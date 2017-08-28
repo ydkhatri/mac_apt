@@ -107,13 +107,13 @@ else:
 log = CreateLogger(os.path.join(args.output_path, "Log." + str(time.strftime("%Y%m%d-%H%M%S")) + ".txt"), args.log_level, args.log_level) # Create logging infrastructure
 log.setLevel(args.log_level)
 log.info("Started {} program".format(__PROGRAMNAME))
+log.info("Dates and times are in UTC unless the specific artifact being parsed saves it as local time!")
 log.debug(' '.join(sys.argv))
 
 output_params = OutputParams()
 output_params.output_path = args.output_path
 
 if args.xlsx: 
-    log.info("XLSX writing is currently under testing!")
     try:
         xlsx_path = os.path.join(output_params.output_path, "mac_apt.xlsx")
         output_params.xlsx_writer = ExcelWriter()
