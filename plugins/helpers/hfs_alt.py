@@ -14,6 +14,7 @@ Redistribution and use in source and binary forms, with or without modification,
 THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 '''
 #from __future__ import unicode_literals
+from __future__ import print_function
 import os
 import sys
 import struct
@@ -30,7 +31,7 @@ try:
     import lzfse
     lzfse_capable = True
 except ImportError, Exception:
-    log.warning("lzfse not found. Won't decompress lzfse/lzvn streams")
+    print("lzfse not found. Won't decompress lzfse/lzvn streams")
 
 def write_file(filename,data):
     f = open(filename, "wb")
@@ -123,10 +124,10 @@ class HFSCompressedResourceFork(HFSFile):
         if compression_type in [8, 12]: # 8 is lzvn, 12 is lzfse
             #only tested for 8
             self.header = HFSPlusCmpfLZVNRsrcHead.parse(block0)
-            #print self.header
+            #print(self.header)
         else:
             self.header = HFSPlusCmpfRsrcHead.parse(block0)
-            #print self.header
+            #print(self.header)
             self.blocks = HFSPlusCmpfRsrcBlockHead.parse(block0[self.header.headerSize:])
             log.debug("HFSCompressedResourceFork numBlocks:{}".format(self.blocks.numBlocks))
 
@@ -235,9 +236,9 @@ class HFSVolume(object):
             return
         for k,v in self.catalogTree.getFolderContents(v.data.folderID):
             if v.recordType == kHFSPlusFolderRecord:
-                print v.data.folderID, getString(k) + "/"
+                print(v.data.folderID, getString(k) + "/")
             elif v.recordType == kHFSPlusFileRecord:
-                print v.data.fileID, getString(k)
+                print(v.data.fileID, getString(k))
     
     def listFinderData(self, path):
         '''Returns finder data'''
