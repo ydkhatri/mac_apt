@@ -17,6 +17,7 @@ Available Plugins (artifacts parsed) | Description
 ------------------ | ---------------
 WIFI | Gets wifi network information
 BASICINFO | Basic machine & OS configuration like SN, timezone, computer name, last logged in user, HFS info
+BASHSESSIONS | Reads bash (Terminal) sessions & history for every user
 DOMAINS | Active Directory Domain(s) that the mac is connected to
 INSTALLHISTORY | Software Installation History
 NETWORKING | Interfaces, last IP address, MAC address, DHCP ..
