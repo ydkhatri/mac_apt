@@ -165,23 +165,23 @@ class MacInfo:
         self.users = []
         self.hfs_native = NativeHfsParser()
 
+    # Public functions, plugins can use these
     def GetFileMACTimes(self, file_path):
         '''
-           Returns dictionary {cTime, mTime, crTime, aTime} 
-           where crTime = created time and cTime = Last time inode/mft modified
+           Returns dictionary {c_time, m_time, cr_time, a_time} 
+           where cr_time = created time and c_time = Last time inode/mft modified
         '''
-        times = { 'cTime':None, 'mTime':None, 'crTime':None, 'aTime':None }
+        times = { 'c_time':None, 'm_time':None, 'cr_time':None, 'a_time':None }
         try:
             tsk_file = self.osx_FS.open(file_path)
-            times['cTime'] = CommonFunctions.ReadUnixTime(tsk_file.info.meta.ctime)
-            times['mTime'] = CommonFunctions.ReadUnixTime(tsk_file.info.meta.mtime)
-            times['crTime'] = CommonFunctions.ReadUnixTime(tsk_file.info.meta.crtime)
-            times['aTime'] = CommonFunctions.ReadUnixTime(tsk_file.info.meta.atime)
+            times['c_time'] = CommonFunctions.ReadUnixTime(tsk_file.info.meta.ctime)
+            times['m_time'] = CommonFunctions.ReadUnixTime(tsk_file.info.meta.mtime)
+            times['cr_time'] = CommonFunctions.ReadUnixTime(tsk_file.info.meta.crtime)
+            times['a_time'] = CommonFunctions.ReadUnixTime(tsk_file.info.meta.atime)
         except Exception as ex:
             log.exception('Error trying to get MAC times')
         return times
 
-    # Public functions, plugins can use these
     def ExportFile(self, artifact_path, subfolder_name, file_prefix=''):
         '''Export an artifact (file) to the output\Export\subfolder_name folder.
            Ideally subfolder_name should be the name of the plugin.
@@ -207,18 +207,18 @@ class MacInfo:
         if self.ExtractFile(artifact_path, file_path):
             # Logging exports
             mac_times = self.GetFileMACTimes(artifact_path)
-            self.output_params.export_log_csv.WriteRow([artifact_path, file_path, mac_times['cTime'], mac_times['mTime'], mac_times['crTime'], mac_times['aTime']])
+            self.output_params.export_log_csv.WriteRow([artifact_path, file_path, mac_times['c_time'], mac_times['m_time'], mac_times['cr_time'], mac_times['a_time']])
 
             if self.IsValidFilePath(artifact_path + "-shm"):
                 if self.ExtractFile(artifact_path + "-shm", shm_file_path):
                     mac_times = self.GetFileMACTimes(artifact_path + "-shm")
-                    self.output_params.export_log_csv.WriteRow([artifact_path + "-shm", shm_file_path, mac_times['cTime'], mac_times['mTime'], mac_times['crTime'], mac_times['aTime']])
+                    self.output_params.export_log_csv.WriteRow([artifact_path + "-shm", shm_file_path, mac_times['c_time'], mac_times['m_time'], mac_times['cr_time'], mac_times['a_time']])
                 else:
                     log.info("Failed to export '" + artifact_path + "-shm' to '" + shm_file_path + "'")
             if self.IsValidFilePath(artifact_path + "-wal"):
                 if self.ExtractFile(artifact_path + "-wal", wal_file_path):
                     mac_times = self.GetFileMACTimes(artifact_path + "-wal")
-                    self.output_params.export_log_csv.WriteRow([artifact_path + "-wal", wal_file_path, mac_times['cTime'], mac_times['mTime'], mac_times['crTime'], mac_times['aTime']])
+                    self.output_params.export_log_csv.WriteRow([artifact_path + "-wal", wal_file_path, mac_times['c_time'], mac_times['m_time'], mac_times['cr_time'], mac_times['a_time']])
                 else:
                     log.info("Failed to export '" + artifact_path + "-wal' to '" + wal_file_path + "'")
             return True
@@ -272,7 +272,7 @@ class MacInfo:
             log.debug (" Unknown exception from GetFileSize() " + str(ex) + " Perhaps file does not exist " + path)
         return None
 
-    def ListItemsInFolder(self, path='/', types_to_fetch=EntryType.FILES_AND_FOLDERS):
+    def ListItemsInFolder(self, path='/', types_to_fetch=EntryType.FILES_AND_FOLDERS, include_dates=False):
         ''' 
         Returns a list of files and/or folders in a list
         Format of list = [ { 'name':'got.txt', 'type':EntryType.FILE, 'size':10 }, .. ]
@@ -287,12 +287,16 @@ class MacInfo:
                 elif name == "." or name == "..": continue
                 elif not self._IsValidFileOrFolderEntry(entry): continue # this filters for allocated files and folders only
                 entry_type = EntryType.FOLDERS if entry.info.name.type == pytsk3.TSK_FS_NAME_TYPE_DIR else EntryType.FILES
+                if include_dates:
+                    item = { 'name':name, 'type':entry_type, 'size':self._GetSize(entry), 'dates': self.GetFileMACTimes(path + '/' + name) }
+                else:
+                    item = { 'name':name, 'type':entry_type, 'size':self._GetSize(entry) }
                 if types_to_fetch == EntryType.FILES_AND_FOLDERS:
-                    items.append( { 'name':name, 'type':entry_type, 'size':self._GetSize(entry)} )
+                    items.append( item )
                 elif types_to_fetch == EntryType.FILES and entry_type == EntryType.FILES:
-                    items.append( { 'name':name, 'type':entry_type, 'size':self._GetSize(entry)} )
+                    items.append( item )
                 elif types_to_fetch == EntryType.FOLDERS and entry_type == EntryType.FOLDERS:
-                    items.append( { 'name':name, 'type':entry_type, 'size':self._GetSize(entry)} )
+                    items.append( item )
                 
         except Exception as ex:
             if str(ex).find('tsk_fs_dir_open: path not found'):
@@ -457,7 +461,7 @@ class MacInfo:
         return False
 
     def _GetSize(self, entry):
-        '''For a pytsk3 file entry, gets logical file size, or None if error'''
+        '''For a pytsk3 file entry, gets logical file size, or 0 if error'''
         try:
             return entry.info.meta.size
         except Exception as ex:
@@ -601,6 +605,7 @@ class MacInfo:
                         if   self.osx_version.startswith('10.10'): self.osx_friendly_name = 'Yosemite'
                         elif self.osx_version.startswith('10.11'): self.osx_friendly_name = 'El Capitan'
                         elif self.osx_version.startswith('10.12'): self.osx_friendly_name = 'Sierra'
+                        elif self.osx_version.startswith('10.13'): self.osx_friendly_name = 'High Sierra'
                         elif self.osx_version.startswith('10.0'): self.osx_friendly_name = 'Cheetah'
                         elif self.osx_version.startswith('10.1'): self.osx_friendly_name = 'Puma'
                         elif self.osx_version.startswith('10.2'): self.osx_friendly_name = 'Jaguar'
@@ -653,12 +658,12 @@ class MountedMacInfo(MacInfo):
         return full_path
 
     def GetFileMACTimes(self, file_path):
-        times = { 'cTime':None, 'mTime':None, 'crTime':None, 'aTime':None }
+        times = { 'c_time':None, 'm_time':None, 'cr_time':None, 'a_time':None }
         try:
-            times['cTime'] = None if self.is_windows else os.path.getctime(file_path)
-            times['mTime'] = os.path.getmtime(file_path)
-            times['crTime'] = os.path.getctime(file_path) if self.is_windows else None
-            times['aTime'] = os.path.getatime(file_path)
+            times['c_time'] = None if self.is_windows else os.path.getctime(file_path)
+            times['m_time'] = os.path.getmtime(file_path)
+            times['cr_time'] = os.path.getctime(file_path) if self.is_windows else None
+            times['a_time'] = os.path.getatime(file_path)
         except Exception as ex:
             log.exception('Error trying to get MAC times')
         return times
@@ -693,7 +698,7 @@ class MountedMacInfo(MacInfo):
     def ListItemsInFolder(self, path='/', types_to_fetch=EntryType.FILES_AND_FOLDERS):
         ''' 
         Returns a list of files and/or folders in a list
-        Format of list = [ {'name':'got.txt', 'type':EntryType.FILE, 'size':10], .. ]
+        Format of list = [ {'name':'got.txt', 'type':EntryType.FILE, 'size':10}, .. ]
         'path' should be linux style using forward-slash like '/var/db/xxyy/file.tdc'
         and starting at root / 
         '''
@@ -761,9 +766,6 @@ class MountedMacInfo(MacInfo):
         # In /private/var/folders/  --> Look for --> xx/yyyyyy/C/com.apple.sandbox/sandbox-cache.db
         for unknown1 in users_dir:
             unknown1_name = unknown1['name']
-            #if unknown1_name == 'zz' : 
-                # TODO look into this later. There may be duplicates (one user has 2 folders) Also, it seems these folders may have same names across machines.
-                # continue; 
             unknown1_dir = self.ListItemsInFolder('/private/var/folders/' + unknown1_name, EntryType.FOLDERS)
             for unknown2 in unknown1_dir:
                 unknown2_name = unknown2['name']
