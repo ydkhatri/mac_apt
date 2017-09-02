@@ -21,7 +21,7 @@ BASHSESSIONS | Reads bash (Terminal) sessions & history for every user
 DOMAINS | Active Directory Domain(s) that the mac is connected to
 INSTALLHISTORY | Software Installation History
 NETWORKING | Interfaces, last IP address, MAC address, DHCP ..
-RECENTITEMS | Recently accessed Servers, Documents, Hosts & Applications from .plist and .sfl files. Also gets recent searches and places for each user
+RECENTITEMS | Recently accessed Servers, Documents, Hosts, Volumes & Applications from .plist and .sfl files. Also gets recent searches and places for each user
 SAFARI | Internet history, downloaded file information, cookies and more from Safari caches
 SPOTLIGHTSHORTCUTS | User typed data in the spotlight bar & targeted document/app
 USERS | Local & Domain user information - name, UID, UUID, GID, homedir & Darwin paths
