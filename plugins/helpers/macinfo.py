@@ -59,6 +59,11 @@ class UserInfo:
         self.UID = '' # retain as string
         self.UUID = ''
         self.GID = '' # retain as string
+        self.creation_time = None
+        self.failed_login_count = 0
+        self.failed_login_timestamp = None
+        self.last_login_timestamp = None
+        self.password_last_set_time = None
         self.DARWIN_USER_DIR = '' #0  With DARWIN_USER_* folders, there may be one or more comma separated
         self.DARWIN_USER_TEMP_DIR = '' #T
         self.DARWIN_USER_CACHE_DIR = ''#C
@@ -522,6 +527,32 @@ class MacInfo:
             except Exception as ex:
                 log.error("Exception trying to get uid & gid for " + folder_path + ' Exception details: ' + str(ex))
 
+    def _ReadPasswordPolicyData(self, password_policy_data, target_user):
+        try:
+            plist2 = biplist.readPlistFromString(password_policy_data[0])
+            target_user.failed_login_count = plist2.get('failedLoginCount', 0)
+            target_user.failed_login_timestamp = plist2.get('failedLoginTimestamp', None)
+            target_user.last_login_timestamp = plist2.get('lastLoginTimestamp', None)
+            target_user.password_last_set_time = plist2.get('passwordLastSetTime', None)
+        except:
+            log.exception('Error reading password_policy_data embedded plist')
+
+    def _ReadAccountPolicyData(self, account_policy_data, target_user):
+        try:
+            plist2 = biplist.readPlistFromString(account_policy_data[0])
+            try: 
+                target_user.creation_time = CommonFunctions.ReadUnixTime(plist2.get('creationTime', 0))
+            except: pass
+            target_user.failed_login_count = plist2.get('failedLoginCount', 0)
+            try: 
+                target_user.failed_login_timestamp = CommonFunctions.ReadUnixTime(plist2.get('failedLoginTimestamp', None))
+            except: pass
+            try: 
+                target_user.password_last_set_time = CommonFunctions.ReadUnixTime(plist2.get('passwordLastSetTime', None))
+            except: pass
+        except:
+            log.exception('Error reading password_policy_data embedded plist')        
+
     def _GetUserInfo(self):
         '''Populates user info from plists under: /private/var/db/dslocal/nodes/Default/users/'''
         #TODO - make a better plugin that gets all user & group info
@@ -545,7 +576,19 @@ class MacInfo:
                             target_user.home_dir = home_dir
                             target_user.user_name = self.GetArrayFirstElement(plist.get('name', ''))
                             target_user.real_name = self.GetArrayFirstElement(plist.get('realname', ''))
-                            # There is also accountpolicydata which contains : creation time, failed logon time, failed count, ..
+                            osx_version = self.GetVersionDictionary()
+                            if osx_version['major'] == 10 and osx_version['minor'] <= 9: # Mavericks & earlier
+                                password_policy_data = plist.get('passwordpolicyoptions', None)
+                                if password_policy_data == None:
+                                    log.debug('Could not find passwordpolicyoptions for user {}'.format(target_user.user_name))
+                                else:
+                                    self._ReadPasswordPolicyData(password_policy_data, target_user)
+                            else: # 10.10 - Yosemite & higher
+                                account_policy_data = plist.get('accountPolicyData', None)
+                                if account_policy_data == None: 
+                                    log.debug('Could not find accountPolicyData for user {}'.format(target_user.user_name))
+                                else:
+                                    self._ReadAccountPolicyData(account_policy_data, target_user)
                         else:
                             log.error('Did not find \'home\' in ' + plist_meta['name'])
                 except Exception as ex:

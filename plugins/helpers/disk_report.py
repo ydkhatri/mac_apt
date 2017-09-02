@@ -63,9 +63,11 @@ class Disk_Info:
         self.ReadVolumesFromPartTable()
 
         data_info = [ ('Type',DataType.TEXT),('Scheme_or_FS-Type',DataType.TEXT),('Name',DataType.TEXT),
-                      ('Offset',DataType.INTEGER),('Size',DataType.TEXT), ('Size_in_bytes',DataType.INTEGER) ]
-        info = [['Partition', x.file_system, x.name, x.offset, x.size_str, x.size_bytes] for x in self.volumes]
-        info.insert(0, ['Disk', str(self.mac_info.vol_info.info.vstype)[12:], '', 0, Disk_Info.GetSizeStr(self.total_disk_size_in_bytes), self.total_disk_size_in_bytes])
+                      ('Offset',DataType.INTEGER),('Size',DataType.TEXT), ('Size_in_bytes',DataType.INTEGER),
+                      ('macOS_Installed',DataType.TEXT) ]
+        info = [ ['Partition', x.file_system, x.name, x.offset, x.size_str, x.size_bytes, 
+                    '*' if self.mac_info.osx_partition_start_offset==x.offset else ''] for x in self.volumes]
+        info.insert(0, ['Disk', str(self.mac_info.vol_info.info.vstype)[12:], '', 0, Disk_Info.GetSizeStr(self.total_disk_size_in_bytes), self.total_disk_size_in_bytes, ''])
         WriteList("disk, partition & volume information", "Disk_Info", info, data_info, self.mac_info.output_params,'')
 
     def ReadVolumesFromPartTable(self): 

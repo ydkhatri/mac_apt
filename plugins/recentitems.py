@@ -23,8 +23,8 @@ from helpers.writer import *
 
 
 __Plugin_Name = "RECENTITEMS"
-__Plugin_Friendly_Name = "Recently accessed Servers, Documents, Hosts & Applications"
-__Plugin_Version = "1.0"
+__Plugin_Friendly_Name = "Recently accessed Servers, Documents, Hosts, Volumes & Applications"
+__Plugin_Version = "1.2"
 __Plugin_Description = "Gets recently accessed Servers, Documents, Hosts & Applications from .plist and .sfl files. Also gets recent searches and places for each user"
 __Plugin_Author = "Yogesh Khatri"
 __Plugin_Author_Email = "yogesh@swiftforensics.com"
@@ -36,12 +36,14 @@ log = logging.getLogger('MAIN.' + __Plugin_Name) # Do not rename or remove this 
 
 #---- Do not change the variable names in above section ----#
 
+#  Processes com.apple.recentitems.plist
 #  Processes *.LSSharedFileList plist files too!
 #      All seem to be located under \Users\USER\Library\Preferences\
-#          On elcapitan, also under \Users\USER\Library\Application Support\com.*\com.*.LSSharedFileList.*\*.sfl <--DONE all sfl
+#          On elcapitan, also under \Users\USER\Library\Application Support\com.*\com.*.LSSharedFileList.*\*.sfl
 #          .SFL files are keyed archives.
 #      All have Bookmark blobs to parse.
-#  Also processes NSNavRecentPlaces and SGTRecentFileSearches from <USER>/Library/Preferences/.GlobalPreferences.plist
+#  Processes NSNavRecentPlaces and SGTRecentFileSearches from <USER>/Library/Preferences/.GlobalPreferences.plist
+#  Processes FXDesktopVolumePositions & FXRecentFolders from <USER>/Library/Preferences/com.apple.finder.plist
 
 class RecentType(IntEnum):
     UNKNOWN = 0
@@ -51,6 +53,7 @@ class RecentType(IntEnum):
     SERVER = 4
     PLACE = 5  # For NSNavRecentPlaces
     SEARCH = 6 # For SGTRecentFileSearches
+    VOLUME = 7 # For FXDesktopVolumePositions
 
     def __str__(self):
         return self.name # This returns 'UNKNOWN' instead of 'RecentType.UNKNOWN'
@@ -179,11 +182,13 @@ def ParseRecentFile(input_file):
                 ReadSFLPlist(f, recent_items, input_file, '')
         except Exception as ex:
             log.exception('Failed to open file: {}'.format(input_file))
-    elif basename.endswith('.plist'): # == 'com.apple.recentitems.plist':
+    elif basename.endswith('.plist'):
         try:
             plist = readPlist(input_file)
             if input_file.endswith('.GlobalPreferences.plist'):
                 ReadGlobalPrefPlist(plist, recent_items, input_file)
+            elif input_file.endswith('com.apple.finder.plist'):
+                ReadFinderPlist(plist, recent_items, input_file)
             else:
                 ReadRecentPlist(plist, recent_items, input_file)
         except:
@@ -192,6 +197,47 @@ def ParseRecentFile(input_file):
         log.info ('Unknown file: {} '.format(basename))
     
     return recent_items
+
+def ReadFinderPlist(plist, recent_items, source, user=''):
+    try:
+        vol_dict = plist['FXDesktopVolumePositions']
+        try:
+            for vol in vol_dict:
+                ri = RecentItem('FXDesktopVolumePositions', vol, source, RecentType.VOLUME, user)
+                recent_items.append(ri)
+        except Exception as ex:
+            log.exception('Error reading FXDesktopVolumePositions from plist')   
+    except: # Not found
+        pass    
+    try:
+        last_connected_url = plist['FXConnectToLastURL']
+        ri = RecentItem('FXConnectToLastURL', last_connected_url, source, RecentType.SERVER, user)
+        recent_items.append(ri)
+    except: # Not found
+        pass
+    try:
+        last_dir = plist['NSNavLastRootDirectory']
+        ri = RecentItem('NSNavLastRootDirectory', last_dir, source, RecentType.PLACE, user)
+        recent_items.append(ri)
+    except: # Not found
+        pass
+    try:
+        last_dir = plist['NSNavLastCurrentDirectory']
+        ri = RecentItem('NSNavLastCurrentDirectory', last_dir, source, RecentType.PLACE, user)
+        recent_items.append(ri)
+    except: # Not found
+        pass
+    try:
+        recent_folders = plist['FXRecentFolders']
+        try:
+            for folder in recent_folders:
+                ri = RecentItem(folder['name'], '', source, RecentType.PLACE, user)
+                ri.ReadBookmark(folder['file-bookmark']) 
+                recent_items.append(ri)
+        except Exception as ex:
+            log.exception('Error reading FXDesktopVolumePositions from plist')   
+    except: # Not found
+        pass 
 
 def ReadGlobalPrefPlist(plist, recent_items, source='', user=''):
     try:
@@ -324,6 +370,8 @@ def ProcessSinglePlist(mac_info, source_path, user, recent_items):
     if success:
         if source_path.endswith('.GlobalPreferences.plist'):
             ReadGlobalPrefPlist(plist, recent_items, source_path, user)
+        elif source_path.endswith('com.apple.finder.plist'):
+            ReadFinderPlist(plist, recent_items, source_path, user)
         else:
             ReadRecentPlist(plist, recent_items, source_path, user)
     else:
@@ -354,6 +402,7 @@ def Plugin_Start(mac_info):
     recent_items = []
     user_recent_plist_path = '{}/Library/Preferences/com.apple.recentitems.plist'
     user_global_pref_plist_path = '{}/Library/Preferences/.GlobalPreferences.plist'
+    user_finder_plist_path = '{}/Library/Preferences/com.apple.finder.plist'
     processed_paths = []
     for user in mac_info.users:
         user_name = user.user_name
@@ -364,11 +413,15 @@ def Plugin_Start(mac_info):
         source_path = user_recent_plist_path.format(user.home_dir)
         if mac_info.IsValidFilePath(source_path):
             ProcessSinglePlist(mac_info, source_path, user_name, recent_items)
-        else:
-            log.debug('File not found: {}'.format(source_path))
+        #else:
+        #    log.debug('File not found: {}'.format(source_path))
         
         #Process .Globalpreferences.plist
         source_path = user_global_pref_plist_path.format(user.home_dir)
+        if mac_info.IsValidFilePath(source_path):
+            ProcessSinglePlist(mac_info, source_path, user_name, recent_items)
+        # Process com.apple.finder.plist
+        source_path = user_finder_plist_path.format(user.home_dir)
         if mac_info.IsValidFilePath(source_path):
             ProcessSinglePlist(mac_info, source_path, user_name, recent_items)
         

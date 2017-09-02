@@ -29,14 +29,16 @@ log = logging.getLogger('MAIN.' + __Plugin_Name) # Do not rename or remove this 
 #---- Do not change the variable names in above section ----#
 
 user_info = [ ('Username',DataType.TEXT),('Realname',DataType.TEXT),('Homedir',DataType.TEXT),
-              ('UID',DataType.TEXT),('GID',DataType.TEXT),('UUID',DataType.TEXT),
+              ('UID',DataType.TEXT),('GID',DataType.TEXT),('UUID',DataType.TEXT),('CreationDate',DataType.DATE),
+              ('FailedLoginCount',DataType.INTEGER),('FailedLoginTime',DataType.DATE),('LastLoginTime',DataType.DATE),('PasswordLastSetTime',DataType.DATE),
               ('DARWIN_USER_DIR',DataType.TEXT),('DARWIN_USER_TEMP_DIR',DataType.TEXT),('DARWIN_USER_CACHE_DIR',DataType.TEXT)
              ]
 
 def Plugin_Start(mac_info):
     users = []
     for user in mac_info.users:
-        users.append([user.user_name, user.real_name, user.home_dir, user.UID, user.GID, user.UUID,
+        users.append([user.user_name, user.real_name, user.home_dir, user.UID, user.GID, user.UUID,user.creation_time,
+                     user.failed_login_count, user.failed_login_timestamp, user.last_login_timestamp, user.password_last_set_time, 
                      user.DARWIN_USER_DIR, user.DARWIN_USER_TEMP_DIR, user.DARWIN_USER_CACHE_DIR])
     WriteList("user information", "Users", users, user_info, mac_info.output_params, '')
 

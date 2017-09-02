@@ -54,7 +54,7 @@ def GetDiff(first, second):
     len1 = len(first)
     len2 = len(second)
 
-    if len2 == len1: # Assuming the lists are same!
+    if len2 == len1:
         # Lists should be the same, still check them!
         count = 0
         while (len1 > count) and (first[count] == second[count]):
