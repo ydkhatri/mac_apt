@@ -85,7 +85,7 @@ def PrintAll(history, output_params, source_path):
 def Plugin_Start(mac_info):
     '''Main Entry point function for plugin'''
     installhistory_plist_path = '/Library/Receipts/InstallHistory.plist'
-    if MacInfo.IsValidFilePath(installhistory_plist_path):
+    if mac_info.IsValidFilePath(installhistory_plist_path):
         mac_info.ExportFile(installhistory_plist_path, __Plugin_Name)
         success, plist, error = mac_info.ReadPlist(installhistory_plist_path)
         if success:
