@@ -24,7 +24,7 @@ NETWORKING | Interfaces, last IP address, MAC address, DHCP ..
 RECENTITEMS | Recently accessed Servers, Documents, Hosts, Volumes & Applications from .plist and .sfl files. Also gets recent searches and places for each user
 SAFARI | Internet history, downloaded file information, cookies and more from Safari caches
 SPOTLIGHTSHORTCUTS | User typed data in the spotlight bar & targeted document/app
-USERS | Local & Domain user information - name, UID, UUID, GID, homedir & Darwin paths
+USERS | Local & Domain user information - name, UID, UUID, GID, account creation & password set dates, pass hints, homedir & Darwin paths
 
 More plugins coming soon..
 
