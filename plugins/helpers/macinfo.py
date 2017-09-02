@@ -59,6 +59,7 @@ class UserInfo:
         self.UID = '' # retain as string
         self.UUID = ''
         self.GID = '' # retain as string
+        self.pw_hint = ''
         self.creation_time = None
         self.failed_login_count = 0
         self.failed_login_timestamp = None
@@ -576,6 +577,7 @@ class MacInfo:
                             target_user.home_dir = home_dir
                             target_user.user_name = self.GetArrayFirstElement(plist.get('name', ''))
                             target_user.real_name = self.GetArrayFirstElement(plist.get('realname', ''))
+                            target_user.pw_hint = self.GetArrayFirstElement(plist.get('hint', ''))
                             osx_version = self.GetVersionDictionary()
                             if osx_version['major'] == 10 and osx_version['minor'] <= 9: # Mavericks & earlier
                                 password_policy_data = plist.get('passwordpolicyoptions', None)

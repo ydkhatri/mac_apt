@@ -71,6 +71,8 @@ class RecentItem:
             try:
                 if self.Type == 0x0101: # UFT8 string
                     self.Data = bookmark[self.Pos + 8:self.Pos + 8 + self.Size].decode('utf-8')
+                elif self.Type == 0x0901: # UFT8 string for URL
+                    self.Data = bookmark[self.Pos + 8:self.Pos + 8 + self.Size].decode('utf-8')
                 elif self.Type == 0x0601:
                     num = self.Size / 4
                     self.Data = struct.unpack("<{}L".format(num), bookmark[self.Pos + 8:self.Pos + 8 + self.Size]) # array is returned
@@ -157,6 +159,14 @@ class RecentItem:
                     folders.append(item['Data'])
                 self.URL = '/'.join(folders)
 
+            #For smb or afp or ftp ones, there may be a better url stored:
+            for bi in bookmark_items:
+                if bi.Type == 0x0901:
+                    url = bi.Data
+                    if url.find('://') > 0 and not url.startswith('file:///'): # Catch protocols, smb://, afp://, ftp..
+                        self.URL = url
+                        return
+            
         except Exception as ex:
             log.exception('Exception while processing data in Bookmark field')
 
@@ -232,10 +242,22 @@ def ReadFinderPlist(plist, recent_items, source, user=''):
         try:
             for folder in recent_folders:
                 ri = RecentItem(folder['name'], '', source, RecentType.PLACE, user)
-                ri.ReadBookmark(folder['file-bookmark']) 
+                data = folder.get('file-bookmark', None)
+                if data != None:
+                    ri.ReadBookmark(data) 
+                else: # Perhaps its osx < 10.9
+                    data = folder.get('file-data')
+                    if data != None:
+                        data = data.get('_CFURLAliasData', None)
+                        if data != None:
+                            ri.ReadAlias(data) # TODO: Does not parse right, fix!
+                        else:
+                            log.error('Could not find _CFURLAliasData in item:{}'.format(ri.Name))
+                    else:
+                        log.error('Could not find file-bookmark or file-data in FXRecentFolders item:{}'.format(ri.Name))
                 recent_items.append(ri)
         except Exception as ex:
-            log.exception('Error reading FXDesktopVolumePositions from plist')   
+            log.exception('Error reading FXRecentFolders from plist')   
     except: # Not found
         pass 
 
@@ -291,7 +313,15 @@ def ReadRecentPlist(plist, recent_items, source='', user=''):
                 try:
                     for item in plist['RecentServers']['CustomListItems']:
                         ri = RecentItem(item['Name'], '', source, RecentType.SERVER, user)
-                        ri.ReadAlias(item['Alias'])
+                        data = item.get('Alias', None) 
+                        if data == None: # Yosemite onwards it is a bookmark!
+                            data = item.get('Bookmark', None)
+                            if data == None:
+                                log.error('Could not find Bookmark or Alias to read in RecentServers for name={}!'.format(ri.Name))
+                            else:
+                                ri.ReadBookmark(data)
+                        else:
+                            ri.ReadAlias(data)
                         recent_items.append(ri)
                 except Exception as ex:
                     log.error('Error reading RecentServers from plist, error was {}'.format(str(ex)))

@@ -74,7 +74,6 @@ def PrintAll(history, output_params, source_path):
                      ('DisplayVersion',DataType.TEXT),('PackageIdentifiers',DataType.TEXT),('ProcessName',DataType.TEXT)
                    ]
 
-    #log.info (str(len(networks)) + " network(s)")
     data_list = []
     for entry in history:
         data_list.append( [ entry.ContentType, entry.Date, entry.DisplayName, entry.DisplayVersion, 
@@ -83,23 +82,24 @@ def PrintAll(history, output_params, source_path):
 
     WriteList("Installation history", "InstallHistory", data_list, install_info, output_params, source_path)
     
-    
-
 def Plugin_Start(mac_info):
     '''Main Entry point function for plugin'''
     installhistory_plist_path = '/Library/Receipts/InstallHistory.plist'
-    mac_info.ExportFile(installhistory_plist_path, __Plugin_Name)
-    success, plist, error = mac_info.ReadPlist(installhistory_plist_path)
-    if success:
-        history = []
-        ReadInstallHistoryPlist(plist, history)
-        if len(history) > 0:
-            PrintAll(history, mac_info.output_params, installhistory_plist_path)
+    if MacInfo.IsValidFilePath(installhistory_plist_path):
+        mac_info.ExportFile(installhistory_plist_path, __Plugin_Name)
+        success, plist, error = mac_info.ReadPlist(installhistory_plist_path)
+        if success:
+            history = []
+            ReadInstallHistoryPlist(plist, history)
+            if len(history) > 0:
+                PrintAll(history, mac_info.output_params, installhistory_plist_path)
+            else:
+                log.info('No install history records found')
         else:
-            log.info('No install history records found')
+            log.error('Could not open plist ' + installhistory_plist_path)
+            log.error('Error was: ' + error)
     else:
-        log.error('Could not open plist ' + installhistory_plist_path)
-        log.error('Error was: ' + error)
+        log.info('InstallHistory.plist not found')
         
 def Plugin_Start_Standalone(input_files_list, output_params):
     log.info("Module Started as standalone")
