@@ -44,6 +44,7 @@ log = logging.getLogger('MAIN.' + __Plugin_Name) # Do not rename or remove this 
 #      All have Bookmark blobs to parse.
 #  Processes NSNavRecentPlaces and SGTRecentFileSearches from <USER>/Library/Preferences/.GlobalPreferences.plist
 #  Processes FXDesktopVolumePositions & FXRecentFolders from <USER>/Library/Preferences/com.apple.finder.plist
+#  Processes systemitems.volumeslist and favoriteservers from <USER>/Library/Preferences/com.apple.sidebarlists.plist
 
 class RecentType(IntEnum):
     UNKNOWN = 0
@@ -53,7 +54,7 @@ class RecentType(IntEnum):
     SERVER = 4
     PLACE = 5  # For NSNavRecentPlaces
     SEARCH = 6 # For SGTRecentFileSearches
-    VOLUME = 7 # For FXDesktopVolumePositions
+    VOLUME = 7 # For FXDesktopVolumePositions & systemitems.volumeslist
 
     def __str__(self):
         return self.name # This returns 'UNKNOWN' instead of 'RecentType.UNKNOWN'
@@ -87,12 +88,90 @@ class RecentItem:
         self.Source = source
         self.Type = recent_type
         self.User = user
-    
+
+    #TODO: Add Alias_v2 parsing capability for osx < 10.9
+
+    ''' ALIAS V3 format
+        struct Alias_v3_header {
+            uint      AppSpecific;
+            ushort    Length;
+            ushort    Version; //3
+            ushort    IsDirectoryKey; //File:0, Folder:1
+            ushort    Unknown0;
+            uint      VolumeCheckedDate; //HFSDate
+            ushort    Unknown1; //zero
+            char      FsType[2]; //NT for NTFS disks?, BD is most common, KG (ftp vol)
+            char      Unknown2[2]; // cu (on BD, KG FsType), IS (on BD FsType) , as (on H+ type)
+            ushort    Unknown3; // Always 1?
+            uint      ParentCNID;
+            uint      TargetCNID;
+            ushort    Unknown4;
+            uint      CreationDate; //HFSDate
+            byte      Unknown5[20];
+        }
+        struct Alias_v3_Item {
+            ushort   Tag;
+            ushort   DataLength;
+            byte     Data[DataLength];
+        }
+    '''
+    def ReadAliasV3(self, alias, size=0):
+        '''Reads Alias v3 records'''
+        try:
+            if size == 0: size = len(alias)
+            length = struct.unpack('>H',alias[4:6])[0]
+            vol_checked_date = CommonFunctions.ReadMacHFSTime(struct.unpack('>L',alias[12:16])[0])
+            fs_type = alias[18:20].decode('utf-8')
+            unknown2 = alias[20:22].decode('utf-8')
+            creation_date = CommonFunctions.ReadMacHFSTime(struct.unpack('>L',alias[34:38])[0])
+            log.debug('FS_type={} vol_checked_date={} creation_date={}'.format(fs_type, vol_checked_date, creation_date))
+            # Now parse tag data
+            
+            pos = 58
+            while pos < size:
+                tag, data_size = struct.unpack('>2H', alias[pos:pos + 4])
+                if data_size > 0:
+                    try:
+                        if tag == 0x9: # Network mount information
+                            if fs_type != 'H+': # Format is unknown for this!
+                                data = alias[pos + 6:pos + 6 + data_size-2]
+                                protocol = data[0:4].decode('utf-8')
+                                url = data[10:].decode('utf-8')
+                                self.URL = url
+                                log.debug('Tag={} Protocol={} Url={}'.format(tag, protocol, url))
+                                return
+                        elif tag == 0xE: # Unicode filename of target
+                            data = alias[pos + 6:pos + 6 + data_size - 2].decode('utf-16be')
+                            log.debug('Tag={} Data={}'.format(tag, data))
+                        elif tag == 0xF: # Unicode volume name
+                            data = alias[pos + 6:pos + 6 + data_size - 2].decode('utf-16be')
+                            log.debug('Tag={} Data={}'.format(tag, data))
+                        elif tag == 0x12:  #Posix path to volume mountpoint
+                            data = alias[pos + 4:pos + 4 + data_size].decode('utf-8')
+                            log.debug('Tag={} Data={}'.format(tag, data))
+                        elif tag == 0x13: #Posix path to volume mountpoint
+                            data = alias[pos + 4:pos + 4 + data_size].decode('utf-8')
+                            log.debug('Tag={} Data={}'.format(tag, data))
+                        elif tag == 0xFFFF:
+                            break
+                        else:
+                            log.debug('Skipped tag {} data_size = '.format(tag, data_size))
+                    except:
+                        log.exception('Exception in while loop parsing alias v3')
+                pos += 4 + data_size
+                if data_size % 2 != 0:
+                    pos += 1
+        except:
+            log.exception('Exception while processing data in Alias_v3 field')
+
     def ReadAlias(self, alias):
         try:
             # alias is a binary blob, only the last string in it is relevant
             size = len(alias)
             if size < 0x3B: return 
+            if struct.unpack('>H', alias[6:8])[0] == 0x3:
+                self.ReadAliasV3(alias, size)
+                return
             if size > 0x200: return # likely non-standard, below method won't work!
             pos = size - 6 # alias ends with ...relevant_data.. 00 FF FF 00 00
             if alias[pos] == b'\x00': pos -= 1
@@ -199,6 +278,8 @@ def ParseRecentFile(input_file):
                 ReadGlobalPrefPlist(plist, recent_items, input_file)
             elif input_file.endswith('com.apple.finder.plist'):
                 ReadFinderPlist(plist, recent_items, input_file)
+            elif input_file.endswith('com.apple.sidebarlists.plist'):
+                ReadSidebarListsPlist(plist, recent_items, input_file)
             else:
                 ReadRecentPlist(plist, recent_items, input_file)
         except:
@@ -207,6 +288,35 @@ def ParseRecentFile(input_file):
         log.info ('Unknown file: {} '.format(basename))
     
     return recent_items
+
+def ReadSidebarListsPlist(plist, recent_items, source, user=''):
+    try:
+        volumes = plist['systemitems']['VolumesList']
+        try:
+            for vol in volumes:
+                name = vol.get('Name', '')
+                type = str(vol.get('EntryType', ''))
+                ri = RecentItem(name + ', type=' + type, '', source, RecentType.VOLUME, user)
+                recent_items.append(ri)
+                alias = vol.get('Alias', None)
+                if alias:
+                    alias = ri.ReadAlias(alias)
+        except:
+            log.exception('Error reading systemitems.VolumesList from sidebar plist')
+    except:
+        pass # Not found!
+    try:
+        servers = plist['favoriteservers']['CustomListItems']
+        try:
+            for server in servers:
+                name = server.get('Name', '')
+                url  = server.get('URL', '')
+                ri = RecentItem(name, url, source, RecentType.SERVER, user)
+                recent_items.append(ri)
+        except:
+            log.exception('Error reading favoriteservers.CustomListItems from sidebar plist')
+    except:
+        pass # Not found!
 
 def ReadFinderPlist(plist, recent_items, source, user=''):
     try:
@@ -250,7 +360,7 @@ def ReadFinderPlist(plist, recent_items, source, user=''):
                     if data != None:
                         data = data.get('_CFURLAliasData', None)
                         if data != None:
-                            ri.ReadAlias(data) # TODO: Does not parse right, fix!
+                            ri.ReadAlias(data)
                         else:
                             log.error('Could not find _CFURLAliasData in item:{}'.format(ri.Name))
                     else:
@@ -402,6 +512,8 @@ def ProcessSinglePlist(mac_info, source_path, user, recent_items):
             ReadGlobalPrefPlist(plist, recent_items, source_path, user)
         elif source_path.endswith('com.apple.finder.plist'):
             ReadFinderPlist(plist, recent_items, source_path, user)
+        elif source_path.endswith('com.apple.sidebarlists.plist'):
+            ReadSidebarListsPlist(plist, recent_items, source_path, user)
         else:
             ReadRecentPlist(plist, recent_items, source_path, user)
     else:
@@ -433,6 +545,7 @@ def Plugin_Start(mac_info):
     user_recent_plist_path = '{}/Library/Preferences/com.apple.recentitems.plist'
     user_global_pref_plist_path = '{}/Library/Preferences/.GlobalPreferences.plist'
     user_finder_plist_path = '{}/Library/Preferences/com.apple.finder.plist'
+    user_sidebarlists_plist_path = '{}/Library/Preferences/com.apple.sidebarlists.plist'
     processed_paths = []
     for user in mac_info.users:
         user_name = user.user_name
@@ -454,7 +567,11 @@ def Plugin_Start(mac_info):
         source_path = user_finder_plist_path.format(user.home_dir)
         if mac_info.IsValidFilePath(source_path):
             ProcessSinglePlist(mac_info, source_path, user_name, recent_items)
-        
+        # Process com.apple.sidebarlists.plist
+        source_path = user_sidebarlists_plist_path.format(user.home_dir)
+        if mac_info.IsValidFilePath(source_path):
+            ProcessSinglePlist(mac_info, source_path, user_name, recent_items)
+
     ProcessPreferencesFolder(mac_info, recent_items)
     ProcessSFL(mac_info, recent_items) # Elcapitan & higher (mostly)
 
