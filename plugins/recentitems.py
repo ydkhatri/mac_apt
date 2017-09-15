@@ -25,12 +25,12 @@ from helpers.writer import *
 __Plugin_Name = "RECENTITEMS"
 __Plugin_Friendly_Name = "Recently accessed Servers, Documents, Hosts, Volumes & Applications"
 __Plugin_Version = "1.2"
-__Plugin_Description = "Gets recently accessed Servers, Documents, Hosts & Applications from .plist and .sfl files. Also gets recent searches and places for each user"
+__Plugin_Description = "Gets recently accessed Servers, Documents, Hosts, Volumes & Applications from .plist and .sfl files. Also gets recent searches and places for each user"
 __Plugin_Author = "Yogesh Khatri"
 __Plugin_Author_Email = "yogesh@swiftforensics.com"
 
 __Plugin_Standalone = True
-__Plugin_Standalone_Usage = 'This module parses recently accessed information from plist and SFL files found under /Users/<USER>/Library/Preferences/'
+__Plugin_Standalone_Usage = 'This module parses recently accessed information from plist and SFL files found under /Users/<USER>/Library/Preferences/ and /Users/<USER>/Library/Application Support/'
 
 log = logging.getLogger('MAIN.' + __Plugin_Name) # Do not rename or remove this ! This is the logger object
 
@@ -82,14 +82,102 @@ class RecentItem:
             except Exception as ex:
                 log.error('Problem reading Bookmark data, exception was: {}'.format(str(ex)))
 
-    def __init__(self, name, url, source, recent_type, user):
+    def __init__(self, name, url, info, source, recent_type, user):
         self.Name = name
         self.URL = url
         self.Source = source
         self.Type = recent_type
         self.User = user
+        self.Info = info
 
-    #TODO: Add Alias_v2 parsing capability for osx < 10.9
+
+    ''' ALIAS V2 format
+        struct Alias_v2_header {
+            uint   AppSpecific;
+            ushort Length;
+            ushort Version; //2
+            ushort IsDirectoryKey; //File:0, Folder:1
+            byte   VolumeNameLength;
+            char   VolumeName[27];
+            HFSTime   VolumeDate; //HFSDate
+            char   FsType[2]; 
+            ushort DiskType; //0 = fixed, 1 = network, 2 = 400Kb, 3 = 800kb, 4 = 1.44MB, 5 = ejectable
+            uint   ParentCNID;
+            byte   TargetNameLength;
+            char   TargetName[63];
+            uint   TargetCNID;
+            HFSTime   TargetCreationDate; //HFSDate
+            uint   TargetCreatorCode;
+            uint   TargetTypeCode;
+            ushort NumDirLevelsFromAliasToRoot;// or -1
+            ushort NumDirLevelsFromRootToTarget;
+            uint   VolAttributes;
+            ushort VolFilesytemID;
+            byte   Reserved[10];
+        }
+        struct Alias_v2_Item {
+            ushort   Tag;
+            ushort   DataLength;
+            byte     Data[DataLength];
+        }
+    '''
+    def ReadAliasV2(self, alias, size=0):
+        '''Reads Alias v2 records'''
+        try:
+            if size == 0: size = len(alias)
+            length = struct.unpack('>H',alias[4:6])[0]
+            vol_name_len = struct.unpack('>B', alias[10:11])[0]
+            vol_name = alias[11:11+vol_name_len].decode('utf-8')
+            vol_date = CommonFunctions.ReadMacHFSTime(struct.unpack('>L',alias[38:42])[0])
+            fs_type = alias[42:44].decode('utf-8')
+            target_name_len = struct.unpack('>B', alias[50:51])[0]
+            target_name = alias[51:51+target_name_len].decode('utf-8')
+            target_creation_date = CommonFunctions.ReadMacHFSTime(struct.unpack('>L',alias[118:122])[0])
+            log.debug('FS_type={} vol_name={} vol_date={} target_name={} target_creation_date={}'.format(fs_type, vol_name, vol_date, target_name,target_creation_date))
+            # Now parse tag data
+            
+            pos = 150
+            while pos < size:
+                tag, data_size = struct.unpack('>2H', alias[pos:pos + 4])
+                if data_size > 0:
+                    try:
+                        if tag in (0, 2, 3, 4, 5, 6):
+                            data = alias[pos + 4:pos + 4 + data_size].decode('utf-8')
+                            log.debug('Tag={} Data={}'.format(tag, data))
+                        elif tag == 0x9: # Network mount information
+                            if fs_type != 'H+': # Format is unknown for this!
+                                data = alias[pos + 6:pos + 6 + data_size-2]
+                                protocol = data[0:4].decode('utf-8')
+                                url = data[10:].decode('utf-8')
+                                self.URL = url
+                                log.debug('Tag={} Protocol={} Url={}'.format(tag, protocol, url))
+                                return
+                        elif tag == 0xE: # Unicode filename of target
+                            data = alias[pos + 6:pos + 6 + data_size - 2].decode('utf-16be')
+                            log.debug('Tag={} Data={}'.format(tag, data))
+                        elif tag == 0xF: # Unicode volume name
+                            data = alias[pos + 6:pos + 6 + data_size - 2].decode('utf-16be')
+                            log.debug('Tag={} Data={}'.format(tag, data))
+                        elif (tag == 0x10 or tag == 0x11) and data_size == 8:
+                            data = CommonFunctions.ReadMacHFSTime(struct.unpack('>L', alias[pos + 6:pos + 10])[0])
+                            log.debug('Tag={} Data={}'.format(tag, data))
+                        elif tag == 0x12:  #Posix path to volume mountpoint
+                            data = alias[pos + 4:pos + 4 + data_size].decode('utf-8')
+                            log.debug('Tag={} Data={}'.format(tag, data))
+                        elif tag == 0x13: #Posix path to volume mountpoint
+                            data = alias[pos + 4:pos + 4 + data_size].decode('utf-8')
+                            log.debug('Tag={} Data={}'.format(tag, data))
+                        elif tag == 0xFFFF:
+                            break
+                        else:
+                            log.debug('Skipped tag {} data_size={}'.format(tag, data_size))
+                    except:
+                        log.exception('Exception in while loop parsing alias v2')
+                pos += 4 + data_size
+                if data_size % 2 != 0:
+                    pos += 1
+        except:
+            log.exception('Exception while processing data in Alias_v2 field')
 
     ''' ALIAS V3 format
         struct Alias_v3_header {
@@ -169,8 +257,12 @@ class RecentItem:
             # alias is a binary blob, only the last string in it is relevant
             size = len(alias)
             if size < 0x3B: return 
-            if struct.unpack('>H', alias[6:8])[0] == 0x3:
+            version = struct.unpack('>H', alias[6:8])[0]
+            if version == 0x3:
                 self.ReadAliasV3(alias, size)
+                return
+            elif version == 0x2:
+                self.ReadAliasV2(alias, size)
                 return
             if size > 0x200: return # likely non-standard, below method won't work!
             pos = size - 6 # alias ends with ...relevant_data.. 00 FF FF 00 00
@@ -251,12 +343,12 @@ class RecentItem:
 
 def PrintAll(recent_items, output_params, source_path):
     recent_info = [ ('Type',DataType.TEXT),('Name',DataType.TEXT),('URL',DataType.TEXT),
-                    ('User', DataType.TEXT),('Source',DataType.TEXT)
+                    ('Info', DataType.TEXT),('User', DataType.TEXT),('Source',DataType.TEXT)
                    ]
 
     data_list = []
     for item in recent_items:
-        data_list.append( [ str(item.Type), item.Name, item.URL, item.User, item.Source ] )
+        data_list.append( [ str(item.Type), item.Name, item.URL, item.Info, item.User, item.Source ] )
 
     WriteList("Recent item information", "RecentItems", data_list, recent_info, output_params, source_path)
     
@@ -296,7 +388,7 @@ def ReadSidebarListsPlist(plist, recent_items, source, user=''):
             for vol in volumes:
                 name = vol.get('Name', '')
                 type = str(vol.get('EntryType', ''))
-                ri = RecentItem(name + ', type=' + type, '', source, RecentType.VOLUME, user)
+                ri = RecentItem(name, '', 'EntryType='+ type, source, RecentType.VOLUME, user)
                 recent_items.append(ri)
                 alias = vol.get('Alias', None)
                 if alias:
@@ -311,39 +403,88 @@ def ReadSidebarListsPlist(plist, recent_items, source, user=''):
             for server in servers:
                 name = server.get('Name', '')
                 url  = server.get('URL', '')
-                ri = RecentItem(name, url, source, RecentType.SERVER, user)
+                ri = RecentItem(name, url, 'favoriteservers', source, RecentType.SERVER, user)
                 recent_items.append(ri)
         except:
             log.exception('Error reading favoriteservers.CustomListItems from sidebar plist')
     except:
         pass # Not found!
 
+def SplitDataInParts(data):
+    '''Splits the volume name string into name, num and type'''
+    # Split on last _ Example entry:  HandBrake-0.10.2-MacOSX.6_GUI_x86_64_0x1.b2a122dp+28
+    # Splits to HandBrake-0.10.2-MacOSX.6_GUI_x86_64 , 1b2a122d, 28
+    # returns tuple  (status, name, num, type)
+
+    parsed_correctly = False
+    name = ''
+    num = ''
+    type = ''
+    last_underscore_pos = data.rfind('_')
+    if last_underscore_pos > 0:
+        name = data[0:last_underscore_pos]
+        rest = data[last_underscore_pos + 1:]
+        plus_pos = rest.rfind('+')
+        if plus_pos > 0:
+            num = rest[0:plus_pos]
+            type = rest[plus_pos+1:]
+            num = num.replace('0x', '').replace('.', '').replace('p','')
+            log.debug('name={} name, num={}, type={}'.format(name, num, type))
+            parsed_correctly = True
+        else:
+            log.debug('+ not found in volume string')
+    else:
+        log.debug('_ not found in volume string')
+    return parsed_correctly, name, num, type
+
+
 def ReadFinderPlist(plist, recent_items, source, user=''):
     try:
         vol_dict = plist['FXDesktopVolumePositions']
         try:
             for vol in vol_dict:
-                ri = RecentItem('FXDesktopVolumePositions', vol, source, RecentType.VOLUME, user)
-                recent_items.append(ri)
+                parsed_correctly, vol_name, vol_date, vol_type = SplitDataInParts(vol)
+                if parsed_correctly:
+                    valid_date = None
+                    if vol_date.startswith('-'): 
+                        log.debug('Got -ve number ({}), not handling!'.format(vol_date))
+                    elif vol_date == '0':
+                        pass
+                    elif vol_type == '29' # Not seen valid data here, most items have same data for date
+                        pass
+                    else:
+                        vol_date_len = len(vol_date)
+                        log.debug('length of vol_date is {}'.format(vol_date_len))
+                        if vol_date_len == 8:
+                            valid_int = int(vol_date, 16)
+                        elif vol_date_len > 8:
+                            valid_int = int(vol_date[0:8], 16)
+                        elif vol_date_len < 8:
+                            #log.debug('Number Seems invalid - {}'.format(vol_date))
+                            vol_date = vol_date * (16 ** (8 - vol_date_len))
+                            valid_int = int(vol_date, 16)
+                        valid_date = CommonFunctions.ReadMacAbsoluteTime(valid_int)
+                    ri = RecentItem(vol_name, vol, 'FXDesktopVolumePositions' + ((', vol_created_date=' + str(valid_date)) if valid_date else '') + ', type=' + vol_type, source, RecentType.VOLUME, user)
+                    recent_items.append(ri)
         except Exception as ex:
             log.exception('Error reading FXDesktopVolumePositions from plist')   
     except: # Not found
         pass    
     try:
         last_connected_url = plist['FXConnectToLastURL']
-        ri = RecentItem('FXConnectToLastURL', last_connected_url, source, RecentType.SERVER, user)
+        ri = RecentItem('', last_connected_url, 'FXConnectToLastURL', source, RecentType.SERVER, user)
         recent_items.append(ri)
     except: # Not found
         pass
     try:
         last_dir = plist['NSNavLastRootDirectory']
-        ri = RecentItem('NSNavLastRootDirectory', last_dir, source, RecentType.PLACE, user)
+        ri = RecentItem('', last_dir, 'NSNavLastRootDirectory', source, RecentType.PLACE, user)
         recent_items.append(ri)
     except: # Not found
         pass
     try:
         last_dir = plist['NSNavLastCurrentDirectory']
-        ri = RecentItem('NSNavLastCurrentDirectory', last_dir, source, RecentType.PLACE, user)
+        ri = RecentItem('', last_dir, 'NSNavLastCurrentDirectory', source, RecentType.PLACE, user)
         recent_items.append(ri)
     except: # Not found
         pass
@@ -351,7 +492,7 @@ def ReadFinderPlist(plist, recent_items, source, user=''):
         recent_folders = plist['FXRecentFolders']
         try:
             for folder in recent_folders:
-                ri = RecentItem(folder['name'], '', source, RecentType.PLACE, user)
+                ri = RecentItem(folder['name'], '', 'FXRecentFolders', source, RecentType.PLACE, user)
                 data = folder.get('file-bookmark', None)
                 if data != None:
                     ri.ReadBookmark(data) 
@@ -376,7 +517,7 @@ def ReadGlobalPrefPlist(plist, recent_items, source='', user=''):
         recent_places = plist['NSNavRecentPlaces']
         try:
             for place in recent_places:
-                ri = RecentItem('NSNavRecentPlaces', place, source, RecentType.PLACE, user)
+                ri = RecentItem('', place, 'NSNavRecentPlaces', source, RecentType.PLACE, user)
                 recent_items.append(ri)
         except Exception as ex:
             log.exception('Error reading NSNavRecentPlaces from plist')   
@@ -386,10 +527,10 @@ def ReadGlobalPrefPlist(plist, recent_items, source='', user=''):
         recent_searches = plist['SGTRecentFileSearches']
         try:
             for search in recent_searches:
-                ri = RecentItem('SGTRecentFileSearches:' + search['type'], search['name'], source, RecentType.SEARCH, user)
+                ri = RecentItem(search['name'], '', 'SGTRecentFileSearches:' + search['type'],  source, RecentType.SEARCH, user)
                 recent_items.append(ri)
         except Exception as ex:
-            log.exception('Error reading SGTRecentFileSearches from plist')   
+            log.exception('Error reading SGTRecentFileSearches from plist')
 
     except: # Not found
         pass
@@ -400,21 +541,21 @@ def ReadRecentPlist(plist, recent_items, source='', user=''):
             if  item_type == 'Hosts':
                 try:
                     for item in plist['Hosts']['CustomListItems']:
-                        ri = RecentItem(item['Name'], item['URL'], source, RecentType.HOST, user)
+                        ri = RecentItem(item['Name'], item['URL'], '', source, RecentType.HOST, user)
                         recent_items.append(ri)
                 except Exception as ex:
                     log.error('Error reading Hosts from plist, error was {}'.format(str(ex)))
             elif item_type == 'RecentApplications':
                 try:
                     for item in plist['RecentApplications']['CustomListItems']:
-                        ri = RecentItem(item['Name'], '', source, RecentType.APPLICATION, user)
+                        ri = RecentItem(item['Name'], '', '', source, RecentType.APPLICATION, user)
                         recent_items.append(ri)
                 except Exception as ex:
                     log.error('Error reading RecentApplications from plist, error was {}'.format(str(ex)))
             elif item_type == 'RecentDocuments':
                 try:
                     for item in plist['RecentDocuments']['CustomListItems']:
-                        ri = RecentItem(item['Name'], '', source, RecentType.DOCUMENT, user)
+                        ri = RecentItem(item['Name'], '', '', source, RecentType.DOCUMENT, user)
                         ri.ReadBookmark(item['Bookmark'])                        
                         recent_items.append(ri)
                 except Exception as ex:
@@ -422,7 +563,7 @@ def ReadRecentPlist(plist, recent_items, source='', user=''):
             elif item_type == 'RecentServers':
                 try:
                     for item in plist['RecentServers']['CustomListItems']:
-                        ri = RecentItem(item['Name'], '', source, RecentType.SERVER, user)
+                        ri = RecentItem(item['Name'], '', '', source, RecentType.SERVER, user)
                         data = item.get('Alias', None) 
                         if data == None: # Yosemite onwards it is a bookmark!
                             data = item.get('Bookmark', None)
@@ -465,7 +606,7 @@ def ReadSFLPlist(file_handle, recent_items, source, user=''):
             elif basename.find('recentdocuments') >=0 : recent_type = RecentType.DOCUMENT
             elif basename.find('recentapplications') >=0 : recent_type = RecentType.APPLICATION
 
-            ri = RecentItem(name, url, source, recent_type, user)
+            ri = RecentItem(name, url, '', source, recent_type, user)
             recent_items.append(ri)
             # try: # Not reading bookmark right now, but this code should work!
             #     bm = item['bookmark']
@@ -550,7 +691,7 @@ def Plugin_Start(mac_info):
     for user in mac_info.users:
         user_name = user.user_name
         if user.home_dir == '/private/var/empty': continue # Optimization, nothing should be here!
-        elif user.home_dir == '/private/var/root': user_name = 'root' # Some other users use the same root folder, we will list such all users as 'root', as there is no way to tell
+        elif user.home_dir == '/private/var/root': user_name = 'root' # Some other users use the same root folder, we will list all such users as 'root', as there is no way to tell
         if user.home_dir in processed_paths: continue # Avoid processing same folder twice (some users have same folder! (Eg: root & daemon))
         processed_paths.append(user.home_dir)
         source_path = user_recent_plist_path.format(user.home_dir)
