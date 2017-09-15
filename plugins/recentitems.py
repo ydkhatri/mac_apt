@@ -450,7 +450,7 @@ def ReadFinderPlist(plist, recent_items, source, user=''):
                         log.debug('Got -ve number ({}), not handling!'.format(vol_date))
                     elif vol_date == '0':
                         pass
-                    elif vol_type == '29' # Not seen valid data here, most items have same data for date
+                    elif vol_type == '29': # Not seen valid data here, most items have same data for date
                         pass
                     else:
                         vol_date_len = len(vol_date)
