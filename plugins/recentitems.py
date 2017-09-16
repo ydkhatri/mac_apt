@@ -445,26 +445,28 @@ def ReadFinderPlist(plist, recent_items, source, user=''):
             for vol in vol_dict:
                 parsed_correctly, vol_name, vol_date, vol_type = SplitDataInParts(vol)
                 if parsed_correctly:
-                    valid_date = None
+                    valid_date = ''
+                    valid_int = None
                     if vol_date.startswith('-'): 
-                        log.debug('Got -ve number ({}), not handling!'.format(vol_date))
+                        log.debug('Got -ve number ({}), not handling! Data was {}'.format(vol_date, vol))
                     elif vol_date == '0':
                         pass
-                    elif vol_type == '29': # Not seen valid data here, most items have same data for date
+                    elif vol_type == '27' or vol_type == '29': # Not seen valid data here, most items have same data for 29
                         pass
                     else:
                         vol_date_len = len(vol_date)
-                        log.debug('length of vol_date is {}'.format(vol_date_len))
+                        #log.debug('length of vol_date is {}'.format(vol_date_len))
                         if vol_date_len == 8:
-                            valid_int = int(vol_date, 16)
+                            valid_int = CommonFunctions.IntFromStr(vol_date, 16, None)
                         elif vol_date_len > 8:
-                            valid_int = int(vol_date[0:8], 16)
+                            valid_int = CommonFunctions.IntFromStr(vol_date[0:8], 16, None)
                         elif vol_date_len < 8:
                             #log.debug('Number Seems invalid - {}'.format(vol_date))
-                            vol_date = vol_date * (16 ** (8 - vol_date_len))
-                            valid_int = int(vol_date, 16)
-                        valid_date = CommonFunctions.ReadMacAbsoluteTime(valid_int)
-                    ri = RecentItem(vol_name, vol, 'FXDesktopVolumePositions' + ((', vol_created_date=' + str(valid_date)) if valid_date else '') + ', type=' + vol_type, source, RecentType.VOLUME, user)
+                            valid_int = CommonFunctions.IntFromStr(vol_date, 16, None)
+                            valid_int = valid_int * (16 ** (8 - vol_date_len)) # Adding zeroes to make it len=8. In decimal thats x16 for each digit added.
+                        if valid_int != None:
+                            valid_date = CommonFunctions.ReadMacAbsoluteTime(valid_int)
+                    ri = RecentItem(vol_name, vol, 'FXDesktopVolumePositions' + ((', vol_created_date=' + str(valid_date)) if valid_date != '' else '') + ', type=' + vol_type, source, RecentType.VOLUME, user)
                     recent_items.append(ri)
         except Exception as ex:
             log.exception('Error reading FXDesktopVolumePositions from plist')   

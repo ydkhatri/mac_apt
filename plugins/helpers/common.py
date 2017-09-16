@@ -36,7 +36,7 @@ class CommonFunctions:
                     mac_abs_time = float(mac_abs_time)
                 return datetime.datetime.utcfromtimestamp(mac_abs_time + 978307200)
             except Exception as ex:
-                log.error("ReadMacAbsoluteTime() Failed to convert timestamp from value " + mac_abs_time + " Error was: " + str(ex))
+                log.error("ReadMacAbsoluteTime() Failed to convert timestamp from value " + str(mac_abs_time) + " Error was: " + str(ex))
         return ''
 
     #TODO: Provide better implementation that does not restrict to POSIX 1970-2038 
@@ -65,10 +65,10 @@ class CommonFunctions:
         return ''
 
     @staticmethod
-    def IntFromStr(str):
-        integer = 0
+    def IntFromStr(str, base='10', error_val=0):
+        integer = error_val
         try:
-            integer = int(str)
+            integer = int(str, base)
         except: # Will go here if str is '' or contains non-digit characters
             if str == '' or str == None: pass
             else: log.exception('Could not convert str {} to int'.format(str))
