@@ -60,7 +60,9 @@ class UserInfo:
         self.UUID = ''
         self.GID = '' # retain as string
         self.pw_hint = ''
+        self.password = ''
         self.creation_time = None
+        self.deletion_time = None
         self.failed_login_count = 0
         self.failed_login_timestamp = None
         self.last_login_timestamp = None
