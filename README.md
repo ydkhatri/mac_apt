@@ -27,6 +27,8 @@ SAFARI | Internet history, downloaded file information, cookies and more from Sa
 SPOTLIGHTSHORTCUTS | User typed data in the spotlight bar & targeted document/app
 USERS | Local & Domain user information - name, UID, UUID, GID, account creation & password set dates, pass hints, homedir & Darwin paths
 
-More plugins coming soon..
+### Coming soon..
+* APFS support (almost here)
+* More plugins
 
 For installation and other information, see https://github.com/ydkhatri/mac_apt/wiki
