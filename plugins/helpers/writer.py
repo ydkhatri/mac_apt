@@ -111,7 +111,7 @@ class DataWriter:
         except Exception as ex:
             log.error('Exception from BlobToHex() : ' + str(ex))
         return s    
-        
+
     def WriteRow(self, row):
         '''Write a single row of data, 'row' can be either a list or dictionary'''
         if self.row_count == 0: #Write Header row
@@ -123,7 +123,14 @@ class DataWriter:
         if row_type == list:
             if len(row) != self.num_columns:
                 raise ValueError('Count of data items in row does not match Number of columns!')
-            if self.sql: self.sql_writer.WriteRow(row)
+            if self.sql: # This routine does NOT modify row, we create a list copy
+                if self.cols_with_blobs:
+                    row_copy = list(row)
+                    for col_name, index in self.cols_with_blobs:
+                        row_copy[index] = buffer(row_copy[index])
+                    self.sql_writer.WriteRow(row_copy)
+                else:
+                    self.sql_writer.WriteRow(row)
             if self.csv or self.xlsx: # This routine modifies row
                 if self.cols_with_blobs:
                     for col_name, index in self.cols_with_blobs:
@@ -134,7 +141,13 @@ class DataWriter:
             #list_to_write = [ row.get(col, None if self.column_info[col] in (DataType.INTEGER, DataType.BLOB, DataType.REAL) else '') \
             #                     for col in self.column_info ]
             list_to_write = [ row.get(col, '') for col in self.column_info ]
-            if self.sql: self.sql_writer.WriteRow(list_to_write)
+            if self.sql: 
+                if self.cols_with_blobs:
+                    row_copy = list(list_to_write)
+                    for col_name, index in self.cols_with_blobs:
+                        row_copy[index] = buffer(row_copy[index])
+                    self.sql_writer.WriteRow(row_copy)
+                else: self.sql_writer.WriteRow(list_to_write)
             if self.csv or self.xlsx:
                 if self.cols_with_blobs:
                     for col_name, index in self.cols_with_blobs:
@@ -155,7 +168,15 @@ class DataWriter:
             raise ValueError("WriteRows() can only handle list or dictionary, passed variable was " + str(row_type))
             return
         if row_type == list: 
-            if self.sql: self.sql_writer.WriteRows(rows)
+            if self.sql:
+                if self.cols_with_blobs:
+                    rows_copy = [list(k) for k in rows]
+                    for row_copy in rows_copy:
+                        for col_name, index in self.cols_with_blobs:
+                            row_copy[index] = buffer(row_copy[index])
+                    self.sql_writer.WriteRows(rows_copy)
+                else:
+                    self.sql_writer.WriteRows(rows)
             if self.csv or self.xlsx: # This routine modifies rows
                 if self.cols_with_blobs:
                     for row in rows:
@@ -172,7 +193,15 @@ class DataWriter:
                 #        For sql, this works too, however None is more correct.. revisit this later.
                 list_row = [ row.get(col, '') for col in self.column_info ]
                 list_to_write.append(list_row)
-            if self.sql: self.sql_writer.WriteRows(list_to_write)
+            if self.sql:
+                if self.cols_with_blobs:
+                    rows_copy = [list(k) for k in list_to_write]
+                    for row_copy in rows_copy:
+                        for col_name, index in self.cols_with_blobs:
+                            row_copy[index] = buffer(row_copy[index])
+                    self.sql_writer.WriteRows(rows_copy)
+                else:
+                    self.sql_writer.WriteRows(list_to_write)
             if self.csv or self.xlsx: # This routine modifies list_to_write
                 if self.cols_with_blobs:
                     for list_row in list_to_write:
@@ -196,7 +225,7 @@ class SqliteWriter:
         try:
             self.conn = sqlite3.connect(self.filepath)
         except Exception as ex:
-            log.error('Failed to create csv file at path {}'.format(filepath))
+            log.error('Failed to open/create sqlite db at path {}'.format(filepath))
             log.exception('Error details')
             raise ex
 
@@ -573,20 +602,21 @@ if __name__ == '__main__': # TESTING ONLY
         writer = DataWriter(op, 'TESTINGWRITER', columns, '/var/folders/none/unknown.db')
 
         d = datetime.datetime(2016,11,10,9,20,45,9)
-        writer.WriteRow([1, "Joe", '/Users/JoeSmith', '\x38\x39', d])
-        #writer.WriteRow([datetime.datetime.now(), "Moe", '/Users/MoePo', '\x38\x39', d])# incorret
-        writer.WriteRow({'NAME':'Bill', 'ID':3, 'Path':'/users/coby', 'BLOB':'\x38\x39'})
-        writer.WriteRow({'NAME':'OBoy', 'Path':'/users/piy', 'BLOB':'\x38\x39', 'S_Date':d})
+        writer.WriteRow([1, "Joe", '/Users/JoeSmith', b'\xdb]\xccY\x00\x00\x00\x00P\x87\x044\x00\x00\x00\x00', d])
+        #writer.WriteRow([datetime.datetime.now(), "Moe", '/Users/MoePo', b'\x38\x39', d])# incorret
+        writer.WriteRow({'NAME':'Bill', 'ID':3, 'Path':'/users/coby', 'BLOB':b'\xdb]\xccY\x00\x00\x38\x39'})
+        writer.WriteRow({'NAME':'OBoy', 'Path':'/users/piy', 'BLOB':b'\x38\x39', 'S_Date':d})
         writer.WriteRow({'NAME':'Bad', 'ID':44 })
-        writer.WriteRows([[4,'Four','/four/', '\x38\x39', d],[5,"Five",'/five/', '\x38\x39', None]])
+        writer.WriteRows([[4,'Four','/four/', b'\xdb]\xccY\x00\x00\x38\x39', d],[5,"Five",'/five/', '\x38\x39', None]])
 
         writer2 = DataWriter(op, 'TESTINGWRITER', columns, '/var/folders/none/unknown.db')
 
         d = datetime.datetime(2016,11,10,9,20,45,9)
-        writer2.WriteRow([1, "Joe", '/Users/JoeSmith', '\x38\x39', d])
+        writer2.WriteRow([1, "Joe", '/Users/JoeSmith', b'\x38\x39', d])
 
         op.xlsx_writer.CommitAndCloseFile()
         writer.FinishWrites()
+        writer2.FinishWrites()
 
     except Exception as ex:
         print (ex)
