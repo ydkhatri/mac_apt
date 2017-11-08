@@ -53,6 +53,18 @@ class CommonFunctions:
         return ''
 
     @staticmethod
+    def ReadAPFSTime(self, mac_apfs_time): # Mac APFS timestamp is nano second time epoch beginning 1970/1/1
+        '''Returns datetime object, or empty string upon error'''
+        if mac_apfs_time not in ( 0, None, ''):
+            try:
+                if type(mac_apfs_time) in (str, unicode):
+                    mac_apfs_time = float(mac_apfs_time)
+                return datetime.datetime.utcfromtimestamp(mac_apfs_time / 1000000000.)
+            except Exception as ex:
+                log.error("ReadAPFSTime() Failed to convert timestamp from value " + str(mac_apfs_time) + " Error was: " + str(ex))
+        return ''
+
+    @staticmethod
     def ReadUnixTime(unix_time): # Unix timestamp is time epoch beginning 1970/1/1
         '''Returns datetime object, or empty string upon error'''
         if unix_time not in ( 0, None, ''):
