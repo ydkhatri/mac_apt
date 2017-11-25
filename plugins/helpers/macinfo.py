@@ -172,6 +172,7 @@ class MacInfo:
         self.osx_friendly_name = 'No name yet!'
         self.users = []
         self.hfs_native = NativeHfsParser()
+        self.is_apfs = False
 
     # Public functions, plugins can use these
     def GetFileMACTimes(self, file_path):
@@ -283,7 +284,7 @@ class MacInfo:
     def ListItemsInFolder(self, path='/', types_to_fetch=EntryType.FILES_AND_FOLDERS, include_dates=False):
         ''' 
         Returns a list of files and/or folders in a list
-        Format of list = [ { 'name':'got.txt', 'type':EntryType.FILE, 'size':10 }, .. ]
+        Format of list = [ { 'name':'got.txt', 'type':EntryType.FILE, 'size':10, 'dates': [] }, .. ]
         'path' should be linux style using forward-slash like '/var/db/xxyy/file.tdc'
         '''
         items = [] # List of dictionaries

@@ -125,6 +125,15 @@ def IsOsxPartition(img, partition_start_offset, mac_info):
         log.exception("Exception") #traceback.print_exc(
     return False
 
+def IsApfsContainer(img, partition_start_offset):
+    '''Checks if this is an APFS container'''
+    try:
+        if img.read(partition_start_offset + 0x20, 4) == b'NXSB':
+            return True
+    except:
+        log.error('Cannot seek into image @ offset {}'.format(partition_start_offset + 0x20))
+    return False
+
 def FindOsxPartition(img, vol_info, vs_info, mac_info):
     for part in vol_info:
         if (int(part.flags) & pytsk3.TSK_VS_PART_FLAG_ALLOC):
@@ -137,9 +146,18 @@ def FindOsxPartition(img, vol_info, vs_info, mac_info):
                 continue # skip this
             else:
                 log.info ("Looking at FS with volume label '{}'  @ offset {}".format(part.desc.decode('utf-8'), partition_start_offset)) 
-
+            
             if IsOsxPartition(img, partition_start_offset, mac_info): # Assumes there is only one single OSX installation partition
                 return True
+            else:
+                log.info('Perhaps this is an APFS volume, checking...')
+                #TODO: check size of partition
+                if IsApfsContainer(img, partition_start_offset):
+                    log.debug('Found an APFS volume')
+                    mac_info.is_apfs = True
+                    #TODO: Process apfs
+                    return False
+                
     return False
 
 def Exit(message=''):
@@ -296,8 +314,9 @@ if args.input_type.upper() != 'MOUNTED':
 
 # Write out disk & vol information
 Disk_Info(mac_info, args.input_path).Write()
-mac_info.hfs_native.Initialize(mac_info.pytsk_image, mac_info.osx_partition_start_offset)
-hfs_info = mac_info.hfs_native.GetVolumeInfo()
+if not mac_info.is_apfs:
+    mac_info.hfs_native.Initialize(mac_info.pytsk_image, mac_info.osx_partition_start_offset)
+    hfs_info = mac_info.hfs_native.GetVolumeInfo()
 
 # Start processing plugins now!
 if found_osx:

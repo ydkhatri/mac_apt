@@ -39,7 +39,7 @@ def GetVolumeInfo(mac_info):
     hfs_info = mac_info.hfs_native.GetVolumeInfo()
     basic_data.append(['HFS', 'Block Size', hfs_info.block_size,'Volume Block size (internal)', ''])
     basic_data.append(['HFS', 'Created date', hfs_info.date_created_local_time,'Volume created date (in local time)', ''])
-    basic_data.append(['HFS', 'Last Modified date', hfs_info.date_modified,'Volume lst modified date', ''])
+    basic_data.append(['HFS', 'Last Modified date', hfs_info.date_modified,'Volume last modified date', ''])
     basic_data.append(['HFS', 'Last Checked date', hfs_info.date_last_checked,'Volume last checked for errors', ''])
     basic_data.append(['HFS', 'Last Backup date', hfs_info.date_backup,'Volume last backup date', ''])
     basic_data.append(['HFS', 'Last Mounted Version', hfs_info.last_mounted_version,'', ''])
