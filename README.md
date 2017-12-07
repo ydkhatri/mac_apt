@@ -12,6 +12,7 @@ mac_apt is a tool to process Mac computer full disk images and extract data/meta
 * XLSX, CSV, Sqlite outputs
 * Analyzed files/artifacts are exported for later review
 * zlib, lzvn, lzfse compressed files are supported!
+* APFS is now supported, you can process HighSierra images now!
 
 Available Plugins (artifacts parsed) | Description 
 ------------------ | ---------------
@@ -30,5 +31,6 @@ USERS | Local & Domain user information - name, UID, UUID, GID, account creation
 
 ### Coming soon..
 * More plugins
+* More documentation
 
 For installation and other information, see https://github.com/ydkhatri/mac_apt/wiki
