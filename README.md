@@ -22,13 +22,13 @@ DOMAINS | Active Directory Domain(s) that the mac is connected to
 INSTALLHISTORY | Software Installation History
 NETWORKING | Interfaces, last IP address, MAC address, DHCP ..
 NOTIFICATIONS | Reads mac notification data for each user
+PRINTJOBS | Parses CUPS spooled print jobs to get information about files/commands sent to a printer
 RECENTITEMS | Recently accessed Servers, Documents, Hosts, Volumes & Applications from .plist and .sfl files. Also gets recent searches and places for each user
 SAFARI | Internet history, downloaded file information, cookies and more from Safari caches
 SPOTLIGHTSHORTCUTS | User typed data in the spotlight bar & targeted document/app
 USERS | Local & Domain user information - name, UID, UUID, GID, account creation & password set dates, pass hints, homedir & Darwin paths
 
 ### Coming soon..
-* APFS support (almost here)
 * More plugins
 
 For installation and other information, see https://github.com/ydkhatri/mac_apt/wiki
