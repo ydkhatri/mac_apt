@@ -169,8 +169,10 @@ class HFSCompressedResourceFork(HFSFile):
                         chunk_uncomp = 65536
                         if len(self.header.chunkOffsets) == i + 1: # last chunk
                             chunk_uncomp = full_uncomp - (65536 * i)
-
-                    r += lzvn_decompress(data, compressed_size, chunk_uncomp)
+                    if chunk_uncomp < compressed_size and data[0] == b'\x06':
+                        r += data[1:]
+                    else:
+                        r += lzvn_decompress(data, compressed_size, chunk_uncomp)
                     i += 1
             except Exception as ex:
                 log.exception("Exception from lzfse.decompress")
@@ -205,7 +207,8 @@ class HFSVolume(object):
         self.hasJournal = self.header.attributes & (1 << kHFSVolumeJournaledBit)
 
     def read(self, offset, size):
-        return self.read_correct(self.img, self.offset + offset, size)
+        #return self.read_correct(self.img, self.offset + offset, size)
+        return self.img.read(self.offset + offset, size)
 
     def volumeID(self):
         return struct.pack(">LL", self.header.finderInfo[6], self.header.finderInfo[7])
@@ -346,31 +349,4 @@ class HFSVolume(object):
         jb = self.read(self.header.journalInfoBlock * self.blockSize, self.blockSize)
         jib = JournalInfoBlock.parse(jb)
         return self.read(jib.offset,jib.size)
-    
-    # For pytsk
-    def calculate_block_and_distance(self, offset):
-        tsk_offset = offset
-        offset_diff = 0 # In 512 byte block, distance from block start to offset |<---diff--->*-------|
-
-        if offset < 512: 
-            tsk_offset = 0
-            offset_diff = offset
-        elif offset > 512: 
-            tsk_offset = 512 * (offset / 512)
-            rem = offset % 512
-            if rem > 0:
-                offset_diff = rem
-        return tsk_offset, offset_diff
-
-    # For pytsk
-    def read_correct(self, img, offset, size):
-        '''Determine which 512 byte block the requested range falls into and
-        make the correct request to pytsk. Strip the output only pass the 
-        requested data back
-        '''
-        tsk_offset_start, offset_diff_start = self.calculate_block_and_distance(offset)
-        tsk_offset_end, offset_diff_end = self.calculate_block_and_distance(offset + size)
-        tsk_size = tsk_offset_end - tsk_offset_start + (512 if offset_diff_end > 0 else 0)
-        data = img.read(tsk_offset_start, tsk_size)
-        return data[offset_diff_start:offset_diff_start + size]
 

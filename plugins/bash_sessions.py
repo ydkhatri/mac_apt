@@ -122,7 +122,7 @@ def ProcessBashSessionsForUser(mac_info, bash_sessions, source_folder, user_name
                                 else: # There was data in history too ! # Not seen this.
                                     session.source += ', ' + source_folder + '/' + historynew_entry['name']
                             else:
-                                log.info('{} has data in it ! There is history content too!'.format(historynew_entry['name']))
+                                log.debug('{} has data in it ! There is history content too!'.format(historynew_entry['name']))
                                 session.new_content += '\n' + ''.join(ReadFile(mac_info, source_folder + '/' + historynew_entry['name']))
                         
                 except:

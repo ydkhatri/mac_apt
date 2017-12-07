@@ -20,21 +20,12 @@ import random
 import string
 import logging
 import ast
+from apfs_reader import *
 from hfs_alt import HFSVolume
 from datetime import datetime
-from enum import IntEnum
 from common import *
 
 log = logging.getLogger('MAIN.HELPERS.MACINFO')
-
-class EntryType(IntEnum):
-    FILES = 1
-    FOLDERS = 2
-    FILES_AND_FOLDERS = 3
-
-class TimeZoneType(IntEnum):
-    LOCAL = 1
-    UTC = 2
 
 '''
     Common data structures for plugins 
@@ -137,8 +128,9 @@ class NativeHfsParser:
             f.write(data)
             f.seek(0)
             return f
-        except Exception as ex:
-            log.exception("Failed to open file {}".format(path))   
+        except:
+            log.exception("Failed to open file {}".format(path))
+
         return None
 
     def ExtractFile(self, path, extract_to_path):
@@ -446,6 +438,38 @@ class MacInfo:
             log.error ("Failed to list tables on db. Error Details: " + str(ex))
         return ''
 
+    def GetUserAndGroupIDForFolder(self, path):
+        '''
+            Returns tuple (success, UID, GID) for folder identified by path
+            If failed to get values, success=False
+            UID & GID are returned as strings
+        '''
+        success, uid, gid = False, 0, 0
+        try:
+            path_dir = self.osx_FS.open_dir(path)
+            uid = str(path_dir.info.fs_file.meta.uid)
+            gid = str(path_dir.info.fs_file.meta.gid)
+            success = True
+        except Exception as ex:
+            log.error("Exception trying to get uid & gid for folder " + path + ' Exception details: ' + str(ex))
+        return success, uid, gid
+
+    def GetUserAndGroupIDForFile(self, path):
+        '''
+            Returns tuple (success, UID, GID) for file identified by path
+            If failed to get values, success=False
+            UID & GID are returned as strings
+        '''
+        success, uid, gid = False, 0, 0
+        try:
+            path_file = self.osx_FS.open(path)
+            uid = str(path_file.info.meta.uid)
+            gid = str(path_file.info.meta.gid)
+            success = True
+        except Exception as ex:
+            log.error("Exception trying to get uid & gid for file " + path + ' Exception details: ' + str(ex))
+        return success, uid, gid
+
     # Private (Internal) functions, plugins should not use these
 
     def _GetSafeFilename(self, name):
@@ -483,7 +507,7 @@ class MacInfo:
         try:
             return entry.info.name.name.decode("utf8")
         except UnicodeError:
-            #print("UnicodeError getting name ")
+            #log.debug("UnicodeError getting name ")
             pass
         except Exception as ex:
             log.error (" Unknown exception from GetName:" + str(ex))
@@ -509,10 +533,8 @@ class MacInfo:
         users_folder = self.ListItemsInFolder('/Users/', EntryType.FOLDERS)
         for folder in users_folder:
             folder_path = '/Users/' + folder['name']
-            try:
-                path_dir = self.osx_FS.open_dir(folder_path)
-                uid = str(path_dir.info.fs_file.meta.uid)
-                gid = str(path_dir.info.fs_file.meta.gid)
+            success, uid, gid = self.GetUserAndGroupIDForFolder(folder_path)
+            if success:
                 found_user = False
                 for user in self.users:
                     if user.UID == uid:
@@ -528,8 +550,6 @@ class MacInfo:
                     target_user.home_dir = folder_path
                     target_user.user_name = folder['name']
                     target_user.real_name = folder['name']
-            except Exception as ex:
-                log.error("Exception trying to get uid & gid for " + folder_path + ' Exception details: ' + str(ex))
 
     def _ReadPasswordPolicyData(self, password_policy_data, target_user):
         try:
@@ -610,16 +630,15 @@ class MacInfo:
             for unknown2 in unknown1_dir:
                 unknown2_name = unknown2['name']
                 path = '/private/var/folders/' + unknown1_name + "/" + unknown2_name
-                try:
-                    path_dir = self.osx_FS.open_dir(path)
-                    uid = str(path_dir.info.fs_file.meta.uid)
-                    gid = str(path_dir.info.fs_file.meta.gid)
+
+                success, uid, gid = self.GetUserAndGroupIDForFolder(path)
+                if success:
                     found_user = False
                     for user in self.users:
                         if user.UID == uid:
                             if user.DARWIN_USER_DIR: 
                                 log.warning('There is already a value in DARWIN_USER_DIR {}'.format(user.DARWIN_USER_DIR))
-                                #Sometimes (rare), if UUID changes, there may be another folder upon restart for DARWIN_USER, we will just concatenate with comma
+                                #Sometimes (rare), if UUID changes, there may be another folder upon restart for DARWIN_USER, we will just concatenate with comma. If you see this, it is more likely that another user with same UID existed prior.
                                 user.DARWIN_USER_DIR       += ',' + path + '/0'
                                 user.DARWIN_USER_CACHE_DIR += ',' + path + '/C'
                                 user.DARWIN_USER_TEMP_DIR  += ',' + path + '/T'
@@ -631,11 +650,7 @@ class MacInfo:
                             break
                     if not found_user:
                         log.error('Could not find username for UID={} GID={}'.format(uid, gid))
-                except Exception as ex:
-                    log.error("Exception trying to get uid & gid for " + path + ' Exception details: ' + str(ex))
- 
-
-    
+   
     def _GetSystemInfo(self):
         ''' Gets system version information'''
         try:
@@ -646,7 +661,6 @@ class MacInfo:
             f = self.OpenSmallFile('/System/Library/CoreServices/SystemVersion.plist')
             if f != None:
                 plist = biplist.readPlist(f)
-                #print (plist)
                 try:
                     self.osx_version = plist.get('ProductVersion', '')
                     if self.osx_version != '':
@@ -671,13 +685,122 @@ class MacInfo:
                     log.error ("Error fetching ProductVersion from plist. Is it a valid xml plist?")
             else:
                 log.error("Could not open plist to get system version info!")
-        except Exception:
-            log.error ("Unknown error from _GetSystemInfo()")
-            log.debug("Exception details:", exc_info=True) #traceback.print_exc()
+        except:
+            log.exception("Unknown error from _GetSystemInfo()")
         return False
 
+class ApfsMacInfo(MacInfo):
+    def __init__(self, output_params):
+        MacInfo.__init__(self, output_params)
+        self.apfs_container = None
+        self.apfs_db = None
+        self.apfs_db_path = ''
+        #self.apfs_osx_volume = self.osx_FS
+        #self.apfs_container_offset = self.osx_partition_start_offset
 
+    def ReadApfsVolumes(self):
+        '''Read volume information into an sqlite db'''
+        for vol in self.apfs_container.volumes:
+            apfs_parser = ApfsFileSystemParser(vol, self.apfs_db)
+            apfs_parser.read_volume_records()
 
+    def GetFileMACTimes(self, file_path):
+        '''Gets MACB and the 5th Index timestamp too'''
+        times = { 'c_time':None, 'm_time':None, 'cr_time':None, 'a_time':None, 'i_time':None }
+        try:
+            apfs_file_meta = self.osx_FS.GetFileMetadataByPath(file_path, self.apfs_db)
+            if apfs_file_meta:
+                times['c_time'] = apfs_file_meta.changed
+                times['m_time'] = apfs_file_meta.modified
+                times['cr_time'] = apfs_file_meta.created
+                times['a_time'] = apfs_file_meta.accessed
+                times['i_time'] = apfs_file_meta.index_time
+            else:
+                log.debug('File not found in GetFileMACTimes() query!, path was ' + file_path)
+        except Exception as ex:
+            log.exception('Error trying to get MAC times')
+        return times
+
+    def IsValidFilePath(self, path):
+        return self.osx_FS.DoesFileExist(self.apfs_db, path)
+
+    def IsValidFolderPath(self, path):
+        return self.osx_FS.DoesFolderExist(self.apfs_db, path)
+
+    def GetFileSize(self, full_path, error=None):
+        try:
+            apfs_file_meta = self.osx_FS.GetFileMetadataByPath(self.apfs_db, path)
+            if apfs_file_meta:
+                return apfs_file_meta.logical_size
+        except:
+            pass
+        return error
+
+    def OpenSmallFile(self, path):
+        '''Open files less than 200 MB, returns open file handle'''
+        return self.osx_FS.OpenSmallFile(path, self.apfs_db)
+
+    def ExtractFile(self, tsk_path, destination_path):
+        return self.osx_FS.CopyOutFile(tsk_path, destination_path, self.apfs_db)
+
+    def _GetSize(self, entry):
+        '''For file entry, gets logical file size, or 0 if error'''
+        try:
+            apfs_file_meta = self.osx_FS.GetFileMetadataByPath(path, self.apfs_db)
+            if apfs_file_meta:
+                return apfs_file_meta.logical_size
+        except:
+            pass
+        return 0
+
+    def GetUserAndGroupIDForFile(self, path):
+        return self._GetUserAndGroupID(path)
+
+    def GetUserAndGroupIDForFolder(self, path):
+        return self._GetUserAndGroupID(path)
+
+    def _GetUserAndGroupID(self, path):
+        '''
+            Returns tuple (success, UID, GID) for file/folder identified by path
+            If failed to get values, success=False
+            UID & GID are returned as strings
+        '''
+        success, uid, gid = False, 0, 0
+        apfs_file_meta = self.osx_FS.GetFileMetadataByPath(path, self.apfs_db)
+        if apfs_file_meta:
+            uid = str(apfs_file_meta.uid)
+            gid = str(apfs_file_meta.gid)
+            success = True
+        else:
+            log.debug("Path not found in database (filesystem) : " + path)
+        return success, uid, gid
+
+    def ListItemsInFolder(self, path='/', types_to_fetch=EntryType.FILES_AND_FOLDERS, include_dates=False):
+        '''Always returns dates ignoring the 'include_dates' parameter'''
+        items = []
+        all_items = self.osx_FS.ListItemsInFolder(path, self.apfs_db)
+        if all_items:
+            if types_to_fetch == EntryType.FILES_AND_FOLDERS:
+                items = [] #[dict(x) for x in all_items if x['type'] in ['File', 'Folder'] ]
+                for x in all_items:
+                    if x['type'] == 'File':
+                        x['type'] = EntryType.FILES
+                        all_items.append(dict(x))
+                    elif x['type'] == 'Folder':
+                        x['type'] = EntryType.FOLDERS
+                        items.append(dict(x))
+
+            elif types_to_fetch == EntryType.FILES:
+                for x in all_items:
+                    if x['type'] == 'File':
+                        x['type'] = EntryType.FILES
+                        items.append(dict(x))
+            else: # Folders
+                for x in all_items:
+                    if x['type'] == 'Folder':
+                        x['type'] = EntryType.FOLDERS
+                        items.append(dict(x))
+        return items 
 # TODO: Make this class more efficient, perhaps remove some extractions!
 class MountedMacInfo(MacInfo):
     def __init__(self, root_folder_path, output_params):
@@ -825,7 +948,6 @@ class MountedMacInfo(MacInfo):
                 if self.IsValidFilePath(path_to_sandbox_db) and self.GetFileSize(path_to_sandbox_db): # This does not always exist or it may be zero in size!
                     sqlite = SqliteWrapper(self)
                     try:
-                        #log.debug ("Looking at " + unknown1_name + '/' + unknown2_name)
                         conn = sqlite.connect(path_to_sandbox_db)
                         try:
                             if self.TableExists(conn, 'entry'):
@@ -835,7 +957,6 @@ class MountedMacInfo(MacInfo):
                                     try:
                                         data_dict = ast.literal_eval(str(row[0]))
                                         for item in data_dict:
-                                            #print ('item =' + item + ' -> ' + data_dict[item])
                                             if item.upper().lstrip('_').rstrip('_') in ('HOME', 'HOME_DIR'):
                                                 home = data_dict[item]
                                                 if home != '':

@@ -26,6 +26,7 @@ import pyewf
 import pytsk3
 import traceback
 import plugins.helpers.macinfo as macinfo
+from plugins.helpers.apfs_reader import ApfsContainer, ApfsDbInfo
 from plugins.helpers.writer import *
 from plugins.helpers.disk_report import *
 import logging
@@ -91,15 +92,15 @@ def FindOsxFiles(mac_info):
     if mac_info.IsValidFilePath('/System/Library/CoreServices/SystemVersion.plist'):
         if mac_info.IsValidFilePath("/System/Library/Kernels/kernel") or \
             mac_info.IsValidFilePath( "/mach_kernel"):
-            log.info ("Found valid OSX kernel")
+            log.info ("Found valid OSX/macOS kernel")
         else:
-            log.info ("Could not find OSX kernel!")# On partial/corrupted images, this may not be found
+            log.info ("Could not find OSX/macOS kernel!")# On partial/corrupted images, this may not be found
         mac_info._GetSystemInfo()
-        mac_info._GetUserInfo() # Remember to uncomment !!
+        mac_info._GetUserInfo()
         #PrintAttributes(fs_info)
         return True
     else:
-        log.info ("Could not find OSX installation!")
+        log.info ("Could not find OSX/macOS installation!")
     return False
 
 def IsOsxPartition(img, partition_start_offset, mac_info):
@@ -131,10 +132,63 @@ def IsApfsContainer(img, partition_start_offset):
         if img.read(partition_start_offset + 0x20, 4) == b'NXSB':
             return True
     except:
-        log.error('Cannot seek into image @ offset {}'.format(partition_start_offset + 0x20))
+        raise 'Cannot seek into image @ offset {}'.format(partition_start_offset + 0x20)
     return False
 
-def FindOsxPartition(img, vol_info, vs_info, mac_info):
+def FindOsxPartitionInApfsContainer(img, vol_info, vs_info, part, partition_start_offset):
+    global mac_info
+    mac_info = macinfo.ApfsMacInfo(mac_info.output_params)
+    mac_info.pytsk_image = img   # Must be populated
+    mac_info.vol_info = vol_info # Must be populated
+    mac_info.is_apfs = True
+    mac_info.osx_partition_start_offset = partition_start_offset # apfs container offset
+    mac_info.apfs_container = ApfsContainer(img, vs_info.block_size * part.len, partition_start_offset)
+    try:
+        # start db
+        use_existing_db = False
+        apfs_sqlite_path = os.path.join(mac_info.output_params.output_path, "APFS_Volumes.db")
+        if os.path.exists(apfs_sqlite_path): # Check if db already exists
+            existing_db = SqliteWriter()     # open & check if it has the correct data
+            existing_db.OpenSqliteDb(apfs_sqlite_path)
+            apfs_db_info = ApfsDbInfo(existing_db)
+            if apfs_db_info.CheckVerInfo() and apfs_db_info.CheckVolInfo(mac_info.apfs_container.volumes):
+                # all good, db is up to date, use it
+                use_existing_db = True
+                mac_info.apfs_db = existing_db
+                log.info('Found an existing APFS_Volumes.db in the output folder, looks good, will not create a new one!')
+            else:
+                # db does not seem up to date, create a new one and read info
+                existing_db.CloseDb()
+        if not use_existing_db:
+            apfs_sqlite_path = SqliteWriter.CreateSqliteDb(apfs_sqlite_path) # Will create with next avail file name
+            mac_info.apfs_db = SqliteWriter()
+            mac_info.apfs_db.OpenSqliteDb(apfs_sqlite_path)
+            try:
+                log.info('Reading APFS volumes from container, this may take a few minutes ...')
+                mac_info.ReadApfsVolumes()
+                apfs_db_info = ApfsDbInfo(mac_info.apfs_db)
+                apfs_db_info.WriteVolInfo(mac_info.apfs_container.volumes)
+                apfs_db_info.WriteVersionInfo()
+            except:
+                log.exception('Error while reading APFS volumes')
+                return False
+        mac_info.output_params.apfs_db_path = apfs_sqlite_path
+        # Now search for osx partition in volumes
+        for vol in mac_info.apfs_container.volumes:
+            if vol.num_blocks_used * vol.container.block_size < 10000000000: # < 10 GB, cannot be a macOS installation volume
+                continue
+            mac_info.osx_FS = vol
+            if FindOsxFiles(mac_info):
+                return True
+        # Did not find macOS installation
+        mac_info.osx_FS = None
+
+    except Exception as ex:
+        log.info('Sqlite db could not be created at : ' + apfs_sqlite_path)
+        log.exception('Exception occurred when trying to create APFS_Volumes Sqlite db')
+    return False
+
+def FindOsxPartition(img, vol_info, vs_info):
     for part in vol_info:
         if (int(part.flags) & pytsk3.TSK_VS_PART_FLAG_ALLOC):
             partition_start_offset = vs_info.block_size * part.start
@@ -147,16 +201,12 @@ def FindOsxPartition(img, vol_info, vs_info, mac_info):
             else:
                 log.info ("Looking at FS with volume label '{}'  @ offset {}".format(part.desc.decode('utf-8'), partition_start_offset)) 
             
-            if IsOsxPartition(img, partition_start_offset, mac_info): # Assumes there is only one single OSX installation partition
+            if IsApfsContainer(img, partition_start_offset):
+                log.debug('Found an APFS container')
+                return FindOsxPartitionInApfsContainer(img, vol_info, vs_info, part, partition_start_offset)
+
+            elif IsOsxPartition(img, partition_start_offset, mac_info): # Assumes there is only one single OSX installation partition
                 return True
-            else:
-                log.info('Perhaps this is an APFS volume, checking...')
-                #TODO: check size of partition
-                if IsApfsContainer(img, partition_start_offset):
-                    log.debug('Found an APFS volume')
-                    mac_info.is_apfs = True
-                    #TODO: Process apfs
-                    return False
                 
     return False
 
@@ -249,7 +299,7 @@ if not process_all:
         Exit("Exiting -> Invalid plugin name entered.")
 
 # Check outputs, create output files
-output_params = OutputParams()
+output_params = macinfo.OutputParams()
 output_params.output_path = args.output_path
 SetupExportLogger(output_params)
 if args.xlsx: 
@@ -303,7 +353,7 @@ if args.input_type.upper() != 'MOUNTED':
         vs_info = vol_info.info # TSK_VS_INFO object
         mac_info.pytsk_image = img
         mac_info.vol_info = vol_info
-        found_osx = FindOsxPartition(img, vol_info, vs_info, mac_info)
+        found_osx = FindOsxPartition(img, vol_info, vs_info)
     except Exception as ex:
         if str(ex).find("Cannot determine partition type") > 0 :
             log.info(" Info: Probably not a disk image, trying to parse as a File system")
@@ -316,7 +366,6 @@ if args.input_type.upper() != 'MOUNTED':
 Disk_Info(mac_info, args.input_path).Write()
 if not mac_info.is_apfs:
     mac_info.hfs_native.Initialize(mac_info.pytsk_image, mac_info.osx_partition_start_offset)
-    hfs_info = mac_info.hfs_native.GetVolumeInfo()
 
 # Start processing plugins now!
 if found_osx:
@@ -336,6 +385,8 @@ else:
 if img != None: img.close()
 if args.xlsx:
     output_params.xlsx_writer.CommitAndCloseFile()
+if mac_info.is_apfs:
+    mac_info.apfs_db.CloseDb()
 
 time_processing_ended = time.time()
 run_time = time_processing_ended - time_processing_started

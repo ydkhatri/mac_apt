@@ -36,17 +36,32 @@ basic_data_info = [ ('INFO_TYPE',DataType.TEXT),('Name',DataType.TEXT),('Data',D
                     ('Description',DataType.TEXT),('Source',DataType.TEXT) ]
 
 def GetVolumeInfo(mac_info):
-    hfs_info = mac_info.hfs_native.GetVolumeInfo()
-    basic_data.append(['HFS', 'Block Size', hfs_info.block_size,'Volume Block size (internal)', ''])
-    basic_data.append(['HFS', 'Created date', hfs_info.date_created_local_time,'Volume created date (in local time)', ''])
-    basic_data.append(['HFS', 'Last Modified date', hfs_info.date_modified,'Volume last modified date', ''])
-    basic_data.append(['HFS', 'Last Checked date', hfs_info.date_last_checked,'Volume last checked for errors', ''])
-    basic_data.append(['HFS', 'Last Backup date', hfs_info.date_backup,'Volume last backup date', ''])
-    basic_data.append(['HFS', 'Last Mounted Version', hfs_info.last_mounted_version,'', ''])
-    basic_data.append(['HFS', 'HFSX status', hfs_info.is_HFSX,'Volume ' + ("is" if hfs_info.is_HFSX else "isn't") + ' HFSX', ''])
-    basic_data.append(['HFS', 'HFS version', hfs_info.version,'Volume version', ''])
-    basic_data.append(['HFS', 'Number of Files', hfs_info.num_files,"Volume's total files", ''])
-    basic_data.append(['HFS', 'Number of Folders', hfs_info.num_folders,"Volume's total folders", ''])
+    '''Gets information for the volume where OSX/macOS is installed'''
+    if mac_info.is_apfs:
+        vol = mac_info.osx_FS
+        used_space = '{:.2f}'.format(float(vol.container.block_size * vol.num_blocks_used / (1024*1024*1024.0)))
+        container_size = '{:.2f}'.format(float(vol.container.apfs_container_size / (1024*1024*1024.0)))
+        basic_data.append(['APFS', 'Block Size (bytes)', vol.container.block_size, 'Container Block size', ''])
+        basic_data.append(['APFS', 'Container Size (GB)', container_size, 'Container size', ''])
+        basic_data.append(['APFS', 'Volume Name', vol.volume_name, 'Volume name', ''])
+        basic_data.append(['APFS', 'Volume UUID', vol.uuid, 'Volume Unique Identifier', ''])
+        basic_data.append(['APFS', 'Size Used (GB)', used_space, 'Space allocated', ''])
+        basic_data.append(['APFS', 'Total Files', vol.num_files, 'Total number of files', ''])
+        basic_data.append(['APFS', 'Total Folders', vol.num_folders, 'Total number of directories/folders', ''])
+        basic_data.append(['APFS', 'Created Time', CommonFunctions.ReadAPFSTime(vol.time_created), 'Created date and time', ''])
+        basic_data.append(['APFS', 'Updated Time', CommonFunctions.ReadAPFSTime(vol.time_updated), 'Last updated date and time', ''])
+    else:
+        hfs_info = mac_info.hfs_native.GetVolumeInfo()
+        basic_data.append(['HFS', 'Block Size', hfs_info.block_size,'Volume Block size (internal)', ''])
+        basic_data.append(['HFS', 'Created date', hfs_info.date_created_local_time,'Volume created date (in local time)', ''])
+        basic_data.append(['HFS', 'Last Modified date', hfs_info.date_modified,'Volume last modified date', ''])
+        basic_data.append(['HFS', 'Last Checked date', hfs_info.date_last_checked,'Volume last checked for errors', ''])
+        basic_data.append(['HFS', 'Last Backup date', hfs_info.date_backup,'Volume last backup date', ''])
+        basic_data.append(['HFS', 'Last Mounted Version', hfs_info.last_mounted_version,'', ''])
+        basic_data.append(['HFS', 'HFSX status', hfs_info.is_HFSX,'Volume ' + ("is" if hfs_info.is_HFSX else "isn't") + ' HFSX', ''])
+        basic_data.append(['HFS', 'HFS version', hfs_info.version,'Volume version', ''])
+        basic_data.append(['HFS', 'Number of Files', hfs_info.num_files,"Volume's total files", ''])
+        basic_data.append(['HFS', 'Number of Folders', hfs_info.num_folders,"Volume's total folders", ''])
 
 def ReadSerialFromDb(mac_info, source):
     found_serial = False
@@ -121,6 +136,8 @@ def GetTimezone(mac_info):
         data = f.read().decode('utf8')
         if data.startswith('/usr/share/zoneinfo'):
             data = data[20:]
+        elif data.startswith('/var/db/timezone/zoneinfo/'): # on HighSierra
+            data = data[26:]
         basic_data.append(['TIMEZONE', 'TimeZone Set', data, 'Timezone on machine', '/private/etc/localtime'])
     else:
         log.error('Could not open file /private/etc/localtime to read timezone information')

@@ -4,6 +4,7 @@
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[co]
+apfs_test.py
 *$py.class
 
 # C extensions

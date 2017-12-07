@@ -19,12 +19,13 @@ import textwrap
 log = logging.getLogger('MAIN.DISK_REPORT')
 
 class Vol_Info:
-    def __init__(self, name, size, file_sys_type, offset):
+    def __init__(self, name, size, file_sys_type, offset, has_os):
         self.name = name
         self.size_bytes = size
         self.file_system = file_sys_type
         self.offset = offset
         self.size_str = Disk_Info.GetSizeStr(size)
+        self.has_os = has_os
 
 class Disk_Info:
 
@@ -47,6 +48,9 @@ class Disk_Info:
         self.mac_info = mac_info
         self.image_path = source_image_path
         self.block_size = mac_info.vol_info.info.block_size
+        self.apfs_block_size = 0
+        if mac_info.is_apfs:
+            self.apfs_block_size = mac_info.apfs_container.block_size
         self.img = mac_info.pytsk_image
         self.volumes = []
         self.total_disk_size_in_bytes = self.img.get_size()
@@ -66,7 +70,7 @@ class Disk_Info:
                       ('Offset',DataType.INTEGER),('Size',DataType.TEXT), ('Size_in_bytes',DataType.INTEGER),
                       ('macOS_Installed',DataType.TEXT) ]
         info = [ ['Partition', x.file_system, x.name, x.offset, x.size_str, x.size_bytes, 
-                    '*' if self.mac_info.osx_partition_start_offset==x.offset else ''] for x in self.volumes]
+                    '*' if x.has_os else ''] for x in self.volumes]
         info.insert(0, ['Disk', str(self.mac_info.vol_info.info.vstype)[12:], '', 0, Disk_Info.GetSizeStr(self.total_disk_size_in_bytes), self.total_disk_size_in_bytes, ''])
         WriteList("disk, partition & volume information", "Disk_Info", info, data_info, self.mac_info.output_params,'')
 
@@ -76,15 +80,29 @@ class Disk_Info:
                 partition_start_offset = self.block_size * part.start
                 partition_size_in_sectors = part.len
                 file_system = 'Unknown'
+                part_is_apfs = False
                 try:
-                    fs = pytsk3.FS_Info(self.img, offset=partition_start_offset)    
+                    fs = pytsk3.FS_Info(self.img, offset=partition_start_offset)
                     fs_info = fs.info # TSK_FS_INFO
                     fs_type = str(fs_info.ftype)[12:]
                     if fs_type.find("_") > 0: fs_type = fs_type[0:fs_type.find("_")]
                     file_system = fs_type
                 except Exception as ex:
-                    log.debug(" Error: Failed to detect/parse file system!")
-                vol = Vol_Info(part.desc.decode('utf-8'), partition_size_in_sectors * self.block_size, file_system, partition_start_offset)
-                self.volumes.append(vol)
+                    if self.mac_info.is_apfs and partition_start_offset == self.mac_info.osx_partition_start_offset:
+                        part_is_apfs = True
+                        for volume in self.mac_info.apfs_container.volumes:
+                            vol = Vol_Info(volume.volume_name, 
+                                partition_size_in_sectors * self.block_size, 
+                                'APFS', 
+                                partition_start_offset,
+                                self.mac_info.osx_FS == volume)
+                            self.volumes.append(vol)
+                    else:
+                        log.debug(" Error: Failed to detect/parse file system!")
+                if not part_is_apfs:
+                    vol = Vol_Info(part.desc.decode('utf-8'), 
+                                partition_size_in_sectors * self.block_size, 
+                                file_system, partition_start_offset, self.mac_info.osx_partition_start_offset==partition_start_offset)
+                    self.volumes.append(vol)
 
             

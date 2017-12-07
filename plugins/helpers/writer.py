@@ -19,7 +19,6 @@ import xlsxwriter
 
 from common import *
 from enum import IntEnum
-from macinfo import OutputParams
 
 log = logging.getLogger('MAIN.HELPERS.WRITER')
 
@@ -215,9 +214,12 @@ class SqliteWriter:
     def __init__(self):
         self.filepath = ''
         self.conn = None
-        self.table_name = ''
-        self.column_info = None
-        self.executemany_query = ''
+        self.table_names = []
+        self.table_name  = ''
+        self.column_infos = []
+        self.column_info  = None
+        self.executemany_querys = []
+        self.executemany_query  = ''
     
     def OpenSqliteDb(self, filepath):
         '''Open an existing db or create it'''
@@ -256,14 +258,28 @@ class SqliteWriter:
             log.error ("In TableExists({}). Failed to list tables on db. Error Details:{}".format(table_name, str(ex)) )
         return False
 
-    # def CleanColumnInfo(self, column_info):
-    #     '''Removes col_width information making it only {(name:type),(name:type),..}'''
-    #     self.column_info = collections.OrderedDict()
-    #     for col, val in column_info.items():
-    #         data = val
-    #         if type(val) == tuple:
-    #             data = val[0]
-    #         self.column_info[col] = data
+    def RunQuery(self, query, writing=False, return_named_objects=False):
+        '''Execute a query on the database and return results.
+           If this is an INSERT/UPDATE/CREATE query, then set writing=true 
+           which internally calls commit().
+           Return value is tuple (success, cursor, error_message)
+        '''
+        cursor = None
+        success = False
+        error_message = ''
+        try:
+            if return_named_objects: 
+                self.conn.row_factory = sqlite3.Row
+            cursor = self.conn.cursor()
+            cursor = self.conn.execute(query)
+            if writing: 
+                self.conn.commit()
+            success = True
+        except Exception as ex:
+            log.exception('Query execution error, query was - ' + query)
+            error_message = str(ex)
+
+        return success, cursor, error_message
 
     def CreateTable(self, column_info, table_name):
         '''
@@ -304,16 +320,34 @@ class SqliteWriter:
             log.error(str(ex))
             log.exception("error creating table " + self.table_name)
             raise ex
+        self.table_names.append(self.table_name)
+        self.column_infos.append(self.column_info)
+        self.executemany_querys.append(self.executemany_query)
+        return self.table_name
 
-    def WriteRow(self, row):
-        '''Write row to db, where row is tuple or list (in order)'''
-        self.WriteRows([row])
+    def WriteRow(self, row, table_name=None):
+        '''Write row to db, where row is tuple or list (in order). 
+           If a table_name is supplied, it will use the query (column_info) for 
+           that table, else it will use the last created table's column_info
+        '''
+        self.WriteRows([row], table_name)
 
-    def WriteRows(self, rows):
-        '''Write rows to db, where row is tuple or list of 'tuple or list' (in order)'''
+    def WriteRows(self, rows, table_name=None):
+        '''Write rows to db, where row is tuple or list of 'tuple or list' (in order).
+           If a table_name is supplied, it will use the query (column_info) for 
+           that table, else it will use the last created table's column_info
+        '''        
         try:
             cursor = self.conn.cursor()
-            cursor.executemany(self.executemany_query, rows)
+            query = self.executemany_query
+            if table_name:
+                try:
+                    index = self.table_names.index(table_name)
+                    query = self.executemany_querys[index]
+                except Exception as ex:
+                    log.exception("Could not find table name {}".format(table_name))
+                    raise ex
+            cursor.executemany(query, rows)
             self.conn.commit()
         except Exception as ex:
             log.error(str(ex))
@@ -589,6 +623,8 @@ if __name__ == '__main__': # TESTING ONLY
     
     try:
         import datetime
+        from macinfo import * # OutputParams
+
         op = OutputParams()
         op.write_csv = True
         op.write_sql = True

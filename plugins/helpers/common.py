@@ -13,9 +13,20 @@ import os
 import datetime
 import pytz
 import logging
+from enum import IntEnum
 from tzlocal import get_localzone
 
 log = logging.getLogger('MAIN.HELPERS.COMMON')
+
+class EntryType(IntEnum):
+    FILES = 1
+    FOLDERS = 2
+    FILES_AND_FOLDERS = 3
+    SYMLINKS = 4
+
+class TimeZoneType(IntEnum):
+    LOCAL = 1
+    UTC = 2
 
 class CommonFunctions:
 
@@ -53,7 +64,7 @@ class CommonFunctions:
         return ''
 
     @staticmethod
-    def ReadAPFSTime(self, mac_apfs_time): # Mac APFS timestamp is nano second time epoch beginning 1970/1/1
+    def ReadAPFSTime(mac_apfs_time): # Mac APFS timestamp is nano second time epoch beginning 1970/1/1
         '''Returns datetime object, or empty string upon error'''
         if mac_apfs_time not in ( 0, None, ''):
             try:
@@ -77,13 +88,13 @@ class CommonFunctions:
         return ''
 
     @staticmethod
-    def IntFromStr(str, base='10', error_val=0):
+    def IntFromStr(str, base=10, error_val=0):
         integer = error_val
         try:
             integer = int(str, base)
         except: # Will go here if str is '' or contains non-digit characters
             if str == '' or str == None: pass
-            else: log.exception('Could not convert str {} to int'.format(str))
+            else: log.exception('Could not convert str "{}" to int'.format(str))
         return integer
 
     @staticmethod
