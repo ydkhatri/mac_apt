@@ -38,12 +38,12 @@ log = logging.getLogger('MAIN.' + __Plugin_Name) # Do not rename or remove this 
 def PrintAll(cups_list, output_params, source_path):
 
     cups_info = [ ('Job',DataType.TEXT),('Owner',DataType.TEXT),('Job ID',DataType.INTEGER),
-                    ('Job UUID',DataType.TEXT),('Application',DataType.TEXT),('Time of Creation',DataType.DATE),
+                    ('Destination Printer', DataType.TEXT),('Application',DataType.TEXT),('Time of Creation',DataType.DATE),
                     ('Time at Processing',DataType.DATE),('Time of Competion',DataType.DATE),
-                    ('PrinterURI',DataType.TEXT),('Document Format', DataType.TEXT),
+                    ('Copies', DataType.INTEGER),('Document Format', DataType.TEXT),
                     ('Origin Host Name', DataType.TEXT),('State', DataType.TEXT),('Sheets printed', DataType.INTEGER),
-                    ('Printer state msg', DataType.TEXT),('Printer state reason', DataType.TEXT),('Copies', DataType.INTEGER),
-                    ('Destination Printer', DataType.TEXT),('Cached_File',DataType.TEXT),('Source',DataType.TEXT)
+                    ('Printer state msg', DataType.TEXT),('Printer state reason', DataType.TEXT),('PrinterURI',DataType.TEXT),
+                    ('Job UUID',DataType.TEXT),('Cached_File',DataType.TEXT),('Source',DataType.TEXT)
                 ]
 
     log.info (str(len(cups_list)) + " print job(s) found")
@@ -91,14 +91,18 @@ def Plugin_Start(mac_info):
     if jobs:
         PrintAll(jobs, mac_info.output_params, cupsDirectory)
 
-def get_job_detail(request, job_request, ret_on_error=''):
-    '''Returns the specific data requested in job_request'''
+def get_job_detail(request, job_request, ret_all_replies=False, ret_on_error=''):
+    '''Returns the specific data requested in job_request. If ret_all_replies=True, a list is returned'''
     try:
         replies = request.job[job_request]
-        for reply in replies:
-            return reply[1]
+        if ret_all_replies:
+            return [reply[1] for reply in replies]
+        else:
+            return replies[0][1]
+
     except Exception as ex:
         print ('Error retrieving value for ' + job_request)
+    if ret_all_replies: return []
     return ret_on_error
 
 def get_job_state_str(state):
@@ -133,8 +137,9 @@ def parse_cups_file(mac_info, filepath):
     job_uuid = get_job_detail(request, "job-uuid").decode("utf8")
     job_state = get_job_state_str(get_job_detail(request, "job-state"))
     job_printer_state_message = get_job_detail(request, "job-printer-state-message").decode("utf8")
+    reasons = get_job_detail(request, "job-printer-state-reasons", ret_all_replies=True)
+    job_printer_state_reason = ', '.join([reason.decode("utf8") for reason in reasons])
     job_media_sheets_completed = get_job_detail(request, "job-media-sheets-completed")
-    job_printer_state_reason = get_job_detail(request, "job-printer-state-reasons").decode("utf8")
 
     copies = get_job_detail(request, "copies")
     destination_printer = get_job_detail(request, "DestinationPrinterID").decode("utf8")
@@ -144,9 +149,9 @@ def parse_cups_file(mac_info, filepath):
     time_at_processing = CommonFunctions.ReadUnixTime(get_job_detail(request, "time-at-processing"))
     time_at_completion = CommonFunctions.ReadUnixTime(get_job_detail(request, "time-at-completed"))
 
-    return [job_name, job_origin_username, job_ID, job_uuid, app, time_at_creation, time_at_processing, time_at_completion,\
-             printer_uri, doc_format, job_origin_hostname, job_state, job_media_sheets_completed, job_printer_state_message,\
-             job_printer_state_reason, copies, destination_printer, '',filepath]
+    return [job_name, job_origin_username, job_ID, destination_printer, app, time_at_creation, time_at_processing, time_at_completion,\
+             copies, doc_format, job_origin_hostname, job_state, job_media_sheets_completed, job_printer_state_message,\
+             job_printer_state_reason, printer_uri, job_uuid, '',filepath]
 
 
 
