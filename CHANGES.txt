@@ -1,0 +1,20 @@
+Updates in 20171207 (v0.2):
+
++ APFS support added, we can parse APFS containers and volumes now
++ New plugin -  PrintJobs
++ Retrieves deleted users
++ Retrieves default user's password if 'autologon' was enabled
++ Sidebarlists plist is now parsed & Alias v3 parsing added
++ Vol created dates are now extracted from FXDesktopVolumePositions
++ Better ALIAS v2 parsing, new Info column in RecentItems output
+
+! Bug fixed - now binary BLOBs write correctly to sqlite db
+! Minor fixes in RecentItems and common.py
+
+Updates in Version 20170902(v0.12):
+
++ New plugin BASHSESSIONS that parses bash_sessions and bash_history
++ Added processing of 'finder' plist to RECENTITEMS plugin
++ More user data is parsed (account policy data such as creation date, last password set date, password hint,..)
+
+! Minor bug fixes
