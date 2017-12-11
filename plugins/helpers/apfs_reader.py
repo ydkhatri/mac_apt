@@ -427,7 +427,8 @@ class ApfsVolume:
             path = '/' + path
         if path.endswith('/') and path != '/':
             path = path[:-1]
-        
+        if not os.path.exists(output_folder):
+            os.makedirs(output_folder)
         items = self.ListItemsInFolder(path, db)
         for item in items:
             type = item['type']

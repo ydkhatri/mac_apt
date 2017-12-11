@@ -22,6 +22,7 @@ from __future__ import unicode_literals
 import sys
 import os
 import argparse
+import binascii
 import pyewf
 import pytsk3
 import traceback
@@ -135,7 +136,7 @@ def IsApfsContainer(img, partition_start_offset):
         raise 'Cannot seek into image @ offset {}'.format(partition_start_offset + 0x20)
     return False
 
-def FindOsxPartitionInApfsContainer(img, vol_info, vs_info, part, partition_start_offset):
+def FindOsxPartitionInApfsContainer(img, vol_info, vs_info, part, partition_start_offset, disk_guid):
     global mac_info
     mac_info = macinfo.ApfsMacInfo(mac_info.output_params)
     mac_info.pytsk_image = img   # Must be populated
@@ -146,7 +147,7 @@ def FindOsxPartitionInApfsContainer(img, vol_info, vs_info, part, partition_star
     try:
         # start db
         use_existing_db = False
-        apfs_sqlite_path = os.path.join(mac_info.output_params.output_path, "APFS_Volumes.db")
+        apfs_sqlite_path = os.path.join(mac_info.output_params.output_path, "APFS_Volumes_" + disk_guid + ".db")
         if os.path.exists(apfs_sqlite_path): # Check if db already exists
             existing_db = SqliteWriter()     # open & check if it has the correct data
             existing_db.OpenSqliteDb(apfs_sqlite_path)
@@ -202,8 +203,9 @@ def FindOsxPartition(img, vol_info, vs_info):
                 log.info ("Looking at FS with volume label '{}'  @ offset {}".format(part.desc.decode('utf-8'), partition_start_offset)) 
             
             if IsApfsContainer(img, partition_start_offset):
-                log.debug('Found an APFS container')
-                return FindOsxPartitionInApfsContainer(img, vol_info, vs_info, part, partition_start_offset)
+                log.info('Found an APFS container')
+                disk_guid = binascii.hexlify(img.read(0x238, 16)).upper() # get gpt disk guid (APFS will always be on a GPT disk)
+                return FindOsxPartitionInApfsContainer(img, vol_info, vs_info, part, partition_start_offset, disk_guid)
 
             elif IsOsxPartition(img, partition_start_offset, mac_info): # Assumes there is only one single OSX installation partition
                 return True
