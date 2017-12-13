@@ -410,64 +410,27 @@ def ReadSidebarListsPlist(plist, recent_items, source, user=''):
     except:
         pass # Not found!
 
-def SplitDataInParts(data):
-    '''Splits the volume name string into name, num and type'''
-    # Split on last _ Example entry:  HandBrake-0.10.2-MacOSX.6_GUI_x86_64_0x1.b2a122dp+28
-    # Splits to HandBrake-0.10.2-MacOSX.6_GUI_x86_64 , 1b2a122d, 28
-    # returns tuple  (status, name, num, type)
-
-    parsed_correctly = False
-    name = ''
-    num = ''
-    type = ''
-    last_underscore_pos = data.rfind('_')
-    if last_underscore_pos > 0:
-        name = data[0:last_underscore_pos]
-        rest = data[last_underscore_pos + 1:]
-        plus_pos = rest.rfind('+')
-        if plus_pos > 0:
-            num = rest[0:plus_pos]
-            type = rest[plus_pos+1:]
-            num = num.replace('0x', '').replace('.', '').replace('p','')
-            log.debug('name={} name, num={}, type={}'.format(name, num, type))
-            parsed_correctly = True
-        else:
-            log.debug('+ not found in volume string')
-    else:
-        log.debug('_ not found in volume string')
-    return parsed_correctly, name, num, type
-
-
 def ReadFinderPlist(plist, recent_items, source, user=''):
     try:
         vol_dict = plist['FXDesktopVolumePositions']
         try:
             for vol in vol_dict:
-                parsed_correctly, vol_name, vol_date, vol_type = SplitDataInParts(vol)
-                if parsed_correctly:
-                    valid_date = ''
-                    valid_int = None
-                    if vol_date.startswith('-'): 
-                        log.debug('Got -ve number ({}), not handling! Data was {}'.format(vol_date, vol))
-                    elif vol_date == '0':
-                        pass
-                    elif vol_type == '27' or vol_type == '29': # Not seen valid data here, most items have same data for 29
-                        pass
-                    else:
-                        vol_date_len = len(vol_date)
-                        #log.debug('length of vol_date is {}'.format(vol_date_len))
-                        if vol_date_len == 8:
-                            valid_int = CommonFunctions.IntFromStr(vol_date, 16, None)
-                        elif vol_date_len > 8:
-                            valid_int = CommonFunctions.IntFromStr(vol_date[0:8], 16, None)
-                        elif vol_date_len < 8:
-                            #log.debug('Number Seems invalid - {}'.format(vol_date))
-                            valid_int = CommonFunctions.IntFromStr(vol_date, 16, None)
-                            valid_int = valid_int * (16 ** (8 - vol_date_len)) # Adding zeroes to make it len=8. In decimal thats x16 for each digit added.
-                        if valid_int != None:
-                            valid_date = CommonFunctions.ReadMacAbsoluteTime(valid_int)
-                    ri = RecentItem(vol_name, vol, 'FXDesktopVolumePositions' + ((', vol_created_date=' + str(valid_date)) if valid_date != '' else '') + ', type=' + vol_type, source, RecentType.VOLUME, user)
-                    recent_items.append(ri)
+                vol_name = vol
+                valid_date = ''
+                
+                last_underscore_pos = vol.rfind('_')
+                if last_underscore_pos > 0:
+                    vol_name = vol[0:last_underscore_pos]
+                    vol_date = vol[last_underscore_pos+1:]
+                    vol_date_int = 0
+                    try: 
+                        vol_date_int = int(float.fromhex(vol_date))
+                    except:
+                        log.error('Failed to convert {} to int'.format(vol_date))
+                    if vol_date_int != 0:
+                        valid_date = CommonFunctions.ReadMacAbsoluteTime(vol_date_int)
+                ri = RecentItem(vol_name, vol, 'FXDesktopVolumePositions' + ((', vol_created_date=' + str(valid_date)) if valid_date != '' else ''), source, RecentType.VOLUME, user)
+                recent_items.append(ri)
         except Exception as ex:
             log.exception('Error reading FXDesktopVolumePositions from plist')   
     except: # Not found
