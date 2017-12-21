@@ -236,7 +236,6 @@ class ApfsFileSystemParser:
             for row in cursor:
                 # Go to decmpfs_extent block and read uncompressed size
                 logical_size = row[2]
-                #uncompressed_size = 0
                 #decmpfs_ext_cnid = row[1]
                 self.container.seek(block_size * row[3])
                 decmpfs = self.container.read(logical_size)
@@ -624,9 +623,9 @@ class ApfsVolume:
                         item['size'] = row[8]
                     item['dates'] = { 'c_time':CommonFunctions.ReadAPFSTime(row[6]), 'm_time':CommonFunctions.ReadAPFSTime(row[5]), 'cr_time':CommonFunctions.ReadAPFSTime(row[4]), 'a_time':CommonFunctions.ReadAPFSTime(row[7]),
                     'i_time':CommonFunctions.ReadAPFSTime(row[9]) }
-                    if row[2] == 4:    item['type'] = 'Folder' #EntryType.FOLDERS
-                    elif row[2] == 8:  item['type'] = 'File' #EntryType.FILES
-                    elif row[2] == 10: item['type'] = 'Symlink' #EntryType.SYMLINKS
+                    if row[2] == 4:    item['type'] = 'Folder'
+                    elif row[2] == 8:  item['type'] = 'File'
+                    elif row[2] == 10: item['type'] = 'Symlink'
                     else:
                         item['type'] = row[2]
                     items.append(item)
@@ -695,7 +694,7 @@ class ApfsContainer:
         return self.position
 
     def read(self, size):
-        data = self.img.read(self.apfs_container_offset + self.position, size) #self.read_correct(self.apfs_container_offset + self.position, size)
+        data = self.img.read(self.apfs_container_offset + self.position, size)
         self.position += len(data)
         return data
 
@@ -713,34 +712,6 @@ class ApfsContainer:
         block = self.apfs.Block(KaitaiStream(BytesIO(data)), self.apfs, self.apfs)
         return block
 
-    # For pytsk - not used - remove later!
-    def calculate_block_and_distance(self, offset):
-        tsk_offset = offset
-        offset_diff = 0 # In 'block_size' byte block, distance from block start to offset |<---diff--->*-------|
-
-        if offset < self.block_size: 
-            tsk_offset = 0
-            offset_diff = offset
-        elif offset > self.block_size: 
-            tsk_offset = self.block_size * (offset / self.block_size)
-            rem = offset % self.block_size
-            if rem > 0:
-                offset_diff = rem
-        return tsk_offset, offset_diff
-
-    # For pytsk - not used - remove later!
-    def read_correct(self, offset, size):
-        '''
-        Determine which 'block_size' byte block the requested range falls into and
-        make the correct request to pytsk. Strip the output only pass the 
-        requested data back
-        '''
-        tsk_offset_start, offset_diff_start = self.calculate_block_and_distance(offset)
-        tsk_offset_end, offset_diff_end = self.calculate_block_and_distance(offset + size)
-        tsk_size = tsk_offset_end - tsk_offset_start + (self.block_size if offset_diff_end > 0 else 0)
-        data = self.img.read(tsk_offset_start, tsk_size)
-        return data[offset_diff_start:offset_diff_start + size]
-
 class ApfsExtent:
     __slots__ = ['offset', 'size', 'block_num']
 
@@ -752,7 +723,6 @@ class ApfsExtent:
     def GetData(self, container):
         container.seek(self.block_num * container.block_size)
         ## TODO: Create buffered read, in case of really large files!!
-        #return image.read(self.size)
         return container.read(self.size)
 
 class ApfsFile():
