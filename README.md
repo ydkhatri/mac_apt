@@ -22,6 +22,7 @@ BASHSESSIONS | Reads bash (Terminal) sessions & history for every user
 DOMAINS | Active Directory Domain(s) that the mac is connected to
 INSTALLHISTORY | Software Installation History
 NETWORKING | Interfaces, last IP address, MAC address, DHCP ..
+NOTES | Reads notes databases
 NOTIFICATIONS | Reads mac notification data for each user
 PRINTJOBS | Parses CUPS spooled print jobs to get information about files/commands sent to a printer
 RECENTITEMS | Recently accessed Servers, Documents, Hosts, Volumes & Applications from .plist and .sfl files. Also gets recent searches and places for each user
