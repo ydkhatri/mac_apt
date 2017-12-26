@@ -5,6 +5,9 @@
 __pycache__/
 *.py[co]
 apfs_test.py
+mac_apt_compiled*
+mac_apt_singleplugin_compiled*
+mac_apt_vmdk*
 *$py.class
 
 # C extensions

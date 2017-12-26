@@ -9,7 +9,7 @@
    ------------
    This plugin will parse information about documents that were printed. The 
    information is in the form of CUPS (Common UNIX Printing System)
-   print job data located at /private/var/spool.
+   print job data located at /private/var/spool/cups
 '''
 
 from __future__ import print_function
@@ -20,6 +20,7 @@ from helpers.macinfo import *
 from helpers.writer import *
 from helpers.common import *
 import logging
+import os
 
 __Plugin_Name = "PRINTJOBS" # Cannot have spaces, and must be all caps!
 __Plugin_Friendly_Name = "Print job info"
@@ -28,8 +29,8 @@ __Plugin_Description = "Parses CUPS spooled print jobs to get information about 
 __Plugin_Author = "Jack Farley, Yogesh Khatri"
 __Plugin_Author_Email = "jack.farley@mymail.champlain.edu, yogesh@swiftforensics.com"
 
-__Plugin_Standalone = False
-__Plugin_Standalone_Usage = ''
+__Plugin_Standalone = True
+__Plugin_Standalone_Usage = 'Parses print jobs from the provided folder. You must supply path to the /private/var/spool/cups folder'
 
 log = logging.getLogger('MAIN.' + __Plugin_Name) # Do not rename or remove this ! This is the logger object
 
@@ -52,8 +53,8 @@ def PrintAll(cups_list, output_params, source_path):
 def Plugin_Start(mac_info):
     '''Main Entry point function for plugin'''
     cupsDirectory = '/private/var/spool/cups'
-    cacheDirectory = cupsDirectory + '/cache'
-    tmpDirectory = cupsDirectory + '/tmp'
+    #cacheDirectory = cupsDirectory + '/cache'
+    #tmpDirectory = cupsDirectory + '/tmp'
 
     jobs = []
     files_list = mac_info.ListItemsInFolder(cupsDirectory, EntryType.FILES)
@@ -62,7 +63,7 @@ def Plugin_Start(mac_info):
         filepath = cupsDirectory + '/' + filename
         if filename.startswith('c') and item['size'] > 0:
             mac_info.ExportFile(filepath, __Plugin_Name)
-            cups_info = parse_cups_file(mac_info, filepath)
+            cups_info = parse_cups_file_from_image(mac_info, filepath)
             if cups_info:
                 jobs.append(cups_info)
     # Now look for d00xxx files, these are cached files corresponding to job-ids
@@ -116,18 +117,8 @@ def get_job_state_str(state):
     else:
         return str(state)
 
-def parse_cups_file(mac_info, filepath):
-    '''Process individual job file (c00xxx) and return list of properties'''
-    j_file = mac_info.OpenSmallFile(filepath)
-    if j_file != None:
-        ippdatas = j_file.read()
-        request = pkipplib.IPPRequest(ippdatas)
-        request.parse()
-        j_file.close()
-    else:
-        log.error ('Error parsing cups job file ' + filepath + ' Error=' + str(ex))
-        return None
-
+def get_job_properties(request, filepath):
+    '''Get job properties from request object'''
     job_name = get_job_detail(request, "job-name").decode("utf8")
     job_origin_username = get_job_detail(request, "job-originating-user-name").decode("utf8")
     printer_uri = get_job_detail(request, "printer-uri").decode("utf8")
@@ -153,20 +144,78 @@ def parse_cups_file(mac_info, filepath):
              copies, doc_format, job_origin_hostname, job_state, job_media_sheets_completed, job_printer_state_message,\
              job_printer_state_reason, printer_uri, job_uuid, '',filepath]
 
+def parse_cups_file_from_image(mac_info, filepath):
+    '''Process individual job file (c00xxx) and return list of properties'''
+    j_file = mac_info.OpenSmallFile(filepath)
+    if j_file != None:
+        ippdatas = j_file.read()
+        request = pkipplib.IPPRequest(ippdatas)
+        request.parse()
+        j_file.close()
+    else:
+        log.error ('Error parsing cups job file ' + filepath + ' Error=' + str(ex))
+        return None
+    return get_job_properties(request, filepath)
+
+def parse_cups_file(filepath):
+    '''Process individual job file (c00xxx) and return list of properties'''
+    try:
+        with open(filepath, 'rb') as j_file:
+            ippdatas = j_file.read()
+            request = pkipplib.IPPRequest(ippdatas)
+            request.parse()
+            j_file.close()
+    except:
+        log.exception ('Error opening cups job file ' + filepath)
+        return None
+    return get_job_properties(request, filepath)
 
 
+def Plugin_Start_Standalone(input_files_list, output_params):
+    log.info("Module Started as standalone")
+    for input_path in input_files_list:
+        log.debug("Input folder passed was: " + input_path)
+        jobs = []
+        try:
+            dirList = os.listdir(input_path)
+            had_exception = False
+        except:
+            log.exception('Problem listing files.. Is the path provided a file (instead of a folder)?')
+            had_exception = True
+        if not had_exception:
+            for filename in dirList:
+                filepath = os.path.join(input_path, filename)
+                if os.path.isfile(filepath):
+                    if filename.startswith('c'):
+                        cups_info = parse_cups_file(filepath)
+                        if cups_info:
+                            jobs.append(cups_info)
+            # Now look for d00xxx files, these are cached files corresponding to job-ids
+            for filename in dirList:
+                filepath = os.path.join(input_path, filename)
+                if filename.startswith('d'):
+                    # Get job id from name
+                    job_id = 0
+                    job_id_str = filename[1:]
+                    dash_pos =job_id_str.find('-')
+                    if dash_pos > 0:
+                        job_id_str = job_id_str[0:dash_pos]
+                    job_id = CommonFunctions.IntFromStr(job_id_str)
+                    # Find the entry that represents that job id
+                    cups_info = None
+                    for job in jobs:
+                        if job[2] == job_id:
+                            cups_info = job
+                            break
+                    if cups_info: # Found job
+                        cups_info[17] = filename
+                    else: # Did not find job, create new one
+                        jobs.append(['', '', None, '', '', '', '', '', '', '', '', '', '', '', '', None, '', filename, ''])
 
+        if len(jobs) > 0:
+            PrintAll(jobs, output_params, filepath)
+        else:
+            log.info('No print jobs found in {}'.format(input_path))
 
-
-
-
-
-
-
-
-
-
-
-
-
-
+if __name__ == '__main__':
+    print ("This plugin is a part of a framework and does not run independently on its own!")
