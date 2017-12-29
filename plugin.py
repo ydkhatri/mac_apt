@@ -14,6 +14,8 @@
 import logging
 import os
 import sys
+import pyewf
+import pytsk3
 
 def ImportPlugins(plugins, only_standalone=False):
     #print ("Trying to import plugins")
@@ -110,3 +112,8 @@ def CreateLogger(log_file_path, log_file_level=logging.DEBUG, log_console_level=
         traceback.print_exc()
         sys.exit ("Program aborted..could not create log file!")
     return logger
+
+def LogLibraryVersions(log):
+    '''Log the versions of libraries used'''
+    log.info('Pytsk version = {}'.format(pytsk3.get_version()))
+    log.info('Pyewf version = {}'.format(pyewf.get_version()))

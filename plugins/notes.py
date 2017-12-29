@@ -230,24 +230,25 @@ def OpenDb(inputPath):
         log.debug ("Opened database successfully")
         return conn
     except Exception as ex:
-        log.error ("Failed to open database, is it a valid Notification DB? \nError details: " + str(ex.args))
+        log.exeption ("Failed to open database, is it a valid Notes DB?")
     return None
 
 def OpenDbFromImage(mac_info, inputPath, user):
-    log.info ("Processing notifications for user '{}' from file {}".format(user, inputPath))
+    '''Returns tuple of (connection, wrapper_obj)'''
+    log.info ("Processing notes for user '{}' from file {}".format(user, inputPath))
     try:
         sqlite = SqliteWrapper(mac_info)
         conn = sqlite.connect(inputPath)
         log.debug ("Opened database successfully")
-        return conn
+        return conn, sqlite
     except Exception as ex:
-        log.error ("Failed to open database, is it a valid Notification DB? Error details: " + str(ex)) 
+        log.exception ("Failed to open database, is it a valid Notes DB?")
     return None
 
 def ProcessNotesDbFromPath(mac_info, notes, source_path, user, version=''):
     if mac_info.IsValidFilePath(source_path):
         mac_info.ExportFile(source_path, __Plugin_Name, user + "_")
-        db = OpenDbFromImage(mac_info, source_path, user)
+        db, wrapper = OpenDbFromImage(mac_info, source_path, user)
         if db != None:
             if version:
                 ReadNotesV2_V4_V6(db, notes, version, source_path, user)

@@ -109,6 +109,7 @@ log.setLevel(args.log_level)
 log.info("Started {} program".format(__PROGRAMNAME))
 log.info("Dates and times are in UTC unless the specific artifact being parsed saves it as local time!")
 log.debug(' '.join(sys.argv))
+LogLibraryVersions(log)
 
 output_params = macinfo.OutputParams()
 output_params.output_path = args.output_path
