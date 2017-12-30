@@ -1,3 +1,20 @@
+Updates in 20171230 (v0.2.6):
+
++ Instructions for macOS installation are now on the wiki
++ mac_apt modules listed and processed in same order on all platforms now
+
+! This release is only to fix a bug with the Notes plugin that caused unpredictable behavior on OSX as the artifact source file was extracted but deleted before or during processing
+
+Updates in 20171225 (v0.2.5):
+
++ Ships with compiled windows executables (no need to install python)!
++ New plugin - Notes
++ APFS volumes database now has GUID in its name, so if you re-run the script in the same folder, it will not parse the filesystem all over again.
+
+! Fixes a minor bug with mac_apt_singleplugin that prevented it from running in last release
+PRINTJOBS plugin can be used with singleplugin mode now
+! -ve dates in RECENTITEMS are parsed correctly now
+
 Updates in 20171207 (v0.2):
 
 + APFS support added, we can parse APFS containers and volumes now
