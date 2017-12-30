@@ -35,3 +35,4 @@ USERS | Local & Domain user information - name, UID, UUID, GID, account creation
 * More documentation
 
 For installation and other information, see https://github.com/ydkhatri/mac_apt/wiki
+To download, proceed here - https://github.com/ydkhatri/mac_apt/releases
