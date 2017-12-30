@@ -42,6 +42,7 @@ def ImportPlugins(plugins, only_standalone=False):
                     continue
     except Exception as ex:
         print ("Does plugin directory exist?\n Exception:\n" +str(ex))
+    plugins.sort(key=lambda plugin: plugin.__Plugin_Name) # So plugins are in same order regardless of platform!
     return len(plugins)
 
 def IsValidPlugin(plugin):
