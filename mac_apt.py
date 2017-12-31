@@ -394,3 +394,4 @@ if mac_info.is_apfs:
 time_processing_ended = time.time()
 run_time = time_processing_ended - time_processing_started
 log.info("Finished in time = {}".format(time.strftime('%H:%M:%S', time.gmtime(run_time))))
+log.info("Review the Log file and report any ERRORs or EXCEPTIONS to the developers")

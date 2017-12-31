@@ -9,6 +9,7 @@
 from __future__ import print_function
 from __future__ import unicode_literals
 import os
+import binascii
 import logging
 from helpers.macinfo import *
 from helpers.writer import *
@@ -44,7 +45,13 @@ def ReadFile(mac_info, path):
     f = mac_info.OpenSmallFile(path)
     if f != None:
         lines = f.readlines()
-        return lines
+        lines_utf8 = []
+        for line in lines:
+            try:
+                lines_utf8.append(line.decode('utf-8')) # This is needed as file was opened in binary mode
+            except:
+                log.error('Failed to convert string to utf-8' + binascii.hexlify(line))
+        return lines_utf8
     else:
         log.error('Could not open file {}'.format(path))
     return []

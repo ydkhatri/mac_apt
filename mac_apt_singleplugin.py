@@ -140,6 +140,7 @@ if args.csv or not (output_params.write_sql or output_params.write_xlsx):
 # At this point, all looks good, lets process the input file
 # Start processing plugin now!
 
+time_processing_started = time.time()
 log.info("-"*50)
 log.info("Running plugin " + plugin_to_run)
 log.info("-"*50)
@@ -151,4 +152,8 @@ except Exception as ex:
 
 if args.xlsx:
     output_params.xlsx_writer.CommitAndCloseFile()
-log.info("Finished..")
+
+time_processing_ended = time.time()
+run_time = time_processing_ended - time_processing_started
+log.info("Finished in time = {}".format(time.strftime('%H:%M:%S', time.gmtime(run_time))))
+log.info("Review the Log file and report any ERRORs or EXCEPTIONS to the developers")
