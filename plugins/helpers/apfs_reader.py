@@ -354,7 +354,7 @@ class ApfsFileSystemParser:
                     newblock = self.container.read_block(entry.data.block_num.value)
                     self.read_entries(entry.data.block_num.value, newblock)
         else:
-            raise "unexpected entry"
+            raise Exception("unexpected entry")
 
         if self.num_records_read_batch > 400000:
             self.num_records_read_batch = 0
@@ -688,7 +688,7 @@ class ApfsContainer:
         elif from_what == 2: # end of file (offset must be -ve)
             self.position = self.apfs_container_size + offset
         else:
-            raise 'Unexpected value in from_what (only 0,1,2 are allowed), value was ' + str(from_what)
+            raise Exception('Unexpected value in from_what (only 0,1,2 are allowed), value was ' + str(from_what))
 
     def tell(self):
         return self.position
@@ -808,7 +808,7 @@ class ApfsFile():
                     i += 1
             except Exception as ex:
                 log.exception("Exception from lzfse.decompress, decompression failed!")
-                raise "Exception from lzfse.decompress, decompression failed!"
+                raise Exception("Exception from lzfse.decompress, decompression failed!")
         # Shouldn't be any of the following:
         elif compression_type in [1,3,7,11]: # types in ResourceFork
             log.error ("compression_type = {} in DecompressNotInline --> ERROR! Should not go here!".format(compression_type))

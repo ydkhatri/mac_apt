@@ -133,7 +133,7 @@ def IsApfsContainer(img, partition_start_offset):
         if img.read(partition_start_offset + 0x20, 4) == b'NXSB':
             return True
     except:
-        raise 'Cannot seek into image @ offset {}'.format(partition_start_offset + 0x20)
+        raise Exception('Cannot seek into image @ offset {}'.format(partition_start_offset + 0x20))
     return False
 
 def FindOsxPartitionInApfsContainer(img, vol_info, vs_info, part, partition_start_offset, disk_guid):

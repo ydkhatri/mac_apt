@@ -57,7 +57,7 @@ class BTree(object):
     
     #convert construct structure to tuple
     def getComparableKey(self, k):
-        raise "implement in subclass"
+        raise Exception("implement in subclass")
     
     def compare_operation_insensitive(self, k1, operation, k2):
         '''Case Insensitive compare operation 

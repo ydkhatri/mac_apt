@@ -361,7 +361,7 @@ class SqliteWriter:
     
     def __del__(self):
         if self.conn != None:
-            raise(ValueError(b'SqliteWriter destructor, Dear coder, you forgot to close db.'))
+            raise ValueError('SqliteWriter destructor, Dear coder, you forgot to close db.')
 
 class CsvWriter:
     def __init__(self, delete_empty_files=True):
@@ -586,7 +586,7 @@ class ExcelWriter:
     
     def __del__(self):
         if self.workbook != None:
-            raise('\nExcelWriter destructor, Dear coder, you forgot to close file.\n')
+            raise Exception('ExcelWriter destructor, Dear coder, you forgot to close file.')
 
 # Plugins should call this function to write out data formatted as a spreadsheet/table
 def WriteList(data_description, data_name, data_list, data_type_info, output_params, source_file=''):
