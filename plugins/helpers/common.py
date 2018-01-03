@@ -114,3 +114,12 @@ class CommonFunctions:
                 fullpath = filepath_without_ext + '{0:02d}'.format(index) + ext
             filepath = fullpath
         return filepath
+
+    @staticmethod
+    def GetFileSize(file):
+        '''Return size from an open file handle'''
+        current_pos = file.tell()
+        file.seek(0, 2) # Seek to end
+        size = file.tell()
+        file.seek(current_pos) # back to original position
+        return size

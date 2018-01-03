@@ -866,7 +866,13 @@ class MountedMacInfo(MacInfo):
             log.debug("Exception in GetFileSize() : " + str(ex) + " Perhaps file does not exist: " + full_path)
         return error
 
-    def ListItemsInFolder(self, path='/', types_to_fetch=EntryType.FILES_AND_FOLDERS):
+    def GetUserAndGroupIDForFile(self, path):
+        return self._GetUserAndGroupID(path)
+
+    def GetUserAndGroupIDForFolder(self, path):
+        return self._GetUserAndGroupID(path)
+
+    def ListItemsInFolder(self, path='/', types_to_fetch=EntryType.FILES_AND_FOLDERS, include_dates=False):
         ''' 
         Returns a list of files and/or folders in a list
         Format of list = [ {'name':'got.txt', 'type':EntryType.FILE, 'size':10}, .. ]
@@ -880,12 +886,15 @@ class MountedMacInfo(MacInfo):
             for entry in dir:
                 newpath = os.path.join(mounted_path, entry)
                 entry_type = EntryType.FOLDERS if os.path.isdir(newpath) else EntryType.FILES
+                item = { 'name':entry, 'type':entry_type, 'size':self._GetFileSizeNoPathMod(newpath, 0)}
+                if include_dates: 
+                    item['dates'] = self.GetFileMACTimes(path + '/' + name)
                 if types_to_fetch == EntryType.FILES_AND_FOLDERS:
-                    items.append( { 'name':entry, 'type':entry_type, 'size':self._GetFileSizeNoPathMod(newpath, 0)} )
+                    items.append( item )
                 elif types_to_fetch == EntryType.FILES and entry_type == EntryType.FILES:
-                    items.append( { 'name':entry, 'type':entry_type, 'size':self._GetFileSizeNoPathMod(newpath, 0)} )
+                    items.append( item )
                 elif types_to_fetch == EntryType.FOLDERS and entry_type == EntryType.FOLDERS:
-                    items.append( { 'name':entry, 'type':entry_type, 'size':self._GetFileSizeNoPathMod(newpath, 0)} )
+                    items.append( item )
                 
         except Exception as ex:
             if str(ex).find('cannot find the path specified'):
@@ -931,8 +940,29 @@ class MountedMacInfo(MacInfo):
             log.debug("Exception details:\n", exc_info=True)           
         return False
 
+    def _GetUserAndGroupID(self, path):
+        '''
+            Returns tuple (success, UID, GID) for object identified by path.
+            UID & GID are returned as strings.
+            If failed to get values, success=False
+        '''
+        success, uid, gid = False, 0, 0
+        try:
+            stat = os.stat(path)
+            uid = str(stat.st_uid)
+            gid = str(stat.st_gid)
+            success = True
+        except Exception as ex:
+            log.error("Exception trying to get uid & gid for file " + path + ' Exception details: ' + str(ex))
+        return success, uid, gid
+
     def _GetDarwinFoldersInfo(self):
         '''Gets DARWIN_*_DIR paths '''
+        if not self.is_windows:
+            # Unix/Linux or Mac mounted disks should preserve UID/GID, so we can read it normally from the files.
+            MacInfo._GetDarwinFoldersInfo(self)
+            return
+
         users_dir = self.ListItemsInFolder('/private/var/folders', EntryType.FOLDERS)
         # In /private/var/folders/  --> Look for --> xx/yyyyyy/C/com.apple.sandbox/sandbox-cache.db
         for unknown1 in users_dir:
@@ -1002,8 +1032,16 @@ class MountedMacInfo(MacInfo):
                     user_info.DARWIN_USER_CACHE_DIR = '/private/var/folders/' + unknown1_name + '/' + unknown2_name + '/C'
                     user_info.DARWIN_USER_TEMP_DIR  = '/private/var/folders/' + unknown1_name + '/' + unknown2_name + '/T'
                     self.users.append(user_info)
+
     def _GetUserInfo(self):
-        self._GetDarwinFoldersInfoFromSandboxDbs() # This probably does not apply to OSX < Mavericks !
+        if not self.is_windows:
+            # Unix/Linux or Mac mounted disks should preserve UID/GID, so we can read it normally from the files.
+            MacInfo._GetUserInfo(self)
+            return
+
+        # on windows
+        self._GetDarwinFoldersInfos() # This probably does not apply to OSX < Mavericks !
+
         #Get user info from plists under: \private\var\db\dslocal\nodes\Default\users\<USER>.plist
         #TODO - make a better plugin that gets all user & group info
         users_path  = '/private/var/db/dslocal/nodes/Default/users'
@@ -1038,6 +1076,7 @@ class MountedMacInfo(MacInfo):
                             log.error('Did not find \'home\' in ' + plist_meta['name'])
                 except Exception as ex:
                     log.error ("Could not open plist " + plist_meta['name'] + " Exception: " + str(ex))
+        #TODO: Domain user uid, gid?
 
 class SqliteWrapper:
     '''

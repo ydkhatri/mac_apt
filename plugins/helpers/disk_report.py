@@ -44,13 +44,17 @@ class Disk_Info:
             size_str = '{0:.2f} TB'.format(size_bytes / (1024 * 1024 * 1024 * 1024))
         return size_str
 
-    def __init__(self, mac_info, source_image_path):
+    def __init__(self, mac_info, source_image_path, apfs_container_only=False):
         self.mac_info = mac_info
         self.image_path = source_image_path
-        self.block_size = mac_info.vol_info.info.block_size
         self.apfs_block_size = 0
         if mac_info.is_apfs:
             self.apfs_block_size = mac_info.apfs_container.block_size
+        self.apfs_container_only = apfs_container_only
+        if apfs_container_only:
+            self.block_size = 0
+        else:
+            self.block_size = mac_info.vol_info.info.block_size
         self.img = mac_info.pytsk_image
         self.volumes = []
         self.total_disk_size_in_bytes = self.img.get_size()
@@ -74,35 +78,39 @@ class Disk_Info:
         info.insert(0, ['Disk', str(self.mac_info.vol_info.info.vstype)[12:], '', 0, Disk_Info.GetSizeStr(self.total_disk_size_in_bytes), self.total_disk_size_in_bytes, ''])
         WriteList("disk, partition & volume information", "Disk_Info", info, data_info, self.mac_info.output_params,'')
 
-    def ReadVolumesFromPartTable(self): 
-        for part in self.mac_info.vol_info:
-            if (int(part.flags) & pytsk3.TSK_VS_PART_FLAG_ALLOC):
-                partition_start_offset = self.block_size * part.start
-                partition_size_in_sectors = part.len
-                file_system = 'Unknown'
-                part_is_apfs = False
-                try:
-                    fs = pytsk3.FS_Info(self.img, offset=partition_start_offset)
-                    fs_info = fs.info # TSK_FS_INFO
-                    fs_type = str(fs_info.ftype)[12:]
-                    if fs_type.find("_") > 0: fs_type = fs_type[0:fs_type.find("_")]
-                    file_system = fs_type
-                except Exception as ex:
-                    if self.mac_info.is_apfs and partition_start_offset == self.mac_info.osx_partition_start_offset:
-                        part_is_apfs = True
-                        for volume in self.mac_info.apfs_container.volumes:
-                            vol = Vol_Info(volume.volume_name, 
-                                partition_size_in_sectors * self.block_size, 
-                                'APFS', 
-                                partition_start_offset,
-                                self.mac_info.osx_FS == volume)
-                            self.volumes.append(vol)
-                    else:
-                        log.debug(" Error: Failed to detect/parse file system!")
-                if not part_is_apfs:
-                    vol = Vol_Info(part.desc.decode('utf-8'), 
-                                partition_size_in_sectors * self.block_size, 
-                                file_system, partition_start_offset, self.mac_info.osx_partition_start_offset==partition_start_offset)
-                    self.volumes.append(vol)
-
-            
+    def ReadVolumesFromPartTable(self):
+        if self.apfs_container_only:
+            size = self.mac_info.apfs_container_size
+            for volume in self.mac_info.apfs_container.volumes:
+                vol = Vol_Info(volume.volume_name, size, 'APFS', 0, self.mac_info.osx_FS == volume)
+                self.volumes.append(vol)
+        else:
+            for part in self.mac_info.vol_info:
+                if (int(part.flags) & pytsk3.TSK_VS_PART_FLAG_ALLOC):
+                    partition_start_offset = self.block_size * part.start
+                    partition_size_in_sectors = part.len
+                    file_system = 'Unknown'
+                    part_is_apfs = False
+                    try:
+                        fs = pytsk3.FS_Info(self.img, offset=partition_start_offset)
+                        fs_info = fs.info # TSK_FS_INFO
+                        fs_type = str(fs_info.ftype)[12:]
+                        if fs_type.find("_") > 0: fs_type = fs_type[0:fs_type.find("_")]
+                        file_system = fs_type
+                    except Exception as ex:
+                        if self.mac_info.is_apfs and partition_start_offset == self.mac_info.osx_partition_start_offset:
+                            part_is_apfs = True
+                            for volume in self.mac_info.apfs_container.volumes:
+                                vol = Vol_Info(volume.volume_name, 
+                                    partition_size_in_sectors * self.block_size, 
+                                    'APFS', 
+                                    partition_start_offset,
+                                    self.mac_info.osx_FS == volume)
+                                self.volumes.append(vol)
+                        else:
+                            log.debug(" Error: Failed to detect/parse file system!")
+                    if not part_is_apfs:
+                        vol = Vol_Info(part.desc.decode('utf-8'), 
+                                    partition_size_in_sectors * self.block_size, 
+                                    file_system, partition_start_offset, self.mac_info.osx_partition_start_offset==partition_start_offset)
+                        self.volumes.append(vol)

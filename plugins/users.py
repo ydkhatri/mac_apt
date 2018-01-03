@@ -149,6 +149,8 @@ def Plugin_Start(mac_info):
                      user.DARWIN_USER_DIR, user.DARWIN_USER_TEMP_DIR, user.DARWIN_USER_CACHE_DIR])
 
     deleted_users = GetDeletedUsers(mac_info)
+    log.info('Found {} users and {} deleted user(s)'.format(len(users), len(deleted_users)))
+
     if len(deleted_users) > 0:
         for user in deleted_users:
             users.append([user.user_name, user.real_name, user.home_dir, user.UID, user.GID, user.UUID,

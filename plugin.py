@@ -16,6 +16,7 @@ import os
 import sys
 import pyewf
 import pytsk3
+import traceback
 
 def ImportPlugins(plugins, only_standalone=False):
     #print ("Trying to import plugins")

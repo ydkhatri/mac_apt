@@ -133,12 +133,16 @@ def GetTimezone(mac_info):
     # Read /private/etc/localtime --> /usr/share/zoneinfo/xxxxxxx
     f = mac_info.OpenSmallFile('/private/etc/localtime')
     if f:
-        data = f.read().decode('utf8')
-        if data.startswith('/usr/share/zoneinfo'):
-            data = data[20:]
-        elif data.startswith('/var/db/timezone/zoneinfo/'): # on HighSierra
-            data = data[26:]
-        basic_data.append(['TIMEZONE', 'TimeZone Set', data, 'Timezone on machine', '/private/etc/localtime'])
+        try:
+            data = f.read(128).decode('utf8')
+            if data.startswith('/usr/share/zoneinfo'):
+                data = data[20:]
+            elif data.startswith('/var/db/timezone/zoneinfo/'): # on HighSierra
+                data = data[26:]
+            basic_data.append(['TIMEZONE', 'TimeZone Set', data, 'Timezone on machine', '/private/etc/localtime'])
+        except:
+            # if mounted on local system, this will resolve to the actual file and throw exception, we just wanted the symlink path!
+            log.warning('Could not read file /private/etc/localtime. If this you are parsing local system using MOUNTED option this is normal!')
     else:
         log.error('Could not open file /private/etc/localtime to read timezone information')
 
@@ -207,7 +211,8 @@ def Plugin_Start(mac_info):
     GetModelAndHostNameFromPreference(mac_info)
     GetTimezone(mac_info)
     GetLastLoggedInUser(mac_info)
-    GetVolumeInfo(mac_info)
+    if mac_info.vol_info != None: # For MOUNTED option, this is None
+        GetVolumeInfo(mac_info)
     WriteList("basic machine info", "Basic_Info", basic_data, basic_data_info, mac_info.output_params)
 
 def Plugin_Start_Standalone(input_files_list, output_params):

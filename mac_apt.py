@@ -136,18 +136,22 @@ def IsApfsContainer(img, partition_start_offset):
         raise Exception('Cannot seek into image @ offset {}'.format(partition_start_offset + 0x20))
     return False
 
-def FindOsxPartitionInApfsContainer(img, vol_info, vs_info, part, partition_start_offset, disk_guid):
+def GetApfsContainerGuid(img, container_start_offset):
+    uuid = img.read(container_start_offset + 72, 16)
+    return binascii.hexlify(uuid).upper()
+
+def FindOsxPartitionInApfsContainer(img, vol_info, container_size, container_start_offset, container_uuid):
     global mac_info
     mac_info = macinfo.ApfsMacInfo(mac_info.output_params)
     mac_info.pytsk_image = img   # Must be populated
     mac_info.vol_info = vol_info # Must be populated
     mac_info.is_apfs = True
-    mac_info.osx_partition_start_offset = partition_start_offset # apfs container offset
-    mac_info.apfs_container = ApfsContainer(img, vs_info.block_size * part.len, partition_start_offset)
+    mac_info.osx_partition_start_offset = container_start_offset # apfs container offset
+    mac_info.apfs_container = ApfsContainer(img, container_size, container_start_offset)
     try:
         # start db
         use_existing_db = False
-        apfs_sqlite_path = os.path.join(mac_info.output_params.output_path, "APFS_Volumes_" + disk_guid + ".db")
+        apfs_sqlite_path = os.path.join(mac_info.output_params.output_path, "APFS_Volumes_" + container_uuid + ".db")
         if os.path.exists(apfs_sqlite_path): # Check if db already exists
             existing_db = SqliteWriter()     # open & check if it has the correct data
             existing_db.OpenSqliteDb(apfs_sqlite_path)
@@ -203,9 +207,9 @@ def FindOsxPartition(img, vol_info, vs_info):
                 log.info ("Looking at FS with volume label '{}'  @ offset {}".format(part.desc.decode('utf-8'), partition_start_offset)) 
             
             if IsApfsContainer(img, partition_start_offset):
-                log.info('Found an APFS container')
-                disk_guid = binascii.hexlify(img.read(0x238, 16)).upper() # get gpt disk guid (APFS will always be on a GPT disk)
-                return FindOsxPartitionInApfsContainer(img, vol_info, vs_info, part, partition_start_offset, disk_guid)
+                uuid = GetApfsContainerGuid(img, partition_start_offset)
+                log.info('Found an APFS container with uuid: {}-{}-{}-{}-{}'.format(uuid[0:8], uuid[8:12], uuid[12:16], uuid[16:20], uuid[20:]))
+                return FindOsxPartitionInApfsContainer(img, vol_info, vs_info.block_size * part.len, partition_start_offset, uuid)
 
             elif IsOsxPartition(img, partition_start_offset, mac_info): # Assumes there is only one single OSX installation partition
                 return True
@@ -285,7 +289,7 @@ else:
     args.log_level = logging.INFO
 log = CreateLogger(os.path.join(args.output_path, "Log." + str(time.strftime("%Y%m%d-%H%M%S")) + ".txt"), args.log_level, args.log_level) # Create logging infrastructure
 log.setLevel(args.log_level)
-log.info("Started {} program".format(__PROGRAMNAME))
+log.info("Started {}, version {}".format(__PROGRAMNAME, __VERSION))
 log.info("Dates and times are in UTC unless the specific artifact being parsed saves it as local time!")
 log.debug(' '.join(sys.argv))
 LogLibraryVersions(log)
@@ -357,22 +361,26 @@ if args.input_type.upper() != 'MOUNTED':
         mac_info.pytsk_image = img
         mac_info.vol_info = vol_info
         found_osx = FindOsxPartition(img, vol_info, vs_info)
+        Disk_Info(mac_info, args.input_path).Write()
     except Exception as ex:
         if str(ex).find("Cannot determine partition type") > 0 :
             log.info(" Info: Probably not a disk image, trying to parse as a File system")
-            found_osx = IsOsxPartition(img, 0, mac_info)
+            if IsApfsContainer(img, 0):
+                uuid = GetApfsContainerGuid(img, 0)
+                log.info('Found an APFS container with uuid: {}-{}-{}-{}-{}'.format(uuid[0:8], uuid[8:12], uuid[12:16], uuid[16:20], uuid[20:]))
+                found_osx = FindOsxPartitionInApfsContainer(img, None, img.get_size(), 0, uuid)
+                Disk_Info(mac_info, args.input_path, True).Write()
+            else:
+                found_osx = IsOsxPartition(img, 0, mac_info)
         else:
             log.error("Unknown error while trying to determine partition")
-            log.exception("Exception") #traceback.print_exc()
-
-# Write out disk & vol information
-Disk_Info(mac_info, args.input_path).Write()
-if not mac_info.is_apfs:
-    mac_info.hfs_native.Initialize(mac_info.pytsk_image, mac_info.osx_partition_start_offset)
+            log.exception("Exception")
 
 # Start processing plugins now!
 if found_osx:
     #print ("Found the partition having OSX on it!")
+    if not mac_info.is_apfs:
+        mac_info.hfs_native.Initialize(mac_info.pytsk_image, mac_info.osx_partition_start_offset)
     for plugin in plugins:
         if process_all or IsItemPresentInList(plugins_to_run, plugin.__Plugin_Name):
             log.info("-"*50)

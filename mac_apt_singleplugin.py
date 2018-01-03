@@ -106,7 +106,7 @@ else:
     args.log_level = logging.INFO
 log = CreateLogger(os.path.join(args.output_path, "Log." + str(time.strftime("%Y%m%d-%H%M%S")) + ".txt"), args.log_level, args.log_level) # Create logging infrastructure
 log.setLevel(args.log_level)
-log.info("Started {} program".format(__PROGRAMNAME))
+log.info("Started {}, version {}".format(__PROGRAMNAME, __VERSION))
 log.info("Dates and times are in UTC unless the specific artifact being parsed saves it as local time!")
 log.debug(' '.join(sys.argv))
 LogLibraryVersions(log)
