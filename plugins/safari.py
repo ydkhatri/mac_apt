@@ -37,7 +37,7 @@ log = logging.getLogger('MAIN.' + __Plugin_Name) # Do not rename or remove this 
 
 ''' Mavericks had History.plist, Yosemite has History.db
 <Home_DIR>/Library/Preferences/com.apple.safari.plist
-  RecentSearchStrings[], SuccessfulLaunchTimestamp, DownloadsPath, HomePage
+  RecentSearchStrings[], SuccessfulLaunchTimestamp, DownloadsPath, HomePage, FrequentlyVisitedSitesCache
 <Home_DIR>/Library/Safari/ --> Bookmarks.plist, Downloads.plist, History.plist, Form Values (Encrypted!), 
   UserNotificationPermissions.plist, 
   LastSession.plist <-- SessionVersion, SessionWindows\[xx]\TabStates\[xx]\[TabTitle & TabURL]
@@ -57,6 +57,7 @@ class SafariItemType(IntEnum):
     GENERAL = 7 # From com.apple.safari.plist
     HISTORYDOMAINS = 8
     TOPSITE_BANNED = 9
+    FREQUENTLY_VISITED = 10 # From com.apple.safari.plist
 
     def __str__(self):
         return self.name
@@ -107,6 +108,17 @@ def ReadSafariPlist(plist, safari_items, source, user):
     except: # Not found
         pass        
     try:
+        freq_sites = plist['FrequentlyVisitedSitesCache'] # seen in  El Capitan
+        try:
+            for site in freq_sites:
+                si = SafariItem(SafariItemType.FREQUENTLY_VISITED, site.get('URL', ''), search.get('Title',''), 
+                                None, 'FrequentlyVisitedSitesCache', user, source)
+                safari_items.append(si)
+        except Exception as ex:
+            log.exception('Error reading FrequentlyVisitedSitesCache from plist')
+    except: # Not found
+        pass     
+    try:
         download_path = plist['DownloadsPath']
         si = SafariItem(SafariItemType.GENERAL, '', download_path, None, 'DOWNLOADS_PATH', user, source)
         safari_items.append(si) 
@@ -115,6 +127,18 @@ def ReadSafariPlist(plist, safari_items, source, user):
     try:
         home = plist['HomePage']
         si = SafariItem(SafariItemType.GENERAL, home, '', None, 'HOME_PAGE', user, source)
+        safari_items.append(si) 
+    except: # Not found
+        pass
+    try:
+        last_ext_pref_selected = plist['LastExtensionSelectedInPreferences']
+        si = SafariItem(SafariItemType.EXTENSION, '', last_ext_pref_selected, None, 'LastExtensionSelectedInPreferences', user, source)
+        safari_items.append(si) 
+    except: # Not found
+        pass
+    try:
+        last_root_dir = plist['NSNavLastRootDirectory']
+        si = SafariItem(SafariItemType.GENERAL, last_root_dir, '', None, 'NSNavLastRootDirectory', user, source)
         safari_items.append(si) 
     except: # Not found
         pass
@@ -353,7 +377,7 @@ def Plugin_Start_Standalone(input_files_list, output_params):
         if input_path.endswith('.plist'):
             try:
                 plist = readPlist(input_path)
-                if input_path.endswith('com.apple.safari.plist'):
+                if input_path.lower().endswith('com.apple.safari.plist'):
                     ReadSafariPlist(plist, safari_items, input_path, '')
                 elif input_path.endswith('History.plist'):
                     ReadHistoryPlist(plist, safari_items, input_path, '')
