@@ -560,7 +560,11 @@ types:
         size: 4
         contents: [APSB]
       - id: unknown_36
-        size: 52
+        size: 20
+      - id: feature_flags # bit0=case-insensitive, bit3=case-sensitive, bit2=encrypted
+        size: u8
+      - id: unknown_64
+        size: 24
       - id: num_blocks_used
         size: u8
       - id: unknown_96

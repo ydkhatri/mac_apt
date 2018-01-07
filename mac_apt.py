@@ -182,6 +182,7 @@ def FindOsxPartitionInApfsContainer(img, vol_info, container_size, container_sta
         for vol in mac_info.apfs_container.volumes:
             if vol.num_blocks_used * vol.container.block_size < 10000000000: # < 10 GB, cannot be a macOS installation volume
                 continue
+            if vol.is_encrypted: continue
             mac_info.osx_FS = vol
             if FindOsxFiles(mac_info):
                 return True
@@ -396,7 +397,7 @@ else:
 if img != None: img.close()
 if args.xlsx:
     output_params.xlsx_writer.CommitAndCloseFile()
-if mac_info.is_apfs:
+if mac_info.is_apfs and mac_info.apfs_db != None:
     mac_info.apfs_db.CloseDb()
 
 time_processing_ended = time.time()

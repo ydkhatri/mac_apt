@@ -84,7 +84,9 @@ class Apfs(KaitaiStruct):
             self._parent = _parent
             self._root = _root if _root else self
             self.magic = self._io.ensure_fixed_contents(struct.pack('4b', 65, 80, 83, 66))
-            self.unknown_36 = self._io.read_bytes(52)
+            self.unknown_36 = self._io.read_bytes(20)
+            self.feature_flags = self._io.read_u8le()
+            self.unknown_64 = self._io.read_bytes(24)
             self.num_blocks_used = self._io.read_u8le()
             self.unknown_96 = self._io.read_bytes(32)
             self.block_map_block = self._root.RefBlock(self._io, self, self._root)
