@@ -8,7 +8,7 @@ mac_apt is a tool to process Mac computer full disk images and extract data/meta
 
 #### Features:
 * Cross platform (no dependency on pyobjc)
-* Works on E01, DD, split-DD, DMG (no compression) & mounted images (limited support)
+* Works on E01, DD, split-DD, DMG (no compression) & mounted images (good for nix, limited support on windows)
 * XLSX, CSV, Sqlite outputs
 * Analyzed files/artifacts are exported for later review
 * zlib, lzvn, lzfse compressed files are supported!
