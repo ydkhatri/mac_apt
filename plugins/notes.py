@@ -187,8 +187,50 @@ def ProcessNoteBodyBlob(blob):
         log.exception('Error processing note data blob')
     return data
 
+def ReadNotesHighSierra(db, notes, source, user):
+    '''Read Notestore.sqlite'''
+    try:
+        query = " SELECT n.Z_PK, n.ZNOTE as note_id, n.ZDATA as data, " \
+                " c3.ZFILESIZE, "\
+                " c4.ZFILENAME, c4.ZIDENTIFIER as att_uuid,  "\
+                " c1.ZTITLE1 as title, c1.ZSNIPPET as snippet, c1.ZIDENTIFIER as noteID, "\
+                " c1.ZCREATIONDATE1 as created, c1.ZLASTVIEWEDMODIFICATIONDATE, c1.ZMODIFICATIONDATE1 as modified, "\
+                " c2.ZACCOUNT3, c2.ZTITLE2 as folderName, c2.ZIDENTIFIER as folderID, "\
+                " c5.ZNAME as acc_name, c5.ZIDENTIFIER as acc_identifier, c5.ZACCOUNTTYPE "\
+                " FROM ZICNOTEDATA as n "\
+                " LEFT JOIN ZICCLOUDSYNCINGOBJECT as c1 ON c1.ZNOTEDATA = n.Z_PK  "\
+                " LEFT JOIN ZICCLOUDSYNCINGOBJECT as c2 ON c2.Z_PK = c1.ZFOLDER "\
+                " LEFT JOIN ZICCLOUDSYNCINGOBJECT as c3 ON c3.ZNOTE= n.ZNOTE "\
+                " LEFT JOIN ZICCLOUDSYNCINGOBJECT as c4 ON c4.ZATTACHMENT1= c3.Z_PK "\
+                " LEFT JOIN ZICCLOUDSYNCINGOBJECT as c5 ON c5.Z_PK = c1.ZACCOUNT2  "\
+                " ORDER BY note_id  "
+        db.row_factory = sqlite3.Row
+        cursor = db.execute(query)
+        for row in cursor:
+            try:
+                att_path = ''
+                if row['att_uuid'] != None:
+                    if user:
+                        att_path = '/Users/' + user + '/Library/Group Containers/group.com.apple.notes/Media/' + row['att_uuid'] + '/' + row['ZFILENAME']
+                    else:
+                        att_path = 'Media/' + row['att_uuid'] + '/' + row['ZFILENAME']
+                data = GetUncompressedData(row['data'])
+                text_content = ProcessNoteBodyBlob(data)
+                note = Note(row['note_id'], row['folderName'], row['title'], row['snippet'], text_content, row['att_uuid'], att_path,
+                            row['acc_name'], row['acc_identifier'], '', 
+                            CommonFunctions.ReadMacAbsoluteTime(row['created']), CommonFunctions.ReadMacAbsoluteTime(row['modified']),
+                            'NoteStore', user, source)
+                notes.append(note)
+            except:
+                log.exception('Error fetching row data')
+    except:
+        log.exception('Query  execution failed. Query was: ' + query)
+
 def ReadNotes(db, notes, source, user):
     '''Read Notestore.sqlite'''
+    if not TableExists(db, 'Z_12NOTES'):
+        ReadNotesHighSierra(db, notes, source, user)
+        return
     try:
         query = " SELECT n.Z_12FOLDERS as folder_id , n.Z_9NOTES as note_id, d.ZDATA as data, " \
                 " c2.ZTITLE2 as folder, c2.ZDATEFORLASTTITLEMODIFICATION as folder_title_modified, " \
@@ -232,6 +274,16 @@ def OpenDb(inputPath):
     except Exception as ex:
         log.exeption ("Failed to open database, is it a valid Notes DB?")
     return None
+
+def TableExists(db, table_name):
+        '''Checks if a table with specified name exists on a db'''
+        try:
+            cursor = db.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='%s'" % table_name)
+            for row in cursor:
+                return True
+        except Exception as ex:
+            log.error ("In TableExists({}). Failed to list tables of db. Error Details:{}".format(table_name, str(ex)) )
+        return False
 
 def OpenDbFromImage(mac_info, inputPath, user):
     '''Returns tuple of (connection, wrapper_obj)'''

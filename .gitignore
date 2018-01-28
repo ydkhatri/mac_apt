@@ -4,7 +4,7 @@
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[co]
-apfs_test.py
+*_test.py
 mac_apt_compiled*
 mac_apt_singleplugin_compiled*
 mac_apt_vmdk*
