@@ -7,10 +7,11 @@
 
    notes.py
    ---------------
-   This plugin will read the 'Notes' databases from osx.
+   This plugin will read databases from the built-in 'Notes' application.
 
    #TODO:
    Create better output, html in xl is not readable.
+   Export attachments contained within individual notes.
 '''
 from __future__ import print_function
 #from __future__ import unicode_literals # Must disable for sqlite.row_factory
@@ -33,7 +34,9 @@ __Plugin_Author = "Yogesh Khatri"
 __Plugin_Author_Email = "yogesh@swiftforensics.com"
 
 __Plugin_Standalone = True
-__Plugin_Standalone_Usage = 'Read Notes databases'
+__Plugin_Standalone_Usage = 'Provide one or more Notes sqlite databases as input to process. These are typically '\
+                            'located at ~/Library/Containers/com.apple.Notes/Data/Library/Notes/  or '\
+                            '~/Library/Group Containers/group.com.apple.notes/'
 
 log = logging.getLogger('MAIN.' + __Plugin_Name) # Do not rename or remove this ! This is the logger object
 
