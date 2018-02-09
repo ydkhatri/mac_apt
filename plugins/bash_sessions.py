@@ -94,7 +94,7 @@ def PrintAll(sessions, output_params, source_path):
         data_list.append( [ session.source_type, session.start_date, session.end_date, session.new_content, 
                             session.all_content, session.user, session.guid, session.source ] )
 
-    WriteList("bash session & history", "BashHistory", data_list, session_info, output_params, source_path)
+    WriteList("bash session & history", "BashSessions", data_list, session_info, output_params, source_path)
     
 def ProcessBashSessionsForUser(mac_info, bash_sessions, source_folder, user_name):
     files_list = mac_info.ListItemsInFolder(source_folder,EntryType.FILES, True)
