@@ -243,20 +243,10 @@ class SqliteWriter:
         '''Get unused table name by appending _xx where xx=00-99'''
         index = 1
         new_name = name + '_{0:02d}'.format(index)
-        while (self.TableExists(new_name)):
+        while (CommonFunctions.TableExists(self.conn, new_name)):
             index += 1
             new_name = name + '_{0:02d}'.format(index)
         return new_name
-
-    def TableExists(self, table_name):
-        '''Checks if a table with specified name exists on a db'''
-        try:
-            cursor = self.conn.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='%s'" % table_name)
-            for row in cursor:
-                return True
-        except Exception as ex:
-            log.error ("In TableExists({}). Failed to list tables on db. Error Details:{}".format(table_name, str(ex)) )
-        return False
 
     def RunQuery(self, query, writing=False, return_named_objects=False):
         '''Execute a query on the database and return results.
@@ -433,6 +423,7 @@ class ExcelSheetInfo:
         self.max_col_index = 0 # Index of last col
         self.col_width_list = None # List of max_char_count in each column
         self.col_types = None # DataType of columns in the sheet
+        self.column_info = None # Original column_info passed into AddHeaders()
 
     def StoreColWidth(self, row):
         column_index = 0
@@ -454,6 +445,7 @@ class ExcelWriter:
         self.col_types = None # Only good for current sheet!
         self.sheet_info_list = []
         self.current_sheet_info = None
+        self.max_allowed_rows = 1000000 # Excel limit is 1,048,576
 
     def CreateXlsxFile(self, filepath):
         '''
@@ -520,19 +512,27 @@ class ExcelWriter:
         self.current_sheet_info.max_row_index = self.row_index - 1
         self.current_sheet_info.col_width_list = [len(col_name)+3 for col_name in column_info] # +3 is to cover autofilter dropdown button
         self.current_sheet_info.col_types = self.col_types
+        self.current_sheet_info.column_info = column_info
 
     def GetNextAvailableSheetName(self, sheet_name):
         name = sheet_name
         if self.SheetExists(name):
             index = 1
-            name = sheet_name + '_{0:02d}'.format(index)
+            name = sheet_name + '{0:02d}'.format(index)
             while (self.SheetExists(name)):
-                name = sheet_name + '_{0:02d}'.format(index)
+                name = sheet_name + '{0:02d}'.format(index)
                 index += 1
         return name
 
     def WriteRow(self, row):
         column_index = 0
+        try:
+            if self.row_index > self.max_allowed_rows:
+                info = self.current_sheet_info
+                self.CreateSheet(info.name)
+                self.AddHeaders(info.column_info)
+        except Exception as ex:
+            log.exception('Error trying to add sheet for overflow data (>1 million rows)')
         try:
             row_unicode = map(unicode, row)
             for item in row_unicode:
