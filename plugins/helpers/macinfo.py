@@ -18,6 +18,7 @@ import shutil
 import struct
 import random
 import string
+import time
 import logging
 import ast
 from apfs_reader import *
@@ -417,26 +418,6 @@ class MacInfo:
         except Exception:
             pass
         return version_dict
-  
-    def TableExists(self, conn, table_name):
-        '''Checks if a table with specified name exists on a db'''
-        try:
-            cursor = conn.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='%s'" % table_name)
-            for row in cursor:
-                return True
-        except Exception as ex:
-            log.error ("In TableExists({}). Failed to list tables on db. Error Details:{}".format(table_name, str(ex)) )
-        return False
-
-    def GetTableNames(self, conn):
-        '''Retreive all table names in table'''
-        try:
-            cursor = conn.execute("select group_concat(name) from sqlite_master WHERE type='table'")
-            for row in cursor:
-                return row[0]
-        except Exception as ex:
-            log.error ("Failed to list tables on db. Error Details: " + str(ex))
-        return ''
 
     def GetUserAndGroupIDForFolder(self, path):
         '''
@@ -982,7 +963,7 @@ class MountedMacInfo(MacInfo):
                     try:
                         conn = sqlite.connect(path_to_sandbox_db)
                         try:
-                            if self.TableExists(conn, 'entry'):
+                            if CommonFunctions.TableExists(conn, 'entry'):
                                 cursor = conn.execute("select params from entry where params like '%HOME%'") # This query is for El Capitan, table 'entry' does not exist on Yosemite
                                 for row in cursor:
                                     if found_home: break
@@ -1013,7 +994,7 @@ class MountedMacInfo(MacInfo):
                             #             log.error ("Unknown error while processing query output")
                             #             log.debug("Exception details:\n", exc_info=True) #traceback.print_exc()   
                                      
-                            elif self.TableExists(conn, 'params'):
+                            elif CommonFunctions.TableExists(conn, 'params'):
                                 cursor = conn.execute("select distinct value from params where key like '%HOME%'  and value not like ''") # This query is for Yosemite
                                 for row in cursor:
                                     home = row[0]
@@ -1091,6 +1072,9 @@ class SqliteWrapper:
     function to get a connection object. All other sqlite objects can be 
     normally retrieved through SqliteWrapper.sqlite3. Use a new instance
     of SqliteWrapper for every database processed.
+
+    WARNING: Keep this object/ref alive till you are using the db. And 
+    don't forget to call db.close() when you are done.
     
     '''
 
@@ -1114,7 +1098,7 @@ class SqliteWrapper:
             if not os.path.exists(self.folder_temp_path):
                 os.makedirs(self.folder_temp_path)
         except Exception as ex:
-            log.error ("Exception in ExtractFiles(). Is ouput folder Writeable? Is it full? Perhaps the drive is disconnected? Exception Details: " + str(ex))
+            log.error ("Exception in _ExtractFiles(). Is ouput folder Writeable? Is it full? Perhaps the drive is disconnected? Exception Details: " + str(ex))
             return False
 
         # extract each file to temp folder
@@ -1152,7 +1136,17 @@ class SqliteWrapper:
   
     def __del__(self):
         '''Close all file handles and delete all files & temp folder'''
-        try:
-            shutil.rmtree(self.folder_temp_path, onerror=self._remove_readonly)
-        except Exception as ex:
-            log.debug("Exception while deleting temp files/folders: " + str(ex))
+        # Sometimes a delay may be needed, lets try at least 3 times before failing.
+        deleted = False
+        count = 0
+        ex_str = ''
+        while (not deleted) and (count < 3):
+            count += 1
+            try:
+                shutil.rmtree(self.folder_temp_path, onerror=self._remove_readonly)
+                deleted = True
+            except Exception as ex:
+                ex_str = "Exception while deleting temp files/folders: " + str(ex)
+                time.sleep(0.3)
+        if not deleted:
+            log.debug(ex_str)

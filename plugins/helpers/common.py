@@ -45,6 +45,8 @@ class CommonFunctions:
             try:
                 if type(mac_abs_time) in (str, unicode):
                     mac_abs_time = float(mac_abs_time)
+                if mac_abs_time > 0xFFFFFFFF: # more than 32 bits, this should be nane-second resolution timestamp in HighSierra
+                    return datetime.datetime.utcfromtimestamp(mac_abs_time / 1000000000 + 978307200)
                 return datetime.datetime.utcfromtimestamp(mac_abs_time + 978307200)
             except Exception as ex:
                 log.error("ReadMacAbsoluteTime() Failed to convert timestamp from value " + str(mac_abs_time) + " Error was: " + str(ex))
@@ -123,3 +125,25 @@ class CommonFunctions:
         size = file.tell()
         file.seek(current_pos) # back to original position
         return size
+
+    @staticmethod
+    def TableExists(db_conn, table_name):
+        '''Checks if a table with specified name exists in an sqlite db'''
+        try:
+            cursor = db_conn.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='%s'" % table_name)
+            for row in cursor:
+                return True
+        except Exception as ex:
+            log.error ("In TableExists({}). Failed to list tables of db. Error Details:{}".format(table_name, str(ex)) )
+        return False
+    
+    @staticmethod
+    def GetTableNames(self, db_conn):
+        '''Retrieve all table names in an sqlite database'''
+        try:
+            cursor = db_conn.execute("SELECT group_concat(name) from sqlite_master WHERE type='table'")
+            for row in cursor:
+                return row[0]
+        except Exception as ex:
+            log.error ("Failed to list tables on db. Error Details: {}".format(str(ex)))
+        return ''
