@@ -28,7 +28,7 @@ import struct
 
 __Plugin_Name = "NOTES"
 __Plugin_Friendly_Name = "Notes"
-__Plugin_Version = "1.0"
+__Plugin_Version = "1.1"
 __Plugin_Description = "Reads Notes databases"
 __Plugin_Author = "Yogesh Khatri"
 __Plugin_Author_Email = "yogesh@swiftforensics.com"
@@ -107,7 +107,7 @@ def GetUncompressedData(compressed):
     return data
 
 def ReadNotesV2_V4_V6(db, notes, version, source, user):
-    '''Reads NotesV2.storedata, NotesV4.storedata, NotesV6.storedata'''
+    '''Reads NotesVx.storedata, where x= 2,4,6,7'''
     try:
         query = "SELECT n.Z_PK as note_id, n.ZDATECREATED as created, n.ZDATEEDITED as edited, n.ZTITLE as title, "\
                 " (SELECT ZNAME from ZFOLDER where n.ZFOLDER=ZFOLDER.Z_PK) as folder, "\
@@ -231,7 +231,7 @@ def ReadNotesHighSierra(db, notes, source, user):
 
 def ReadNotes(db, notes, source, user):
     '''Read Notestore.sqlite'''
-    if not TableExists(db, 'Z_12NOTES'):
+    if not CommonFunctions.TableExists(db, 'Z_12NOTES'):
         ReadNotesHighSierra(db, notes, source, user)
         return
     try:
@@ -278,16 +278,6 @@ def OpenDb(inputPath):
         log.exeption ("Failed to open database, is it a valid Notes DB?")
     return None
 
-def TableExists(db, table_name):
-        '''Checks if a table with specified name exists on a db'''
-        try:
-            cursor = db.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='%s'" % table_name)
-            for row in cursor:
-                return True
-        except Exception as ex:
-            log.error ("In TableExists({}). Failed to list tables of db. Error Details:{}".format(table_name, str(ex)) )
-        return False
-
 def OpenDbFromImage(mac_info, inputPath, user):
     '''Returns tuple of (connection, wrapper_obj)'''
     log.info ("Processing notes for user '{}' from file {}".format(user, inputPath))
@@ -314,13 +304,18 @@ def ProcessNotesDbFromPath(mac_info, notes, source_path, user, version=''):
 def Plugin_Start(mac_info):
     '''Main Entry point function for plugin'''
     notes = []
+    notes_v1_path = '{}/Library/Containers/com.apple.Notes/Data/Library/Notes/NotesV1.storedata' # Mountain Lion
     notes_v2_path = '{}/Library/Containers/com.apple.Notes/Data/Library/Notes/NotesV2.storedata' # Mavericks
     notes_v4_path = '{}/Library/Containers/com.apple.Notes/Data/Library/Notes/NotesV4.storedata' # Yosemite
     notes_v6_path = '{}/Library/Containers/com.apple.Notes/Data/Library/Notes/NotesV6.storedata' # Elcapitan
-    notes_path    = '{}/Library/Group Containers/group.com.apple.notes/NoteStore.sqlite'         # Elcapitan has this too!
+    notes_v7_path = '{}/Library/Containers/com.apple.Notes/Data/Library/Notes/NotesV7.storedata' # HighSierra
+    notes_path    = '{}/Library/Group Containers/group.com.apple.notes/NoteStore.sqlite'         # Elcapitan+ has this too!
 
     for user in mac_info.users:
         if user.home_dir == '/private/var/empty': continue # Optimization, nothing should be here!
+        source_path = notes_v1_path.format(user.home_dir)
+        ProcessNotesDbFromPath(mac_info, notes, source_path, user.user_name, 'V1')
+
         source_path = notes_v2_path.format(user.home_dir)
         ProcessNotesDbFromPath(mac_info, notes, source_path, user.user_name, 'V2')
 
@@ -329,6 +324,9 @@ def Plugin_Start(mac_info):
 
         source_path = notes_v6_path.format(user.home_dir)
         ProcessNotesDbFromPath(mac_info, notes, source_path, user.user_name, 'V6')
+
+        source_path = notes_v7_path.format(user.home_dir)
+        ProcessNotesDbFromPath(mac_info, notes, source_path, user.user_name, 'V7')
 
         source_path = notes_path.format(user.home_dir)
         ProcessNotesDbFromPath(mac_info, notes, source_path, user.user_name)
@@ -348,10 +346,14 @@ def Plugin_Start_Standalone(input_files_list, output_params):
             filename = os.path.basename(input_path)
             if filename.find('V2') > 0:
                 ReadNotesV2_V4_V6(db, notes, 'V2', input_path, '')
+            elif filename.find('V1') > 0:
+                ReadNotesV2_V4_V6(db, notes, 'V1', input_path, '')
             elif filename.find('V4') > 0:
                 ReadNotesV2_V4_V6(db, notes, 'V4', input_path, '')
             elif filename.find('V6') > 0:
                 ReadNotesV2_V4_V6(db, notes, 'V6', input_path, '')
+            elif filename.find('V7') > 0:
+                ReadNotesV2_V4_V6(db, notes, 'V7', input_path, '')
             elif filename.find('NoteStore') >= 0:
                 ReadNotes(db, notes, input_path, '')
             else:

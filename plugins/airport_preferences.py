@@ -28,7 +28,7 @@ __Plugin_Author = "Michael Geyer, Yogesh Khatri"
 __Plugin_Author_Email = "michael.geyer@mymail.champlain.edu, yogesh@swiftforensics.com"
 
 __Plugin_Standalone = True
-__Plugin_Standalone_Usage = 'This module parses wifi network information from the plist file found at: /Library/Preferences/SystemConfiguration/com.apple.airport.preferences.plist'
+__Plugin_Standalone_Usage = 'Provide the airport wifi plist file found at /Library/Preferences/SystemConfiguration/com.apple.airport.preferences.plist'
 
 log = logging.getLogger('MAIN.' + __Plugin_Name) # Do not rename or remove this ! This is the logger object
 
@@ -135,7 +135,7 @@ def PrintAll(networks, output_params, source_path):
                             str(wifi.ChannelHistory) if (wifi.ChannelHistory and len(wifi.ChannelHistory) > 0) else ''
                           ] )
 
-    WriteList("wifi network information", "Airport_Wifi", data_list, network_info, output_params, source_path)
+    WriteList("wifi network information", "Wifi", data_list, network_info, output_params, source_path)
     
     
 # # # MAIN PROGRAM BELOW # # # 
