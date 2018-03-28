@@ -456,7 +456,7 @@ class ExcelWriter:
         self.filepath = CommonFunctions.GetNextAvailableFileName(filepath)
         try:
             self.workbook = xlsxwriter.Workbook(self.filepath, {'strings_to_urls': False, 'constant_memory': True}) #Turning off auto-URL generation as excel freaks on \r \n in url or paths, will result in corrupt excel file
-            self.bold = self.workbook.add_format({'bold': 1}) #Define formatting for later user
+            self.bold = self.workbook.add_format({'bold': 1}) #Define formatting for later use
             self.date_format = self.workbook.add_format({'num_format':'YYYY-MM-DD HH:MM:SS'})
             self.num_format = self.workbook.add_format()
             self.num_format.set_num_format('#,###')
@@ -537,8 +537,8 @@ class ExcelWriter:
             row_unicode = map(unicode, row)
             for item in row_unicode:
                 try:
-                    if item == '' or row[column_index] == None:
-                        self.sheet.write(self.row_index, column_index, '')
+                    if item == '' or row[column_index] == None: pass
+                        #self.sheet.write(self.row_index, column_index, '')
                     elif self.col_types[column_index] == DataType.INTEGER:
                         self.sheet.write_number(self.row_index, column_index, row[column_index], self.num_format)
                     elif (self.col_types[column_index] == DataType.DATE):

@@ -669,14 +669,14 @@ class ApfsContainer:
         self.num_volumes = len(apfss)
 
         log.debug("There are {} volumes in this container".format(self.num_volumes))
-        #log.debug("Volume Block IDs: %s, Mapping-Btree: %d" % (apfss, block_map_block_num))
+        log.debug("Volume Block IDs: %s, Mapping-Btree: %d" % (apfss, block_map_block_num))
 
         block_map = self.read_block(block_map_block_num)
         self.apfs_locations = {}
         block_map_btree_root = self.read_block(block_map.body.root.value)
         for _, entry in enumerate(block_map_btree_root.body.entries):
             self.apfs_locations[entry.key.key_value] = entry.data.block_num.value
-        #log.debug("Volume Blocks:", self.apfs_locations, "\n")
+        log.debug("Volume Blocks:" + str(self.apfs_locations))
         index = 1
         for _, volume_block_num in self.apfs_locations.items():
             volume = ApfsVolume(self, 'Vol_' + str(index))
