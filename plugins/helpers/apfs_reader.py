@@ -863,7 +863,7 @@ class ApfsFile():
         for extent in extents:
             if bytes_left <= 0:
                 # Not so uncommon in reality! For files that grow and shrink, APFS does not reclaim clusters immediately.
-                log.debug ("mismatch between logical size and extents!") #Not so uncommon in reality!
+                log.debug ("mismatch between logical size and extents!")
                 break
             data = extent.GetData(self.container)
             data_len = extent.size
