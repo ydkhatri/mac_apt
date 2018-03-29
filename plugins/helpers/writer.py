@@ -102,13 +102,14 @@ class DataWriter:
     def BlobToHex(self, blob):
         '''Convert binary data to hex text'''
         s = ''
-        try:
-            if self.PYTHON_VER == 2: 
-                s = binascii.hexlify(blob).upper()
-            else:
-                s = binascii.hexlify(blob).decode("ascii").upper() # For python3!
-        except Exception as ex:
-            log.error('Exception from BlobToHex() : ' + str(ex))
+        if blob:
+            try:
+                if self.PYTHON_VER == 2: 
+                    s = binascii.hexlify(blob).upper()
+                else:
+                    s = binascii.hexlify(blob).decode("ascii").upper() # For python3!
+            except Exception as ex:
+                log.error('Exception from BlobToHex() : ' + str(ex))
         return s    
 
     def WriteRow(self, row):
@@ -172,7 +173,7 @@ class DataWriter:
                     rows_copy = [list(k) for k in rows]
                     for row_copy in rows_copy:
                         for col_name, index in self.cols_with_blobs:
-                            row_copy[index] = buffer(row_copy[index])
+                            row_copy[index] = buffer(row_copy[index]) if row_copy[index] else ''
                     self.sql_writer.WriteRows(rows_copy)
                 else:
                     self.sql_writer.WriteRows(rows)
