@@ -91,7 +91,7 @@ def GetAttachments(mac_info, sourceDirectory, user):
         for attachment_paths in files:
             mac_info.ExportFile(attachment_paths, os.path.join(__Plugin_Name, user), "")
     else:
-        log.info('No files found under {} ,  iMessage services may not have been used for this user'.format(sourceDirectory))
+        log.info('No attachment files found under {}'.format(sourceDirectory))
 
 def OpenDbFromImage(mac_info, inputPath):
     '''Returns tuple of (connection, wrapper_obj)'''
