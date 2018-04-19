@@ -45,7 +45,7 @@ class CommonFunctions:
             try:
                 if type(mac_abs_time) in (str, unicode):
                     mac_abs_time = float(mac_abs_time)
-                if mac_abs_time > 0xFFFFFFFF: # more than 32 bits, this should be nane-second resolution timestamp in HighSierra
+                if mac_abs_time > 0xFFFFFFFF: # more than 32 bits, this should be nano-second resolution timestamp in HighSierra
                     return datetime.datetime.utcfromtimestamp(mac_abs_time / 1000000000 + 978307200)
                 return datetime.datetime.utcfromtimestamp(mac_abs_time + 978307200)
             except Exception as ex:

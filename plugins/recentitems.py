@@ -24,7 +24,7 @@ from helpers.writer import *
 
 __Plugin_Name = "RECENTITEMS"
 __Plugin_Friendly_Name = "Recently accessed Servers, Documents, Hosts, Volumes & Applications"
-__Plugin_Version = "1.2"
+__Plugin_Version = "1.3"
 __Plugin_Description = "Gets recently accessed Servers, Documents, Hosts, Volumes & Applications from .plist and .sfl files. Also gets recent searches and places for each user"
 __Plugin_Author = "Yogesh Khatri"
 __Plugin_Author_Email = "yogesh@swiftforensics.com"
@@ -55,6 +55,7 @@ class RecentType(IntEnum):
     PLACE = 5  # For NSNavRecentPlaces
     SEARCH = 6 # For SGTRecentFileSearches
     VOLUME = 7 # For FXDesktopVolumePositions & systemitems.volumeslist
+    BULKRENAME = 8 # For finder
 
     def __str__(self):
         return self.name # This returns 'UNKNOWN' instead of 'RecentType.UNKNOWN'
@@ -411,6 +412,9 @@ def ReadSidebarListsPlist(plist, recent_items, source, user=''):
         pass # Not found!
 
 def ReadFinderPlist(plist, recent_items, source, user=''):
+    ReadFinderBulkRenameSettings(plist, recent_items, source, user)
+    ReadFinderRecentMoveCopyDest(plist, recent_items, source, user)
+    ReadFinderGotoHistory(plist, recent_items, source, user)
     try:
         vol_dict = plist['FXDesktopVolumePositions']
         try:
@@ -475,7 +479,41 @@ def ReadFinderPlist(plist, recent_items, source, user=''):
         except Exception as ex:
             log.exception('Error reading FXRecentFolders from plist')   
     except: # Not found
-        pass 
+        pass
+
+def ReadFinderRecentMoveCopyDest(plist, recent_items, source, user=''):
+    destinations = plist.get('RecentMoveAndCopyDestinations', None)
+    if destinations:
+        for dest in destinations:
+            ri = RecentItem(dest, '', 'RecentMoveAndCopyDestinations', source, RecentType.PLACE, user)
+            recent_items.append(ri)
+
+def ReadFinderGotoHistory(plist, recent_items, source, user=''):
+    '''Read GoTo history from com.apple.finder.plist'''
+    goto = plist.get('GoToField', None)
+    if goto:
+        ri = RecentItem(goto, '', 'GoToField', source, RecentType.PLACE, user)
+        recent_items.append(ri)
+    goto_history = plist.get('GoToFieldHistory', None)
+    if goto_history:
+        for item in goto_history:
+            ri = RecentItem(item, '', 'GoToFieldHistory', source, RecentType.PLACE, user)
+            recent_items.append(ri)
+
+def ReadFinderBulkRenameSettings(plist, recent_items, source, user=''):
+    '''Read Bulk Rename last used settings from com.apple.finder.plist'''
+    prefix = 'BulkRename'
+    for item in ['Name', 'AddNumberTo', 'AddTextText', 'AddTextTo', 'PlaceNumberAt', 'StartIndex']:
+        data = plist.get(prefix + item, None)
+        if data and (str(data) != '0'): # Either blank or zero by default, skip if so
+            ri = RecentItem(str(data), '', prefix + item, source, RecentType.BULKRENAME, user)
+            recent_items.append(ri)
+
+    for item in ['FindText', 'ReplaceText']:
+        data = plist.get(prefix + item, None)
+        if data != None:
+            ri = RecentItem(data, '', prefix + item, source, RecentType.BULKRENAME, user)
+            recent_items.append(ri)
 
 def ReadGlobalPrefPlist(plist, recent_items, source='', user=''):
     try:
