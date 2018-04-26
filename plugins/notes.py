@@ -141,14 +141,14 @@ def ReadLengthField(blob):
     skip = 0
     try:
         data_length = int(struct.unpack('<B', blob[0])[0])
-        if data_length > 0x7F: # -ve number for signed byte
-            skip = 2
-            length = (int(struct.unpack('<B', blob[1])[0]) << 7) + (data_length & 0x7F)
-        else:
-            skip = 1
-            length = data_length
+        length = data_length & 0x7F
+        while data_length > 0x7F:
+            skip += 1
+            data_length = int(struct.unpack('<B', blob[skip])[0])
+            length = ((data_length & 0x7F) << (skip * 7)) + length
     except:
-        log.exception('Error trying to read length field in note data blob')    
+        log.exception('Error trying to read length field in note data blob')
+    skip += 1
     return length, skip
 
 def ProcessNoteBodyBlob(blob):
