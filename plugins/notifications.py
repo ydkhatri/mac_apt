@@ -30,7 +30,7 @@ __Plugin_Standalone = True
 __Plugin_Standalone_Usage = '''This module parses the notification database for a user. 
 
 For OSX Mavericks (and earlier), this is found at:
-/Users/<profile>/Library/Application Support/NotificationCenter/<GUID>.db
+/Users/<profile>/Library/Application Support/NotificationCenter/<UUID>.db
 
 For Yosemite onwards, this is at: 
 /private/var/folders/<xx>/<yyyyyyy>/0/com.apple.notificationcenter/db

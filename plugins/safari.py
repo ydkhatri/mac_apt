@@ -43,7 +43,7 @@ log = logging.getLogger('MAIN.' + __Plugin_Name) # Do not rename or remove this 
   LastSession.plist <-- SessionVersion, SessionWindows\[xx]\TabStates\[xx]\[TabTitle & TabURL]
   TopSites.plist <-- [BannedURLStrings] , DisplayedSitesLastModified, TopSites\[xx][TopSiteTitle & TopSiteURLString]
   Extensions\Extensions.plist <-- Installed Extensions\[xx][Archive File Name & Enabled]
-  ReadingListArchives/<GUID>/Page.webarchive <-- Plist, get WebResourceURL
+  ReadingListArchives/<UUID>/Page.webarchive <-- Plist, get WebResourceURL
 '''
 
 class SafariItemType(IntEnum):

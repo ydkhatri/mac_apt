@@ -136,7 +136,7 @@ def IsApfsContainer(img, partition_start_offset):
         raise Exception('Cannot seek into image @ offset {}'.format(partition_start_offset + 0x20))
     return False
 
-def GetApfsContainerGuid(img, container_start_offset):
+def GetApfsContainerUuid(img, container_start_offset):
     uuid = img.read(container_start_offset + 72, 16)
     return binascii.hexlify(uuid).upper()
 
@@ -208,7 +208,7 @@ def FindOsxPartition(img, vol_info, vs_info):
                 log.info ("Looking at FS with volume label '{}'  @ offset {}".format(part.desc.decode('utf-8'), partition_start_offset)) 
             
             if IsApfsContainer(img, partition_start_offset):
-                uuid = GetApfsContainerGuid(img, partition_start_offset)
+                uuid = GetApfsContainerUuid(img, partition_start_offset)
                 log.info('Found an APFS container with uuid: {}-{}-{}-{}-{}'.format(uuid[0:8], uuid[8:12], uuid[12:16], uuid[16:20], uuid[20:]))
                 return FindOsxPartitionInApfsContainer(img, vol_info, vs_info.block_size * part.len, partition_start_offset, uuid)
 
@@ -367,7 +367,7 @@ if args.input_type.upper() != 'MOUNTED':
         if str(ex).find("Cannot determine partition type") > 0 :
             log.info(" Info: Probably not a disk image, trying to parse as a File system")
             if IsApfsContainer(img, 0):
-                uuid = GetApfsContainerGuid(img, 0)
+                uuid = GetApfsContainerUuid(img, 0)
                 log.info('Found an APFS container with uuid: {}-{}-{}-{}-{}'.format(uuid[0:8], uuid[8:12], uuid[12:16], uuid[16:20], uuid[20:]))
                 found_osx = FindOsxPartitionInApfsContainer(img, None, img.get_size(), 0, uuid)
                 Disk_Info(mac_info, args.input_path, True).Write()

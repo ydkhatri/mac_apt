@@ -33,7 +33,7 @@ class BashSession:
     def __init__(self, user, source, source_type):
         self.start_date = None 
         self.end_date = None
-        self.guid = ''
+        self.uuid = ''
         self.restore_string = ''
         self.new_content = ''
         self.all_content = ''
@@ -86,13 +86,13 @@ def GetDiff(first, second):
 def PrintAll(sessions, output_params, source_path):
     session_info = [ ('Source_Type',DataType.TEXT),('Session_Start',DataType.DATE),('Session_End',DataType.DATE),
                      ('new_content',DataType.TEXT),('all_content',DataType.TEXT),('User', DataType.TEXT),
-                     ('Session_GUID',DataType.TEXT),('Source',DataType.TEXT)
+                     ('Session_UUID',DataType.TEXT),('Source',DataType.TEXT)
                    ]
 
     data_list = []
     for session in sessions:
         data_list.append( [ session.source_type, session.start_date, session.end_date, session.new_content, 
-                            session.all_content, session.user, session.guid, session.source ] )
+                            session.all_content, session.user, session.uuid, session.source ] )
 
     WriteList("bash session & history", "BashSessions", data_list, session_info, output_params, source_path)
     
@@ -107,7 +107,7 @@ def ProcessBashSessionsForUser(mac_info, bash_sessions, source_folder, user_name
             if file_entry['name'].endswith('.history'):
                 session = BashSession(user_name, source_folder + '/' + file_entry['name'], 'BASH_SESSION')
                 bash_sessions.append(session)
-                session.guid = file_entry['name'].split('.')[0]
+                session.uuid = file_entry['name'].split('.')[0]
                 session.end_date = file_entry['dates']['cr_time']
                 content = ReadFile(mac_info, source_folder + '/' + file_entry['name'])
                 if prev_content != None:
@@ -118,7 +118,7 @@ def ProcessBashSessionsForUser(mac_info, bash_sessions, source_folder, user_name
                 session.all_content = ''.join(content)
                 # Get .historynew file
                 try:
-                    historynew_entry = filter(lambda x: x['name'] == session.guid + '.historynew', files_list)[0]
+                    historynew_entry = filter(lambda x: x['name'] == session.uuid + '.historynew', files_list)[0]
                     if historynew_entry != None:
                         session.start_date = historynew_entry['dates']['cr_time']
                         if historynew_entry['size'] > 0:

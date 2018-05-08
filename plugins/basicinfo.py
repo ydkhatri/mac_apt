@@ -139,6 +139,7 @@ def GetTimezone(mac_info):
                 data = data[20:]
             elif data.startswith('/var/db/timezone/zoneinfo/'): # on HighSierra
                 data = data[26:]
+            data = data.rstrip('\x00')
             basic_data.append(['TIMEZONE', 'TimeZone Set', data, 'Timezone on machine', '/private/etc/localtime'])
         except:
             # if mounted on local system, this will resolve to the actual file and throw exception, we just wanted the symlink path!
