@@ -231,9 +231,9 @@ def Plugin_Start(mac_info):
     GetEtcHosts(mac_info) # Not writing to file yet!
     GetNetworkInterfaceInfo(mac_info)
     GetNetworkInterface2Info(mac_info)
-    WriteList('dhcp data', 'Networking_DHCP', dhcp_interfaces, dhcp_data_info, mac_info.output_params)
-    WriteList('network interface data', 'Networking_Interfaces', net_interfaces, net_interface_info, mac_info.output_params, '/Library/Preferences/SystemConfiguration/NetworkInterfaces.plist')
-    WriteList('network interface details', 'Networking_Interface_Details', net_interface_details, net_interface_detail_info, mac_info.output_params, '/Library/Preferences/SystemConfiguration/preferences.plist')
+    WriteList('dhcp data', 'Network_DHCP', dhcp_interfaces, dhcp_data_info, mac_info.output_params)
+    WriteList('network interface data', 'Network_Interfaces', net_interfaces, net_interface_info, mac_info.output_params, '/Library/Preferences/SystemConfiguration/NetworkInterfaces.plist')
+    WriteList('network interface details', 'Network_Details', net_interface_details, net_interface_detail_info, mac_info.output_params, '/Library/Preferences/SystemConfiguration/preferences.plist')
 
 def Plugin_Start_Standalone(input_files_list, output_params):
     log.info("This plugin cannot be run as standalone")

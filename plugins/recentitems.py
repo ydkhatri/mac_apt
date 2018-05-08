@@ -71,9 +71,9 @@ class RecentItem:
             
         def ReadData(self, bookmark):
             try:
-                if self.Type == 0x0101: # UFT8 string
+                if self.Type == 0x0101: # UTF8 string
                     self.Data = bookmark[self.Pos + 8:self.Pos + 8 + self.Size].decode('utf-8')
-                elif self.Type == 0x0901: # UFT8 string for URL
+                elif self.Type == 0x0901: # UTF8 string for URL
                     self.Data = bookmark[self.Pos + 8:self.Pos + 8 + self.Size].decode('utf-8')
                 elif self.Type == 0x0601:
                     num = self.Size / 4

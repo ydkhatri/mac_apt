@@ -9,7 +9,7 @@ Updates in 20171225 (v0.2.5):
 
 + Ships with compiled windows executables (no need to install python)!
 + New plugin - Notes
-+ APFS volumes database now has GUID in its name, so if you re-run the script in the same folder, it will not parse the filesystem all over again.
++ APFS volumes database now has UUID in its name, so if you re-run the script in the same folder, it will not parse the filesystem all over again.
 
 ! Fixes a minor bug with mac_apt_singleplugin that prevented it from running in last release
 PRINTJOBS plugin can be used with singleplugin mode now
