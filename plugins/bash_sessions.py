@@ -85,7 +85,7 @@ def GetDiff(first, second):
 
 def PrintAll(sessions, output_params, source_path):
     session_info = [ ('Source_Type',DataType.TEXT),('Session_Start',DataType.DATE),('Session_End',DataType.DATE),
-                     ('new_content',DataType.TEXT),('all_content',DataType.TEXT),('User', DataType.TEXT),
+                     ('Session_Commands',DataType.TEXT),('Prev+New_Commands',DataType.TEXT),('User', DataType.TEXT),
                      ('Session_UUID',DataType.TEXT),('Source',DataType.TEXT)
                    ]
 
