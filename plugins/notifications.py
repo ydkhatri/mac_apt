@@ -96,7 +96,7 @@ def GetDbVersion(conn):
             return int(row[0])
     except:
         log.exception("Exception trying to determine db version")
-    return 15; #old version
+    return 15 #old version
 
 def Parse_ver_17_Db(conn, inputPath, user, timezone):
     '''Parse High Sierra's notification db'''
