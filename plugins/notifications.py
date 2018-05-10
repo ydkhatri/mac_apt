@@ -15,13 +15,14 @@ import os
 import biplist
 from biplist import *
 import logging
+import uuid
 from helpers.macinfo import *
 from helpers.writer import *
 from helpers.common import *
 
 __Plugin_Name = "NOTIFICATIONS" # Cannot have spaces, and must be all caps!
 __Plugin_Friendly_Name = "Notifications"
-__Plugin_Version = "1.0"
+__Plugin_Version = "1.1"
 __Plugin_Description = "Reads notification databases"
 __Plugin_Author = "Yogesh Khatri"
 __Plugin_Author_Email = "yogesh@swiftforensics.com"
@@ -32,8 +33,12 @@ __Plugin_Standalone_Usage = '''This module parses the notification database for 
 For OSX Mavericks (and earlier), this is found at:
 /Users/<profile>/Library/Application Support/NotificationCenter/<UUID>.db
 
-For Yosemite onwards, this is at: 
-/private/var/folders/<xx>/<yyyyyyy>/0/com.apple.notificationcenter/db
+For Yosemite, ElCapitan & Sierra, this is at: 
+/private/var/folders/<xx>/<yyyyyyy>/0/com.apple.notificationcenter/db/db
+
+For High Sierra, this is at:
+/private/var/folders/<xx>/<yyyyyyy>/0/com.apple.notificationcenter/db2/db
+
  where the path <xx>/<yyyyyyy> represents the DARWIN_USER_DIR for a user
 '''
 log = logging.getLogger('MAIN.' + __Plugin_Name) # Do not rename or remove this ! This is the logger object
@@ -55,6 +60,7 @@ def ProcessNotificationDb(inputPath, output_params):
         conn = sqlite3.connect(inputPath)
         log.debug ("Opened database successfully")
         ParseDb(conn, inputPath, '', output_params.timezone)
+        conn.close()
     except Exception as ex:
         log.error ("Failed to open database, is it a valid Notification DB? \nError details: " + str(ex.args))
 
@@ -65,23 +71,74 @@ def ProcessNotificationDb_Wrapper(inputPath, mac_info, user):
         conn = sqlite.connect(inputPath)
         log.debug ("Opened database successfully")
         ParseDb(conn, inputPath, user, mac_info.output_params.timezone)
+        conn.close()
     except Exception as ex:
         log.error ("Failed to open database, is it a valid Notification DB? Error details: " + str(ex)) 
 
 def GetText(string_or_binary):
     '''Converts binary or text string into text string. UUID in Sierra is now binary blob instead of hex text.'''
-    text = ''
+    uuid_text = ''
     try:
         if type(string_or_binary) == buffer or type(string_or_binary) == bytes: # Python3 is 'bytes'
-            text = ''.join('{:02X}'.format(ord(x)) for x in string_or_binary)
+            #hex_str = ''.join('{:02X}'.format(ord(x)) for x in string_or_binary)
+            uuid_text = str(uuid.UUID(bytes=string_or_binary)).upper()
         else:
-            text = string_or_binary
+            uuid_text = string_or_binary.upper()
     except Exception as ex:
         log.error('Error trying to convert binary value to hex text. Details: ' + str(ex))
-    return text
+    return uuid_text
+
+def GetDbVersion(conn):
+    try:
+        cursor = conn.execute("SELECT value from dbinfo WHERE key LIKE 'compatibleVersion'")
+        for row in cursor:
+            log.debug('db compatibleversion = {}'.format(row[0]))
+            return int(row[0])
+    except:
+        log.exception("Exception trying to determine db version")
+    return 15; #old version
+
+def Parse_ver_17_Db(conn, inputPath, user, timezone):
+    '''Parse High Sierra's notification db'''
+    try:
+        conn.row_factory = sqlite3.Row
+        cursor = conn.execute("SELECT (SELECT identifier from app where app.app_id=record.app_id) as app, "\
+                                "uuid, data, presented, delivered_date FROM record")
+        try:
+            for row in cursor:
+                title    = ''
+                subtitle = ''
+                message  = ''
+                try:
+                    plist = readPlistFromString(row['data'])
+                    try:
+                        req = plist['req']
+                        title = RemoveTabsNewLines(req.get('titl', ''))
+                        subtitle = RemoveTabsNewLines(req.get('subt', ''))
+                        message = RemoveTabsNewLines(req.get('body', ''))
+                    except Exception as ex: log.debug('Error reading field req - ' + str(ex))
+                    try:
+                        log.debug('Unknown field orig = {}'.format(plist['orig']))
+                    except Exception: pass
+                except (InvalidPlistException, NotBinaryPlistException, Exception) as e:
+                    log.error ("Invalid plist in table." + str(e) )
+                try:
+                    notifications.append([user, CommonFunctions.ReadMacAbsoluteTime(row['delivered_date']) , 
+                                         row['presented'], row['app'], '', GetText(row['uuid']), 
+                                         title, subtitle, message, inputPath])
+                except Exception as ex:
+                    log.error ("Error while fetching row data, error details:\n" + str(ex))        
+        except Exception as ex:
+            log.error ("Db cursor error while reading file " + inputPath)
+            log.exception("Exception Details")
+    except Exception as ex:
+        log.error ("Sqlite error - \nError details: \n" + str(ex))
 
 def ParseDb(conn, inputPath, user, timezone):
     '''variable 'timezone' is not being currently used'''
+    if GetDbVersion(conn) >= 17: # High Sierra
+        Parse_ver_17_Db(conn, inputPath, user, timezone)
+        return
     try:
         conn.row_factory = sqlite3.Row
         cursor = conn.execute("SELECT date_presented as time_utc, actually_presented AS shown, "
@@ -91,9 +148,7 @@ def ParseDb(conn, inputPath, user, timezone):
                                 "(SELECT encoded_data from notifications WHERE notifications.note_id = presented_notifications.note_id) AS dataPlist "
                                 "from presented_notifications ")
         try:
-            rowcount = 0
             for row in cursor:
-                rowcount += 1
                 title    = ''
                 subtitle = ''
                 message  = ''
@@ -131,7 +186,6 @@ def ParseDb(conn, inputPath, user, timezone):
         except Exception as ex:
             log.error ("Db cursor error while reading file " + inputPath)
             log.exception("Exception Details")
-        conn.close()
     except Exception as ex:
         log.error ("Sqlite error - \nError details: \n" + str(ex))
 
@@ -175,6 +229,12 @@ def Plugin_Start(mac_info):
                 darwin_user_folders = user.DARWIN_USER_DIR.split(',')
                 for darwin_user_dir in darwin_user_folders:
                     db_path = darwin_user_dir + '/com.apple.notificationcenter/db/db'
+                    if not mac_info.IsValidFilePath(db_path): continue
+                    else:
+                        ProcessNotificationDb_Wrapper(db_path, mac_info, user.user_name)
+                        mac_info.ExportFile(db_path, __Plugin_Name, user.user_name + '_')
+                    #For High Sierra db2 is present. If upgraded, both might be present
+                    db_path = darwin_user_dir + '/com.apple.notificationcenter/db2/db' 
                     if not mac_info.IsValidFilePath(db_path): continue
                     else:
                         ProcessNotificationDb_Wrapper(db_path, mac_info, user.user_name)
