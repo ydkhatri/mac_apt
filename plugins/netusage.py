@@ -172,8 +172,8 @@ def OpenDb(inputPath):
         conn = sqlite3.connect(inputPath)
         log.debug ("Opened database successfully")
         return conn
-    except Exception as ex:
-        log.exeption ("Failed to open database, is it a valid DB?")
+    except:
+        log.exception ("Failed to open database, is it a valid DB?")
     return None
 
 def OpenDbFromImage(mac_info, inputPath):

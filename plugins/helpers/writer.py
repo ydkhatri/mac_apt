@@ -540,7 +540,7 @@ class ExcelWriter:
                 try:
                     if item == '' or row[column_index] == None: pass
                         #self.sheet.write(self.row_index, column_index, '')
-                    elif self.col_types[column_index] == DataType.INTEGER:
+                    elif self.col_types[column_index] in [DataType.INTEGER, DataType.REAL]:
                         self.sheet.write_number(self.row_index, column_index, row[column_index], self.num_format)
                     elif (self.col_types[column_index] == DataType.DATE):
                         self.sheet.write_datetime(self.row_index, column_index, row[column_index], self.date_format)#[0:19], self.date_format)
@@ -569,7 +569,7 @@ class ExcelWriter:
             # Set column widths
             col_index = 0
             for col_width in sheet_info.col_width_list:
-                if sheet_info.col_types[col_index] == DataType.INTEGER:
+                if sheet_info.col_types[col_index] in [DataType.INTEGER, DataType.REAL]:
                     col_width += col_width/4 - 1
                 elif sheet_info.col_types[col_index] == DataType.DATE:
                     col_width = 18
