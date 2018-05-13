@@ -52,7 +52,7 @@ def Plugin_Start(mac_info):
     mac_info.ExportFile(file_path, __Plugin_Name)
 
     # Let's write it out now
-    TestWriting(version, mac_info.output_params, file_path)
+    WriteMe(version, mac_info.output_params, file_path)
 
 
 def Process_File(mac_info, file_path):
@@ -76,7 +76,7 @@ def GetMacOsVersion(plist):
     return osx_version
 
 
-def TestWriting(version, output_params, file_path):
+def WriteMe(version, output_params, file_path):
     col_info = [ ('Version info', DataType.TEXT),('Major', DataType.INTEGER) ] # Define your columns
     major_ver = int(version.split('.')[0])
     data = [version, major_ver] # Data as a list (or dictionary)
@@ -86,7 +86,7 @@ def TestWriting(version, output_params, file_path):
     try:
         writer.WriteRow(data)
     except:
-        log.exception('TestWriting() exception')
+        log.exception('WriteMe() exception')
     finally:
         writer.FinishWrites()
 
@@ -107,7 +107,7 @@ def Plugin_Start_Standalone(input_files_list, output_params):
                 except Exception:
                     log.error("Error finding this key within the given pList file.")
 
-                TestWriting(osx_version, output_params, input_path)
+                WriteMe(osx_version, output_params, input_path)
             else:
                 log.error('Input file "{}" is not a plist'.format(input_path))
 
