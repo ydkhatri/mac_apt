@@ -1,10 +1,10 @@
 '''
-   Copyright (c) 2017 Yogesh Khatri 
+   Copyright (c) 2017 Yogesh Khatri
 
    This file is part of mac_apt (macOS Artifact Parsing Tool).
-   Usage or distribution of this software/code is subject to the 
+   Usage or distribution of this software/code is subject to the
    terms of the MIT License.
-   
+
 '''
 from __future__ import unicode_literals
 import pytsk3
@@ -29,7 +29,7 @@ from common import *
 log = logging.getLogger('MAIN.HELPERS.MACINFO')
 
 '''
-    Common data structures for plugins 
+    Common data structures for plugins
 '''
 class OutputParams:
     def __init__(self):
@@ -112,7 +112,7 @@ class NativeHfsParser:
             hfs_info.num_folders = header.folderCount
             return hfs_info
         except Exception as ex:
-            log.exception("Failed to read HFS info")         
+            log.exception("Failed to read HFS info")
         return None
 
     def OpenSmallFile(self, path):
@@ -155,7 +155,7 @@ class NativeHfsParser:
 class MacInfo:
 
     def __init__(self, output_params):
-        #self.Partitions = {}   # Dictionary of all partition objects returned from pytsk LATER! 
+        #self.Partitions = {}   # Dictionary of all partition objects returned from pytsk LATER!
         self.pytsk_image = None
         self.osx_FS = None     # Just the FileSystem object (fs) from OSX partition
         self.osx_partition_start_offset = 0
@@ -170,7 +170,7 @@ class MacInfo:
     # Public functions, plugins can use these
     def GetFileMACTimes(self, file_path):
         '''
-           Returns dictionary {c_time, m_time, cr_time, a_time} 
+           Returns dictionary {c_time, m_time, cr_time, a_time}
            where cr_time = created time and c_time = Last time inode/mft modified
         '''
         times = { 'c_time':None, 'm_time':None, 'cr_time':None, 'a_time':None }
@@ -255,7 +255,7 @@ class MacInfo:
         except Exception:
             pass
         return False
-    
+
     def IsValidFolderPath(self, path):
         '''Check if a folder path is valid'''
         try:
@@ -268,14 +268,14 @@ class MacInfo:
     def GetFileSize(self, path, error=None):
         '''For a given file path, gets logical file size, or None if error'''
         try:
-            valid_file = self.osx_FS.open(path) 
+            valid_file = self.osx_FS.open(path)
             return valid_file.info.meta.size
         except Exception as ex:
             log.debug (" Unknown exception from GetFileSize() " + str(ex) + " Perhaps file does not exist " + path)
         return None
 
     def ListItemsInFolder(self, path='/', types_to_fetch=EntryType.FILES_AND_FOLDERS, include_dates=False):
-        ''' 
+        '''
         Returns a list of files and/or folders in a list
         Format of list = [ { 'name':'got.txt', 'type':EntryType.FILE, 'size':10, 'dates': [] }, .. ]
         'path' should be linux style using forward-slash like '/var/db/xxyy/file.tdc'
@@ -299,7 +299,7 @@ class MacInfo:
                     items.append( item )
                 elif types_to_fetch == EntryType.FOLDERS and entry_type == EntryType.FOLDERS:
                     items.append( item )
-                
+
         except Exception as ex:
             if str(ex).find('tsk_fs_dir_open: path not found'):
                 log.debug("Path not found : " + path)
@@ -343,8 +343,8 @@ class MacInfo:
                     log.error("Failed to open file: " + path)
                     log.debug("Exception details:\n", exc_info=True)
             else:
-                log.error("Failed to open file {}".format(path)) 
-                log.debug("Exception details:\n", exc_info=True)      
+                log.error("Failed to open file {}".format(path))
+                log.debug("Exception details:\n", exc_info=True)
         return None
 
     def ExtractFile(self, tsk_path, destination_path):
@@ -390,7 +390,7 @@ class MacInfo:
                 log.debug("OpenSmallFile() returned 'Path not found' error for path: {}".format(tsk_path))
             else:
                 #traceback.print_exc()
-                log.error("Failed to open/find file: " + tsk_path)            
+                log.error("Failed to open/find file: " + tsk_path)
         return False
 
     def GetArrayFirstElement(self, array, error=''):
@@ -400,7 +400,7 @@ class MacInfo:
         except Exception:
             pass
         return error
-  
+
     def GetVersionDictionary(self):
         '''Returns osx version as dictionary {major:10, minor:5 , micro:0}'''
         version_dict = { 'major':0, 'minor':0, 'micro':0 }
@@ -507,7 +507,7 @@ class MacInfo:
             log.error(" Unknown exception from _IsValidFileOrFolderEntry:" + self._GetName(entry))
             log.debug("Exception details:\n", exc_info=True) #traceback.print_exc()
         return False
-    
+
     def _GetDomainUserInfo(self):
         '''Populates self.users with data from /Users/'''
         log.debug('Trying to get domain profiles from /Users/')
@@ -545,18 +545,18 @@ class MacInfo:
     def _ReadAccountPolicyData(self, account_policy_data, target_user):
         try:
             plist2 = biplist.readPlistFromString(account_policy_data[0])
-            try: 
+            try:
                 target_user.creation_time = CommonFunctions.ReadUnixTime(plist2.get('creationTime', 0))
             except: pass
             target_user.failed_login_count = plist2.get('failedLoginCount', 0)
-            try: 
+            try:
                 target_user.failed_login_timestamp = CommonFunctions.ReadUnixTime(plist2.get('failedLoginTimestamp', None))
             except: pass
-            try: 
+            try:
                 target_user.password_last_set_time = CommonFunctions.ReadUnixTime(plist2.get('passwordLastSetTime', None))
             except: pass
         except:
-            log.exception('Error reading password_policy_data embedded plist')        
+            log.exception('Error reading password_policy_data embedded plist')
 
     def _GetUserInfo(self):
         '''Populates user info from plists under: /private/var/db/dslocal/nodes/Default/users/'''
@@ -591,7 +591,7 @@ class MacInfo:
                                     self._ReadPasswordPolicyData(password_policy_data, target_user)
                             else: # 10.10 - Yosemite & higher
                                 account_policy_data = plist.get('accountPolicyData', None)
-                                if account_policy_data == None: 
+                                if account_policy_data == None:
                                     log.debug('Could not find accountPolicyData for user {}'.format(target_user.user_name))
                                 else:
                                     self._ReadAccountPolicyData(account_policy_data, target_user)
@@ -617,7 +617,7 @@ class MacInfo:
                     found_user = False
                     for user in self.users:
                         if user.UID == uid:
-                            if user.DARWIN_USER_DIR: 
+                            if user.DARWIN_USER_DIR:
                                 log.warning('There is already a value in DARWIN_USER_DIR {}'.format(user.DARWIN_USER_DIR))
                                 #Sometimes (rare), if UUID changes, there may be another folder upon restart for DARWIN_USER, we will just concatenate with comma. If you see this, it is more likely that another user with same UID existed prior.
                                 user.DARWIN_USER_DIR       += ',' + path + '/0'
@@ -631,7 +631,7 @@ class MacInfo:
                             break
                     if not found_user:
                         log.error('Could not find username for UID={} GID={}'.format(uid, gid))
-   
+
     def _GetSystemInfo(self):
         ''' Gets system version information'''
         try:
@@ -682,7 +682,7 @@ class ApfsMacInfo(MacInfo):
     def ReadApfsVolumes(self):
         '''Read volume information into an sqlite db'''
         for vol in self.apfs_container.volumes:
-            if vol.is_encrypted: 
+            if vol.is_encrypted:
                 continue
             apfs_parser = ApfsFileSystemParser(vol, self.apfs_db)
             apfs_parser.read_volume_records()
@@ -783,7 +783,7 @@ class ApfsMacInfo(MacInfo):
                     if x['type'] == 'Folder':
                         x['type'] = EntryType.FOLDERS
                         items.append(dict(x))
-        return items 
+        return items
 # TODO: Make this class more efficient, perhaps remove some extractions!
 class MountedMacInfo(MacInfo):
     def __init__(self, root_folder_path, output_params):
@@ -824,7 +824,7 @@ class MountedMacInfo(MacInfo):
 
     def IsValidFilePath(self, path):
         try:
-            return os.path.exists(self.BuildFullPath(path)) 
+            return os.path.exists(self.BuildFullPath(path))
         except Exception as ex:
             log.error("Exception in IsValidFilePath() for path : {} " + path)
             log.exception("Exception details")
@@ -832,7 +832,7 @@ class MountedMacInfo(MacInfo):
 
     def IsValidFolderPath(self, path):
         return self.IsValidFilePath(path)
-    
+
     def _GetFileSizeNoPathMod(self, full_path, error=None):
         '''Simply calls os.path.getsize(), BEWARE-does not build full path!'''
         try:
@@ -856,11 +856,11 @@ class MountedMacInfo(MacInfo):
         return self._GetUserAndGroupID(path)
 
     def ListItemsInFolder(self, path='/', types_to_fetch=EntryType.FILES_AND_FOLDERS, include_dates=False):
-        ''' 
+        '''
         Returns a list of files and/or folders in a list
         Format of list = [ {'name':'got.txt', 'type':EntryType.FILE, 'size':10}, .. ]
         'path' should be linux style using forward-slash like '/var/db/xxyy/file.tdc'
-        and starting at root / 
+        and starting at root /
         '''
         items = [] # List of dictionaries
         try:
@@ -870,7 +870,7 @@ class MountedMacInfo(MacInfo):
                 newpath = os.path.join(mounted_path, entry)
                 entry_type = EntryType.FOLDERS if os.path.isdir(newpath) else EntryType.FILES
                 item = { 'name':entry, 'type':entry_type, 'size':self._GetFileSizeNoPathMod(newpath, 0)}
-                if include_dates: 
+                if include_dates:
                     item['dates'] = self.GetFileMACTimes(path + '/' + name)
                 if types_to_fetch == EntryType.FILES_AND_FOLDERS:
                     items.append( item )
@@ -878,7 +878,7 @@ class MountedMacInfo(MacInfo):
                     items.append( item )
                 elif types_to_fetch == EntryType.FOLDERS and entry_type == EntryType.FOLDERS:
                     items.append( item )
-                
+
         except Exception as ex:
             if str(ex).find('cannot find the path specified'):
                 log.debug("Path not found : " + mounted_path)
@@ -916,11 +916,11 @@ class MountedMacInfo(MacInfo):
                     f.flush()
             except Exception as ex:
                 log.error ("Failed to create file for writing - " + destination_path + "\n" + str(ex))
-                log.debug("Exception details:\n", exc_info=True)   
+                log.debug("Exception details:\n", exc_info=True)
             return True
         except Exception:
-            log.error("Failed to open/find file " + source_file) 
-            log.debug("Exception details:\n", exc_info=True)           
+            log.error("Failed to open/find file " + source_file)
+            log.debug("Exception details:\n", exc_info=True)
         return False
 
     def _GetUserAndGroupID(self, path):
@@ -992,8 +992,8 @@ class MountedMacInfo(MacInfo):
                             #                         break;
                             #         except Exception as ex:
                             #             log.error ("Unknown error while processing query output")
-                            #             log.debug("Exception details:\n", exc_info=True) #traceback.print_exc()   
-                                     
+                            #             log.debug("Exception details:\n", exc_info=True) #traceback.print_exc()
+
                             elif CommonFunctions.TableExists(conn, 'params'):
                                 cursor = conn.execute("select distinct value from params where key like '%HOME%'  and value not like ''") # This query is for Yosemite
                                 for row in cursor:
@@ -1069,13 +1069,13 @@ class SqliteWrapper:
     temp files.
 
     Plugins can use this class and use the SqliteWrapper.connect()
-    function to get a connection object. All other sqlite objects can be 
+    function to get a connection object. All other sqlite objects can be
     normally retrieved through SqliteWrapper.sqlite3. Use a new instance
     of SqliteWrapper for every database processed.
 
-    WARNING: Keep this object/ref alive till you are using the db. And 
+    WARNING: Keep this object/ref alive till you are using the db. And
     don't forget to call db.close() when you are done.
-    
+
     '''
 
     def __init__(self, mac_info):
@@ -1114,7 +1114,7 @@ class SqliteWrapper:
         return True
 
     def __getattr__(self, attr):
-        if attr == 'connect': 
+        if attr == 'connect':
             def hooked(path):
                 # Get 'database' variable
                 self.db_file_path = path
@@ -1133,7 +1133,7 @@ class SqliteWrapper:
     def _remove_readonly(self, func, path, excinfo):
         os.chmod(path, stat.S_IWRITE)
         func(path)
-  
+
     def __del__(self):
         '''Close all file handles and delete all files & temp folder'''
         # Sometimes a delay may be needed, lets try at least 3 times before failing.
