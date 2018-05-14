@@ -1,6 +1,5 @@
 '''
    Copyright (c) 2017 Yogesh Khatri
-
    This file is part of mac_apt (macOS Artifact Parsing Tool).
    Usage or distribution of this software/code is subject to the
    terms of the MIT License.
@@ -1067,12 +1066,10 @@ class SqliteWrapper:
     This is to extract the sqlite db and related files to disk before
     it can be opened. When object is destroyed, it will delete these
     temp files.
-
     Plugins can use this class and use the SqliteWrapper.connect()
     function to get a connection object. All other sqlite objects can be
     normally retrieved through SqliteWrapper.sqlite3. Use a new instance
     of SqliteWrapper for every database processed.
-
     WARNING: Keep this object/ref alive till you are using the db. And
     don't forget to call db.close() when you are done.
 
