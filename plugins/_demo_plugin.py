@@ -1,13 +1,13 @@
 '''
-   Copyright (c) 2017 Yogesh Khatri 
+   Copyright (c) 2017 Yogesh Khatri
 
    This file is part of mac_apt (macOS Artifact Parsing Tool).
-   Usage or distribution of this software/code is subject to the 
+   Usage or distribution of this software/code is subject to the
    terms of the MIT License.
 
    _demo_plugin.py
    ---------------
-   This demonstrates how to write a simple plugin for use with mac_apt. 
+   This demonstrates how to write a simple plugin for use with mac_apt.
    Any plugin that starts with underscore '_' will not be included, so
    remember to remove the underscore to include it into mac_apt.
 '''
@@ -15,8 +15,10 @@ from __future__ import print_function
 from __future__ import unicode_literals
 
 import os
+
 from helpers.macinfo import *
 from helpers.writer import *
+
 import logging
 import biplist
 
@@ -36,55 +38,58 @@ log = logging.getLogger('MAIN.' + __Plugin_Name) # Do not rename or remove this 
 
 def Plugin_Start(mac_info):
     '''Main Entry point function for plugin'''
-    log.info("Demo plugin here, lets print osx version that the framework has already retrieved")
+
+    # Lets print the osx name and version that the framework has already retrieved. (Utilizing MacInfo)
     log.info("Current OS is: " + os.name)
-    log.info("Mac version is : {}".format(mac_info.osx_version)) # Get osx version from MacInfo
-    
-    log.info("Now lets try to get it ourselves")
+    log.info("Mac version is : {}".format(mac_info.osx_version))
+
+    # Now lets try to get it ourselves manually.
     file_path = '/System/Library/CoreServices/SystemVersion.plist'
-    version = Process_File(mac_info, file_path) # Reading osx version from SystemVersion.plist
+    version = Process_File(mac_info, file_path)
     log.info("Mac version retrieved = {}".format(version))
-    log.info("Let's write it out now")
-    TestWriting(version, mac_info.output_params, file_path)
+
+    # Lets export our file into the Export folder, as most plugins should.
+    mac_info.ExportFile(file_path, __Plugin_Name)
+
+    # Let's write it out now
+    WriteMe(version, mac_info.output_params, file_path)
+
 
 def Process_File(mac_info, file_path):
     version = ''
     log.debug("Inside Process_File")
     try:
-        log.debug("Trying to get version from {}".format(file_path))
-        f = mac_info.OpenSmallFile(file_path)
-        if f != None:
-            version = GetMacOsVersion(f)
-        else:
-            log.error("Could not open plist to get osx version number!")
+        log.info("Trying to get version from {}".format(file_path))
+        success, plist, error = mac_info.ReadPlist(file_path)
+        if success:
+            version = GetMacOsVersion(plist)
     except Exception:
-        log.exception ("Could not open plist " + file_path)
+        log.exception(error)
     return version
 
-def GetMacOsVersion(fp):
-    ''' Gets osx version number from plist, input here is file pointer'''
-    plist = biplist.readPlist(fp)
+def GetMacOsVersion(plist):
+    ''' Gets osx version number from plist, input here is the plist itself.'''
     try:
-        osx_version = plist.get('ProductVersion', '')
-        return osx_version
+        osx_version = plist['ProductVersion']
     except Exception:
-        log.error ("Error fetching ProductVersion from plist. Is it a valid xml plist?")
-    return ''
+        log.error("Error fetching ProductVersion from plist. Is it a valid xml plist?")
+    return osx_version
 
-def TestWriting(version, output_params, file_path):
+
+def WriteMe(version, output_params, file_path):
     col_info = [ ('Version info', DataType.TEXT),('Major', DataType.INTEGER) ] # Define your columns
     major_ver = int(version.split('.')[0])
     data = [version, major_ver] # Data as a list (or dictionary)
-    
+
     ## The following demonstrates use of the writer class.
     writer = DataWriter(output_params, 'OSX Info', col_info, file_path)
     try:
         writer.WriteRow(data)
     except:
-        log.exception('TestWriting() exception')
+        log.exception('WriteMe() exception')
     finally:
         writer.FinishWrites()
-    
+
     # Alternately, you could do it in one line as shown below:
     WriteList('OSX version info', 'OSX Info', [data], col_info, output_params, file_path)
 
@@ -94,10 +99,15 @@ def Plugin_Start_Standalone(input_files_list, output_params):
     for input_path in input_files_list:
         log.debug("Input file passed was: " + input_path)
         ## Process the input file here ##
-        with open (input_path, 'rb') as artifact_file:
+        with open (input_path, 'rb') as fp:
             if input_path.endswith('SystemVersion.plist'):
-                version = GetMacOsVersion(artifact_file) # Reading osx version from SystemVersion.plist
-                TestWriting(version, output_params, input_path)
+                plist = biplist.readPlist(fp)
+                try:
+                    osx_version = plist.get('ProductVersion')
+                except Exception:
+                    log.error("Error finding this key within the given pList file.")
+
+                WriteMe(osx_version, output_params, input_path)
             else:
                 log.error('Input file "{}" is not a plist'.format(input_path))
 
