@@ -2,6 +2,7 @@
 -------------------------
 
 * Yogesh Khatri - Author & Maintainer of mac_apt framework and plugins
+* Adam Ferrante - Plugin Documentation on wiki
 * Jack Farley - Wrote the PRINTJOBS plugin
 * Michael Geyer - Wrote the WIFI plugin
 * Noah Sidall - Wrote the INSTALLHISTORY plugin
