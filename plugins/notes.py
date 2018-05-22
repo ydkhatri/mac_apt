@@ -307,7 +307,7 @@ def Plugin_Start(mac_info):
     notes_v1_path = '{}/Library/Containers/com.apple.Notes/Data/Library/Notes/NotesV1.storedata' # Mountain Lion
     notes_v2_path = '{}/Library/Containers/com.apple.Notes/Data/Library/Notes/NotesV2.storedata' # Mavericks
     notes_v4_path = '{}/Library/Containers/com.apple.Notes/Data/Library/Notes/NotesV4.storedata' # Yosemite
-    notes_v6_path = '{}/Library/Containers/com.apple.Notes/Data/Library/Notes/NotesV6.storedata' # Elcapitan
+    notes_v6_path = '{}/Library/Containers/com.apple.Notes/Data/Library/Notes/NotesV6.storedata' # Elcapitan & Sierra
     notes_v7_path = '{}/Library/Containers/com.apple.Notes/Data/Library/Notes/NotesV7.storedata' # HighSierra
     notes_path    = '{}/Library/Group Containers/group.com.apple.notes/NoteStore.sqlite'         # Elcapitan+ has this too!
 
