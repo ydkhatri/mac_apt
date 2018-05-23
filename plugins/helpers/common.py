@@ -37,7 +37,6 @@ class CommonFunctions:
         #local_tz = get_localzone()
         return d_utc.replace(tzinfo=pytz.utc).astimezone(local_timezone)
 
-    #TODO: Provide better implementation that does not restrict to POSIX 1970-2038
     @staticmethod
     def ReadMacAbsoluteTime(mac_abs_time): # Mac Absolute time is time epoch beginning 2001/1/1
         '''Returns datetime object, or empty string upon error'''
@@ -52,7 +51,6 @@ class CommonFunctions:
                 log.error("ReadMacAbsoluteTime() Failed to convert timestamp from value " + str(mac_abs_time) + " Error was: " + str(ex))
         return ''
 
-    #TODO: Provide better implementation that does not restrict to POSIX 1970-2038 
     @staticmethod
     def ReadMacHFSTime(mac_hfs_time): # Mac HFS+ timestamp is time epoch beginning 1904/1/1
         '''Returns datetime object, or empty string upon error'''
@@ -90,13 +88,13 @@ class CommonFunctions:
         return ''
 
     @staticmethod
-    def IntFromStr(str, base=10, error_val=0):
+    def IntFromStr(string, base=10, error_val=0):
         integer = error_val
         try:
-            integer = int(str, base)
-        except: # Will go here if str is '' or contains non-digit characters
-            if str == '' or str == None: pass
-            else: log.exception('Could not convert str "{}" to int'.format(str))
+            integer = int(string, base)
+        except: # Will go here if string is '' or contains non-digit characters
+            if string == '' or string == None: pass
+            else: log.exception('Could not convert string "{}" to int'.format(string))
         return integer
 
     @staticmethod

@@ -357,9 +357,9 @@ except Exception as ex:
 
 if args.input_type.upper() != 'MOUNTED':
     try:
-        vol_info = pytsk3.Volume_Info(img) 
-        vs_info = vol_info.info # TSK_VS_INFO object
         mac_info.pytsk_image = img
+        vol_info = pytsk3.Volume_Info(img)
+        vs_info = vol_info.info # TSK_VS_INFO object
         mac_info.vol_info = vol_info
         found_osx = FindOsxPartition(img, vol_info, vs_info)
         Disk_Info(mac_info, args.input_path).Write()
