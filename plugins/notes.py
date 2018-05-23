@@ -229,44 +229,87 @@ def ReadNotesHighSierra(db, notes, source, user):
     except:
         log.exception('Query  execution failed. Query was: ' + query)
 
-def ReadNotes(db, notes, source, user):
-    '''Read Notestore.sqlite'''
-    if not CommonFunctions.TableExists(db, 'Z_12NOTES'):
-        ReadNotesHighSierra(db, notes, source, user)
-        return
+def IsHighSierraDb(db):
+    '''Returns false if Z_xxNOTE is a table where xx is a number'''
     try:
-        query = " SELECT n.Z_12FOLDERS as folder_id , n.Z_9NOTES as note_id, d.ZDATA as data, " \
-                " c2.ZTITLE2 as folder, c2.ZDATEFORLASTTITLEMODIFICATION as folder_title_modified, " \
-                " c1.ZCREATIONDATE as created, c1.ZMODIFICATIONDATE1 as modified, c1.ZSNIPPET as snippet, c1.ZTITLE1 as title, c1.ZACCOUNT2 as acc_id, " \
-                " c5.ZACCOUNTTYPE as acc_type, c5.ZIDENTIFIER as acc_identifier, c5.ZNAME as acc_name, " \
-                " c3.ZMEDIA as media_id, c3.ZFILESIZE as att_filesize, c3.ZMODIFICATIONDATE as att_modified, c3.ZPREVIEWUPDATEDATE as att_previewed, c3.ZTITLE as att_title, c3.ZTYPEUTI, c3.ZIDENTIFIER as att_uuid, " \
-                " c4.ZFILENAME, c4.ZIDENTIFIER as media_uuid " \
-                " FROM Z_12NOTES as n " \
-                " LEFT JOIN ZICNOTEDATA as d ON d.ZNOTE = n.Z_9NOTES " \
-                " LEFT JOIN ZICCLOUDSYNCINGOBJECT as c1 ON c1.Z_PK = n.Z_9NOTES " \
-                " LEFT JOIN ZICCLOUDSYNCINGOBJECT as c2 ON c2.Z_PK = n.Z_12FOLDERS " \
-                " LEFT JOIN ZICCLOUDSYNCINGOBJECT as c3 ON c3.ZNOTE = n.Z_9NOTES " \
-                " LEFT JOIN ZICCLOUDSYNCINGOBJECT as c4 ON c3.ZMEDIA = c4.Z_PK " \
-                " LEFT JOIN ZICCLOUDSYNCINGOBJECT as c5 ON c5.Z_PK = c1.ZACCOUNT2 " \
-                " ORDER BY note_id "
+        cursor = db.execute("SELECT name FROM sqlite_master WHERE type='table' AND name LIKE '%NOTE%'")
+        for row in cursor:
+            if row[0].startswith('Z_') and row[0].endswith('NOTES'):
+                return False
+    except Exception as ex:
+        log.error ("Failed to list tables of db. Error Details:{}".format(str(ex)) )
+    return True
+
+def ExecuteQuery(db, query):
+    '''Run query, return tuple (cursor, error_message)'''
+    try:
         db.row_factory = sqlite3.Row
         cursor = db.execute(query)
-        for row in cursor:
-            try:
-                att_path = ''
-                if row['media_id'] != None:
-                    att_path = row['ZFILENAME']
-                data = GetUncompressedData(row['data'])
-                text_content = ProcessNoteBodyBlob(data)
-                note = Note(row['note_id'], row['folder'], row['title'], row['snippet'], text_content, row['att_uuid'], att_path,
-                            row['acc_name'], row['acc_identifier'], '', 
-                            CommonFunctions.ReadMacAbsoluteTime(row['created']), CommonFunctions.ReadMacAbsoluteTime(row['modified']),
-                            'NoteStore', user, source)
-                notes.append(note)
-            except:
-                log.exception('Error fetching row data')
-    except:
-        log.exception('Query  execution failed. Query was: ' + query)
+        return cursor, ""
+    except Exception as ex:
+        error = str(ex)
+        log.debug('Exception:{}'.format(error))
+    return None, error
+
+def ReadNotes(db, notes, source, user):
+    '''Read Notestore.sqlite'''
+    if IsHighSierraDb(db):
+        ReadNotesHighSierra(db, notes, source, user)
+        return
+
+    query1 = " SELECT n.Z_12FOLDERS as folder_id , n.Z_9NOTES as note_id, d.ZDATA as data, " \
+            " c2.ZTITLE2 as folder, c2.ZDATEFORLASTTITLEMODIFICATION as folder_title_modified, " \
+            " c1.ZCREATIONDATE as created, c1.ZMODIFICATIONDATE1 as modified, c1.ZSNIPPET as snippet, c1.ZTITLE1 as title, c1.ZACCOUNT2 as acc_id, " \
+            " c5.ZACCOUNTTYPE as acc_type, c5.ZIDENTIFIER as acc_identifier, c5.ZNAME as acc_name, " \
+            " c3.ZMEDIA as media_id, c3.ZFILESIZE as att_filesize, c3.ZMODIFICATIONDATE as att_modified, c3.ZPREVIEWUPDATEDATE as att_previewed, c3.ZTITLE as att_title, c3.ZTYPEUTI, c3.ZIDENTIFIER as att_uuid, " \
+            " c4.ZFILENAME, c4.ZIDENTIFIER as media_uuid " \
+            " FROM Z_12NOTES as n " \
+            " LEFT JOIN ZICNOTEDATA as d ON d.ZNOTE = n.Z_9NOTES " \
+            " LEFT JOIN ZICCLOUDSYNCINGOBJECT as c1 ON c1.Z_PK = n.Z_9NOTES " \
+            " LEFT JOIN ZICCLOUDSYNCINGOBJECT as c2 ON c2.Z_PK = n.Z_12FOLDERS " \
+            " LEFT JOIN ZICCLOUDSYNCINGOBJECT as c3 ON c3.ZNOTE = n.Z_9NOTES " \
+            " LEFT JOIN ZICCLOUDSYNCINGOBJECT as c4 ON c3.ZMEDIA = c4.Z_PK " \
+            " LEFT JOIN ZICCLOUDSYNCINGOBJECT as c5 ON c5.Z_PK = c1.ZACCOUNT2 " \
+            " ORDER BY note_id "
+    query2 = " SELECT n.Z_11FOLDERS as folder_id , n.Z_8NOTES as note_id, d.ZDATA as data, " \
+            " c2.ZTITLE2 as folder, c2.ZDATEFORLASTTITLEMODIFICATION as folder_title_modified, " \
+            " c1.ZCREATIONDATE as created, c1.ZMODIFICATIONDATE1 as modified, c1.ZSNIPPET as snippet, c1.ZTITLE1 as title, c1.ZACCOUNT2 as acc_id, " \
+            " c5.ZACCOUNTTYPE as acc_type, c5.ZIDENTIFIER as acc_identifier, c5.ZNAME as acc_name, " \
+            " c3.ZMEDIA as media_id, c3.ZFILESIZE as att_filesize, c3.ZMODIFICATIONDATE as att_modified, c3.ZPREVIEWUPDATEDATE as att_previewed, c3.ZTITLE as att_title, c3.ZTYPEUTI, c3.ZIDENTIFIER as att_uuid, " \
+            " c4.ZFILENAME, c4.ZIDENTIFIER as media_uuid " \
+            " FROM Z_11NOTES as n " \
+            " LEFT JOIN ZICNOTEDATA as d ON d.ZNOTE = n.Z_8NOTES " \
+            " LEFT JOIN ZICCLOUDSYNCINGOBJECT as c1 ON c1.Z_PK = n.Z_8NOTES " \
+            " LEFT JOIN ZICCLOUDSYNCINGOBJECT as c2 ON c2.Z_PK = n.Z_11FOLDERS " \
+            " LEFT JOIN ZICCLOUDSYNCINGOBJECT as c3 ON c3.ZNOTE = n.Z_8NOTES " \
+            " LEFT JOIN ZICCLOUDSYNCINGOBJECT as c4 ON c3.ZMEDIA = c4.Z_PK " \
+            " LEFT JOIN ZICCLOUDSYNCINGOBJECT as c5 ON c5.Z_PK = c1.ZACCOUNT2 " \
+            " ORDER BY note_id "
+    cursor, error1 = ExecuteQuery(db, query1)
+    if cursor:
+        ReadQueryResults(cursor, notes, user, source)
+    else: # Try query2
+        cursor, error2 = ExecuteQuery(db, query2)
+        if cursor:
+            ReadQueryResults(cursor, notes, user, source)
+        else:
+            log.error('Query execution failed.\n Query 1 error: {}\n Query 2 error: {}'.format(error1, error2))
+
+def ReadQueryResults(cursor, notes, user, source):
+    for row in cursor:
+        try:
+            att_path = ''
+            if row['media_id'] != None:
+                att_path = row['ZFILENAME']
+            data = GetUncompressedData(row['data'])
+            text_content = ProcessNoteBodyBlob(data)
+            note = Note(row['note_id'], row['folder'], row['title'], row['snippet'], text_content, row['att_uuid'], att_path,
+                        row['acc_name'], row['acc_identifier'], '', 
+                        CommonFunctions.ReadMacAbsoluteTime(row['created']), CommonFunctions.ReadMacAbsoluteTime(row['modified']),
+                        'NoteStore', user, source)
+            notes.append(note)
+        except:
+            log.exception('Error fetching row data')
 
 def OpenDb(inputPath):
     log.info ("Processing file " + inputPath)
