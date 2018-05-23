@@ -66,7 +66,7 @@ def PrintAll(imessages, output_params, source_path):
                       imsg.user, imsg.source
                      ]
         imessages_list.append(imsg_items)
-    WriteList("iMessages", "iMessages", imessages_list, imessages_info, output_params, source_path)
+    WriteList("iMessages", "IMessages", imessages_list, imessages_info, output_params, source_path)
 
 def GetAttachments(mac_info, sourceDirectory, user):
     '''
