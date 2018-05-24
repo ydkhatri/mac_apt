@@ -332,7 +332,8 @@ class MacInfo:
             if str(ex).find('tsk_fs_file_open: path not found:') > 0:
                 log.error("OpenSmallFile() returned 'Path not found' error for path: {}".format(path))
             elif str(ex).find('tsk_fs_attrlist_get: Attribute 4352 not found') > 0 or \
-                 (str(ex).find('Read error: Invalid file offset') > 0 and self._IsFileCompressed(tsk_file)):
+                 (str(ex).find('Read error: Invalid file offset') > 0 and self._IsFileCompressed(tsk_file)) or \
+                 str(ex).find('Read error: Error in metadata') > 0:
                 log.debug("Known TSK bug caused Error: Failed to open file {}".format(path))
                 log.debug("Trying to open with Native HFS parser")
                 try:
@@ -343,8 +344,7 @@ class MacInfo:
                     log.error("Failed to open file: " + path)
                     log.debug("Exception details:\n", exc_info=True)
             else:
-                log.error("Failed to open file {}".format(path)) 
-                log.debug("Exception details:\n", exc_info=True)      
+                log.exception("Failed to open file {}".format(path)) 
         return None
 
     def ExtractFile(self, tsk_path, destination_path):
@@ -366,7 +366,8 @@ class MacInfo:
                             f.write(data)
                         except Exception as ex:
                             if str(ex).find('tsk_fs_attrlist_get: Attribute 4352 not found') > 0 or \
-                               (str(ex).find('Read error: Invalid file offset') > 0 and self._IsFileCompressed(tsk_file)):
+                               (str(ex).find('Read error: Invalid file offset') > 0 and self._IsFileCompressed(tsk_file)) or \
+                               str(ex).find('Read error: Error in metadata') > 0:
                                 log.debug("Known TSK bug caused Error: Failed to read file {}".format(tsk_path))
                                 log.debug("Trying to read with Native HFS parser")
                                 try:
@@ -378,6 +379,9 @@ class MacInfo:
                                 except Exception as ex2:
                                     log.error("Failed to export file: " + tsk_path)
                                     log.debug("Exception details:\n", exc_info=True)
+                                return False
+                            else:
+                                log.exception("Failed to read file {}".format(tsk_path)) 
                                 return False
                     f.flush()
                     f.close()

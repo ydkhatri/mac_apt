@@ -248,7 +248,7 @@ def ExecuteQuery(db, query):
         return cursor, ""
     except Exception as ex:
         error = str(ex)
-        log.debug('Exception:{}'.format(error))
+        #log.debug('Exception:{}'.format(error))
     return None, error
 
 def ReadNotes(db, notes, source, user):
