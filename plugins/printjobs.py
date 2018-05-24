@@ -102,7 +102,8 @@ def get_job_detail(request, job_request, ret_all_replies=False, ret_on_error='')
             return replies[0][1]
 
     except Exception as ex:
-        log.error ('Error retrieving value for ' + job_request)
+        #log.debug ('Error retrieving value for ' + job_request)
+        pass
     if ret_all_replies: return []
     return ret_on_error
 

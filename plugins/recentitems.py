@@ -598,26 +598,29 @@ def ReadSFLPlist(file_handle, recent_items, source, user=''):
 
         for item in items:
             url = ''
+            name = ''
             try: url = item['URL']['NS.relative']
             except: pass
             if url.find('x-apple-findertag') == 0: continue # skipping these items
-            name = item['name']
-            recent_type = RecentType.UNKNOWN
-            basename = os.path.basename(source).lower()
-            if basename.find('recentservers') >=0 : recent_type = RecentType.SERVER
-            elif basename.find('recenthosts') >=0 : recent_type = RecentType.HOST
-            elif basename.find('recentdocuments') >=0 : recent_type = RecentType.DOCUMENT
-            elif basename.find('recentapplications') >=0 : recent_type = RecentType.APPLICATION
+            try: name = item['name']
+            except: pass
+            if name or url:
+                recent_type = RecentType.UNKNOWN
+                basename = os.path.basename(source).lower()
+                if basename.find('recentservers') >=0 : recent_type = RecentType.SERVER
+                elif basename.find('recenthosts') >=0 : recent_type = RecentType.HOST
+                elif basename.find('recentdocuments') >=0 : recent_type = RecentType.DOCUMENT
+                elif basename.find('recentapplications') >=0 : recent_type = RecentType.APPLICATION
 
-            ri = RecentItem(name, url, '', source, recent_type, user)
-            recent_items.append(ri)
-            # try: # Not reading bookmark right now, but this code should work!
-            #     bm = item['bookmark']
-            #     if type(bm) == ccl_bplist.NsKeyedArchiverDictionary: # Soemtimes its 'str', otherwise this
-            #         bm = bm['NS.data']
-            #     #print "bookmark bytes=", len(bm)
-            # except:
-            #     pass # Not everything has bookmarks
+                ri = RecentItem(name, url, '', source, recent_type, user)
+                recent_items.append(ri)
+                # try: # Not reading bookmark right now, but this code should work!
+                #     bm = item['bookmark']
+                #     if type(bm) == ccl_bplist.NsKeyedArchiverDictionary: # Sometimes its 'str', otherwise this
+                #         bm = bm['NS.data']
+                #     #print "bookmark bytes=", len(bm)
+                # except:
+                #     pass # Not everything has bookmarks
     except Exception as ex:
         log.exception('Error reading SFL plist')
 
