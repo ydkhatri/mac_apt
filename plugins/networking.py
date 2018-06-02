@@ -43,7 +43,7 @@ net_interfaces = []
 net_interface_info = [  ('Category',DataType.TEXT),('Active',DataType.TEXT),('BSD Name',DataType.TEXT),
                         ('IOBuiltin',DataType.TEXT),('IOInterfaceNamePrefix', DataType.TEXT),('IOInterfaceType',DataType.INTEGER),
                         ('IOInterfaceUnit', DataType.INTEGER),('IOMACAddress',DataType.TEXT),('IOPathMatch',DataType.TEXT),
-                        ('SCNetworkInterfaceInfo',DataType.TEXT),('SCNetworkInterfaceType',DataType.TEXT)  
+                        ('SCNetworkInterfaceInfo',DataType.TEXT),('SCNetworkInterfaceType',DataType.TEXT),('Source', DataType.TEXT)
                     ]
 
 net_interface_details = []
@@ -51,7 +51,7 @@ net_interface_detail_info = [ ('UUID',DataType.TEXT),('IPv4.ConfigMethod',DataTy
                               ('DeviceName',DataType.TEXT),('Hardware',DataType.TEXT),('Type',DataType.TEXT),
                               ('SubType',DataType.TEXT),('UserDefinedName',DataType.TEXT),('Proxies.ExceptionsList',DataType.TEXT),
                               ('SMB.NetBIOSName',DataType.TEXT),('SMB.Workgroup',DataType.TEXT),
-                              ('PPP',DataType.TEXT),('Modem',DataType.TEXT) #,('VirtualInterfaces',DataType.TEXT)
+                              ('PPP',DataType.TEXT),('Modem',DataType.TEXT),('Source', DataType.TEXT) #,('VirtualInterfaces',DataType.TEXT)
                             ]
 
 def GetNetworkInterface2Info(mac_info):
@@ -62,7 +62,7 @@ def GetNetworkInterface2Info(mac_info):
     if success:
         try:
             for uuid, interface in plist['NetworkServices'].items():
-                interface_info = { 'UUID': uuid }
+                interface_info = { 'UUID': uuid, 'Source': preference_plist_path }
                 for item, value in interface.items():
                     if item == 'DNS' and value: log.info('Interface {} has DNS info as : {}'.format(uuid, value))
                     elif item == 'UserDefinedName' or item == 'Modem' or item == 'PPP': interface_info[item] = unicode(value)
@@ -128,7 +128,7 @@ def GetNetworkInterfaceInfo(mac_info):
                     if category != 'Model': log.debug('Skipping ' + category)
                     continue;
                 for interface in cat_array:
-                    interface_info = {'Category':category}
+                    interface_info = {'Category':category, 'Source':path }
                     for item, value in interface.iteritems(): # .items() for Python 3
                         if item in ['Active','BSD Name','IOBuiltin','IOInterfaceNamePrefix','IOInterfaceType',
                                     'IOInterfaceUnit','IOPathMatch','SCNetworkInterfaceType']:

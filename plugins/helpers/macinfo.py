@@ -62,6 +62,7 @@ class UserInfo:
         self.DARWIN_USER_DIR = '' #0  With DARWIN_USER_* folders, there may be one or more comma separated
         self.DARWIN_USER_TEMP_DIR = '' #T
         self.DARWIN_USER_CACHE_DIR = ''#C
+        self._source = '' # Path of data source
 
 class HfsVolumeInfo:
     def __init__(self):
@@ -535,6 +536,7 @@ class MacInfo:
                     target_user.home_dir = folder_path
                     target_user.user_name = folder['name']
                     target_user.real_name = folder['name']
+                    target_user._source = folder_path
 
     def _ReadPasswordPolicyData(self, password_policy_data, target_user):
         try:
@@ -570,7 +572,8 @@ class MacInfo:
         for plist_meta in user_plists:
             if plist_meta['size'] > 0:
                 try:
-                    f = self.OpenSmallFile(users_path + '/' + plist_meta['name'])
+                    user_plist_path = users_path + '/' + plist_meta['name']
+                    f = self.OpenSmallFile(user_plist_path)
                     if f!= None:
                         plist = biplist.readPlist(f)
                         home_dir = self.GetArrayFirstElement(plist.get('home', ''))
@@ -586,6 +589,7 @@ class MacInfo:
                             target_user.user_name = self.GetArrayFirstElement(plist.get('name', ''))
                             target_user.real_name = self.GetArrayFirstElement(plist.get('realname', ''))
                             target_user.pw_hint = self.GetArrayFirstElement(plist.get('hint', ''))
+                            target_user._source = user_plist_path
                             osx_version = self.GetVersionDictionary()
                             if osx_version['major'] == 10 and osx_version['minor'] <= 9: # Mavericks & earlier
                                 password_policy_data = plist.get('passwordpolicyoptions', None)
@@ -601,8 +605,8 @@ class MacInfo:
                                     self._ReadAccountPolicyData(account_policy_data, target_user)
                         else:
                             log.error('Did not find \'home\' in ' + plist_meta['name'])
-                except Exception as ex:
-                    log.error ("Could not open plist " + plist_meta['name'] + " Exception: " + str(ex))
+                except:
+                    log.exception ("Could not open plist " + user_plist_path)
         self._GetDomainUserInfo()
         self._GetDarwinFoldersInfo() # This probably does not apply to OSX < Mavericks !
 
@@ -1018,6 +1022,7 @@ class MountedMacInfo(MacInfo):
                     user_info.DARWIN_USER_DIR       = '/private/var/folders/' + unknown1_name + '/' + unknown2_name + '/0'
                     user_info.DARWIN_USER_CACHE_DIR = '/private/var/folders/' + unknown1_name + '/' + unknown2_name + '/C'
                     user_info.DARWIN_USER_TEMP_DIR  = '/private/var/folders/' + unknown1_name + '/' + unknown2_name + '/T'
+                    user_info._source = path_to_sandbox_db
                     self.users.append(user_info)
 
     def _GetUserInfo(self):

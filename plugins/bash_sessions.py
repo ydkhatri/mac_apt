@@ -90,6 +90,7 @@ def PrintAll(sessions, output_params, source_path):
                    ]
 
     data_list = []
+    log.info("Found {} session(s)".format(len(sessions)))
     for session in sessions:
         data_list.append( [ session.source_type, session.start_date, session.end_date, session.new_content, 
                             session.all_content, session.user, session.uuid, session.source ] )
