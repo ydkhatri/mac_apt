@@ -36,7 +36,7 @@ http://mirror.informatimago.com/next/developer.apple.com/documentation/Carbon/Re
 from construct import *
 
 def getString(obj):
-    return obj.HFSUniStr255.unicode
+    return obj.HFSUniStr255.unicode.replace('/', ':')
 
 kHFSRootParentID            = 1
 kHFSRootFolderID            = 2
