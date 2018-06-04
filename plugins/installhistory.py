@@ -71,13 +71,14 @@ def ParseInstallHistoryFile(input_file):
 
 def PrintAll(history, output_params, source_path):
     install_info = [ ('ContentType',DataType.TEXT),('Date',DataType.DATE),('DisplayName',DataType.TEXT),
-                     ('DisplayVersion',DataType.TEXT),('PackageIdentifiers',DataType.TEXT),('ProcessName',DataType.TEXT)
+                     ('DisplayVersion',DataType.TEXT),('PackageIdentifiers',DataType.TEXT),('ProcessName',DataType.TEXT),
+                     ('Source',DataType.TEXT)
                    ]
 
     data_list = []
     for entry in history:
         data_list.append( [ entry.ContentType, entry.Date, entry.DisplayName, entry.DisplayVersion, 
-                            ', '.join(entry.PackageIdentifiers), entry.ProcessName
+                            ', '.join(entry.PackageIdentifiers), entry.ProcessName, source_path
                           ] )
 
     WriteList("Installation history", "InstallHistory", data_list, install_info, output_params, source_path)
@@ -86,7 +87,7 @@ def Plugin_Start(mac_info):
     '''Main Entry point function for plugin'''
     installhistory_plist_path = '/Library/Receipts/InstallHistory.plist'
     if mac_info.IsValidFilePath(installhistory_plist_path):
-        mac_info.ExportFile(installhistory_plist_path, __Plugin_Name)
+        mac_info.ExportFile(installhistory_plist_path, __Plugin_Name, '', False)
         success, plist, error = mac_info.ReadPlist(installhistory_plist_path)
         if success:
             history = []

@@ -33,7 +33,8 @@ user_info = [ ('Username',DataType.TEXT),('Realname',DataType.TEXT),('Homedir',D
               ('CreationDate',DataType.DATE),('DeletedDate',DataType.DATE),
               ('FailedLoginCount',DataType.INTEGER),('FailedLoginTime',DataType.DATE),('LastLoginTime',DataType.DATE),
               ('PasswordLastSetTime',DataType.DATE),('PasswordHint',DataType.TEXT),('Password',DataType.TEXT),
-              ('DARWIN_USER_DIR',DataType.TEXT),('DARWIN_USER_TEMP_DIR',DataType.TEXT),('DARWIN_USER_CACHE_DIR',DataType.TEXT)
+              ('DARWIN_USER_DIR',DataType.TEXT),('DARWIN_USER_TEMP_DIR',DataType.TEXT),('DARWIN_USER_CACHE_DIR',DataType.TEXT),
+              ('Source',DataType.TEXT)
              ]
 
 # Decryption XOR key from http://www.brock-family.org/gavin/perl/kcpassword.html
@@ -61,7 +62,7 @@ def decrypt_kcpassword(enc_list):
 def GetAutoLoginPass(mac_info):
     '''Retrieves the user and password for user that is set for auto-logon'''
     kc_path = '/private/etc/kcpassword'
-    mac_info.ExportFile(kc_path, __Plugin_Name)
+    mac_info.ExportFile(kc_path, __Plugin_Name, '', False)
     dec_data = ''
     try:
         f = mac_info.OpenSmallFile(kc_path)
@@ -85,7 +86,7 @@ def GetAutoLoginUser(mac_info):
     user = ''
     loginwindow_plist_path = '/Library/Preferences/com.apple.loginwindow.plist'
     if mac_info.IsValidFilePath(loginwindow_plist_path):
-        mac_info.ExportFile(loginwindow_plist_path, __Plugin_Name)
+        mac_info.ExportFile(loginwindow_plist_path, __Plugin_Name, '', False)
         success, plist, error_message = mac_info.ReadPlist(loginwindow_plist_path)
         if success:
             try:
@@ -101,7 +102,7 @@ def GetDeletedUsers(mac_info):
     deleted_users = []
     plist_path = '/Library/Preferences/com.apple.preferences.accounts.plist'
     if mac_info.IsValidFilePath(plist_path):
-        mac_info.ExportFile(plist_path, __Plugin_Name)
+        mac_info.ExportFile(plist_path, __Plugin_Name, '', False)
         success, plist, error_message = mac_info.ReadPlist(plist_path)
         if success:
             try:
@@ -116,6 +117,7 @@ def GetDeletedUsers(mac_info):
                             deleted_user.real_name = user.get('dsAttrTypeStandard:RealName','')
                             deleted_user.UID = str(user.get('dsAttrTypeStandard:UniqueID',''))
                             deleted_user.deletion_time = user.get('date', None)
+                            deleted_user._source = plist_path
                         except:
                             log.exception('Error trying to fetch deleted user info in plist')
                 else:
@@ -139,14 +141,17 @@ def Plugin_Start(mac_info):
 
     users = []
     for user in mac_info.users:
+        source = user._source
         if auto_login and (auto_username == user.user_name):
             user.password = auto_password
+            source += ', /private/etc/kcpassword'
 
         users.append([user.user_name, user.real_name, user.home_dir, user.UID, user.GID, user.UUID,
                      user.creation_time, user.deletion_time,
                      user.failed_login_count, user.failed_login_timestamp, user.last_login_timestamp, 
                      user.password_last_set_time, user.pw_hint, user.password,
-                     user.DARWIN_USER_DIR, user.DARWIN_USER_TEMP_DIR, user.DARWIN_USER_CACHE_DIR])
+                     user.DARWIN_USER_DIR, user.DARWIN_USER_TEMP_DIR, user.DARWIN_USER_CACHE_DIR,
+                     source])
 
     deleted_users = GetDeletedUsers(mac_info)
     log.info('Found {} users and {} deleted user(s)'.format(len(users), len(deleted_users)))
@@ -157,7 +162,8 @@ def Plugin_Start(mac_info):
                      user.creation_time, user.deletion_time,
                      user.failed_login_count, user.failed_login_timestamp, user.last_login_timestamp, 
                      user.password_last_set_time, user.pw_hint, user.password,
-                     user.DARWIN_USER_DIR, user.DARWIN_USER_TEMP_DIR, user.DARWIN_USER_CACHE_DIR])
+                     user.DARWIN_USER_DIR, user.DARWIN_USER_TEMP_DIR, user.DARWIN_USER_CACHE_DIR,
+                     user._source])
     WriteList("user information", "Users", users, user_info, mac_info.output_params, '')
 
 def Plugin_Start_Standalone(input_files_list, output_params):
