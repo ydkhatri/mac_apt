@@ -151,7 +151,7 @@ def ReadSafariPlist(plist, safari_items, source, user):
         pass        
 
 def ProcessSafariPlist(mac_info, source_path, user, safari_items, read_plist_function):
-    mac_info.ExportFile(source_path, __Plugin_Name, user + "_")
+    mac_info.ExportFile(source_path, __Plugin_Name, user + "_", False)
     success, plist, error = mac_info.ReadPlist(source_path)
     if success:
         read_plist_function(plist, safari_items, source_path, user)
@@ -371,6 +371,7 @@ def ProcessSafariFolder(mac_info, folder_path, user, safari_items):
     # Yosemite onwards there is History.db
     source_path = folder_path + '/History.db'
     if mac_info.IsValidFilePath(source_path) and mac_info.GetFileSize(source_path) > 0:
+        mac_info.ExportFile(source_path, __Plugin_Name, user + "_")
         try:
             sqlite = SqliteWrapper(mac_info)
             conn = sqlite.connect(source_path)

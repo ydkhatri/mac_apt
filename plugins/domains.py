@@ -46,7 +46,7 @@ def Plugin_Start(mac_info):
         if ad['size'] == 0: continue
         ad_name = ad['name']
         log.info("Trying to read " + ad_name)
-        mac_info.ExportFile(ad_folder + '/' + ad_name, __Plugin_Name)
+        mac_info.ExportFile(ad_folder + '/' + ad_name, __Plugin_Name, '', False)
         plist_path = ad_folder + '/' + ad_name
         success, plist, error_message = mac_info.ReadPlist(plist_path)
         if success:

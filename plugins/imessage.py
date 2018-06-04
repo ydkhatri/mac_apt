@@ -89,7 +89,7 @@ def GetAttachments(mac_info, sourceDirectory, user):
                         attachments = attachments['name']
                         files.append(sourceDirectory + folder_names + secondary_folder_names + tri_folder_names + attachments)
         for attachment_paths in files:
-            mac_info.ExportFile(attachment_paths, os.path.join(__Plugin_Name, user), "")
+            mac_info.ExportFile(attachment_paths, os.path.join(__Plugin_Name, user), '', False)
     else:
         log.info('No attachment files found under {}'.format(sourceDirectory))
 

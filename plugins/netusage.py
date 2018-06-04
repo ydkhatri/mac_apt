@@ -206,7 +206,7 @@ def Plugin_Start(mac_info):
     # Also get Last GateKeeper rejected file (not seen in 10.13?)
     gk_reject_path = "/private/var/db/.LastGKReject"
     if mac_info.IsValidFilePath(gk_reject_path):
-        mac_info.ExportFile(gk_reject_path, __Plugin_Name)
+        mac_info.ExportFile(gk_reject_path, __Plugin_Name, '', False)
         success, plist, error = mac_info.ReadPlist(gk_reject_path)
         if success:
             ReadLastGKRejectPlist(plist)

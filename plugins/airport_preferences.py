@@ -257,7 +257,7 @@ def ReadAirportPrefPlist(plist, networks):
 def Plugin_Start(mac_info):
     '''Main Entry point function for plugin'''
     airport_pref_plist_path = '/Library/Preferences/SystemConfiguration/com.apple.airport.preferences.plist'
-    mac_info.ExportFile(airport_pref_plist_path, __Plugin_Name)
+    mac_info.ExportFile(airport_pref_plist_path, __Plugin_Name, '', False)
     success, plist, error = mac_info.ReadPlist(airport_pref_plist_path)
     if success:
         networks = []

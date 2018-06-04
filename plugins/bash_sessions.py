@@ -104,7 +104,7 @@ def ProcessBashSessionsForUser(mac_info, bash_sessions, source_folder, user_name
         content = None
         prev_content = None
         for file_entry in files_list:
-            mac_info.ExportFile(source_folder + '/' + file_entry['name'], __Plugin_Name, user_name + "_")
+            mac_info.ExportFile(source_folder + '/' + file_entry['name'], __Plugin_Name, user_name + "_", False)
             if file_entry['name'].endswith('.history'):
                 session = BashSession(user_name, source_folder + '/' + file_entry['name'], 'BASH_SESSION')
                 bash_sessions.append(session)
@@ -159,7 +159,7 @@ def Plugin_Start(mac_info):
         #Export .bash_history file
         bash_history_path = user.home_dir + ('/.sh_history' if user_name == 'root' else '/.bash_history')
         if mac_info.IsValidFilePath(bash_history_path):
-            mac_info.ExportFile(bash_history_path , __Plugin_Name, user_name + "_")
+            mac_info.ExportFile(bash_history_path , __Plugin_Name, user_name + "_", False)
             content = ReadFile(mac_info, bash_history_path)
             session = BashSession(user_name, bash_history_path, 'BASH_HISTORY')
             bash_sessions.append(session)

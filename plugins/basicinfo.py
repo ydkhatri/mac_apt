@@ -115,7 +115,7 @@ def GetMacSerialNum(mac_info):
 # Sources - /private/etc/localtime and /Library/Preferences/.GlobalPreferences.plist 
 def GetTimezone(mac_info):
     global_pref_plist_path = '/Library/Preferences/.GlobalPreferences.plist'
-    mac_info.ExportFile(global_pref_plist_path, __Plugin_Name)
+    mac_info.ExportFile(global_pref_plist_path, __Plugin_Name, '', False)
     success, plist, error_message = mac_info.ReadPlist(global_pref_plist_path)
     num_items_read = 0
     if success:
@@ -151,7 +151,7 @@ def GetTimezone(mac_info):
 # TODO: Perhaps move this to users plugin?
 def GetLastLoggedInUser(mac_info):
     loginwindow_plist_path = '/Library/Preferences/com.apple.loginwindow.plist'
-    mac_info.ExportFile(loginwindow_plist_path, __Plugin_Name)
+    mac_info.ExportFile(loginwindow_plist_path, __Plugin_Name, '', False)
     success, plist, error_message = mac_info.ReadPlist(loginwindow_plist_path)
     if success:
         try:
@@ -178,7 +178,7 @@ def GetLastLoggedInUser(mac_info):
 # Source - /Library/Preferences/SystemConfiguration/preferences.plist FOR ComputerName
 def GetModelAndHostNameFromPreference(mac_info):
     preference_plist_path = '/Library/Preferences/SystemConfiguration/preferences.plist'
-    mac_info.ExportFile(preference_plist_path, __Plugin_Name)
+    mac_info.ExportFile(preference_plist_path, __Plugin_Name, '', False)
     success, plist, error_message = mac_info.ReadPlist(preference_plist_path)
     if success:
         try: 

@@ -57,7 +57,7 @@ net_interface_detail_info = [ ('UUID',DataType.TEXT),('IPv4.ConfigMethod',DataTy
 def GetNetworkInterface2Info(mac_info):
     '''Read interface info from /Library/Preferences/SystemConfiguration/preferences.plist'''
     preference_plist_path = '/Library/Preferences/SystemConfiguration/preferences.plist'
-    mac_info.ExportFile(preference_plist_path, __Plugin_Name)
+    mac_info.ExportFile(preference_plist_path, __Plugin_Name, '', False)
     success, plist, error_message = mac_info.ReadPlist(preference_plist_path)
     if success:
         try:
@@ -113,7 +113,7 @@ def GetNetworkInterface2Info(mac_info):
 def GetNetworkInterfaceInfo(mac_info):
     '''Read interface info from NetworkInterfaces.plist'''
     path = '/Library/Preferences/SystemConfiguration/NetworkInterfaces.plist'
-    mac_info.ExportFile(path, __Plugin_Name)
+    mac_info.ExportFile(path, __Plugin_Name, '', False)
     log.debug("Trying to read {}".format(path))
     f = mac_info.OpenSmallFile(path)
     if f != None:
@@ -156,7 +156,7 @@ def GetDhcpInfo(mac_info):
             name = interface['name']
             if name.find(",") > 0:
                 #Process plist
-                mac_info.ExportFile('/private/var/db/dhcpclient/leases/' + name, __Plugin_Name)
+                mac_info.ExportFile('/private/var/db/dhcpclient/leases/' + name, __Plugin_Name, '', False)
                 name_no_ext = os.path.splitext(name)[0] # not needed as there is no .plist extension on these files
                 if_name, mac_address = name_no_ext.split(",")
                 log.info("Found mac address = " + mac_address + " on interface " + if_name)
@@ -209,15 +209,19 @@ def GetFileContents(mac_info, path):
 
 def GetResolvConf(mac_info):
     '''Reads last domain and nameserver data from resolv.conf'''
-    resolv_conf = GetFileContents(mac_info, '/private/var/run/resolv.conf')
-    mac_info.ExportFile('/private/var/run/resolv.conf', __Plugin_Name)
-    for line in resolv_conf:
-        log.info("resolve.conf Content --> " + line)
+    resolv_conf_path = '/private/var/run/resolv.conf'
+    if mac_info.IsValidFilePath(resolv_conf_path):
+        resolv_conf = GetFileContents(mac_info, resolv_conf_path)
+        mac_info.ExportFile(resolv_conf_path, __Plugin_Name, '', False)
+        for line in resolv_conf:
+            log.info("resolve.conf Content --> " + line)
+    else:
+        log.info("{} does not exist!".format(resolv_conf_path))
 
 def GetEtcHosts(mac_info):
     '''Reads hosts file'''
     etc_hosts = GetFileContents(mac_info, '/private/etc/hosts')
-    mac_info.ExportFile('/private/etc/hosts', __Plugin_Name)
+    mac_info.ExportFile('/private/etc/hosts', __Plugin_Name, '', False)
     for line in etc_hosts:
         log.info("/etc/hosts Content --> " + line)
 

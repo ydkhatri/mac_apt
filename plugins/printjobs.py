@@ -62,7 +62,7 @@ def Plugin_Start(mac_info):
         filename = item['name']
         filepath = cupsDirectory + '/' + filename
         if filename.startswith('c') and item['size'] > 0:
-            mac_info.ExportFile(filepath, __Plugin_Name)
+            mac_info.ExportFile(filepath, __Plugin_Name, '', False)
             cups_info = parse_cups_file_from_image(mac_info, filepath)
             if cups_info:
                 jobs.append(cups_info)
@@ -71,7 +71,7 @@ def Plugin_Start(mac_info):
         filename = item['name']
         filepath = cupsDirectory + '/' + filename
         if filename.startswith('d') and item['size'] > 0:
-            mac_info.ExportFile(filepath, __Plugin_Name)
+            mac_info.ExportFile(filepath, __Plugin_Name, '', False)
             # Get job id from name
             job_id = 0
             job_id_str = filename[1:]

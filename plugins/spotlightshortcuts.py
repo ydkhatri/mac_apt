@@ -81,7 +81,7 @@ def Plugin_Start(mac_info):
         if user.home_dir == '/private/var/empty': continue # Optimization, nothing should be here!
         source_path = user_plist_rel_path.format(user.home_dir)
         if mac_info.IsValidFilePath(source_path):
-            mac_info.ExportFile(source_path, __Plugin_Name, user.user_name + "_")
+            mac_info.ExportFile(source_path, __Plugin_Name, user.user_name + "_", False)
             success, plist, error = mac_info.ReadPlist(source_path)
             if success:
                 ReadShortcutPlist(plist, shortcuts, source_path, user.user_name)
