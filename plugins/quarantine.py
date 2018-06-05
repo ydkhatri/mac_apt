@@ -11,13 +11,14 @@ from __future__ import print_function
 
 from helpers.macinfo import *
 from helpers.writer import *
+from helpers.bookmark import *
 import logging
 import sqlite3
 
 __Plugin_Name = "QUARANTINE"
 __Plugin_Friendly_Name = "Quarantine"
 __Plugin_Version = "1.0"
-__Plugin_Description = "Reads Quarantine V2 databases"
+__Plugin_Description = "Reads Quarantine V2 databases, and GateKeeper .LastGKReject file"
 __Plugin_Author = "Yogesh Khatri"
 __Plugin_Author_Email = "yogesh@swiftforensics.com"
 
@@ -118,6 +119,55 @@ def ProcessDbFromPath(mac_info, quarantined, source_path, user):
             ReadQuarantineDb(db, quarantined, source_path, user)
             db.close()
 
+def ReadLastGKRejectPlist(plist):
+    bookmark_data = plist.get('BookmarkData', None)
+    timestamp = plist.get('TimeStamp', None)
+    mal_type = plist.get('XProtectMalwareType', None)
+
+    if bookmark_data:
+        bm = Bookmark.from_bytes(bookmark_data)
+        file_path = ''
+        vol_path = ''
+        orig_vol_path = ''
+        try:
+            # Get full file path
+            vol_path = bm.tocs[0][1].get(BookmarkKey.VolumePath, '')
+            file_path = bm.tocs[0][1].get(BookmarkKey.Path, [])
+
+            file_path = '/' + '/'.join(file_path)
+            if vol_path and (not file_path.startswith(vol_path)):
+                file_path += vol_path
+            
+            # If file is on a mounted volume (dmg), get the dmg file details too
+            orig_vol_bm = bm.tocs[0][1].get(BookmarkKey.VolumeBookmark, None)
+            if orig_vol_bm:
+                filtered = filter(lambda x: x[0]==orig_vol_bm, bm.tocs)
+                if filtered:
+                    orig_vol_toc = filtered[0][1]
+                    orig_vol_path = orig_vol_toc.get(BookmarkKey.Path, '')
+                    if orig_vol_path:
+                        orig_vol_path = '/' + '/'.join(orig_vol_path)
+                else:
+                    print ("Error, tid {} not found ".format(orig_vol_bm))
+        except:
+            log.error('Error processing BookmarkData from .LastGKReject')
+            log.debug(bm)
+
+        log.info('.LastGKReject -> File   = {}'.format(file_path))
+        if vol_path:
+            log.info('.LastGKReject -> Volume = {}'.format(vol_path))
+        if orig_vol_path:
+            log.info('.LastGKReject -> Orininating Volume = {}'.format(orig_vol_path))
+
+    if mal_type:
+        # According to Patrick Wardle (Synack)
+        # 2=unsigned, 3= modified bundle, 5=signed app, 7=modified app
+        if   mal_type == 2: mal_type = "Unsigned app/program"
+        elif mal_type == 3: mal_type = "Modified Bundle"
+        elif mal_type == 5: mal_type = "Signed App"
+        elif mal_type == 7: mal_type = "Modified App"
+        log.info('.LastGKReject -> XProtectMalwareType = {}'.format(mal_type))
+    
 def Plugin_Start(mac_info):
     '''Main Entry point function for plugin'''
     quarantined = []
@@ -133,23 +183,42 @@ def Plugin_Start(mac_info):
     else:
         log.info('No quarantine events found')
 
+    # Also get Last GateKeeper rejected file (not seen in 10.13?)
+    gk_reject_path = "/private/var/db/.LastGKReject"
+    if mac_info.IsValidFilePath(gk_reject_path):
+        mac_info.ExportFile(gk_reject_path, __Plugin_Name, '', False)
+        success, plist, error = mac_info.ReadPlist(gk_reject_path)
+        if success:
+            ReadLastGKRejectPlist(plist)
+        else:
+            log.error("Problem reading .LastGKReject plist - " + error)
+    else:
+        log.debug('{} not found'.format(gk_reject_path))
+
 def Plugin_Start_Standalone(input_files_list, output_params):
     log.info("Module Started as standalone")
     for input_path in input_files_list:
         log.debug("Input file passed was: " + input_path)
-        quarantined = []
-        db = OpenDb(input_path)
-        if db != None:
-            filename = os.path.basename(input_path)
-            if filename.find('V2') > 0:
-                ReadQuarantineDb(db, quarantined, input_path, '')
+        if input_path.endswith('.LastGKReject'):
+            try:
+                plist = readPlist(input_path)
+                ReadLastGKRejectPlist(plist)
+            except Exception as ex:
+                log.exception('Failed to read file: {}'.format(input_path))
+        elif input_path.endswith('.sqlite'):
+            quarantined = []
+            db = OpenDb(input_path)
+            if db != None:
+                filename = os.path.basename(input_path)
+                if filename.find('V2') > 0:
+                    ReadQuarantineDb(db, quarantined, input_path, '')
+                else:
+                    log.info('Unknown database type, not a recognized file name')
+                db.close()
+            if len(quarantined) > 0:
+                PrintAll(quarantined, output_params)
             else:
-                log.info('Unknown database type, not a recognized file name')
-            db.close()
-        if len(quarantined) > 0:
-            PrintAll(quarantined, output_params)
-        else:
-            log.info('No quarantine events found in {}'.format(input_path))
+                log.info('No quarantine events found in {}'.format(input_path))
 
 if __name__ == '__main__':
     print ("This plugin is a part of a framework and does not run independently on its own!")

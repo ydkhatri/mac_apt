@@ -11,7 +11,6 @@ from __future__ import print_function
 
 from helpers.macinfo import *
 from helpers.writer import *
-from helpers.bookmark import *
 from biplist import *
 import logging
 import sqlite3
@@ -69,56 +68,6 @@ def PrintAll(netusage_items, output_params):
                 ]
         netusage_list.append(n_item)
     WriteList("net usage information", "NetUsage", netusage_list, netusage_info, output_params, '')
-
-def ReadLastGKRejectPlist(plist):
-    bookmark_data = plist.get('BookmarkData', None)
-    timestamp = plist.get('TimeStamp', None)
-    mal_type = plist.get('XProtectMalwareType', None)
-
-    if bookmark_data:
-        bm = Bookmark.from_bytes(bookmark_data)
-        file_path = ''
-        vol_path = ''
-        orig_vol_path = ''
-        try:
-            # Get full file path
-            vol_path = bm.tocs[0][1].get(BookmarkKey.VolumePath, '')
-            file_path = bm.tocs[0][1].get(BookmarkKey.Path, [])
-
-            file_path = '/' + '/'.join(file_path)
-            if vol_path and (not file_path.startswith(vol_path)):
-                file_path += vol_path
-            
-            # If file is on a mounted volume (dmg), get the dmg file details too
-            orig_vol_bm = bm.tocs[0][1].get(BookmarkKey.VolumeBookmark, None)
-            if orig_vol_bm:
-                filtered = filter(lambda x: x[0]==orig_vol_bm, bm.tocs)
-                if filtered:
-                    orig_vol_toc = filtered[0][1]
-                    orig_vol_path = orig_vol_toc.get(BookmarkKey.Path, '')
-                    if orig_vol_path:
-                        orig_vol_path = '/' + '/'.join(orig_vol_path)
-                else:
-                    print ("Error, tid {} not found ".format(orig_vol_bm))
-        except:
-            log.error('Error processing BookmarkData from .LastGKReject')
-            log.debug(bm)
-
-        log.info('.LastGKReject -> File   = {}'.format(file_path))
-        if vol_path:
-            log.info('.LastGKReject -> Volume = {}'.format(vol_path))
-        if orig_vol_path:
-            log.info('.LastGKReject -> Orininating Volume = {}'.format(orig_vol_path))
-
-    if mal_type:
-        # According to Patrick Wardle (Synack)
-        # 2=unsigned, 3= modified bundle, 5=signed app, 7=modified app
-        if mal_type == 2:   mal_type = "Unsigned app/program"
-        elif mal_type == 3: mal_type = "Modified Bundle"
-        elif mal_type == 5: mal_type = "Signed App"
-        elif mal_type == 7: mal_type = "Modified App"
-        log.info('.LastGKReject -> XProtectMalwareType = {}'.format(mal_type))
-    
 
 def ReadNetUsageDb(db, netusage_items, source):
     '''Reads netusage.sqlite db'''
@@ -203,17 +152,6 @@ def Plugin_Start(mac_info):
     
     ProcessDbFromPath(mac_info, netusage_items, netusage_path)
 
-    # Also get Last GateKeeper rejected file (not seen in 10.13?)
-    gk_reject_path = "/private/var/db/.LastGKReject"
-    if mac_info.IsValidFilePath(gk_reject_path):
-        mac_info.ExportFile(gk_reject_path, __Plugin_Name, '', False)
-        success, plist, error = mac_info.ReadPlist(gk_reject_path)
-        if success:
-            ReadLastGKRejectPlist(plist)
-        else:
-            log.error("Problem reading .LastGKReject plist - " + error)
-    else:
-        log.debug('{} not found'.format(gk_reject_path))
     if len(netusage_items) > 0:
         PrintAll(netusage_items, mac_info.output_params)
     else:
@@ -223,22 +161,14 @@ def Plugin_Start_Standalone(input_files_list, output_params):
     log.info("Module Started as standalone")
     for input_path in input_files_list:
         log.debug("Input file passed was: " + input_path)
-        if input_path.endswith('.LastGKReject'):
-            try:
-                plist = readPlist(input_path)
-                ReadLastGKRejectPlist(plist)
-            except Exception as ex:
-                log.exception('Failed to read file: {}'.format(input_path))
-        elif input_path.endswith('.sqlite'):
-            netusage_items = []
-            db = OpenDb(input_path)
-            if db != None:
-                ReadNetUsageDb(db, netusage_items, input_path)
-                db.close()
-            if len(netusage_items) > 0:
-                PrintAll(netusage_items, output_params)
-            else:
-                log.info('No net usage data found in {}'.format(input_path))
+        db = OpenDb(input_path)
+        if db != None:
+            ReadNetUsageDb(db, netusage_items, input_path)
+            db.close()
+        if len(netusage_items) > 0:
+            PrintAll(netusage_items, output_params)
+        else:
+            log.info('No net usage data found in {}'.format(input_path))
 
 if __name__ == '__main__':
     print ("This plugin is a part of a framework and does not run independently on its own!")
