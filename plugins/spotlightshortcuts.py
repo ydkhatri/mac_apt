@@ -36,7 +36,7 @@ def PrintAll(shortcut_items, output_params, source_path):
     shortcut_info = [ ('User',DataType.TEXT),('UserTyped',DataType.TEXT),('DisplayName',DataType.TEXT),
                       ('LastUsed',DataType.DATE),('URL',DataType.TEXT),('Source',DataType.TEXT)
                    ]
-
+    log.debug('Writing {} spotlight shorcut item(s)'.format(len(shortcut_items)))
     WriteList("spotlight shortcut information", "SpotlightShortcuts", shortcut_items, shortcut_info, output_params, source_path)
     
 def ParseShortcutFile(input_file, shortcuts):
@@ -77,19 +77,24 @@ def Plugin_Start(mac_info):
     version = mac_info.GetVersionDictionary()
     if version['major'] == 10 and version['minor'] >= 10:
         user_plist_rel_path = '{}/Library/Application Support/com.apple.spotlight.Shortcuts'
+    processed_paths = []
     for user in mac_info.users:
+        user_name = user.user_name
         if user.home_dir == '/private/var/empty': continue # Optimization, nothing should be here!
+        elif user.home_dir == '/private/var/root': user_name = 'root' # Some other users use the same root folder, we will list such all users as 'root', as there is no way to tell
+        if user.home_dir in processed_paths: continue # Avoid processing same folder twice (some users have same folder! (Eg: root & daemon))
         source_path = user_plist_rel_path.format(user.home_dir)
         if mac_info.IsValidFilePath(source_path):
-            mac_info.ExportFile(source_path, __Plugin_Name, user.user_name + "_", False)
+            mac_info.ExportFile(source_path, __Plugin_Name, user_name + "_", False)
             success, plist, error = mac_info.ReadPlist(source_path)
             if success:
-                ReadShortcutPlist(plist, shortcuts, source_path, user.user_name)
-            # else:
-            #     log.error('Could not open plist ' + source_path)
-            #     log.error('Error was: ' + error)
+                ReadShortcutPlist(plist, shortcuts, source_path, user_name)
+            else:
+                log.error('Could not open plist ' + source_path)
+                log.error('Error was: ' + error)
         else:
-            log.debug('File not found: {}'.format(source_path))
+            if not user_name.startswith('_'):
+                log.debug('File not found: {}'.format(source_path))
 
     if len(shortcuts) > 0:
         PrintAll(shortcuts, mac_info.output_params, source_path)

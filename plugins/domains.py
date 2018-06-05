@@ -38,23 +38,26 @@ ad_details = []
 
 def Plugin_Start(mac_info):
     ad_folder = '/Library/Preferences/OpenDirectory/Configurations/Active Directory'
-    ad_list = mac_info.ListItemsInFolder(ad_folder, EntryType.FILES)
-    if len(ad_list) == 0:
-        log.debug("No files found under " + ad_folder)
-        return
-    for ad in ad_list:
-        if ad['size'] == 0: continue
-        ad_name = ad['name']
-        log.info("Trying to read " + ad_name)
-        mac_info.ExportFile(ad_folder + '/' + ad_name, __Plugin_Name, '', False)
-        plist_path = ad_folder + '/' + ad_name
-        success, plist, error_message = mac_info.ReadPlist(plist_path)
-        if success:
-            ProcessActiveDirectoryPlist(plist_path, plist)
-        else:
-            log.error('Failed to read plist ' + plist_path + " Error was : " + error_message)
-    
-    WriteList('domain details', 'Domain_ActiveDirectory', ad_details, ad_info, mac_info.output_params, '/Library/Preferences/OpenDirectory/Configurations/Active Directory/')
+    if mac_info.IsValidFolderPath(ad_folder):
+        ad_list = mac_info.ListItemsInFolder(ad_folder, EntryType.FILES)
+        if len(ad_list) == 0:
+            log.debug("No files found under " + ad_folder)
+            return
+        for ad in ad_list:
+            if ad['size'] == 0: continue
+            ad_name = ad['name']
+            log.info("Trying to read " + ad_name)
+            mac_info.ExportFile(ad_folder + '/' + ad_name, __Plugin_Name, '', False)
+            plist_path = ad_folder + '/' + ad_name
+            success, plist, error_message = mac_info.ReadPlist(plist_path)
+            if success:
+                ProcessActiveDirectoryPlist(plist_path, plist)
+            else:
+                log.error('Failed to read plist ' + plist_path + " Error was : " + error_message)
+        
+        WriteList('domain details', 'Domain_ActiveDirectory', ad_details, ad_info, mac_info.output_params, '/Library/Preferences/OpenDirectory/Configurations/Active Directory/')
+    else:
+        log.info("Folder " + ad_folder + " not found!")
 
 def ProcessActiveDirectoryPlist(plist_path, plist):
     active_directory = {'source': plist_path}

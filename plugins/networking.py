@@ -86,7 +86,7 @@ def GetNetworkInterface2Info(mac_info):
                         for k, v in value.items():
                             if k in ['DeviceName', 'Hardware', 'Type', 'UserDefinedName']:  interface_info[k] = v
                             else:
-                                log.info('Found unknown data in plist at /NetworkServices/' + uuid + '/Interface/' + k + ' Value=' + v)
+                                log.info('Found unknown data in plist at /NetworkServices/' + uuid + '/Interface/' + k + ' Value=' + str(v))
                     elif item == 'SMB':
                         for k, v in value.items():
                             if k in ['NetBIOSName', 'Workgroup', 'Type', 'UserDefinedName']:  interface_info['SMB.'+ k] = v
@@ -106,7 +106,7 @@ def GetNetworkInterface2Info(mac_info):
                 except Exception:
                     log.debug('/VirtualNetworkInterfaces/Bridge not found!')'''
         except Exception:
-            log.error('/NetworkServices not found or other error from ' + preference_plist_path)
+            log.exception('/NetworkServices not found or other error from ' + preference_plist_path)
     else:
         log.error('Failed to read plist ' + preference_plist_path + " Error was : " + error_message)
 

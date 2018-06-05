@@ -123,7 +123,7 @@ def PrintAll(networks, output_params, source_path):
                      ('Last connected channel',DataType.TEXT),('Other channel history',DataType.TEXT)
                    ]
 
-    log.info (str(len(networks)) + " network(s)")
+    log.info ("Found " + str(len(networks)) + " network(s)")
     data_list = []
     for wifi in networks:
         data_list.append( [ wifi.Name, wifi.SSIDString, wifi.Order, str(wifi.Type), wifi.SecurityType, wifi.AutoLogin, 
