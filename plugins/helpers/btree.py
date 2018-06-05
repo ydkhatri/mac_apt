@@ -204,9 +204,18 @@ class BTree(object):
             recordNumber = 0
         return kv
 
+class CachedNodeData():
+    def __init__(self, path='', cnid=0, k=None, v=None):
+        self.path = path
+        self.cnid = cnid
+        self.key  = k
+        self.value = v
+
 class CatalogTree(BTree):
     def __init__(self, file):
         super(CatalogTree,self).__init__(file, HFSPlusCatalogKey, HFSPlusCatalogData)
+        # Cache last folder data
+        self.cached_last_folder_info = CachedNodeData()
     
     def printLeaf(self, k, d):
         if d.recordType == kHFSPlusFolderRecord or d.recordType == kHFSPlusFileRecord:
@@ -221,24 +230,57 @@ class CatalogTree(BTree):
     
     def getFolderContents(self, cnid):
         return self.searchMultiple((cnid, ""), lambda k:k.parentID == cnid)
-    
+
     def getRecordFromPath(self, path):
+        # WARNING - Comparisons are all case-sensitive!
         if not path.startswith("/"):
             return None, None
         if path == "/":
             return self.searchByCNID(kHFSRootFolderID)
         parentId=kHFSRootFolderID
-        for p in path.split("/")[1:]:
+
+        is_folder = False
+        k = v = prev_k = prev_v = None
+        reconstructed_folder_path = ""
+        if self.cached_last_folder_info.path:
+            path = path.rstrip('/') # removing trailing / if present
+            last_path = self.cached_last_folder_info.path
+            if path == last_path:            # same path as cached
+                return self.cached_last_folder_info.key, self.cached_last_folder_info.value
+            elif path.startswith(last_path): # partial path
+                if path[len(last_path)] == '/': # must be same folder, not /abc/de in /abc/defg
+                    path = path[len(last_path) + 1:]
+                    k = self.cached_last_folder_info.key
+                    v = self.cached_last_folder_info.value
+                    parentId = self.cached_last_folder_info.cnid
+                    reconstructed_folder_path = last_path
+                    #print('--Cache used!--', parentId, last_path)
+        
+        path_parts = path.split("/") if k else path.split("/")[1:]
+        for p in path_parts:
             if p == "":
                 break
+            prev_k = k
+            prev_v = v
             k,v  = self.search((parentId, p))
             if (k,v) == (None, None):
                 return None, None
 
             if v.recordType == kHFSPlusFolderRecord:
-                parentId = v.data.folderID
+                parentId = v.data.folderID 
+                is_folder = True
+                reconstructed_folder_path += '/' + p
             else:
+                is_folder = False
                 break
+        if self.cached_last_folder_info.cnid != parentId: # last folder changed, update cache
+            if is_folder:
+                self.cached_last_folder_info = CachedNodeData(reconstructed_folder_path, parentId, k, v)
+                #print ('Setting cacheFolder - ' + reconstructed_folder_path + "  Id=" + str(parentId))
+            else:
+                self.cached_last_folder_info = CachedNodeData(reconstructed_folder_path, parentId, prev_k, prev_v)
+                #print ('Setting cacheFolder2- ' + reconstructed_folder_path + "  Id=" + str(parentId))
+        #print ("p=" + p)
         return k,v
     
 class ExtentsOverflowTree(BTree):

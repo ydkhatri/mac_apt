@@ -164,11 +164,37 @@ HFSPlusAttrKey = "HFSPlusAttrKey" / Struct(
     #Int32ub("nodeNumber")
 )
 
+HFSPlusAttrInlineData = "HFSPlusAttrInlineData" / Struct(
+    Array(2, "reserved" / Int32ub),
+    "size" / Int32ub,
+    "data" / Bytes(lambda ctx: ctx["size"])
+)
+
 HFSPlusAttrData = "HFSPlusAttrData" / Struct(
     "recordType" / Int32ub,
     Array(2, "reserved" / Int32ub),
     "size" / Int32ub,
     "data" / Bytes(lambda ctx: ctx["size"])
+)
+
+HFSPlusAttrForkData = "HFSPlusAttrForkData" / Struct(
+    "reserved" / Int32ub,
+    HFSPlusForkData
+)
+
+HFSPlusAttrExtents = "HFSPlusAttrExtents" / Struct(
+    "reserved" / Int32ub,
+    HFSPlusExtentRecord
+)
+
+HFSPlusAttrRecord = "HFSPlusAttrRecord" / Struct(
+    "recordType" / Int32ub,
+    "data" / Switch(lambda ctx: ctx["recordType"], 
+    {
+        kHFSPlusAttrInlineData : HFSPlusAttrInlineData,
+        kHFSPlusAttrForkData : HFSPlusAttrForkData,
+        kHFSPlusAttrExtents: HFSPlusAttrExtents
+    }  )
 )
 
 HFSPlusCatalogKey = "HFSPlusCatalogKey" / Struct(

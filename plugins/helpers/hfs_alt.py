@@ -27,6 +27,7 @@ import struct
 import zlib
 import pytsk3
 import logging
+from common import CommonFunctions
 from btree import AttributesTree, CatalogTree, ExtentsOverflowTree
 from structs import *
 
@@ -91,17 +92,37 @@ class HFSFile(object):
             r = r[:self.logicalSize]
         return r
     '''
-    def readAllBuffer(self, truncate=True):
+    def readAllBuffer(self, truncate=True, output_file=None):
+        '''Write to output_file if valid, else return a buffer of data'''
         r = b""
-        # Lets read all blocks in a single extent at once to be more efficient
         bs = self.volume.blockSize
+        blocks_max = 52428800 / bs  # 50MB
         for extent in self.extents:
             if extent.blockCount == 0: continue
             #if not self.deleted and self.fileID != kHFSAllocationFileID and not self.volume.isBlockInUse(lba):
             #    log.debug("FAIL, block "0x{:x}" not marked as used".format(n))
-            r += self.volume.read(extent.startBlock * bs, bs * extent.blockCount)
+            if extent.blockCount > blocks_max:
+                counter = blocks_max
+                remaining_blocks = extent.blockCount
+                while remaining_blocks > 0:
+                    num_blocks_to_read = min(blocks_max, remaining_blocks)
+                    data = self.volume.read(extent.startBlock * bs, num_blocks_to_read * bs)
+                    if output_file:
+                        output_file.write(data)
+                    else:
+                        r += data
+                    remaining_blocks -= num_blocks_to_read
+            else:
+                data = self.volume.read(extent.startBlock * bs, bs * extent.blockCount)
+                if output_file:
+                    output_file.write(data)
+                else:
+                    r += data
         if truncate:
-            r = r[:self.logicalSize]
+            if output_file:
+                output_file.truncate(self.logicalSize)
+            else:
+                r = r[:self.logicalSize]
         return r
 
     def processBlock(self, block, lba):
@@ -138,7 +159,7 @@ class HFSCompressedResourceFork(HFSFile):
             log.debug("HFSCompressedResourceFork numBlocks:{}".format(self.blocks.numBlocks))
 
     #HAX, readblock not implemented
-    def readAllBuffer(self):
+    def readAllBuffer(self, truncate=True, output_file=None):
         if self.compression_type in [7, 8, 11, 12] and not lzfse_capable:
             raise ValueError('LZFSE/LZVN compression detected, no decompressor available!')
         buff = super(HFSCompressedResourceFork, self).readAllBuffer()
@@ -149,9 +170,11 @@ class HFSCompressedResourceFork(HFSFile):
                 # The following is only for lzvn, not encountered lzfse yet!
                 data_start = self.header.headerSize
                 compressed_stream = buff[data_start:self.header.totalSize]
-                r += lzvn_decompress(compressed_stream, self.header.totalSize - self.header.headerSize, self.uncompressed_size)
+                decompressed = lzvn_decompress(compressed_stream, self.header.totalSize - self.header.headerSize, self.uncompressed_size)
+                if output_file: output_file.write(decompressed)
+                else: r += decompressed
             except Exception as ex:
-                log.exception("Exception from lzfse.decompress")
+                raise Exception("Exception from lzfse_lzvn decompressor")
         elif self.compression_type in [8, 12]: # lzvn or lzfse in 64k chunks
             try:
                 # The following is only for lzvn, not encountered lzfse yet!
@@ -170,16 +193,20 @@ class HFSCompressedResourceFork(HFSFile):
                         if len(self.header.chunkOffsets) == i + 1: # last chunk
                             chunk_uncomp = full_uncomp - (65536 * i)
                     if chunk_uncomp < compressed_size and data[0] == b'\x06':
-                        r += data[1:]
+                        decompressed = data[1:]
                     else:
-                        r += lzvn_decompress(data, compressed_size, chunk_uncomp)
+                        decompressed = lzvn_decompress(data, compressed_size, chunk_uncomp)
+                    if output_file: output_file.write(decompressed)
+                    else: r += decompressed
                     i += 1
             except Exception as ex:
-                log.exception("Exception from lzfse.decompress")
+                raise Exception("Exception from lzfse_lzvn decompressor")
         else:
             base = self.header.headerSize + 4
             for b in self.blocks.HFSPlusCmpfRsrcBlock:
-                r += zlib.decompress(buff[base+b.offset:base+b.offset+b.size])
+                decompressed = zlib.decompress(buff[base+b.offset:base+b.offset+b.size])
+                if output_file: output_file.write(decompressed)
+                else: r += decompressed
         return r
 
 class HFSVolume(object):
@@ -207,7 +234,6 @@ class HFSVolume(object):
         self.hasJournal = self.header.attributes & (1 << kHFSVolumeJournaledBit)
 
     def read(self, offset, size):
-        #return self.read_correct(self.img, self.offset + offset, size)
         return self.img.read(self.offset + offset, size)
 
     def volumeID(self):
@@ -294,12 +320,12 @@ class HFSVolume(object):
         case 6: /* unused */
     '''
 
-    def readFile(self, path, returnString=False):
-        '''Reads file specified by 'path' and copies it out or returns as string'''
+    def readFile(self, path, output_file=None):
+        '''Reads file specified by 'path' and copies it out into output_file if valid, else returns as string'''
         k,v = self.catalogTree.getRecordFromPath(path)
         if not v:
-            log.error("File {} not found".format(path))
-            return None
+            raise ValueError("File not found")
+        data = b''
         assert v.recordType == kHFSPlusFileRecord
         xattr = self.getXattr(v.data.fileID, "com.apple.decmpfs")
         if xattr:
@@ -307,20 +333,17 @@ class HFSVolume(object):
             log.debug("decmpfs.compression_type={}".format(str(decmpfs.compression_type)))
             if decmpfs.compression_type == 1:
                 data = xattr[16:]
-                return data if returnString else self.writeout_file(os.path.basename(path), data)
+                if output_file: output_file.write(data)
             elif decmpfs.compression_type == 3:
-                data = None
                 if decmpfs.uncompressed_size == len(xattr) - 16:
                     data = xattr[16:]
                 else:
                     data = zlib.decompress(xattr[16:])
-                return data if returnString else self.writeout_file(os.path.basename(path), data)
+                if output_file: output_file.write(data)
             elif decmpfs.compression_type == 4:
                 f = HFSCompressedResourceFork(self, v.data.resourceFork, v.data.fileID, decmpfs.compression_type, decmpfs.uncompressed_size)
-                data = f.readAllBuffer()
-                return data if returnString else self.writeout_file(os.path.basename(path), data)
+                data = f.readAllBuffer(True, output_file)
             elif decmpfs.compression_type in [7, 11]:
-                data = xattr[16:]
                 if xattr[16] == b'\x06': # perhaps even 0xF?
                     data = xattr[17:] #tested OK
                 else: #tested OK
@@ -328,25 +351,74 @@ class HFSVolume(object):
                     compressed_size = len(xattr) - 16
                     compressed_stream = xattr[16:]
                     data = lzvn_decompress(compressed_stream, compressed_size, uncompressed_size)
-                return data if returnString else self.writeout_file(os.path.basename(path), data)
+                if output_file: output_file.write(data)
             elif decmpfs.compression_type in [8, 12]:
                 # tested for type 8 , OK
                 f = HFSCompressedResourceFork(self, v.data.resourceFork, v.data.fileID, decmpfs.compression_type, decmpfs.uncompressed_size)
-                data = f.readAllBuffer()  # inefficient?
-                return data if returnString else self.writeout_file(os.path.basename(path), data)
-
-        f = HFSFile(self, v.data.dataFork, v.data.fileID)
-        if returnString:
-            return f.readAllBuffer()
+                data = f.readAllBuffer(True, output_file)
+                if output_file: output_file.write(data)
         else:
-            f.copyOutFile(os.path.basename(path))
-
-    def writeout_file(self, outputfile, data):
-        with open(outputfile, "wb") as f:
-            f.write(data)
+            f = HFSFile(self, v.data.dataFork, v.data.fileID)
+            data = f.readAllBuffer(True, output_file)
+        return data
 
     def readJournal(self):
         jb = self.read(self.header.journalInfoBlock * self.blockSize, self.blockSize)
         jib = JournalInfoBlock.parse(jb)
         return self.read(jib.offset,jib.size)
 
+    def GetFileMACTimesFromFileRecord(self, v):
+        times = { 'c_time':None, 'm_time':None, 'cr_time':None, 'a_time':None }
+        catalog_file = v.data
+        times['c_time'] = CommonFunctions.ReadMacHFSTime(catalog_file.attributeModDate)
+        times['m_time'] = CommonFunctions.ReadMacHFSTime(catalog_file.contentModDate)
+        times['cr_time'] = CommonFunctions.ReadMacHFSTime(catalog_file.createDate)
+        times['a_time'] = CommonFunctions.ReadMacHFSTime(catalog_file.accessDate)
+        return times
+
+    def GetFileMACTimes(self, file_path):
+        '''
+           Returns dictionary {c_time, m_time, cr_time, a_time} 
+           where cr_time = created time and c_time = Last time inode/mft modified
+        '''
+        k,v = self.catalogTree.getRecordFromPath(file_path)
+        if k and v.recordType in (kHFSPlusFileRecord, kHFSPlusFolderRecord):
+            return self.GetFileMACTimesFromFileRecord(v)
+        raise Exception("Path not found or not file/folder!")
+
+    def IsValidFilePath(self, path):
+        '''Check if a file path is valid, does not check for folders!'''
+        k,v = self.catalogTree.getRecordFromPath(path)
+        if not v:
+            return False
+        return v.recordType == kHFSPlusFileRecord #TODO: Check for hard links , sym links?
+
+    def IsValidFolderPath(self, path):
+        '''Check if a folder path is valid'''
+        k,v = self.catalogTree.getRecordFromPath(path)
+        if not v:
+            return False
+        return v.recordType == kHFSPlusFolderRecord #TODO: Check for hard links , sym links?
+
+    def GetFileSizeFromFileRecord(self, v):
+        xattr = self.getXattr(v.data.fileID, "com.apple.decmpfs")
+        if xattr:
+            decmpfs = HFSPlusDecmpfs.parse(xattr)
+            return decmpfs.uncompressed_size #TODO verify for all cases!
+        else:
+            return v.data.dataFork.logicalSize
+
+    def GetFileSize(self, path):
+        '''For a given file path, gets logical file size'''
+        k,v = self.catalogTree.getRecordFromPath(path)
+        if k and v.recordType == kHFSPlusFileRecord:
+            return self.GetFileSizeFromFileRecord(v)
+        else:
+            raise Exception("Path not found")
+
+    def GetUserAndGroupID(self, path):
+        k,v = self.catalogTree.getRecordFromPath(path)
+        if k and v.recordType in (kHFSPlusFileRecord, kHFSPlusFolderRecord):
+            return (v.data.HFSPlusBSDInfo.ownerID, v.data.HFSPlusBSDInfo.groupID)
+        else:
+            raise Exception("Path not found") 
