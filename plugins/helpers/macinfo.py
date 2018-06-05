@@ -281,7 +281,7 @@ class NativeHfsParser:
                      'dates': self._GetFileMACTimesFromFileRecord(v)
                     }
         else:
-            item = { 'name':name, 'type':entry_type, 'size':self._GetSizeFromRec(v) if entry_type == EntryType.FILES else 0 }
+            item = { 'name':name, 'type':entry_type, 'size':self._GetSizeFromRec(k, v) if entry_type == EntryType.FILES else 0 }
         return item
 
 class MacInfo:
