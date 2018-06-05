@@ -98,7 +98,6 @@ def FindOsxFiles(mac_info):
             log.info ("Could not find OSX/macOS kernel!")# On partial/corrupted images, this may not be found
         mac_info._GetSystemInfo()
         mac_info._GetUserInfo()
-        #PrintAttributes(fs_info)
         return True
     else:
         log.info ("Could not find OSX/macOS installation!")
@@ -118,6 +117,7 @@ def IsOsxPartition(img, partition_start_offset, mac_info):
             folders = fs.open_dir("/")
             mac_info.osx_FS = fs
             mac_info.osx_partition_start_offset = partition_start_offset
+            mac_info.hfs_native.Initialize(mac_info.pytsk_image, mac_info.osx_partition_start_offset)
             return FindOsxFiles(mac_info)
         except Exception:
             log.error ("Could not open / (root folder on partition)")
@@ -266,7 +266,7 @@ arg_parser.add_argument('-x', '--xlsx', action="store_true", help='Save output i
 arg_parser.add_argument('-c', '--csv', action="store_true", help='Save output as CSV files (Default option if no output type selected)')
 arg_parser.add_argument('-s', '--sqlite', action="store_true", help='Save output in an sqlite database')
 arg_parser.add_argument('-l', '--log_level', help='Log levels: INFO, DEBUG, WARNING, ERROR, CRITICAL (Default is INFO)')#, choices=['INFO','DEBUG','WARNING','ERROR','CRITICAL'])
-arg_parser.add_argument('plugin', nargs="+", help="Plugins to run (space seperated). 'ALL' will process every available plugin")
+arg_parser.add_argument('plugin', nargs="+", help="Plugins to run (space separated). 'ALL' will process every available plugin")
 args = arg_parser.parse_args()
 
 if args.output_path:
