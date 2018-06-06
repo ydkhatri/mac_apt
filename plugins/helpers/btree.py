@@ -295,20 +295,34 @@ class ExtentsOverflowTree(BTree):
 
 class AttributesTree(BTree):
     def __init__(self, file):
-        super(AttributesTree,self).__init__(file, HFSPlusAttrKey, HFSPlusAttrData)
+        super(AttributesTree,self).__init__(file, HFSPlusAttrKey, HFSPlusAttrRecord)
+        #self.debug_path = ''
     
     def printLeaf(self, k, d):
-        print (k.fileID, getString(k), d.data.encode("hex"))
+        print (k.fileID, getString(k), self._getData(k,d).encode("hex"))
     
     def getComparableKey(self, k2):
         return (k2.fileID, getString(k2))
     
     def searchXattr(self, fileID, name):
         k,v = self.search((fileID, name))
-        return v.data if v else None
+        return self._getData(k,v) if v else None
     
+    def _getData(self, k, v):
+        if v.recordType == kHFSPlusAttrInlineData:
+            return v.data.data
+        elif v.recordType == kHFSPlusAttrForkData:
+            #print('skipping kHFSPlusAttrForkData, size=' + str(v.data.HFSPlusForkData.logicalSize) + ' k='+ getString(k))
+            #print('  path -> ' + self.debug_path)
+            pass
+        elif v.recordType == kHFSPlusAttrExtents:
+            #print('skipping kHFSPlusAttrExtents' + ' k='+ getString(k))
+            #print('  path -> ' + self.debug_path)
+            pass
+        return None
+
     def getAllXattrs(self, fileID):
         res = {}
         for k,v in self.searchMultiple((fileID, ""), lambda k:k.fileID == fileID):
-            res[getString(k)] = v.data
+            res[getString(k)] = self._getData(k,v)
         return res

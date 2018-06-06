@@ -170,13 +170,6 @@ HFSPlusAttrInlineData = "HFSPlusAttrInlineData" / Struct(
     "data" / Bytes(lambda ctx: ctx["size"])
 )
 
-HFSPlusAttrData = "HFSPlusAttrData" / Struct(
-    "recordType" / Int32ub,
-    Array(2, "reserved" / Int32ub),
-    "size" / Int32ub,
-    "data" / Bytes(lambda ctx: ctx["size"])
-)
-
 HFSPlusAttrForkData = "HFSPlusAttrForkData" / Struct(
     "reserved" / Int32ub,
     HFSPlusForkData
