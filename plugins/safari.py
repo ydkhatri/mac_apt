@@ -395,7 +395,8 @@ def Plugin_Start(mac_info):
         if mac_info.IsValidFilePath(source_path):
             ProcessSafariPlist(mac_info, source_path, user_name, safari_items, ReadSafariPlist)
         else:
-            log.debug('File not found: {}'.format(source_path))
+            if not user_name.startswith('_'):
+                log.debug('File not found: {}'.format(source_path))
         
         source_path = user_safari_path.format(user.home_dir)
         if mac_info.IsValidFolderPath(source_path):
