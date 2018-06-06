@@ -266,6 +266,7 @@ arg_parser.add_argument('-x', '--xlsx', action="store_true", help='Save output i
 arg_parser.add_argument('-c', '--csv', action="store_true", help='Save output as CSV files (Default option if no output type selected)')
 arg_parser.add_argument('-s', '--sqlite', action="store_true", help='Save output in an sqlite database')
 arg_parser.add_argument('-l', '--log_level', help='Log levels: INFO, DEBUG, WARNING, ERROR, CRITICAL (Default is INFO)')#, choices=['INFO','DEBUG','WARNING','ERROR','CRITICAL'])
+arg_parser.add_argument('-u', '--use_tsk', action="store_true", help='Use sleuthkit instead of native HFS+ parser (This is slower!)')
 arg_parser.add_argument('plugin', nargs="+", help="Plugins to run (space separated). 'ALL' will process every available plugin")
 args = arg_parser.parse_args()
 
@@ -356,6 +357,7 @@ except Exception as ex:
     Exit()
 
 if args.input_type.upper() != 'MOUNTED':
+    mac_info.use_native_hfs_parser = False if args.use_tsk else True
     try:
         mac_info.pytsk_image = img
         vol_info = pytsk3.Volume_Info(img)
