@@ -1,3 +1,19 @@
+Updates in 20180606 (v0.3):
+
++ Added FrequentlyVisitedSitesCache, NSNavLastRootDirectory & RecentlyClosedTabls.plist parsing to SAFARI plugin
++ Added GotoFieldHistory, RecentMoveCopyDestinations, BulkRename settings to RECENTITEMS plugin
++ Added detection of encrypted volumes and user friendly message
++ New plugins -iMessage, iNetAccounts, Quarantine, NetUsage
++ Add support for High Sierra's notifications (db2)
++ More documentation on wiki!
++ Native HFS parser made default, processing is much faster!
+
+! Fixed Bash sessions exception on some binary UTF8 strings
+! Fixed bugs with MOUNTED option, added more support for mounted disk parsing
+! Fixed Notes bugs - 'table missing' bug for High Sierra, long notes related bug
+! Excel sheet with > 1 million records is now handled correctly
+! Several minor fixes
+
 Updates in 20171230 (v0.2.6):
 
 + Instructions for macOS installation are now on the wiki
