@@ -268,7 +268,7 @@ class NativeHfsParser:
                 log.error('Path not found : ' + path)
         except:
             log.error('Error trying to get file list from folder: ' + path)
-            log.exception()
+            log.exception('')
         return items
     
     def _BuildFileListItemFromRecord(self, k, v, entry_type, include_dates):
@@ -298,7 +298,7 @@ class MacInfo:
         self.users = []
         self.hfs_native = NativeHfsParser()
         self.is_apfs = False
-        self.use_native_hfs_parser = False
+        self.use_native_hfs_parser = True
 
     # Public functions, plugins can use these
     def GetFileMACTimes(self, file_path):
