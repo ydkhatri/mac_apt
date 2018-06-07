@@ -20,11 +20,15 @@ WIFI | Gets wifi network information
 BASICINFO | Basic machine & OS configuration like SN, timezone, computer name, last logged in user, HFS info
 BASHSESSIONS | Reads bash (Terminal) sessions & history for every user
 DOMAINS | Active Directory Domain(s) that the mac is connected to
+IMESSAGE | Read iMessage chats
+INETACCOUNTS | Retrieve configured internet accounts (iCloud, Google, Linkedin, facebook..)
 INSTALLHISTORY | Software Installation History
+NETUSAGE | Read network usage data statistics per application
 NETWORKING | Interfaces, last IP address, MAC address, DHCP ..
 NOTES | Reads notes databases
 NOTIFICATIONS | Reads mac notification data for each user
 PRINTJOBS | Parses CUPS spooled print jobs to get information about files/commands sent to a printer
+QUARANTINE | Reads the quarantine database and .LastGKReject file
 RECENTITEMS | Recently accessed Servers, Documents, Hosts, Volumes & Applications from .plist and .sfl files. Also gets recent searches and places for each user
 SAFARI | Internet history, downloaded file information, cookies and more from Safari caches
 SPOTLIGHTSHORTCUTS | User typed data in the spotlight bar & targeted document/app
