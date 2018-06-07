@@ -3,7 +3,7 @@
 
 * Yogesh Khatri - Author & Maintainer of mac_apt framework and plugins
 * Adam Ferrante - Plugin Documentation on wiki
-* Jack Farley - Wrote the PRINTJOBS plugin
+* Jack Farley - Wrote the PRINTJOBS & IMESSAGE plugins
 * Michael Geyer - Wrote the WIFI plugin
 * Noah Sidall - Wrote the INSTALLHISTORY plugin
 * Austin Truax - Wrote the proof of concept parsing wifi information from airport plist
