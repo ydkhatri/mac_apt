@@ -396,7 +396,7 @@ class ApfsVolume:
         self.time_updated = super_block.body.time_updated
         self.uuid = self.ReadUUID(super_block.body.volume_uuid)
         self.is_case_sensitive = (super_block.body.feature_flags & 0x8 != 0)
-        self.is_encrypted = (super_block.body.feature_flags & 0x4 != 0)
+        self.is_encrypted = (super_block.body.encryption_flags & 0x1 != 1)
 
         #log.debug("%s (volume, Mapping-Btree: %d, Rootdir-Block_ID: %d)" % (
         #    super_block.body.volume_name, self.block_map_block_num, self.root_dir_block_id))
@@ -405,7 +405,7 @@ class ApfsVolume:
         log.debug("  Num files = %d" % super_block.body.num_files)
         log.debug("  Num dirs  = %d" % super_block.body.num_folders)
         log.debug("  Vol used  = %.2f GB" % float((super_block.body.num_blocks_used * self.container.apfs.block_size)/(1024.0*1024.0*1024.0)))
-        #log.debug('  feature_flags='+ str(super_block.body.feature_flags))
+        log.debug('  feature_flags=0x{:X}'.format(super_block.body.feature_flags))
 
         if self.is_encrypted:
             log.info("Volume appears to be ENCRYPTED. Encrypted volumes are not supported right now :(")

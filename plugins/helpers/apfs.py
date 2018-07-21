@@ -40,6 +40,7 @@ class Apfs(KaitaiStruct):
         unknown_1 = 1
         generic = 2
         symlink = 6
+        unknown_17 = 17 # new unknown one!
 
     class BlockType(Enum):
         containersuperblock = 1
@@ -104,7 +105,7 @@ class Apfs(KaitaiStruct):
             self.unknown_232 = self._io.read_bytes(8)
             self.volume_uuid = self._io.read_bytes(16)
             self.time_updated = self._io.read_u8le()
-            self.unknown_264 = self._io.read_u8le()
+            self.encryption_flags = self._io.read_u8le()
             self.created_by = (KaitaiStream.bytes_terminate(self._io.read_bytes(32), 0, False)).decode(u"UTF-8")
             self.time_created = self._io.read_u8le()
             self.unknown_312 = self._io.read_bytes(392)

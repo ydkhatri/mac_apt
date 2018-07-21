@@ -601,7 +601,7 @@ types:
         size: 16
       - id: time_updated
         type: u8
-      - id: unknown_264
+      - id: encryption_flags
         type: u8
       - id: created_by
         size: 32
