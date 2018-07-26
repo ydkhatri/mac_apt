@@ -24,7 +24,7 @@ import ast
 from apfs_reader import *
 from hfs_alt import HFSVolume
 from common import *
-from plugins.helpers.structs import *
+from structs import *
 
 log = logging.getLogger('MAIN.HELPERS.MACINFO')
 
@@ -244,7 +244,6 @@ class NativeHfsParser:
         Format of list = [ { 'name':'got.txt', 'type':EntryType.FILES, 'size':10, 'dates': [] }, .. ]
         'path' should be linux style using forward-slash like '/var/db/xxyy/file.tdc'
         '''
-        ##INCOMPLETE
         items = [] # List of dictionaries
         try:
             k,v = self.volume.catalogTree.getRecordFromPath(path)

@@ -314,11 +314,11 @@ class AttributesTree(BTree):
         elif v.recordType == kHFSPlusAttrForkData:
             #print('skipping kHFSPlusAttrForkData, size=' + str(v.data.HFSPlusForkData.logicalSize) + ' k='+ getString(k))
             #print('  path -> ' + self.debug_path)
-            pass
+            return ">> NOT IMPLEMENTED Fork <<"
         elif v.recordType == kHFSPlusAttrExtents:
             #print('skipping kHFSPlusAttrExtents' + ' k='+ getString(k))
             #print('  path -> ' + self.debug_path)
-            pass
+            return ">> NOT IMPLEMENTED Extent <<"
         return None
 
     def getAllXattrs(self, fileID):
