@@ -1,5 +1,5 @@
 '''
-   Copyright (c) 2017 Yogesh Khatri 
+   Copyright (c) 2018 Yogesh Khatri 
 
    This file is part of mac_apt (macOS Artifact Parsing Tool).
    Usage or distribution of this software/code is subject to the 
