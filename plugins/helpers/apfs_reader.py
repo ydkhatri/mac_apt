@@ -405,7 +405,7 @@ class ApfsVolume:
         log.debug("  Num files = %d" % super_block.body.num_files)
         log.debug("  Num dirs  = %d" % super_block.body.num_folders)
         log.debug("  Vol used  = %.2f GB" % float((super_block.body.num_blocks_used * self.container.apfs.block_size)/(1024.0*1024.0*1024.0)))
-        log.debug('  feature_flags=0x{:X}'.format(super_block.body.feature_flags))
+        log.debug('  feature_flags=0x{:X}, encryption_flags=0x{:X}'.format(super_block.body.feature_flags, super_block.body.encryption_flags))
 
         if self.is_encrypted:
             log.info("Volume appears to be ENCRYPTED. Encrypted volumes are not supported right now :(")
