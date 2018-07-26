@@ -193,13 +193,15 @@ def WriteOutput(output_params):
     if len(notifications) == 0: 
         log.info("No notification data was retrieved!")
         return
+    else:
+        log.info("{} notifications found".format(len(notifications)))
     try:
         log.debug ("Trying to write out parsed notifications data")
         writer = DataWriter(output_params, "Notifications", data_info)
         try:
             writer.WriteRows(notifications)
         except Exception as ex:
-            log.error ("Failed to write row  data")
+            log.error ("Failed to write row data")
             log.exception ("Error details")
         finally:
             writer.FinishWrites()
@@ -209,18 +211,26 @@ def WriteOutput(output_params):
 
 def Plugin_Start(mac_info):
     version_dict = mac_info.GetVersionDictionary()
+    processed_paths = []
+
     if version_dict['major'] == 10 and version_dict['minor'] <= 9:   # older than yosemite, ie, mavericks or earlier
-        users_dir = mac_info.ListItemsInFolder('/Users', EntryType.FOLDERS)
-        for user in users_dir:
-            temp_path = '/Users/' + user['name'] + '/Library/Application Support/NotificationCenter'
-            files = mac_info.ListItemsInFolder(temp_path, EntryType.FILES)
-            for db in files:
-                # Not sure if this is the only file here
-                if db['name'].endswith('.db') and db['size'] > 0 :
-                    db_path = '/Users/' + user['name'] + '/Library/Application Support/NotificationCenter/' + db['name']
-                    ProcessNotificationDb_Wrapper(db_path, mac_info, user['name'])
-                    mac_info.ExportFile(db_path, __Plugin_Name, user['name'] + '_')
-                    break
+        notification_path = '{}/Library/Application Support/NotificationCenter'
+        for user in mac_info.users:
+            user_name = user.user_name
+            if user.home_dir == '/private/var': continue # Optimization, nothing should be here!
+            elif user.home_dir == '/private/var/root': user_name = 'root' # Some other users use the same root folder, we will list such all users as 'root', as there is no way to tell
+            if user.home_dir in processed_paths: continue # Avoid processing same folder twice (some users have same folder! (Eg: root & daemon))
+            processed_paths.append(user.home_dir)
+            user_notification_path = notification_path.format(user.home_dir)
+            if mac_info.IsValidFolderPath(user_notification_path):
+                files = mac_info.ListItemsInFolder(user_notification_path, EntryType.FILES)
+                for db in files:
+                    # Not sure if this is the only file here
+                    if db['name'].endswith('.db') and db['size'] > 0 :
+                        db_path = user_notification_path + '/' + db['name']
+                        ProcessNotificationDb_Wrapper(db_path, mac_info, user_name)
+                        mac_info.ExportFile(db_path, __Plugin_Name, user_name + '_')
+                        break
             
     elif version_dict['major'] == 10 and version_dict['minor'] >= 10: # Yosemite or higher
         for user in mac_info.users:
