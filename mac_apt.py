@@ -372,7 +372,6 @@ if args.input_type.upper() != 'MOUNTED':
                 uuid = GetApfsContainerUuid(img, 0)
                 log.info('Found an APFS container with uuid: {}-{}-{}-{}-{}'.format(uuid[0:8], uuid[8:12], uuid[12:16], uuid[16:20], uuid[20:]))
                 found_osx = FindOsxPartitionInApfsContainer(img, None, img.get_size(), 0, uuid)
-                Disk_Info(mac_info, args.input_path, True).Write()
             else:
                 found_osx = IsOsxPartition(img, 0, mac_info)
         else:
@@ -394,6 +393,8 @@ if found_osx:
                 log.exception ("An exception occurred while running plugin - {}".format(plugin.__Plugin_Name))
 else:
     log.warning (":( Could not find a partition having an OSX installation on it")
+
+log.info("-"*50)
 
 # Final cleanup
 if img != None: img.close()

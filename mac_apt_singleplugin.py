@@ -150,6 +150,8 @@ try:
 except Exception as ex:
     log.exception ("An exception occurred while running plugin - " + plugin_to_run)
 
+log.info("-"*50)
+
 if args.xlsx:
     output_params.xlsx_writer.CommitAndCloseFile()
 
