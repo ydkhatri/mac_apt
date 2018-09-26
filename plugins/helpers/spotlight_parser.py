@@ -91,7 +91,7 @@ class FileMetaDataListing:
     def ConvertEpochToUtcDateStr(self, value):
         '''Convert Epoch microseconds timestamp to string'''
         try:
-            return str(datetime.datetime.utcfromtimestamp(value/1000000))
+            return datetime.datetime(1970, 1, 1) + datetime.timedelta(seconds=value/1000000.)
         except:
             pass
         return ""
@@ -103,6 +103,15 @@ class FileMetaDataListing:
         return num, bytes_read
 
     def ReadStr(self):
+        '''Returns single string of data and bytes_read'''
+        string = ""
+        size, pos = self.ReadVarSizeNum()
+        for x in range(pos, size + pos):
+            string += str(self.data[self.pos])
+            self.pos += 1
+        return string, size + pos
+
+    def ReadStrings(self):
         '''Returns array of strings found in data and bytes_read'''
         strings = []
         string = ""
@@ -263,7 +272,7 @@ class FileMetaDataListing:
                     else:
                         value = self.ReadDouble()
                 elif value_type == 0x0B:
-                    value = self.ReadStr()[0]
+                    value = self.ReadStrings()[0]
                 elif value_type == 0x0C:
                     if prop_type & 2 == 2:
                         num_dates = (self.ReadVarSizeNum()[0])/8
@@ -274,9 +283,18 @@ class FileMetaDataListing:
                     else:
                         value = self.ReadDate()
                 elif value_type == 0x0E:
-                    value = self.ReadStr()[0]
-                    if prop_name == u'kMDStoreUUID':
-                        value = binascii.hexlify(value[0])
+                    if prop_type & 2 == 2:
+                        value = self.ReadStrings()[0]
+                    else:
+                        value = self.ReadStr()[0]
+                    if prop_name != u'kMDStoreProperties':
+                        if type(value) == list:
+                            if len(value) == 1:
+                                value = binascii.hexlify(value[0]).upper()
+                            else:
+                                value = [binascii.hexlify(item).upper() for item in value]
+                        else: # single string
+                            value = binascii.hexlify(value).upper()
                 elif value_type == 0x0F:
                     value = self.ConvertUint32ToSigned(self.ReadVarSizeNum()[0])
                     if value < 0:
@@ -556,13 +574,15 @@ class SpotlightStore:
                         # Sometimes bv4- (uncompressed data) followed by 4 bytes length, then data
                         chunk_start = 20 # bv41 offset
                         uncompressed = b''
+                        last_uncompressed = b''
                         header = block_data[chunk_start:chunk_start + 4]
                         while (self.block_size > chunk_start) and (header != b'bv4$'):  # b'bv41':
                             log.debug("0x{:X} - {}".format(chunk_start, header))
                             if header == b'bv41':
                                 uncompressed_size, compressed_size = struct.unpack('<II', block_data[chunk_start + 4:chunk_start + 12])
-                                uncompressed += lz4.block.decompress(block_data[chunk_start + 12: chunk_start + 12 + compressed_size], uncompressed_size)
+                                last_uncompressed = lz4.block.decompress(block_data[chunk_start + 12: chunk_start + 12 + compressed_size], uncompressed_size, dict=last_uncompressed)
                                 chunk_start += 12 + compressed_size
+                                uncompressed += last_uncompressed
                             elif header == b'bv4-':
                                 uncompressed_size = struct.unpack('<I', block_data[chunk_start + 4:chunk_start + 8])[0]
                                 uncompressed += block_data[chunk_start + 8:chunk_start + 8 + uncompressed_size]
