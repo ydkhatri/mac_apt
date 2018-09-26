@@ -44,9 +44,9 @@ class CommonFunctions:
             try:
                 if type(mac_abs_time) in (str, unicode):
                     mac_abs_time = float(mac_abs_time)
-                if mac_abs_time > 0xFFFFFFFF: # more than 32 bits, this should be nano-second resolution timestamp in HighSierra
-                    return datetime.datetime.utcfromtimestamp(mac_abs_time / 1000000000 + 978307200)
-                return datetime.datetime.utcfromtimestamp(mac_abs_time + 978307200)
+                if mac_abs_time > 0xFFFFFFFF: # more than 32 bits, this should be nano-second resolution timestamp (seen only in HighSierra)
+                    return datetime.datetime(2001, 1, 1) + datetime.timedelta(seconds=mac_abs_time/1000000000.)
+                return datetime.datetime(2001, 1, 1) + datetime.timedelta(seconds=mac_abs_time)
             except Exception as ex:
                 log.error("ReadMacAbsoluteTime() Failed to convert timestamp from value " + str(mac_abs_time) + " Error was: " + str(ex))
         return ''
@@ -58,7 +58,7 @@ class CommonFunctions:
             try:
                 if type(mac_hfs_time) in (str, unicode):
                     mac_hfs_time = float(mac_hfs_time)
-                return datetime.datetime.utcfromtimestamp(mac_hfs_time - 2082844800)
+                return datetime.datetime(1904, 1, 1) + datetime.timedelta(seconds=mac_hfs_time)
             except Exception as ex:
                 log.error("ReadMacHFSTime() Failed to convert timestamp from value " + str(mac_hfs_time) + " Error was: " + str(ex))
         return ''
@@ -70,7 +70,7 @@ class CommonFunctions:
             try:
                 if type(mac_apfs_time) in (str, unicode):
                     mac_apfs_time = float(mac_apfs_time)
-                return datetime.datetime.utcfromtimestamp(mac_apfs_time / 1000000000.)
+                return datetime.datetime(1970, 1, 1) + datetime.timedelta(seconds=mac_apfs_time/1000000000.)
             except Exception as ex:
                 log.error("ReadAPFSTime() Failed to convert timestamp from value " + str(mac_apfs_time) + " Error was: " + str(ex))
         return ''
@@ -82,7 +82,7 @@ class CommonFunctions:
             try:
                 if type(unix_time) in (str, unicode):
                     unix_time = float(unix_time)
-                return datetime.datetime.utcfromtimestamp(unix_time)
+                return datetime.datetime(1970, 1, 1) + datetime.timedelta(seconds=unix_time)
             except Exception as ex:
                 log.error("ReadUnixTime() Failed to convert timestamp from value " + str(unix_time) + " Error was: " + str(ex))
         return ''
