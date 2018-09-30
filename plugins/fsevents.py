@@ -18,7 +18,7 @@ import struct
 __Plugin_Name = "FSEVENTS"
 __Plugin_Friendly_Name = "Fsevents"
 __Plugin_Version = "1.0"
-__Plugin_Description = "Reads file system events log (from .fseventsd)"
+__Plugin_Description = "Reads file system event logs (from .fseventsd)"
 __Plugin_Author = "Yogesh Khatri"
 __Plugin_Author_Email = "yogesh@swiftforensics.com"
 
@@ -137,16 +137,16 @@ def ReadCString(buffer, buffer_size, start_pos):
     Returns tuple (string, end_pos)
     '''
     end_pos = start_pos
-    string = ""
+    string = b""
     ch = ''
     while end_pos < buffer_size:
         ch = buffer[end_pos]
-        if ch == '\x00':
+        if ch == b'\x00':
             break
         else:
             end_pos += 1
             string += ch
-    return string, end_pos + 1
+    return string.decode('utf-8'), end_pos + 1
 
 def ParseData(buffer, logs, source_date, source):
     '''Process buffer to extract log data and return number of logs processed'''
@@ -225,15 +225,16 @@ def Plugin_Start(mac_info):
     file_list = mac_info.ListItemsInFolder('/.fseventsd', EntryType.FILES, True)
     for item in file_list:
         file_name = item['name']
-        if file_name == 'fseventsd-uuid':
-            pass
-        else:
-            path = '/.fseventsd/' + file_name
-            f = mac_info.OpenSmallFile(path)
-            if f != None:
-                ProcessFile(file_name, f, logs, item['dates']['m_time'], path)
+        path = '/.fseventsd/' + file_name
+        mac_info.ExportFile(path, __Plugin_Name, '', False)
+        f = mac_info.OpenSmallFile(path)
+        if f != None:
+            if file_name == 'fseventsd-uuid':
+                log.info("fseventsd-uuid={}".format(f.read()))
             else:
-                log.error('Could not open file {}'.format(path))
+                ProcessFile(file_name, f, logs, item['dates']['m_time'], path)
+        else:
+            log.error('Could not open file {}'.format(path))
     
     if len(logs) > 0:
         PrintAll(logs, mac_info.output_params)
