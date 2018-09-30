@@ -20,6 +20,7 @@ WIFI | Gets wifi network information
 BASICINFO | Basic machine & OS configuration like SN, timezone, computer name, last logged in user, HFS info
 BASHSESSIONS | Reads bash (Terminal) sessions & history for every user
 DOMAINS | Active Directory Domain(s) that the mac is connected to
+FSEVENTS | Reads file system event logs (from .fseventsd)
 IMESSAGE | Read iMessage chats
 INETACCOUNTS | Retrieve configured internet accounts (iCloud, Google, Linkedin, facebook..)
 INSTALLHISTORY | Software Installation History
