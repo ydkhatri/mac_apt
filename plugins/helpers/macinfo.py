@@ -804,6 +804,7 @@ class MacInfo:
                         elif self.osx_version.startswith('10.11'): self.osx_friendly_name = 'El Capitan'
                         elif self.osx_version.startswith('10.12'): self.osx_friendly_name = 'Sierra'
                         elif self.osx_version.startswith('10.13'): self.osx_friendly_name = 'High Sierra'
+                        elif self.osx_version.startswith('10.14'): self.osx_friendly_name = 'Mojave'
                         elif self.osx_version.startswith('10.0'): self.osx_friendly_name = 'Cheetah'
                         elif self.osx_version.startswith('10.1'): self.osx_friendly_name = 'Puma'
                         elif self.osx_version.startswith('10.2'): self.osx_friendly_name = 'Jaguar'
