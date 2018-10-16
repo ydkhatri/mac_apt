@@ -114,7 +114,7 @@ def EnableSqliteDb(output_path, out_params, file_name_prefix):
         log.exception('Exception occurred when trying to create Sqlite db')
     return False
 
-def ProcessStoreDb(input_file_path, input_file, output_path, output_params, items_to_compare, file_name_prefix, limit_output_types=True):
+def ProcessStoreDb(input_file_path, input_file, output_path, output_params, items_to_compare, file_name_prefix, limit_output_types=True, no_path_file=False):
     '''Main spotlight store.db processing function
        file_name_prefix is used to name the excel sheet or sqlite table, as well as prefix for name of paths_file.
        limit_output_types=True will only write to SQLITE, else all output options are honored. This is for faster 
@@ -132,45 +132,46 @@ def ProcessStoreDb(input_file_path, input_file, output_path, output_params, item
         if not os.path.exists(output_path):
             log.info("Creating output folder for spotlight at {}".format(output_path))
             os.makedirs(output_path)
-
+        
         with open(output_path_data, 'wb') as output_file:
-            with open(output_path_full_paths, 'wb') as output_paths_file:
-                store = spotlight_parser.SpotlightStore(input_file)
-                store.ReadBlocksInSeq()
-                ## create db, write table with fields.
-                out_params = CopyOutputParams(output_params)
-                if limit_output_types and (store.block0.item_count > 500): # Large db, limit to sqlite output
-                    log.warning('Since the spotlight database is large, only Sqlite output will be written!')
-                    out_params.write_xlsx = False
-                    out_params.write_csv = False
-                    if not out_params.write_sql: # sql is not enabled, must initialize database!
-                        if not EnableSqliteDb(output_path, out_params, file_name_prefix): return None
-                try:
-                    log.debug ("Trying to write extracted store data for {}".format(file_name_prefix))
-                    data_type_info = Get_Column_Info(store)
-                    writer = DataWriter(out_params, "Spotlight-" + file_name_prefix, data_type_info, input_file_path)
-                except Exception as ex:
-                    log.exception ("Failed to initilize data writer")
-                    return None
+            output_paths_file = None
+            store = spotlight_parser.SpotlightStore(input_file)
+            store.ReadBlocksInSeq()
+            ## create db, write table with fields.
+            out_params = CopyOutputParams(output_params)
+            if limit_output_types and (store.block0.item_count > 500): # Large db, limit to sqlite output
+                log.warning('Since the spotlight database is large, only Sqlite output will be written!')
+                out_params.write_xlsx = False
+                out_params.write_csv = False
+                if not out_params.write_sql: # sql is not enabled, must initialize database!
+                    if not EnableSqliteDb(output_path, out_params, file_name_prefix): return None
+            try:
+                log.debug ("Trying to write extracted store data for {}".format(file_name_prefix))
+                data_type_info = Get_Column_Info(store)
+                writer = DataWriter(out_params, "Spotlight-" + file_name_prefix, data_type_info, input_file_path)
+            except Exception as ex:
+                log.exception ("Failed to initilize data writer")
+                return None
 
-                store.ParseMetadataBlocks(output_file, items, items_to_compare, ProcessStoreItems)
-                writer.FinishWrites()
-                
+            store.ParseMetadataBlocks(output_file, items, items_to_compare, ProcessStoreItems)
+            writer.FinishWrites()
+            
+            # Write Paths db as csv
+            if not no_path_file:
                 path_type_info = [ ('ID',DataType.INTEGER),('FullPath',DataType.TEXT) ]
                 fullpath_writer = DataWriter(out_params, "Spotlight-" + file_name_prefix + '-paths', path_type_info, input_file_path)
-
-                # Write Paths db as csv
-                log.info('Inodes and Path information being written to {}'.format(output_path_full_paths))
-                output_paths_file.write("Inode_Number\tFull_Path\r\n")
-                if items_to_compare: 
-                    items_to_compare.update(items) # This updates items_to_compare ! 
-                    WriteFullPaths(items, items_to_compare, output_paths_file, fullpath_writer)
-                else:
-                    WriteFullPaths(items, items, output_paths_file, fullpath_writer)
-                if out_params.write_sql: 
-                    CreateViewAndIndexes(data_type_info, fullpath_writer.sql_writer, file_name_prefix)
-                fullpath_writer.FinishWrites()
-                return items
+                with open(output_path_full_paths, 'wb') as output_paths_file:
+                    log.info('Inodes and Path information being written to {}'.format(output_path_full_paths))
+                    output_paths_file.write("Inode_Number\tFull_Path\r\n")
+                    if items_to_compare: 
+                        items_to_compare.update(items) # This updates items_to_compare ! 
+                        WriteFullPaths(items, items_to_compare, output_paths_file, fullpath_writer)
+                    else:
+                        WriteFullPaths(items, items, output_paths_file, fullpath_writer)
+                    if out_params.write_sql: 
+                        CreateViewAndIndexes(data_type_info, fullpath_writer.sql_writer, file_name_prefix)
+                fullpath_writer.FinishWrites()                
+            return items
     except Exception as ex:
         log.exception('Exception processing spotlight store db file')
 
@@ -284,8 +285,57 @@ def ReadVolumeConfigPlist(plist, output_params, file_path):
     else:
         log.info ("No spotlight stores defined in plist!")
 
+def Process_User_DBs(mac_info):
+    '''
+    Process the databases located in /Users/<USER>/Library/Metadata/CoreSpotlight/index.spotlightV3/
+    Seen in High Sierra (10.13) and above
+    '''
+    user_spotlight_store = '{}/Library/Metadata/CoreSpotlight/index.spotlightV3/store.db'
+    user_spotlight_dot_store = '{}/Library/Metadata/CoreSpotlight/index.spotlightV3/.store.db'
+    processed_paths = []
+    for user in mac_info.users:
+        user_name = user.user_name
+        if user.home_dir == '/private/var/empty': continue # Optimization, nothing should be here!
+        elif user.home_dir == '/private/var/root': user_name = 'root' # Some other users use the same root folder, we will list such all users as 'root', as there is no way to tell
+        if user.home_dir in processed_paths: continue # Avoid processing same folder twice (some users have same folder! (Eg: root & daemon))
+        processed_paths.append(user.home_dir)
+        store_path_1 = user_spotlight_store.format(user.home_dir)
+        store_path_2 = user_spotlight_dot_store.format(user.home_dir)
+        items_1 = None
+        items_2 = None
+        if mac_info.IsValidFilePath(store_path_1):
+            mac_info.ExportFile(store_path_1, __Plugin_Name, user_name + '_', False)
+            log.info('Now processing file {} '.format(store_path_1))
+            # Process store.db here
+            input_file = mac_info.OpenSmallFile(store_path_1)
+            output_folder = os.path.join(mac_info.output_params.output_path, 'SPOTLIGHT_DATA', user_name)
+            if input_file != None:
+                table_name = user_name + '-store'
+                log.info("Spotlight data for user='{}' db='{}' will be saved with table/sheet name as {}".format(user_name, 'store.db', table_name))
+                items_1 = ProcessStoreDb(store_path_1, input_file, output_folder, mac_info.output_params, None, table_name, True, True)
+        
+        if mac_info.IsValidFilePath(store_path_2):
+            mac_info.ExportFile(store_path_2,  __Plugin_Name, user_name + '_', False)
+            log.info('Now processing file {}'.format(store_path_2))
+            # Process .store.db here
+            input_file = mac_info.OpenSmallFile(store_path_2)
+            output_folder = os.path.join(mac_info.output_params.output_path, 'SPOTLIGHT_DATA', user_name)
+            if input_file != None:
+                if items_1: 
+                    log.info('Only newer items not found in store.db will be written out!')
+                    DropReadme(output_folder, 'Items already present in store.db were ignored when processing the'\
+                                            '.store.db file. Only new or updated items are shown in the .store-DIFF* '\
+                                            'files. If you want the complete output, process the exported .store.db '\
+                                            'file with mac_apt_single_plugin.py and this plugin')
+                table_name = user_name + '-.store-DIFF'
+                log.info("Spotlight store for user='{}' db='{}' will be saved with table/sheet name as {}".format(user_name, '.store.db', table_name))
+                items_2 = ProcessStoreDb(store_path_2, input_file, output_folder, mac_info.output_params, items_1, table_name, True, True)
+
+
 def Plugin_Start(mac_info):
     '''Main Entry point function for plugin'''
+
+    Process_User_DBs(mac_info) # Usually small , 10.13+ only
 
     spotlight_folder = '/.Spotlight-V100/Store-V2/'
     vol_config_plist_path = '/.Spotlight-V100/VolumeConfiguration.plist'
@@ -311,7 +361,7 @@ def Plugin_Start(mac_info):
             if input_file != None:
                 table_name = str(index) + '-store'
                 log.info("Spotlight data for uuid='{}' db='{}' will be saved with table/sheet name as {}".format(uuid, 'store.db', table_name))
-                items_1 = ProcessStoreDb(store_path_1, input_file, output_folder, mac_info.output_params, None, table_name, True)
+                items_1 = ProcessStoreDb(store_path_1, input_file, output_folder, mac_info.output_params, None, table_name, True, False)
         else:
             log.debug('File not found: {}'.format(store_path_1))
 
@@ -330,7 +380,7 @@ def Plugin_Start(mac_info):
                                             'file with mac_apt_single_plugin.py and this plugin')
                 table_name = str(index) + '-.store-DIFF'
                 log.info("Spotlight store for uuid='{}' db='{}' will be saved with table/sheet name as {}".format(uuid, '.store.db', table_name))
-                items_2 = ProcessStoreDb(store_path_2, input_file, output_folder, mac_info.output_params, items_1, table_name, True)
+                items_2 = ProcessStoreDb(store_path_2, input_file, output_folder, mac_info.output_params, items_1, table_name, True, False)
         else:
             log.debug('File not found: {}'.format(store_path_2))
 
@@ -342,8 +392,8 @@ def Plugin_Start_Standalone(input_files_list, output_params):
             try:
                 with open(input_path, 'rb') as input_file:
                     output_folder = os.path.join(output_params.output_path, 'SPOTLIGHT_DATA')
-                    log.info('Now processing file {}'.format(input_file))
-                    ProcessStoreDb(input_path, input_file, output_folder, output_params, None, os.path.basename(input_path), False)
+                    log.info('Now processing file {}'.format(input_path))
+                    ProcessStoreDb(input_path, input_file, output_folder, output_params, None, os.path.basename(input_path), False, False)
             except:
                 log.exception('Failed to open input file ' + input_path)
         else:

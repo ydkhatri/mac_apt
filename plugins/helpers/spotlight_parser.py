@@ -17,13 +17,16 @@
 #
 # Script Name  : spotlight_parser.py
 # Author       : Yogesh Khatri
-# Last Updated : 3/27/2018
+# Last Updated : 10/16/2018
 # Requirement  : Python 2.7 and modules ( lz4, enum34 )
 #                Dependencies can be installed using the command 'pip install lz4 enum34' 
 # 
 # Purpose      : Parse the Spotlight store.db or .store.db file from mac OSX
 #                These files are located under:
 #                 /.Spotlight-V100/Store-V2/<UUID>/
+#
+#                Since 10.13, there are also spotlight databases for each user under
+#                 ~/Library/Metadata/CoreSpotlight/index.spotlightV3/
 #
 # Usage        : spotlight_parser.py [-p OUTPUT_PREFIX] <path_to_database>  <output_folder>
 #                Example:  python.exe spotlight_parser.py c:\store  c:\store_output
@@ -44,7 +47,7 @@ import sys
 import logging
 from enum import IntEnum
 
-__VERSION__ = '0.6'
+__VERSION__ = '0.7'
 
 log = logging.getLogger('SPOTLIGHT_PARSER')
 
@@ -348,17 +351,19 @@ class StoreBlock0:
     def __init__(self, data):
         self.data = data
         self.signature = struct.unpack("<I", data[0:4])[0]
-        if self.signature != 0x64626D32:  # 2mbd (block 0)
+        if self.signature not in [0x64626D31, 0x64626D32]:  #  1mbd or 2mbd (block 0)
             raise Exception("Unknown signature {:X} in block0! Can't parse".format(self.signature))
         self.physical_size = struct.unpack("<I", data[4:8])[0]
         self.item_count    = struct.unpack("<I", data[8:12])[0]
         self.unk_zero      = struct.unpack("<I", data[12:16])[0]
         self.unk_type      = struct.unpack("<I", data[16:20])[0]
-        # Followed by indexes [last_id_in_block, unknown1, offset_index, unknown2]
+        # Followed by indexes [last_id_in_block, offset_index, dest_block_size]
+        # If sig==1mbd, then last_id_in_block is BigEndian else LE
+        # Everything else LE
         self.indexes = []
         pos = 20
         for i in range (0, self.item_count):
-            index = struct.unpack("<IIII", data[pos : pos + 16])
+            index = struct.unpack("<QII", data[pos : pos + 16]) # last_id_in_block is not used, so we don't care if it is read BE/LE
             self.indexes.append(index)
             pos += 16
 
@@ -556,15 +561,15 @@ class SpotlightStore:
         return False
 
     def ParseMetadataBlocks(self, output_file, items, items_to_compare=None, process_items_func=None):
-        # Index = [last_id_in_block, unknown1, offset_index, unknown2]
+        # Index = [last_id_in_block, offset_index, dest_block_size]
         for index in self.block0.indexes:
             #go to offset and parse
-            self.Seek(index[2] * 0x1000)
+            self.Seek(index[1] * 0x1000)
             block_data = self.ReadFromFile(self.block_size)
             compressed_block = StoreBlock(block_data)
             if compressed_block.block_type & BlockType.METADATA != BlockType.METADATA:
                 raise Exception('Expected METADATA block, Unknown block type encountered: 0x{:X}'.format(compressed_block.block_type))
-            log.debug ("Trying to decompress compressed block @ {:X}".format(index[2] * 0x1000 + 20))
+            log.debug ("Trying to decompress compressed block @ {:X}".format(index[1] * 0x1000 + 20))
 
             try:
                 if compressed_block.block_type & 0x1000 == 0x1000: # LZ4 compression
@@ -596,7 +601,7 @@ class SpotlightStore:
                     #compressed_size = compressed_block.logical_size - 20
                     uncompressed = zlib.decompress(block_data[20:compressed_block.logical_size])
             except Exception as ex:
-                log.error("Decompression error for block @ {:X}\r\n{}".format(index[2] * 0x1000 + 20, str(ex)))
+                log.error("Decompression error for block @ {:X}\r\n{}".format(index[1] * 0x1000 + 20, str(ex)))
                 if len(uncompressed) == 0: continue
             
             ## Now process it!!
@@ -627,7 +632,7 @@ class SpotlightStore:
                         else: # Not adding repeat elements
                             items[md_item.id] = [md_item.id, md_item.parent_id, md_item.GetFileName().decode('utf-8'), '', md_item.date_updated] # id, parent_id, name, path, date
                 except:
-                    log.exception('Error trying to process item @ block {:X} offset {}'.format(index[2] * 0x1000 + 20, pos))
+                    log.exception('Error trying to process item @ block {:X} offset {}'.format(index[1] * 0x1000 + 20, pos))
                 pos += item_size + 4
                 count += 1
 
