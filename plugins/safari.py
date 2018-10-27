@@ -112,7 +112,7 @@ def ReadSafariPlist(plist, safari_items, source, user):
         freq_sites = plist['FrequentlyVisitedSitesCache'] # seen in  El Capitan
         try:
             for site in freq_sites:
-                si = SafariItem(SafariItemType.FREQUENTLY_VISITED, site.get('URL', ''), search.get('Title',''), 
+                si = SafariItem(SafariItemType.FREQUENTLY_VISITED, site.get('URL', ''), site.get('Title',''), 
                                 None, 'FrequentlyVisitedSitesCache', user, source)
                 safari_items.append(si)
         except Exception as ex:
