@@ -270,7 +270,7 @@ class FileMetaDataListing:
                 elif value_type == 0x0A:
                     if prop_type & 2 == 2:
                         num_values = (self.ReadVarSizeNum()[0])/8
-                        doubles = [self.ReadDate() for x in range(num_values)]
+                        doubles = [self.ReadDouble() for x in range(num_values)]
                         value = doubles
                     else:
                         value = self.ReadDouble()
@@ -567,7 +567,7 @@ class SpotlightStore:
             self.Seek(index[1] * 0x1000)
             block_data = self.ReadFromFile(self.block_size)
             compressed_block = StoreBlock(block_data)
-            if compressed_block.block_type & BlockType.METADATA != BlockType.METADATA:
+            if compressed_block.block_type & 0xFF != BlockType.METADATA:
                 raise Exception('Expected METADATA block, Unknown block type encountered: 0x{:X}'.format(compressed_block.block_type))
             log.debug ("Trying to decompress compressed block @ {:X}".format(index[1] * 0x1000 + 20))
 
