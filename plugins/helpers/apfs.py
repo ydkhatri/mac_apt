@@ -104,10 +104,10 @@ class Apfs(KaitaiStruct):
             self.unknown_224 = self._io.read_bytes(8)
             self.unknown_232 = self._io.read_bytes(8)
             self.volume_uuid = self._io.read_bytes(16)
-            self.time_updated = self._io.read_u8le()
+            self.time_updated = self._io.read_s8le()
             self.encryption_flags = self._io.read_u8le()
             self.created_by = (KaitaiStream.bytes_terminate(self._io.read_bytes(32), 0, False)).decode(u"UTF-8")
-            self.time_created = self._io.read_u8le()
+            self.time_created = self._io.read_s8le()
             self.unknown_312 = self._io.read_bytes(392)
             self.volume_name = (self._io.read_bytes_term(0, False, True, True)).decode(u"UTF-8")
 
@@ -306,7 +306,7 @@ class Apfs(KaitaiStruct):
             self._parent = _parent
             self._root = _root if _root else self
             self.node_id = self._io.read_u8le()
-            self.timestamp = self._io.read_u8le()
+            self.timestamp = self._io.read_s8le()
             self.type_item = self._root.ItemType(self._io.read_u2le())
 
 
@@ -557,10 +557,10 @@ class Apfs(KaitaiStruct):
             self._root = _root if _root else self
             self.parent_id = self._io.read_u8le()
             self.node_id = self._io.read_u8le()
-            self.creation_timestamp = self._io.read_u8le()
-            self.modified_timestamp = self._io.read_u8le()
-            self.changed_timestamp = self._io.read_u8le()
-            self.accessed_timestamp = self._io.read_u8le()
+            self.creation_timestamp = self._io.read_s8le()
+            self.modified_timestamp = self._io.read_s8le()
+            self.changed_timestamp = self._io.read_s8le()
+            self.accessed_timestamp = self._io.read_s8le()
             self.flags = self._io.read_u8le()
             self.nchildren_or_nlink = self._io.read_u4le()
             self.unknown_60 = self._io.read_u4le()

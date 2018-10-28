@@ -329,13 +329,13 @@ types:
       - id: node_id
         type: u8
       - id: creation_timestamp
-        type: u8
+        type: s8
       - id: modified_timestamp
-        type: u8
+        type: s8
       - id: changed_timestamp
-        type: u8
+        type: s8
       - id: accessed_timestamp
-        type: u8
+        type: s8
       - id: flags
         type: u8
       - id: nchildren_or_nlink
@@ -417,7 +417,7 @@ types:
       - id: node_id
         type: u8
       - id: timestamp
-        type: u8
+        type: s8
       - id: type_item
         type: u2
         enum: item_type
@@ -600,14 +600,14 @@ types:
       - id: volume_uuid # 0xF0
         size: 16
       - id: time_updated
-        type: u8
+        type: s8
       - id: encryption_flags
         type: u8
       - id: created_by
         size: 32
         type: strz
       - id: time_created
-        type: u8
+        type: s8
       - id: unknown_312
         size: 392
       - id: volume_name
