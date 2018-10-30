@@ -37,8 +37,10 @@ basic_data_info = [ ('INFO_TYPE',DataType.TEXT),('Name',DataType.TEXT),('Data',D
 
 def GetVolumeInfo(mac_info):
     '''Gets information for the volume where OSX/macOS is installed'''
+    vol = mac_info.osx_FS
+    if vol == None: # For MOUNTED option, this is None
+        return
     if mac_info.is_apfs:
-        vol = mac_info.osx_FS
         used_space = '{:.2f}'.format(float(vol.container.block_size * vol.num_blocks_used / (1024*1024*1024.0)))
         container_size = '{:.2f}'.format(float(vol.container.apfs_container_size / (1024*1024*1024.0)))
         basic_data.append(['APFS', 'Block Size (bytes)', vol.container.block_size, 'Container Block size', ''])
@@ -212,8 +214,7 @@ def Plugin_Start(mac_info):
     GetModelAndHostNameFromPreference(mac_info)
     GetTimezone(mac_info)
     GetLastLoggedInUser(mac_info)
-    if mac_info.vol_info != None: # For MOUNTED option, this is None
-        GetVolumeInfo(mac_info)
+    GetVolumeInfo(mac_info)
     WriteList("basic machine info", "Basic_Info", basic_data, basic_data_info, mac_info.output_params)
 
 def Plugin_Start_Standalone(input_files_list, output_params):
