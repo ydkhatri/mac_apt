@@ -219,7 +219,8 @@ def Plugin_Start(mac_info):
                     info_plist_path = folder + '/Info.plist'
                     status_plist_path = folder + '/Status.plist'
                     manifest_plist_path = folder + '/Manifest.plist'
-                    manifest_db_path = folder + '/Manifest.db'
+                    manifest_db_path1 = folder + '/Manifest.mbdb'
+                    manifest_db_path2 = folder + '/Manifest.db'   # ios 9 and above
                     export_folder_path = os.path.join(__Plugin_Name, user_name + "_" + os.path.basename(folder)) # Should create folder EXPORT/IDEVICEBACKUPS/user_BackupUUID/
                     if mac_info.IsValidFilePath(info_plist_path):
                         mac_info.ExportFile(info_plist_path, export_folder_path, '', False)
@@ -233,10 +234,10 @@ def Plugin_Start(mac_info):
                         mac_info.ExportFile(manifest_plist_path, export_folder_path, '', False)
                     else:
                         log.error("Failed to find Manifest.plist in {}".format(folder))
-                    if mac_info.IsValidFilePath(manifest_db_path):
-                        mac_info.ExportFile(manifest_db_path, export_folder_path, '', False)
-                    else:
-                        log.error("Failed to find Manifest.db in {}".format(folder))
+                    if mac_info.IsValidFilePath(manifest_db_path1):
+                        mac_info.ExportFile(manifest_db_path1, export_folder_path, '', False)
+                    elif mac_info.IsValidFilePath(manifest_db_path2):
+                        mac_info.ExportFile(manifest_db_path2, export_folder_path, '', False)
 
                     ReadBackups(mac_info, export_folder_path, info_plist_path, status_plist_path, manifest_plist_path, user.user_name, backups, folder)
     if backups:
