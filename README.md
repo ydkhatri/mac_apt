@@ -16,11 +16,13 @@ mac_apt is a DFIR tool to process Mac computer full disk images (or live machine
 
 Available Plugins (artifacts parsed) | Description 
 ------------------ | ---------------
-WIFI | Gets wifi network information
-BASICINFO | Basic machine & OS configuration like SN, timezone, computer name, last logged in user, HFS info
 BASHSESSIONS | Reads bash (Terminal) sessions & history for every user
+BASICINFO | Basic machine & OS configuration like SN, timezone, computer name, last logged in user, HFS info
+BLUETOOTH | Gets Bluetooth Artifacts
+DOCKITEMS | Reads the Dock plist for every user
 DOMAINS | Active Directory Domain(s) that the mac is connected to
 FSEVENTS | Reads file system event logs (from .fseventsd)
+IDEVICEBACKUPS | Reads and exports iPhone/iPad backup databases
 IMESSAGE | Read iMessage chats
 INETACCOUNTS | Retrieve configured internet accounts (iCloud, Google, Linkedin, facebook..)
 INSTALLHISTORY | Software Installation History
@@ -35,6 +37,7 @@ SAFARI | Internet history, downloaded file information, cookies and more from Sa
 SPOTLIGHT | Reads the spotlight index databases
 SPOTLIGHTSHORTCUTS | User typed data in the spotlight bar & targeted document/app
 USERS | Local & Domain user information - name, UID, UUID, GID, account creation & password set dates, pass hints, homedir & Darwin paths
+WIFI | Gets wifi network information
 
 ### Coming soon..
 * More plugins
