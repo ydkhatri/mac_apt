@@ -468,6 +468,9 @@ class ExcelWriter:
     
     def CreateSheet(self, sheet_name):
         sheet_name = sheet_name.replace('_','') # Remove _ to shorten name
+        if len(sheet_name) > 31:
+            log.warning('Sheet name "{}" is longer than the Excel limit of 31 char. It will be truncated to 31 char!'.format(sheet_name))
+            sheet_name = sheet_name[0:31]
         try:
             self.sheet = self.workbook.add_worksheet(sheet_name)
         except Exception as ex:
@@ -518,6 +521,9 @@ class ExcelWriter:
     def GetNextAvailableSheetName(self, sheet_name):
         name = sheet_name
         if self.SheetExists(name):
+            if len(name) > 29:
+                sheet_name = name[0:29] # Truncate to 30 char, as excel can only handle 32 char sheetnames
+                log.warning('Sheet name "{}" is in use, and has length > 29 char. Truncating to 29 char to add 2 numerical digits!'.format(name))
             index = 1
             name = sheet_name + '{0:02d}'.format(index)
             while (self.SheetExists(name)):
