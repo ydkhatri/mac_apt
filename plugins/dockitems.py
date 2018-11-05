@@ -35,9 +35,12 @@ log = logging.getLogger('MAIN.' + __Plugin_Name) # Do not rename or remove this 
 class DockItem:
     def __init__(self, file_label, parent_mod_date, file_mod_date, file_type, file_data, guid, user, source_path):
         self.file_label = file_label
-        if parent_mod_date > 0xFFFFFFFF: # On High Sierra, sometimes seen..
+        if parent_mod_date > 0xFFFFFFFF: # On High Sierra and above..
             parent_mod_date = parent_mod_date & 0xFFFFFFFF # Killing upper 32 bits!
                                                            # Upper 32 bits maybe the finer resolution (microseconds?).
+
+        if file_mod_date > 0xFFFFFFFF: # On High Sierra and above..
+            file_mod_date = file_mod_date & 0xFFFFFFFF # Killing upper 32 bits!
 
         self.parent_mod_date = CommonFunctions.ReadMacHFSTime(parent_mod_date)
         self.file_mod_date = CommonFunctions.ReadMacHFSTime(file_mod_date)
