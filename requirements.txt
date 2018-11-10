@@ -7,7 +7,7 @@ kaitaistruct
 # libewf-python
 lz4
 pkipplib
-# warning: request lzfse source
+# warning: requires lzfse source
 # pylzfse
 pytsk3
 tzlocal
