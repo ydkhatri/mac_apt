@@ -3,7 +3,12 @@ biplist
 construct == 2.8.10
 enum34
 kaitaistruct
+# warning: PyPI provides the experimental version
+# libewf-python
 lz4
 pkipplib
+# warning: request lzfse source
+# pylzfse
+pytsk3
 tzlocal
 xlsxwriter
