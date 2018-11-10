@@ -1,0 +1,9 @@
+pip >= 7.0.0
+biplist
+construct == 2.8.10
+enum34
+kaitaistruct
+lz4
+pkipplib
+tzlocal
+xlsxwriter
