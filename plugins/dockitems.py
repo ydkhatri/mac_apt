@@ -87,7 +87,7 @@ def GetDockItemsPlistFromImage(mac_info, plist_path):
 def ParseDockItemsPlist(plist, docks, user_name, plist_path):
     '''Parse plist and add items to docks list'''
 
-    for key in ['persistent-others', 'persistent-apps']:
+    for key in ['persistent-others', 'persistent-apps', 'recent-apps']:
         if plist.get(key, None) != None:
             try:
                 for item in plist[key]:
