@@ -348,13 +348,19 @@ class ApfsFileSystemParser:
                 if type(entry.data) == self.ptr_type: #apfs.Apfs.PointerRecord: 
                     # Must process this!!!!
                     if type(entry.key.content) == apfs.Apfs.LocationKey:
-                        newblock = self.container.read_block(entry.data.pointer)
-                        self.read_entries(entry.data.pointer, newblock)
+                        try:
+                            newblock = self.container.read_block(entry.data.pointer)
+                            self.read_entries(entry.data.pointer, newblock)
+                        except:
+                            log.exception('Exception trying to read block {}'.format(entry.data.pointer))
                 else:
-                    newblock = self.container.read_block(entry.data.block_num.value)
-                    self.read_entries(entry.data.block_num.value, newblock)
+                    try:
+                        newblock = self.container.read_block(entry.data.block_num.value)
+                        self.read_entries(entry.data.block_num.value, newblock)
+                    except:
+                        log.exception('Exception trying to read block {}'.format(entry.data.block_num.value))
         else:
-            raise Exception("unexpected entry")
+            raise ValueError("unexpected entry in block {}".format(block_num))
 
         if self.num_records_read_batch > 400000:
             self.num_records_read_batch = 0
