@@ -92,9 +92,14 @@ class Network:
         self.ChannelHistory = self.ReadParam(dictionary, 'ChannelHistory')
 
 def GetReadableSSID(ssid):
+    global wifi_plist_ver
+    
     try:
-        ssid = ssid[11:-1]
-        ssid = ssid.replace(" ", "")
+        if (wifi_plist_ver == 2500):
+            ssid = ssid[10:]
+        else:
+            ssid = ssid[11:-1]
+            ssid = ssid.replace(" ", "")
         ssid = unhexlify(ssid).decode('utf-8')
     except Exception as e:
         log.error ('Error in GetReadableSSID() Details: ' + str(e))
@@ -103,13 +108,9 @@ def GetReadableSSID(ssid):
 def GetSSIDs(ssids):
     list = []
     for ssid in ssids:
-        try:
-            ssid = ssid[11:-1]
-            ssid = ssid.replace(" ", "")
-            ssid = unhexlify(ssid).decode('utf-8')
-            list.append(ssid)
-        except Exception as e:
-            log.error ('Error in GetSSIDs() Details: ' + str(e))
+        ssid_readable = GetReadableSSID(ssid)
+        if ssid_readable:
+            list.append(ssid_readable)
     return list
 
 def PrintAll(networks, output_params, source_path):
@@ -140,6 +141,8 @@ def PrintAll(networks, output_params, source_path):
     
 # # # MAIN PROGRAM BELOW # # # 
 
+wifi_plist_ver = 0
+
 def ParseWifi(input_file):
     networks = []
     try:
@@ -165,13 +168,14 @@ def ProcessOlderAirportPrefPlist(plist, networks):
 def ReadAirportPrefPlist(plist, networks):
     #Read version info (12=10.8, 14=10.9, 2200=10.10 & higher)
     # No version info in SnowLeopard (10.6) !
-    version = 0
+    global wifi_plist_ver
+    wifi_plist_ver = 0
     try:
-        version = plist['Version']
-        log.debug ("com.apple.airport.preferences.plist version is " + str(version))
+        wifi_plist_ver = plist['Version']
+        log.debug ("com.apple.airport.preferences.plist version is {}".format(wifi_plist_ver))
     except Exception as e:
         log.info ('Error reading version number: ' + str(e))
-    if version <= 14:
+    if wifi_plist_ver <= 14:
         ProcessOlderAirportPrefPlist(plist, networks)
         return
     try:
