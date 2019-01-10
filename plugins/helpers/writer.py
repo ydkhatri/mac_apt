@@ -343,7 +343,7 @@ class SqliteWriter:
         except Exception as ex:
             log.error(str(ex))
             log.exception("error writing to table " + self.table_name)
-            raise ex
+            #raise ex
 
     def CloseDb(self):
         if self.conn != None:
