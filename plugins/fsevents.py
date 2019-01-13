@@ -171,7 +171,7 @@ def ParseData(buffer, logs, source_date, source):
             while pos < buffer_size:
                 log_filepath, pos = ReadCString(buffer, buffer_size, pos)
                 if not log_filepath: break # end of stream, rest are zeroes
-                log_id, log_event_flag, log_file_id = struct.unpack("<QIq", buffer[pos:pos+20])
+                log_id, log_event_flag, log_file_id = struct.unpack("<QIQ", buffer[pos:pos+20])
                 pos += 20
                 num_logs_processed += 1
                 logs.append([log_id, log_event_flag, log_filepath, log_file_id, source_date, source])
