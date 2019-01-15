@@ -924,7 +924,7 @@ class ApfsMacInfo(MacInfo):
                 for x in all_items:
                     if x['type'] == 'File':
                         x['type'] = EntryType.FILES
-                        all_items.append(dict(x))
+                        items.append(dict(x))
                     elif x['type'] == 'Folder':
                         x['type'] = EntryType.FOLDERS
                         items.append(dict(x))
