@@ -1,11 +1,12 @@
 # Credits & Acknowledgments
 -------------------------
 
-* Yogesh Khatri - Author & Maintainer of mac_apt framework and plugins
-* Adam Ferrante - Plugin Documentation on wiki and wrote DOCKITEMS & BLUETOOTH plugins
-* Jack Farley - Wrote the IDEVICE_BACKUPS, PRINTJOBS, IMESSAGE plugins
+* Yogesh Khatri (@swiftforensics) - Author & Maintainer of mac_apt framework and plugins
+* Zachary Burnham (@zmbf0r3ns1cs) - Wrote the install shell script for mac_apt on macOS
+* Adam Ferrante (@ferran7e) - Plugin Documentation on wiki and wrote DOCKITEMS & BLUETOOTH plugins
+* Jack Farley (@JackFarley248) - Wrote the IDEVICE_BACKUPS, PRINTJOBS, IMESSAGE plugins
 * Michael Geyer - Wrote the WIFI plugin
-* Noah Sidall - Wrote the INSTALLHISTORY plugin
+* Noah Sidall (@noah_sidd) - Wrote the INSTALLHISTORY plugin
 * Austin Truax - Wrote the proof of concept parsing wifi information from airport plist
 
 #### APFS support 
