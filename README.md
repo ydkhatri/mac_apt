@@ -42,6 +42,7 @@ WIFI | Gets wifi network information
 ### Coming soon..
 * More plugins
 * More documentation
+* Python 3 version
 
 For installation and other information, see https://github.com/ydkhatri/mac_apt/wiki
 
