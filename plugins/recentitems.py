@@ -19,12 +19,13 @@ from biplist import *
 from enum import IntEnum
 from binascii import unhexlify
 from helpers.macinfo import *
+from helpers.plist_deserializer import *
 from helpers.writer import *
 
 
 __Plugin_Name = "RECENTITEMS"
 __Plugin_Friendly_Name = "Recently accessed Servers, Documents, Hosts, Volumes & Applications"
-__Plugin_Version = "1.3"
+__Plugin_Version = "1.4"
 __Plugin_Description = "Gets recently accessed Servers, Documents, Hosts, Volumes & Applications from .plist and .sfl files. Also gets recent searches and places for each user"
 __Plugin_Author = "Yogesh Khatri"
 __Plugin_Author_Email = "yogesh@swiftforensics.com"
@@ -352,16 +353,17 @@ def PrintAll(recent_items, output_params, source_path):
         data_list.append( [ str(item.Type), item.Name, item.URL, item.Info, item.User, item.Source ] )
 
     WriteList("Recent item information", "RecentItems", data_list, recent_info, output_params, source_path)
-    
-# # # MAIN PROGRAM BELOW # # # 
 
 def ParseRecentFile(input_file):
     recent_items = []
     basename = os.path.basename(input_file).lower()
-    if basename.endswith('.sfl'):
+    if basename.endswith('.sfl') or basename.endswith('.sfl2'):
         try:
             with open(input_file, "rb") as f:
-                ReadSFLPlist(f, recent_items, input_file, '')
+                if basename.endswith('.sfl'):
+                    ReadSFLPlist(f, recent_items, input_file, '')
+                else: #SFL2
+                    ReadSFL2Plist(f, recent_items, input_file, '')
         except Exception as ex:
             log.exception('Failed to open file: {}'.format(input_file))
     elif basename.endswith('.plist'):
@@ -582,10 +584,38 @@ def ReadRecentPlist(plist, recent_items, source='', user=''):
             else:
                 log.info("Found unknown item {} in plist".format(item_type))
     except Exception as ex:
-        log.exception('Error reading plist')   
+        log.exception('Error reading plist')
+
+def ReadSFL2Plist(file_handle, recent_items, source, user=''):
+    basename = os.path.basename(source).lower()
+    try:
+        plist = DeserializeNSKeyedArchive(file_handle)
+        for item in plist['items']:
+            name = item.get('Name', '')
+            uuid = item.get('uuid', '')
+            recent_type = RecentType.UNKNOWN
+            if basename.find('recentservers') >=0 : recent_type = RecentType.SERVER
+            elif basename.find('recenthosts') >=0 : recent_type = RecentType.HOST
+            elif basename.find('recentdocuments') >=0 : recent_type = RecentType.DOCUMENT
+            elif basename.find('recentapplications') >=0 : recent_type = RecentType.APPLICATION
+            elif basename.find('favoritevolumes') >=0 : recent_type = RecentType.VOLUME
+            ri = RecentItem(name, '', 'uuid={}'.format(uuid), source, recent_type, user)
+            recent_items.append(ri)
+
+            data = item.get('Bookmark', None)
+            if data:
+                if isinstance(data, dict):
+                    data = data.get('NS.data', None)
+                    if data:
+                        ri.ReadBookmark(data)
+                else:
+                    ri.ReadBookmark(data)
+    except:
+        log.exception('Error reading SFL2 plist')
 
 def ReadSFLPlist(file_handle, recent_items, source, user=''):
     try:
+        basename = os.path.basename(source).lower()
         ccl_bplist.set_object_converter(ccl_bplist.NSKeyedArchiver_common_objects_convertor)
         plist = ccl_bplist.load(file_handle)
 
@@ -594,8 +624,7 @@ def ReadSFLPlist(file_handle, recent_items, source, user=''):
         root = ns_keyed_archiver_obj['root']
         log.debug('Version of SFL is {}'.format(root['version'])) # Currently we parse version 1
         items = root['items']
-        count = len(items)
-
+        
         for item in items:
             url = ''
             name = ''
@@ -606,7 +635,6 @@ def ReadSFLPlist(file_handle, recent_items, source, user=''):
             except: pass
             if name or url:
                 recent_type = RecentType.UNKNOWN
-                basename = os.path.basename(source).lower()
                 if basename.find('recentservers') >=0 : recent_type = RecentType.SERVER
                 elif basename.find('recenthosts') >=0 : recent_type = RecentType.HOST
                 elif basename.find('recentdocuments') >=0 : recent_type = RecentType.DOCUMENT
@@ -636,12 +664,19 @@ def ProcessSFLFolder(mac_info, user_path, recent_items):
         if mac_info.IsValidFolderPath(source_folder):
             files_list = mac_info.ListItemsInFolder(source_folder,EntryType.FILES)
             for file_entry in files_list:
-                if file_entry['name'].lower().endswith('.sfl') and (file_entry['size'] > 446): # 446 is an empty plist, only keyed class data
+                f_name = file_entry['name'].lower()
+                if (f_name.endswith('.sfl') and (file_entry['size'] > 446)) or f_name.endswith('.sfl2'): # 446 is an empty plist, only keyed class data for SFL
                     source_path = source_folder + '/' + file_entry['name']
+                    if f_name == 'com.apple.LSSharedFileList.ProjectsItems.sfl2': # Only has Tag/color info
+                        log.info('Skipping ' + source_path)
+                        continue
                     mac_info.ExportFile(source_path, __Plugin_Name, user_name + "_", False)
                     f = mac_info.OpenSmallFile(source_path)
                     if f != None:
-                        ReadSFLPlist(f, recent_items, source_path, user_name)
+                        if f_name.endswith('.sfl'):
+                            ReadSFLPlist(f, recent_items, source_path, user_name)
+                        else: #SFL2
+                            ReadSFL2Plist(f, recent_items, source_path, user_name)
     
 def ProcessSFL(mac_info, recent_items):
     '''Processes .SFL files '''
@@ -731,6 +766,10 @@ def Plugin_Start_Standalone(input_files_list, output_params):
     log.info("Module Started as standalone")
     for input_path in input_files_list:
         log.debug("Input file passed was: " + input_path)
+        if os.path.basename(input_path) == 'com.apple.LSSharedFileList.ProjectsItems.sfl2': # Only has Tag/color info
+            log.info('Skipping ' + input_path)
+            continue
+
         recent_items = ParseRecentFile(input_path)
         if len(recent_items) > 0:
             PrintAll(recent_items, output_params, input_path)
