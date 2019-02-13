@@ -319,12 +319,57 @@ class MacInfo:
             log.exception('Error trying to get MAC times')
         return times
 
-    def ExportFile(self, artifact_path, subfolder_name, file_prefix='', check_for_sqlite_files=True):
+    def ExportFolder(self, artifact_path, subfolder_name, overwrite):
+        '''Export an artifact folder to the output\Export\subfolder_name folder. This
+           will export the entire folder and subfolders recursively. 
+           This does not export Xattr. Return value is boolean (False if it encountered
+           any errors).
+        '''
+        export_path = os.path.join(self.output_params.export_path, subfolder_name, os.path.basename(artifact_path))
+        # create folder
+        try:
+            if not os.path.exists(export_path):
+                os.makedirs(export_path)
+        except Exception as ex:
+            log.error ("Exception while creating Export folder " + export_path + "\n Is output folder Writeable?" +
+                       "Is it full? Perhaps the drive is disconnected? Exception Details: " + str(ex))
+            return False
+        # recursively export files/folders
+        try:
+            return self._ExportFolder(artifact_path, export_path, overwrite)
+        except:
+            log.exception('Exception while exporting folder ' + artifact_path)
+        return False
+
+    def _ExportFolder(self, artifact_path, export_path, overwrite):
+        '''Exports files/folders from artifact_path to export_path recursively'''
+        entries = self.ListItemsInFolder(artifact_path, EntryType.FILES_AND_FOLDERS, True)
+        ret = True
+        for entry in entries:
+            new_path = os.path.join(export_path, entry['name'])
+            if entry['type'] == EntryType.FOLDERS:
+                try:
+                    if not os.path.exists(new_path):
+                        os.mkdir(new_path)
+                except:
+                    log.exception("Exception while creating Export folder " + export_path)
+                    ret = False
+                    continue
+                ret &= self._ExportFolder(artifact_path + '/' + entry['name'], new_path, overwrite)
+            else: # FILE
+                ret &= self._ExtractFile(artifact_path + '/' + entry['name'], new_path, entry['dates'])
+        return ret
+
+    def ExportFile(self, artifact_path, subfolder_name, file_prefix='', check_for_sqlite_files=True, overwrite=False):
         '''Export an artifact (file) to the output\Export\subfolder_name folder.
            Ideally subfolder_name should be the name of the plugin.
+           If 'overwrite' is set to True, it will not check for existing files. The
+           default behaviour is to check and rename the newly exported file if there
+           is a name collision.
            If this is an sqlite db, the -shm and -wal files will also be exported.
            The check for -shm and -wal can be skipped if  check_for_sqlite_files=False
-           It is much faster to skip the check if not needed
+           It is much faster to skip the check if not needed.
+           The Function returns False if it fails to export the file.
         '''
         export_path = os.path.join(self.output_params.export_path, subfolder_name)
         # create folder
@@ -332,14 +377,17 @@ class MacInfo:
             if not os.path.exists(export_path):
                 os.makedirs(export_path)
         except Exception as ex:
-            log.error ("Exception while creating Export folder " + export_path + "\n Is ouput folder Writeable?" +
+            log.error ("Exception while creating Export folder " + export_path + "\n Is output folder Writeable?" +
                        "Is it full? Perhaps the drive is disconnected? Exception Details: " + str(ex))
             return False
 
         # extract each file to temp folder
         out_filename =  file_prefix + os.path.basename(artifact_path)
         out_filename = self._GetSafeFilename(out_filename) #filter filenames based on platform (Eg: Windows does not like ?<>/\:*"! in filenames)
-        file_path = CommonFunctions.GetNextAvailableFileName(os.path.join(export_path, out_filename))
+        if overwrite:
+            file_path = os.path.join(export_path, out_filename)
+        else:
+            file_path = CommonFunctions.GetNextAvailableFileName(os.path.join(export_path, out_filename))
         shm_file_path = file_path + "-shm" # For sqlite db
         wal_file_path = file_path + "-wal" # For sqlite db
 
@@ -352,10 +400,11 @@ class MacInfo:
             return True
         return False
 
-    def _ExtractFile(self, artifact_path, export_path):
+    def _ExtractFile(self, artifact_path, export_path, mac_times=None):
         '''Internal function, just export, no checks!'''
         if self.ExtractFile(artifact_path, export_path):
-            mac_times = self.GetFileMACTimes(artifact_path)
+            if not mac_times:
+                mac_times = self.GetFileMACTimes(artifact_path)
             self.output_params.export_log_csv.WriteRow([artifact_path, export_path, mac_times['c_time'], mac_times['m_time'], mac_times['cr_time'], mac_times['a_time']])
             return True
         else:
@@ -417,7 +466,7 @@ class MacInfo:
     def ListItemsInFolder(self, path='/', types_to_fetch=EntryType.FILES_AND_FOLDERS, include_dates=False):
         ''' 
         Returns a list of files and/or folders in a list
-        Format of list = [ { 'name':'got.txt', 'type':EntryType.FILES, 'size':10, 'dates': [] }, .. ]
+        Format of list = [ { 'name':'got.txt', 'type':EntryType.FILES, 'size':10, 'dates': {} }, .. ]
         'path' should be linux style using forward-slash like '/var/db/xxyy/file.tdc'
         '''
         if self.use_native_hfs_parser:
