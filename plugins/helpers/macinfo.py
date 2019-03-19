@@ -412,7 +412,7 @@ class MacInfo:
         return False
 
     def ReadPlist(self, path):
-        '''Safely open and read a plist; returns tuple (True/False, plist/None, error)'''
+        '''Safely open and read a plist; returns tuple (True/False, plist/None, "error_message")'''
         log.debug("Trying to open plist file : " + path)
         error = ''
         try:
@@ -422,6 +422,17 @@ class MacInfo:
                     log.debug("Trying to read plist file : " + path)
                     plist = biplist.readPlist(f)
                     return (True, plist, '')
+                except biplist.InvalidPlistException as ex:
+                    try:
+                        # Perhaps this is manually edited or incorrectly formatted by a non-Apple utility  
+                        # that has left whitespaces at the start of file before <?xml tag
+                        f.seek(0)
+                        data = f.read()
+                        data = data.lstrip(" \r\n\t")
+                        plist = biplist.readPlistFromString(data)
+                        return (True, plist, '')
+                    except biplist.InvalidPlistException as ex:
+                        error = 'Could not read plist: ' + path + " Error was : " + str(ex)
                 except Exception as ex:
                     error = 'Could not read plist: ' + path + " Error was : " + str(ex)
             else:

@@ -174,11 +174,11 @@ def Plugin_Start_Standalone(input_files_list, output_params):
         log.debug("Input file passed was: " + input_path)
         accounts = []
         if os.path.basename(input_path).upper() == 'MOBILEMEACCOUNTS.PLIST':
-            try:
-                plist = biplist.readPlist(input_path)
+            success, plist, error = CommonFunctions.ReadPlist(input_path)
+            if success:
                 ReadMobileMeAccountPlist(plist, accounts, input_path, '')
-            except:
-                log.exception('Failed to read plist - {}'.format(input_path))
+            else:
+                log.error('Failed to read plist - {}  Error was {}'.format(input_path, error))
         elif os.path.basename(input_path).upper() in ('ACCOUNTS1.SQLITE','ACCOUNTS2.SQLITE','ACCOUNTS3.SQLITE','ACCOUNTS4.SQLITE'):
             db = OpenDb(input_path)
             if db != None:

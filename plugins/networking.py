@@ -115,37 +115,32 @@ def GetNetworkInterfaceInfo(mac_info):
     path = '/Library/Preferences/SystemConfiguration/NetworkInterfaces.plist'
     mac_info.ExportFile(path, __Plugin_Name, '', False)
     log.debug("Trying to read {}".format(path))
-    f = mac_info.OpenSmallFile(path)
-    if f != None:
+    success, plist, error = mac_info.ReadPlist(path)
+    if success:
         try:
-            plist = biplist.readPlist(f)
-            #print (plist)
-            try:
-                log.info("Model = " + plist['Model'])
-            except Exception: pass
-            for category, cat_array in plist.iteritems(): #value is another array in this dict
-                if not category.startswith('Interface'): 
-                    if category != 'Model': log.debug('Skipping ' + category)
-                    continue;
-                for interface in cat_array:
-                    interface_info = {'Category':category, 'Source':path }
-                    for item, value in interface.iteritems(): # .items() for Python 3
-                        if item in ['Active','BSD Name','IOBuiltin','IOInterfaceNamePrefix','IOInterfaceType',
-                                    'IOInterfaceUnit','IOPathMatch','SCNetworkInterfaceType']:
-                            interface_info[item] = value
-                        elif item == 'IOMACAddress':  # convert binary blob to MAC address
-                            data = [(binascii.hexlify(c).upper() if PYTHON_VER == 2 else binascii.hexlify(c).decode("ascii").upper()) for c in value]
-                            interface_info[item] = ":".join(data)
-                        elif item == 'SCNetworkInterfaceInfo':
-                            try: interface_info['SCNetworkInterfaceInfo'] = value['UserDefinedName']
-                            except Exception: pass
-                        else:
-                            log.info("Found unknown item in plist: ITEM=" + item + " VALUE=" + str(value))
-                    net_interfaces.append(interface_info)
-        except Exception as ex:
-            log.error("Failed to read plist " + path + " Exception: " + str(ex))
+            log.info("Model = " + plist['Model'])
+        except Exception: pass
+        for category, cat_array in plist.iteritems(): #value is another array in this dict
+            if not category.startswith('Interface'): 
+                if category != 'Model': log.debug('Skipping ' + category)
+                continue
+            for interface in cat_array:
+                interface_info = {'Category':category, 'Source':path }
+                for item, value in interface.iteritems(): # .items() for Python 3
+                    if item in ['Active','BSD Name','IOBuiltin','IOInterfaceNamePrefix','IOInterfaceType',
+                                'IOInterfaceUnit','IOPathMatch','SCNetworkInterfaceType']:
+                        interface_info[item] = value
+                    elif item == 'IOMACAddress':  # convert binary blob to MAC address
+                        data = [(binascii.hexlify(c).upper() if PYTHON_VER == 2 else binascii.hexlify(c).decode("ascii").upper()) for c in value]
+                        interface_info[item] = ":".join(data)
+                    elif item == 'SCNetworkInterfaceInfo':
+                        try: interface_info['SCNetworkInterfaceInfo'] = value['UserDefinedName']
+                        except Exception: pass
+                    else:
+                        log.info("Found unknown item in plist: ITEM=" + item + " VALUE=" + str(value))
+                net_interfaces.append(interface_info)
     else:
-        log.error("Could not open plist to get interface info for " + path)
+        log.error("Could not open plist to get interface info for " + path + " Error was " + error)
 
 
 def GetDhcpInfo(mac_info):
@@ -162,27 +157,24 @@ def GetDhcpInfo(mac_info):
                 log.info("Found mac address = " + mac_address + " on interface " + if_name)
 
                 log.debug("Trying to read {}".format(name))
-                f = mac_info.OpenSmallFile('/private/var/db/dhcpclient/leases/' + name)
-                if f != None:
-                    try:
-                        plist = biplist.readPlist(f)
-                        interface_info = {  'Source':'/private/var/db/dhcpclient/leases/' + name,
-                                            'Interface':if_name,
-                                            'MAC_Address':mac_address }
-                        #p = dict(plist)
-                        for item, value in plist.iteritems(): # .items() for Python 3
-                            if item in ['IPAddress','LeaseLength','LeaseStartDate','PacketData','RouterIPAddress','SSID']:
-                                interface_info[item] = value
-                            elif item == 'RouterHardwareAddress':  # convert binary blob to MAC address
-                                data = [(binascii.hexlify(c).upper() if PYTHON_VER == 2 else binascii.hexlify(c).decode("ascii").upper()) for c in value]
-                                interface_info[item] = ":".join(data)
-                            else:
-                                log.info("Found unknown item in plist: ITEM=" + item + " VALUE=" + str(value))
-                        dhcp_interfaces.append(interface_info)
-                    except Exception as ex:
-                        log.error("Failed to read plist " + name + " Exception: " + str(ex))
+                path = '/private/var/db/dhcpclient/leases/' + name
+                success, plist, error = mac_info.ReadPlist(path)
+                if success:
+                    interface_info = {  'Source':'/private/var/db/dhcpclient/leases/' + name,
+                                        'Interface':if_name,
+                                        'MAC_Address':mac_address }
+
+                    for item, value in plist.iteritems(): # .items() for Python 3
+                        if item in ['IPAddress','LeaseLength','LeaseStartDate','PacketData','RouterIPAddress','SSID']:
+                            interface_info[item] = value
+                        elif item == 'RouterHardwareAddress':  # convert binary blob to MAC address
+                            data = [(binascii.hexlify(c).upper() if PYTHON_VER == 2 else binascii.hexlify(c).decode("ascii").upper()) for c in value]
+                            interface_info[item] = ":".join(data)
+                        else:
+                            log.info("Found unknown item in plist: ITEM=" + item + " VALUE=" + str(value))
+                    dhcp_interfaces.append(interface_info)
                 else:
-                    log.error("Could not open plist to get interface info for " + name)
+                    log.error("Could not open plist to get interface info for " + path + " Error was " + error)
             else:
                 log.info("Found unexpected file, not processing /private/var/db/dhcpclient/leases/" + name + " size=" + str(interface['size']))
         # Done processing interfaces!

@@ -9,6 +9,7 @@
 
 from __future__ import unicode_literals
 
+import biplist
 import os
 import datetime
 import pytz
@@ -136,7 +137,7 @@ class CommonFunctions:
         return False
     
     @staticmethod
-    def GetTableNames(self, db_conn):
+    def GetTableNames(db_conn):
         '''Retrieve all table names in an sqlite database'''
         try:
             cursor = db_conn.execute("SELECT group_concat(name) from sqlite_master WHERE type='table'")
@@ -145,3 +146,37 @@ class CommonFunctions:
         except Exception as ex:
             log.error ("Failed to list tables on db. Error Details: {}".format(str(ex)))
         return ''
+
+    @staticmethod
+    def ReadPlist(path):
+        '''
+            Safely open and read a plist.
+            Returns a tuple (True/False, plist/None, "error_message")
+        '''
+        #log.debug("Trying to open plist file : " + path)
+        error = ''
+        try:
+            with open(path, 'rb') as f:
+                if f != None:
+                    try:
+                        #log.debug("Trying to read plist file : " + path)
+                        plist = biplist.readPlist(f)
+                        return (True, plist, '')
+                    except biplist.InvalidPlistException as ex:
+                        try:
+                            # Perhaps this is manually edited or incorrectly formatted by a non-Apple utility  
+                            # that has left whitespaces at the start of file before <?xml tag
+                            f.seek(0)
+                            data = f.read()
+                            data = data.lstrip(" \r\n\t")
+                            plist = biplist.readPlistFromString(data)
+                            return (True, plist, '')
+                        except biplist.InvalidPlistException as ex:
+                            error = 'Could not read plist: ' + path + " Error was : " + str(ex)
+                    except IOError as ex:
+                        error = 'IOError while reading plist: ' + path + " Error was : " + str(ex)
+                else:
+                    error = 'Failed to open file'
+        except IOError as ex:
+            error = 'Exception from ReadPlist while trying to open file. Exception=' + str(ex)
+        return (False, None, error)

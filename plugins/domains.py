@@ -77,14 +77,15 @@ def ProcessActiveDirectoryPlist(plist_path, plist):
 def Plugin_Start_Standalone(input_files_list, output_params):
     log.info("Module Started as standalone")
     for input_path in input_files_list:
-        try:
-            log.debug("Trying to read plist : " + input_path)
-            plist = biplist.readPlist(f)
+        log.debug("Trying to read plist : " + input_path)
+        success, plist, error = CommonFunctions.ReadPlist.readPlist(input_path)
+        if success:
             ProcessActiveDirectoryPlist(input_path, plist)
-        except Exception as ex:
-            log.error("Failed to read plist " + input_path + " Exception: " + str(ex))
+            WriteList('domain details', 'Domain_ActiveDirectory', ad_details, ad_info, mac_info.output_params, input_path)
+        else:
+            log.error("Failed to read plist " + input_path + " Error was: " + error)
 
-    WriteList('domain details', 'Domain_ActiveDirectory', ad_details, ad_info, mac_info.output_params, input_path)
+    
 
 if __name__ == '__main__':
     print("This plugin is a part of a framework and does not run independently on its own!")
