@@ -168,7 +168,7 @@ def ParseData(buffer, logs, source_date, source):
 
     try:
         if is_version2:
-            while pos < buffer_size:
+            while pos < min(buffer_size, file_size): # buffer size is always larger, this skips the junk data at its end
                 log_filepath, pos = ReadCString(buffer, buffer_size, pos)
                 if not log_filepath: break # end of stream, rest are zeroes
                 log_id, log_event_flag, log_file_id = struct.unpack("<QIq", buffer[pos:pos+20])
@@ -176,7 +176,7 @@ def ParseData(buffer, logs, source_date, source):
                 num_logs_processed += 1
                 logs.append([log_id, log_event_flag, log_filepath, log_file_id, source_date, source])
         else:
-            while pos < buffer_size:
+            while pos < min(buffer_size, file_size):
                 log_filepath, pos = ReadCString(buffer, buffer_size, pos)
                 if not log_filepath: break # end of stream, rest are zeroes
                 log_id, log_event_flag = struct.unpack("<QI", buffer[pos:pos+12])
