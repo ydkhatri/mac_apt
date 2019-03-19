@@ -268,7 +268,7 @@ def ReadBluetoothPlist(plist):
     try:
         connected_devices = plist['PairedDevices']
     except:
-        log.debug("Paired devices missing, did this device ever touch use a Bluetooth device?")
+        log.debug("Paired devices missing, did this device ever touch/use another Bluetooth device?")
         connected_devices = []
 
     # Gather the data from the DeviceCache key, and put it into an object.
