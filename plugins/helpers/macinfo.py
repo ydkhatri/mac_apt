@@ -427,14 +427,14 @@ class MacInfo:
                         # Perhaps this is manually edited or incorrectly formatted by a non-Apple utility  
                         # that has left whitespaces at the start of file before <?xml tag
                         f.seek(0)
-                        data = f.read()
-                        data = data.lstrip(" \r\n\t")
+                        data = f.read().decode('utf8')
+                        data = data.lstrip(" \r\n\t").encode('utf8')
                         plist = biplist.readPlistFromString(data)
                         return (True, plist, '')
                     except biplist.InvalidPlistException as ex:
                         error = 'Could not read plist: ' + path + " Error was : " + str(ex)
-                except Exception as ex:
-                    error = 'Could not read plist: ' + path + " Error was : " + str(ex)
+                except IOError as ex:
+                    error = 'IOError while reading plist: ' + path + " Error was : " + str(ex)
             else:
                 error = 'Failed to open file'
         except Exception as ex:

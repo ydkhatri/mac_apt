@@ -99,17 +99,16 @@ def Plugin_Start_Standalone(input_files_list, output_params):
     for input_path in input_files_list:
         log.debug("Input file passed was: " + input_path)
         ## Process the input file here ##
-        with open (input_path, 'rb') as fp:
-            if input_path.endswith('SystemVersion.plist'):
-                plist = biplist.readPlist(fp)
-                try:
-                    osx_version = plist.get('ProductVersion')
-                except Exception:
-                    log.error("Error finding this key within the given pList file.")
-
-                WriteMe(osx_version, output_params, input_path)
+        if input_path.endswith('SystemVersion.plist'):
+            success, plist, error = CommonFunctions.ReadPlist(input_path)
+            if success:
+                osx_version = plist.get('ProductVersion', None)
+                if osx_version == None:
+                    log.error('Could not find ProductVersion in plist!')
+                else:
+                    WriteMe(osx_version, output_params, input_path)
             else:
-                log.error('Input file "{}" is not a plist'.format(input_path))
+                log.error('Input file "{}" is not a valid plist. Error opening file was: {}'.format(input_path, error))
 
 if __name__ == '__main__':
     print ("This plugin is a part of a framework and does not run independently on its own!")
