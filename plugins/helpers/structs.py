@@ -149,10 +149,18 @@ BTHeaderRec = "BTHeaderRec" / Struct(
     "attributes" / Int32ub,
     Array(16, "reserved3" / Int32ub)
 )
+'''THIS WAS MODIFIED'''
+'''
 
 HFSUniStr255 = "HFSUniStr255" / Struct(
     "length" / Int16ub,
     "unicode" / String(lambda ctx: ctx["length"] * 2, encoding="utf-16-be") # "unicode", 
+)
+
+'''
+HFSUniStr255 = "HFSUniStr255" / Struct(
+    "length" / Int16ub,
+    "unicode" / PascalString(lambda ctx: ctx["length"] * 2, encoding="utf-16-be") # "unicode",
 )
 
 HFSPlusAttrKey = "HFSPlusAttrKey" / Struct(
@@ -215,6 +223,8 @@ Rect = "Rect" / Struct(
     "bottom" / Int16sb,
     "right" / Int16sb
 )
+'''THIS WAS MODIFIED'''
+'''
 FileInfo = "FileInfo" / Struct(
     "fileType" / String(4), #Int32ub,
     "fileCreator" / String(4), #Int32ub,
@@ -222,6 +232,16 @@ FileInfo = "FileInfo" / Struct(
     Point,
     "reservedField" / Int16ub
 )
+'''
+
+FileInfo = "FileInfo" / Struct(
+    "fileType" / String(4), #Int32ub,
+    "fileCreator" / String(4), #Int32ub,
+    "finderFlags" / Int16ub,
+    Point,
+    "reservedField" / Int16ub
+)
+
 ExtendedFileInfo = "ExtendedFileInfo" / Struct(
     Array(2, "reserved1" / Int16sb),
     "finderDateAdded" / Int32ub, # 4 bytes stores Finder.DateAdded as unix timestamp

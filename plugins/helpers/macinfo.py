@@ -21,10 +21,10 @@ import string
 import time
 import logging
 import ast
-from apfs_reader import *
-from hfs_alt import HFSVolume
-from common import *
-from structs import *
+from plugins.helpers.apfs_reader import *
+from plugins.helpers.hfs_alt import HFSVolume
+from plugins.helpers.common import *
+from plugins.helpers.structs import *
 
 log = logging.getLogger('MAIN.HELPERS.MACINFO')
 

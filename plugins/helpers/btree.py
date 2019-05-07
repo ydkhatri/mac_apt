@@ -16,7 +16,8 @@ THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND 
 
 from __future__ import print_function
 from __future__ import unicode_literals
-from structs import *
+from io import BytesIO
+from plugins.helpers.structs import *
 
 """
 Probably buggy
@@ -92,7 +93,8 @@ class BTree(object):
 
     def readNode(self, nodeNumber):
         node = b""
-        for i in xrange(self.blocksForNode):
+        nodeNumber = int(nodeNumber)
+        for i in range(int(self.blocksForNode)):
             node += self.file.readBlock(nodeNumber * self.blocksForNode + i)
         return node
     
@@ -111,17 +113,17 @@ class BTree(object):
         elif btnode.kind == kBTIndexNode:
             recs = []
             offsets = Array(btnode.numRecords, "off" / Int16ub).parse(node[-2*btnode.numRecords:])
-            for i in xrange(btnode.numRecords):
-                off = offsets[btnode.numRecords-i-1]
+            for i in range(btnode.numRecords):
+                off = offsets[btnode.numRecords - i - 1]
                 k = self.keyStruct.parse(node[off:])
                 off += 2 + k.keyLength
-                k.childNode = Int32ub.parse(node[off:off+4]) # ("nodeNumber")
+                k.childNode = Int32ub.parse(node[off:off + 4])  # ("nodeNumber")
                 recs.append(k)
             return kBTIndexNode, recs
         elif btnode.kind == kBTLeafNode:
             recs = []
             offsets = Array(btnode.numRecords, "off" / Int16ub).parse(node[-2*btnode.numRecords:])
-            for i in xrange(btnode.numRecords):
+            for i in range(btnode.numRecords):
                 off = offsets[btnode.numRecords-i-1]
                 k = self.keyStruct.parse(node[off:])
                 off += 2 + k.keyLength
@@ -138,7 +140,7 @@ class BTree(object):
         type, stuff = self.readBtreeNode(node)
         
         if type == kBTIndexNode: 
-            for i in xrange(len(stuff)):
+            for i in range(len(stuff)):
                 if self.compareKeys(searchKey, stuff[i]) < 0:
                     if i > 0:
                         i = i - 1

@@ -14,11 +14,11 @@
 
 from __future__ import print_function
 from __future__ import unicode_literals
-from pkipplib import pkipplib
+import pkipplib
 import datetime
-from helpers.macinfo import *
-from helpers.writer import *
-from helpers.common import *
+from plugins.helpers.macinfo import *
+from plugins.helpers.writer import *
+from plugins.helpers.common import *
 import logging
 import os
 

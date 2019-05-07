@@ -63,8 +63,8 @@ class ewf_Img_Info(pytsk3.Img_Info):
     self._ewf_handle.close()
 
   def read(self, offset, size):
-    self._ewf_handle.seek(offset)
-    return self._ewf_handle.read(size)
+    self._ewf_handle.seek(int(offset))
+    return self._ewf_handle.read(int(size))
 
   def get_size(self):
     return self._ewf_handle.get_media_size()

@@ -17,7 +17,7 @@ import logging
 import binascii
 import xlsxwriter
 
-from common import *
+from plugins.helpers.common import *
 from enum import IntEnum
 
 log = logging.getLogger('MAIN.HELPERS.WRITER')
@@ -379,7 +379,7 @@ class CsvWriter:
         '''Remove \r \n \t from each item to write'''
         safe_list = []
         for item in row:
-            safe_str = unicode(item)
+            safe_str = str(item)
             try:
                 safe_str = safe_str.replace('\r\n', ',').replace('\r', ',').replace('\n', ',').replace('\t', ' ')
             except Exception as ex:
@@ -389,7 +389,7 @@ class CsvWriter:
 
     def WriteRow(self, row):
         row = self.Sanitize(row)
-        self.file_handle.write("\t".join(map(unicode,row)) + ('\r\n'))
+        self.file_handle.write("\t".join(map(str,row)) + ('\r\n'))
     
     def WriteRows(self, rows):
         for row in rows:

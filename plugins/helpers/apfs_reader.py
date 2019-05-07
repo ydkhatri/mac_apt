@@ -9,15 +9,15 @@
 from __future__ import unicode_literals
 from __future__ import print_function
 from kaitaistruct import __version__ as ks_version, KaitaiStream, BytesIO
-import apfs
+import plugins.helpers.apfs as apfs
 import binascii
 import collections
 import logging
 import lzfse
 import struct
 import tempfile
-from writer import DataType
-from common import *
+from plugins.helpers.writer import DataType
+from plugins.helpers.common import *
 
 import zlib
 

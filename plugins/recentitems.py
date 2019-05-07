@@ -8,19 +8,20 @@
 '''
 from __future__ import print_function
 from __future__ import unicode_literals
+
 import os
 import biplist
 import sys
 import logging
 import struct
-import helpers.ccl_bplist as ccl_bplist
+from plugins.helpers import ccl_bplist
 
 from biplist import *
 from enum import IntEnum
 from binascii import unhexlify
-from helpers.macinfo import *
-from helpers.plist_deserializer import *
-from helpers.writer import *
+from plugins.helpers.macinfo import *
+from plugins.helpers.plist_deserializer import *
+from plugins.helpers.writer import *
 
 
 __Plugin_Name = "RECENTITEMS"
