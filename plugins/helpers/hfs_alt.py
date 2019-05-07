@@ -37,7 +37,7 @@ lzfse_capable = False
 try:
     import lzfse
     lzfse_capable = True
-except (ImportError as Exception):
+except (ImportError, Exception):
     print("lzfse not found. Won't decompress lzfse/lzvn streams")
 
 def write_file(filename,data):
