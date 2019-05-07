@@ -1,20 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <project version="4">
   <component name="ChangeListManager">
-    <list default="true" id="cc9d5ece-b2e5-4f65-8550-1101f9160955" name="Default Changelist" comment="">
-      <change beforePath="$PROJECT_DIR$/lzfse_dll/lzfse.pyd" beforeDir="false" afterPath="$PROJECT_DIR$/lzfse_dll/lzfse.pyd" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/mac_apt.py" beforeDir="false" afterPath="$PROJECT_DIR$/mac_apt.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/plugins/helpers/apfs_reader.py" beforeDir="false" afterPath="$PROJECT_DIR$/plugins/helpers/apfs_reader.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/plugins/helpers/btree.py" beforeDir="false" afterPath="$PROJECT_DIR$/plugins/helpers/btree.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/plugins/helpers/ccl_bplist.py" beforeDir="false" afterPath="$PROJECT_DIR$/plugins/helpers/ccl_bplist.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/plugins/helpers/disk_report.py" beforeDir="false" afterPath="$PROJECT_DIR$/plugins/helpers/disk_report.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/plugins/helpers/hfs_alt.py" beforeDir="false" afterPath="$PROJECT_DIR$/plugins/helpers/hfs_alt.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/plugins/helpers/macinfo.py" beforeDir="false" afterPath="$PROJECT_DIR$/plugins/helpers/macinfo.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/plugins/helpers/structs.py" beforeDir="false" afterPath="$PROJECT_DIR$/plugins/helpers/structs.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/plugins/helpers/writer.py" beforeDir="false" afterPath="$PROJECT_DIR$/plugins/helpers/writer.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/plugins/printjobs.py" beforeDir="false" afterPath="$PROJECT_DIR$/plugins/printjobs.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/plugins/recentitems.py" beforeDir="false" afterPath="$PROJECT_DIR$/plugins/recentitems.py" afterDir="false" />
-    </list>
+    <list default="true" id="cc9d5ece-b2e5-4f65-8550-1101f9160955" name="Default Changelist" comment="" />
     <option name="EXCLUDED_CONVERTED_TO_IGNORED" value="true" />
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -71,8 +58,8 @@
       <file pinned="false" current-in-tab="true">
         <entry file="file://$PROJECT_DIR$/plugins/helpers/btree.py">
           <provider selected="true" editor-type-id="text-editor">
-            <state relative-caret-position="311">
-              <caret line="114" column="17" lean-forward="true" selection-start-line="114" selection-start-column="17" selection-end-line="114" selection-end-column="17" />
+            <state relative-caret-position="102">
+              <caret line="114" column="17" selection-start-line="114" selection-start-column="17" selection-end-line="114" selection-end-column="17" />
               <folding>
                 <element signature="e#1515#1552#0" expanded="true" />
               </folding>
@@ -191,6 +178,7 @@
     </panes>
   </component>
   <component name="PropertiesComponent">
+    <property name="SHARE_PROJECT_CONFIGURATION_FILES" value="true" />
     <property name="last_opened_file_path" value="$USER_HOME$/Downloads/mac_apt-master" />
     <property name="settings.editor.selected.configurable" value="com.jetbrains.python.configuration.PyActiveSdkModuleConfigurable" />
   </component>
@@ -244,7 +232,6 @@
   </component>
   <component name="ToolWindowManager">
     <frame x="-8" y="-8" width="1936" height="1056" extended-state="6" />
-    <editor active="true" />
     <layout>
       <window_info id="Favorites" side_tool="true" />
       <window_info content_ui="combo" id="Project" order="0" visible="true" weight="0.24973656" />
@@ -255,7 +242,7 @@
       <window_info anchor="bottom" id="Event Log" sideWeight="0.50052685" side_tool="true" weight="0.59371614" />
       <window_info anchor="bottom" id="Message" order="0" />
       <window_info anchor="bottom" id="Find" order="1" weight="0.32936078" />
-      <window_info active="true" anchor="bottom" id="Run" order="2" sideWeight="0.49947312" visible="true" weight="0.17009751" />
+      <window_info anchor="bottom" id="Run" order="2" sideWeight="0.49947312" weight="0.7399783" />
       <window_info anchor="bottom" id="Debug" order="3" weight="0.45937163" />
       <window_info anchor="bottom" id="Cvs" order="4" weight="0.25" />
       <window_info anchor="bottom" id="Inspection" order="5" weight="0.4" />
@@ -370,8 +357,8 @@
     </entry>
     <entry file="file://$PROJECT_DIR$/plugins/helpers/btree.py">
       <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="311">
-          <caret line="114" column="17" lean-forward="true" selection-start-line="114" selection-start-column="17" selection-end-line="114" selection-end-column="17" />
+        <state relative-caret-position="102">
+          <caret line="114" column="17" selection-start-line="114" selection-start-column="17" selection-end-line="114" selection-end-column="17" />
           <folding>
             <element signature="e#1515#1552#0" expanded="true" />
           </folding>
