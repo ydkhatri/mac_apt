@@ -6,15 +6,15 @@
    terms of the MIT License.
    
 '''
-from __future__ import print_function
+
 #from __future__ import unicode_literals
 import os
 import logging
 import struct
 
 from biplist import *
-from helpers.macinfo import *
-from helpers.writer import *
+from plugins.helpers.macinfo import *
+from plugins.helpers.writer import *
 
 __Plugin_Name = "INETACCOUNTS"
 __Plugin_Friendly_Name = "Internet Accounts"
@@ -157,7 +157,7 @@ def Plugin_Start(mac_info):
                 ReadMobileMeAccountPlist(plist, accounts, plist_path, user.user_name)
         
         # Process Sqlite db
-        for version in xrange(1, 5):
+        for version in range(1, 5):
             sqlite_path = account_sqlite_rel_path.format(user.home_dir, version)
             if mac_info.IsValidFilePath(sqlite_path):
                 mac_info.ExportFile(sqlite_path, __Plugin_Name, user.user_name + "_")
