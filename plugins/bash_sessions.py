@@ -6,13 +6,13 @@
    terms of the MIT License.
    
 '''
-from __future__ import print_function
-from __future__ import unicode_literals
+
+
 import os
 import binascii
 import logging
-from helpers.macinfo import *
-from helpers.writer import *
+from plugins.helpers.macinfo import *
+from plugins.helpers.writer import *
 
 __Plugin_Name = "BASHSESSIONS" # Cannot have spaces, and must be all caps!
 __Plugin_Friendly_Name = "Bash Sessions & History"
@@ -119,7 +119,7 @@ def ProcessBashSessionsForUser(mac_info, bash_sessions, source_folder, user_name
                 session.all_content = ''.join(content)
                 # Get .historynew file
                 try:
-                    historynew_entry = filter(lambda x: x['name'] == session.uuid + '.historynew', files_list)[0]
+                    historynew_entry = [x for x in files_list if x['name'] == session.uuid + '.historynew'][0]
                     if historynew_entry != None:
                         session.start_date = historynew_entry['dates']['cr_time']
                         if historynew_entry['size'] > 0:

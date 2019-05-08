@@ -6,14 +6,14 @@
    terms of the MIT License.
    
 '''
-from __future__ import print_function
-from __future__ import unicode_literals
+
+
 import os
 import sqlite3
 import logging
-from helpers.macinfo import *
-from helpers.writer import *
-from helpers.common import *
+from plugins.helpers.macinfo import *
+from plugins.helpers.writer import *
+from plugins.helpers.common import *
 
 
 
@@ -53,6 +53,7 @@ def GetVolumeInfo(mac_info):
         basic_data.append(['APFS', 'Created Time', CommonFunctions.ReadAPFSTime(vol.time_created), 'Created date and time', ''])
         basic_data.append(['APFS', 'Updated Time', CommonFunctions.ReadAPFSTime(vol.time_updated), 'Last updated date and time', ''])
     else:
+
         hfs_info = mac_info.hfs_native.GetVolumeInfo()
         basic_data.append(['HFS', 'Block Size', hfs_info.block_size,'Volume Block size (internal)', ''])
         basic_data.append(['HFS', 'Created date', hfs_info.date_created_local_time,'Volume created date (in local time)', ''])
@@ -157,7 +158,7 @@ def GetLastLoggedInUser(mac_info):
     success, plist, error_message = mac_info.ReadPlist(loginwindow_plist_path)
     if success:
         try:
-            for item, value in plist.items():
+            for item, value in list(plist.items()):
                 if item in ['autoLoginUser','GuestEnabled','lastUserName']:
                     basic_data.append(['USER-LOGIN', item, value, '', loginwindow_plist_path])
                 elif item == 'lastUser':
@@ -167,7 +168,7 @@ def GetLastLoggedInUser(mac_info):
                 elif item.startswith('Optimizer') or item in ['SHOWFULLNAME']:
                     continue
                 elif item == 'AccountInfo':
-                    for k, v in value.items():
+                    for k, v in list(value.items()):
                         basic_data.append(['USER-LOGIN', item + '.' +  k, str(v), '?', loginwindow_plist_path])
                 else:
                     basic_data.append(['USER-LOGIN', item, str(value), 'unknown', loginwindow_plist_path])
@@ -197,7 +198,7 @@ def GetModelAndHostNameFromPreference(mac_info):
         except Exception: log.info('/System/System/ComputerName not found in ' + preference_plist_path)
         try:
             other_host_names = plist['System']['Network']['HostNames']
-            for k,v in other_host_names.items():
+            for k,v in list(other_host_names.items()):
                 basic_data.append(['SYSTEM', k, v, '', preference_plist_path])
         except Exception: log.info('/System/Network/HostNames not found in ' + preference_plist_path)
     else:

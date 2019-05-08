@@ -43,7 +43,7 @@ class CommonFunctions:
         '''Returns datetime object, or empty string upon error'''
         if mac_abs_time not in ( 0, None, ''):
             try:
-                if type(mac_abs_time) in (str, unicode):
+                if isinstance(mac_abs_time, str):
                     mac_abs_time = float(mac_abs_time)
                 if mac_abs_time > 0xFFFFFFFF: # more than 32 bits, this should be nano-second resolution timestamp (seen only in HighSierra)
                     return datetime.datetime(2001, 1, 1) + datetime.timedelta(seconds=mac_abs_time/1000000000.)
@@ -57,7 +57,7 @@ class CommonFunctions:
         '''Returns datetime object, or empty string upon error'''
         if mac_hfs_time not in ( 0, None, ''):
             try:
-                if type(mac_hfs_time) in (str, unicode):
+                if isinstance(mac_hfs_time, str):
                     mac_hfs_time = float(mac_hfs_time)
                 return datetime.datetime(1904, 1, 1) + datetime.timedelta(seconds=mac_hfs_time)
             except Exception as ex:
@@ -69,7 +69,7 @@ class CommonFunctions:
         '''Returns datetime object, or empty string upon error'''
         if mac_apfs_time not in ( 0, None, ''):
             try:
-                if type(mac_apfs_time) in (str, unicode):
+                if isinstance(mac_apfs_time, str):
                     mac_apfs_time = float(mac_apfs_time)
                 return datetime.datetime(1970, 1, 1) + datetime.timedelta(seconds=mac_apfs_time/1000000000.)
             except Exception as ex:
@@ -81,7 +81,7 @@ class CommonFunctions:
         '''Returns datetime object, or empty string upon error'''
         if unix_time not in ( 0, None, ''):
             try:
-                if type(unix_time) in (str, unicode):
+                if isinstance(unix_time, str):
                     unix_time = float(unix_time)
                 return datetime.datetime(1970, 1, 1) + datetime.timedelta(seconds=unix_time)
             except Exception as ex:

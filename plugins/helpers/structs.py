@@ -160,7 +160,7 @@ HFSUniStr255 = "HFSUniStr255" / Struct(
 '''
 HFSUniStr255 = "HFSUniStr255" / Struct(
     "length" / Int16ub,
-    "unicode" / PascalString(lambda ctx: ctx["length"] * 2, encoding="utf-16-be") # "unicode",
+    "unicode" / String(lambda ctx: ctx["length"] * 2, encoding="utf-16-be") # "unicode",
 )
 
 HFSPlusAttrKey = "HFSPlusAttrKey" / Struct(

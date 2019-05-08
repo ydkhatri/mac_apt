@@ -37,7 +37,7 @@ lzfse_capable = False
 try:
     import lzfse
     lzfse_capable = True
-except (ImportError, Exception):
+except ImportError as Exception:
     print("lzfse not found. Won't decompress lzfse/lzvn streams")
 
 def write_file(filename,data):
@@ -49,8 +49,8 @@ def lzvn_decompress(compressed_stream, compressed_size, uncompressed_size): #TOD
     '''Adds Prefix and Postfix bytes as required by decompressor, 
         then decompresses and returns uncompressed bytes buffer
     '''
-    header = 'bvxn' + struct.pack('<I', uncompressed_size) + struct.pack('<I', compressed_size)
-    footer = 'bvx$'
+    header = b'bvxn' + struct.pack('<I', uncompressed_size) + struct.pack('<I', compressed_size)
+    footer = b'bvx$'
     return lzfse.decompress(header + compressed_stream + footer)
 
 class HFSFile(object):

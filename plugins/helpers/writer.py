@@ -541,8 +541,8 @@ class ExcelWriter:
         except Exception as ex:
             log.exception('Error trying to add sheet for overflow data (>1 million rows)')
         try:
-            row_unicode = map(unicode, row)
-            for item in row_unicode:
+            row_str = map(str, row)
+            for item in row_str:
                 try:
                     if item == '' or row[column_index] == None: pass
                         #self.sheet.write(self.row_index, column_index, '')
@@ -558,7 +558,7 @@ class ExcelWriter:
 
             self.row_index += 1
             self.current_sheet_info.max_row_index = self.row_index - 1
-            self.current_sheet_info.StoreColWidth(row_unicode)
+            self.current_sheet_info.StoreColWidth(row_str)
             
         except Exception as ex:
             log.exception('Error writing excel row {}'.format(self.row_index))

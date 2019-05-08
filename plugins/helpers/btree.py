@@ -34,8 +34,8 @@ class BTree(object):
         self.header = BTHeaderRec.parse(block0[BTNodeDescriptor.sizeof():])
         #TODO: do more testing when nodeSize != blockSize
         self.nodeSize = self.header.nodeSize
-        self.nodesInBlock = file.blockSize / self.header.nodeSize
-        self.blocksForNode = self.header.nodeSize / file.blockSize
+        self.nodesInBlock = file.blockSize // self.header.nodeSize
+        self.blocksForNode = self.header.nodeSize // file.blockSize
         #print (file.blockSize , self.header.nodeSize)
         self.lastRecordNumber = 0
         type, (hdr, maprec) = self.readBtreeNode(0)
@@ -43,7 +43,7 @@ class BTree(object):
         self.compare_case_sensitive = self.header.keyCompareType == kHFSBinaryCompare # 0xBC
 
     def isNodeInUse(self, nodeNumber):
-        thisByte = ord(self.maprec[nodeNumber / 8])
+        thisByte = ord(self.maprec[nodeNumber // 8])
         return (thisByte & (1 << (7 - (nodeNumber % 8)))) != 0
     
     def readEmptySpace(self):
@@ -66,8 +66,8 @@ class BTree(object):
            1. Nulls (empty strings) end up first in sort, but should be last in HFS implementation
            2. Unicode handling is not addressed (Need to port Apple's FastUnicodeCompare())
         '''
-        k1_ci = [(item.lower() if (type(item)==unicode or type(item)==str) else item) for item in k1]
-        k2_ci = [(item.lower() if (type(item)==unicode or type(item)==str) else item) for item in k2]
+        k1_ci = [(item.lower() if (type(item)==str) else item) for item in k1]
+        k2_ci = [(item.lower() if (type(item)==str) else item) for item in k2]
         if operation == '==':
             return k1_ci == k2_ci
         elif operation == '<':
@@ -95,13 +95,13 @@ class BTree(object):
         node = b""
         nodeNumber = int(nodeNumber)
         for i in range(int(self.blocksForNode)):
-            node += self.file.readBlock(nodeNumber * self.blocksForNode + i)
+            node += self.file.readBlock((nodeNumber * int(self.blocksForNode)) + i)
         return node
     
     def readBtreeNode(self, nodeNumber):
         self.lastnodeNumber = nodeNumber
-        node = memoryview(self.readNode(nodeNumber))
-        #node = self.readNode(nodeNumber)
+        #node = memoryview(self.readNode(nodeNumber))
+        node = self.readNode(nodeNumber)
         self.lastbtnode = btnode = BTNodeDescriptor.parse(node)
 
         if btnode.kind == kBTHeaderNode:
