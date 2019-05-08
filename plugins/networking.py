@@ -6,15 +6,16 @@
    terms of the MIT License.
    
 '''
-from __future__ import print_function
-from __future__ import unicode_literals
+
+
 import os
-from helpers.macinfo import *
-from helpers.writer import *
+from plugins.helpers.macinfo import *
+from plugins.helpers.writer import *
 import logging
 import biplist
 import binascii
 import sys
+
 
 __Plugin_Name = "NETWORKING" # Cannot have spaces, and must be all caps!
 __Plugin_Friendly_Name = "Networking"
@@ -61,11 +62,11 @@ def GetNetworkInterface2Info(mac_info):
     success, plist, error_message = mac_info.ReadPlist(preference_plist_path)
     if success:
         try:
-            for uuid, interface in plist['NetworkServices'].items():
+            for uuid, interface in list(plist['NetworkServices'].items()):
                 interface_info = { 'UUID': uuid, 'Source': preference_plist_path }
-                for item, value in interface.items():
+                for item, value in list(interface.items()):
                     if item == 'DNS' and value: log.info('Interface {} has DNS info as : {}'.format(uuid, value))
-                    elif item == 'UserDefinedName' or item == 'Modem' or item == 'PPP': interface_info[item] = unicode(value)
+                    elif item == 'UserDefinedName' or item == 'Modem' or item == 'PPP': interface_info[item] = str(value)
                     elif item == 'Proxies':
                         try:
                             exceptions = value['ExceptionsList']
@@ -83,12 +84,12 @@ def GetNetworkInterface2Info(mac_info):
                             interface_info['IPv6.ConfigMethod'] = method
                         except Exception: log.error('/NetworkServices/' + uuid + '/IPv6/ConfigMethod not found in plist ' + preference_plist_path)                        
                     elif item == 'Interface':
-                        for k, v in value.items():
+                        for k, v in list(value.items()):
                             if k in ['DeviceName', 'Hardware', 'Type', 'UserDefinedName']:  interface_info[k] = v
                             else:
                                 log.info('Found unknown data in plist at /NetworkServices/' + uuid + '/Interface/' + k + ' Value=' + str(v))
                     elif item == 'SMB':
-                        for k, v in value.items():
+                        for k, v in list(value.items()):
                             if k in ['NetBIOSName', 'Workgroup', 'Type', 'UserDefinedName']:  interface_info['SMB.'+ k] = v
                             else:
                                 log.info('Found unknown data in plist at /NetworkServices/' + uuid + '/SMB/' + k + ' Value=' + v)
@@ -120,19 +121,20 @@ def GetNetworkInterfaceInfo(mac_info):
         try:
             log.info("Model = " + plist['Model'])
         except Exception: pass
-        for category, cat_array in plist.iteritems(): #value is another array in this dict
+        for category, cat_array in plist.items(): #value is another array in this dict
             if not category.startswith('Interface'): 
                 if category != 'Model': log.debug('Skipping ' + category)
                 continue
             for interface in cat_array:
                 interface_info = {'Category':category, 'Source':path }
-                for item, value in interface.iteritems(): # .items() for Python 3
+                for item, value in interface.items(): # .items() for Python 3
                     if item in ['Active','BSD Name','IOBuiltin','IOInterfaceNamePrefix','IOInterfaceType',
                                 'IOInterfaceUnit','IOPathMatch','SCNetworkInterfaceType']:
                         interface_info[item] = value
                     elif item == 'IOMACAddress':  # convert binary blob to MAC address
-                        data = [(binascii.hexlify(c).upper() if PYTHON_VER == 2 else binascii.hexlify(c).decode("ascii").upper()) for c in value]
-                        interface_info[item] = ":".join(data)
+                        data = ':'.join(value.hex()[i:i + 2] for i in range(0, len(value.hex()), 2))
+                        interface_info[item] = data.upper()
+
                     elif item == 'SCNetworkInterfaceInfo':
                         try: interface_info['SCNetworkInterfaceInfo'] = value['UserDefinedName']
                         except Exception: pass
@@ -164,12 +166,12 @@ def GetDhcpInfo(mac_info):
                                         'Interface':if_name,
                                         'MAC_Address':mac_address }
 
-                    for item, value in plist.iteritems(): # .items() for Python 3
+                    for item, value in list(plist.items()): # .items() for Python 3
                         if item in ['IPAddress','LeaseLength','LeaseStartDate','PacketData','RouterIPAddress','SSID']:
                             interface_info[item] = value
                         elif item == 'RouterHardwareAddress':  # convert binary blob to MAC address
-                            data = [(binascii.hexlify(c).upper() if PYTHON_VER == 2 else binascii.hexlify(c).decode("ascii").upper()) for c in value]
-                            interface_info[item] = ":".join(data)
+                            data = ':'.join(value.hex()[i:i+2] for i in range(0,len(value.hex()),2))
+                            interface_info[item] = data.upper()
                         else:
                             log.info("Found unknown item in plist: ITEM=" + item + " VALUE=" + str(value))
                     dhcp_interfaces.append(interface_info)
