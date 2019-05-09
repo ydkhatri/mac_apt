@@ -13,12 +13,12 @@ import biplist
 import sys
 import logging
 import struct
-import helpers.ccl_bplist as ccl_bplist
+import plugins.helpers.ccl_bplist as ccl_bplist
 
 from biplist import *
 from enum import IntEnum
-from helpers.macinfo import *
-from helpers.writer import *
+from plugins.helpers.macinfo import *
+from plugins.helpers.writer import *
 
 
 __Plugin_Name = "SAFARI"
