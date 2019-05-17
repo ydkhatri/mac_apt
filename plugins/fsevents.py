@@ -6,11 +6,11 @@
    terms of the MIT License.
 
 '''
-from __future__ import print_function
-from __future__ import unicode_literals
 
-from helpers.macinfo import *
-from helpers.writer import *
+
+
+from plugins.helpers.macinfo import *
+from plugins.helpers.writer import *
 import logging
 import zlib
 import struct
@@ -126,7 +126,7 @@ def PrintAll(logs, output_params):
 def GetEventFlagsString(flags, flag_values):
     '''Get string names of all flags set'''
     list_flags = []
-    for k, v in flag_values.items():
+    for k, v in list(flag_values.items()):
         if (k & flags) != 0:
             list_flags.append(v)
     return '|'.join(list_flags)
@@ -137,16 +137,20 @@ def ReadCString(buffer, buffer_size, start_pos):
     Returns tuple (string, end_pos)
     '''
     end_pos = start_pos
-    string = b""
+    string = ""
     ch = ''
     while end_pos < buffer_size:
-        ch = buffer[end_pos]
-        if ch == b'\x00':
+        ch = str(chr(buffer[end_pos]))
+
+        if ch == '\x00':
             break
         else:
             end_pos += 1
             string += ch
-    return string.decode('utf-8'), end_pos + 1
+    x = string
+    y = string.encode("utf-8")
+
+    return string, end_pos + 1
 
 def ParseData(buffer, logs, source_date, source):
     '''Process buffer to extract log data and return number of logs processed'''
@@ -157,11 +161,12 @@ def ParseData(buffer, logs, source_date, source):
         return
     
     header_sig, unknown, file_size = struct.unpack("<4sII", buffer[0:12])
-    is_version2 = (header_sig == '2SLD') 
-    is_version_unknown = (not is_version2) and (header_sig != '1SLD')
+    #Changed header_sig encoding so that it would actually match true against a string
+    is_version2 = (str(header_sig, 'utf-8') == '2SLD')
+    is_version_unknown = (not is_version2) and (str(header_sig, 'utf-8') != '1SLD')
 
     if is_version_unknown:
-        log.debug("Unsupported version, header = {}".format(header_sig))
+        log.debug("Unsupported version, header = {}".format(str(header_sig)))
         return
     
     pos = 12

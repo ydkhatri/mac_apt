@@ -6,7 +6,7 @@
    terms of the MIT License.
    
 '''
-from __future__ import unicode_literals
+
 import pytsk3
 import traceback
 import biplist
@@ -21,10 +21,10 @@ import string
 import time
 import logging
 import ast
-from apfs_reader import *
-from hfs_alt import HFSVolume
-from common import *
-from structs import *
+from plugins.helpers.apfs_reader import *
+from plugins.helpers.hfs_alt import HFSVolume
+from plugins.helpers.common import *
+from plugins.helpers.structs import *
 
 log = logging.getLogger('MAIN.HELPERS.MACINFO')
 
@@ -104,7 +104,16 @@ class NativeHfsParser:
             hfs_info.is_HFSX = header.signature == 0x4858
             hfs_info.block_size = header.blockSize
             hfs_info.version = 0
-            hfs_info.last_mounted_version = ''.join(struct.unpack("<4c", struct.pack(">I", header.lastMountedVersion))) # ugly, is there a better way?
+            hfs_info.last_mounted_version = struct.unpack("<4c", struct.pack(">I", header.lastMountedVersion))# ugly, is there a better way?
+            ''' 
+            Had to add this because the above would return a tuple of bytes which would then cause plugins calling GetVolumeInfo
+            and assigning it to a variable would cause an exception here and return None
+            '''
+            lmv = ""
+            for singleByte in hfs_info.last_mounted_version:
+                singleChar = singleByte.decode('utf-8')
+                lmv += singleChar
+            hfs_info.last_mounted_version = lmv
             hfs_info.date_created_local_time = CommonFunctions.ReadMacHFSTime(header.createDate)
             hfs_info.date_modified = CommonFunctions.ReadMacHFSTime(header.modifyDate)
             hfs_info.date_backup = CommonFunctions.ReadMacHFSTime(header.backupDate)
@@ -671,7 +680,7 @@ class MacInfo:
         '''
         try:
             unsafe_chars = '?<>/\:*"!' if os.name == 'nt' else '/'
-            return filter(lambda c: c not in unsafe_chars, name)
+            return ''.join([c for c in name if c not in unsafe_chars])
         except:
             pass
         return "_error_no_name_"

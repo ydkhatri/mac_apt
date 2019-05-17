@@ -15,8 +15,8 @@ import logging
 import struct
 
 from biplist import *
-from helpers.macinfo import *
-from helpers.writer import *
+from plugins.helpers.macinfo import *
+from plugins.helpers.writer import *
 
 __Plugin_Name = "SPOTLIGHTSHORTCUTS"
 __Plugin_Friendly_Name = "Spotlight shortcuts"

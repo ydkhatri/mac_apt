@@ -6,16 +6,16 @@
    terms of the MIT License.
    
 '''
-from __future__ import print_function
+
 #from __future__ import unicode_literals
 import os
 import logging
 import struct
-import helpers.spotlight_parser as spotlight_parser
+from plugins.helpers import spotlight_parser as spotlight_parser
 
 from biplist import *
-from helpers.macinfo import *
-from helpers.writer import *
+from plugins.helpers.macinfo import *
+from plugins.helpers.writer import *
 
 __Plugin_Name = "SPOTLIGHT"
 __Plugin_Friendly_Name = "Spotlight"
@@ -42,12 +42,12 @@ def ProcessStoreItem(item):
         data_dict['Flags'] = item.flags
         data_dict['Parent_ID'] = item.parent_id
         data_dict['Date_Updated'] = item.ConvertEpochToUtcDateStr(item.date_updated)
-        for k, v in item.meta_data_dict.items():
+        for k, v in list(item.meta_data_dict.items()):
             orig_debug = v
             if type(v) == list:
                 if len(v) == 1:
                     v = v[0]
-                    if type(v) in (str, unicode):
+                    if type(v) in (str, str):
                         if v.endswith('\x16\x02'):
                             v = v[:-2]
                     if type(v) == str: v = v.decode('utf-8')
@@ -78,7 +78,7 @@ def Get_Column_Info(store):
     '''Returns a list of columns with data types for use with writer'''
     data_info = [ ('ID',DataType.INTEGER),('Flags',DataType.INTEGER),('Parent_ID',DataType.INTEGER),
                   ('Date_Updated',DataType.TEXT) ]
-    for _, prop in store.properties.items():
+    for _, prop in list(store.properties.items()):
         # prop = [name, prop_type, value_type]
         if prop[0] in ('_kMDXXXX___DUMMY', 'kMDStoreAccumulatedSizes') : continue # skip this
         if prop[2] in [0, 2, 6, 7]:
@@ -232,7 +232,7 @@ def WriteFullPaths(items, all_items, output_paths_file, fullpath_writer):
         all_items = dictionary of items to recursively search full paths
     '''
     path_list = []
-    for k,v in items.items():
+    for k,v in list(items.items()):
         name = v[2]
         if name:
             fullpath = spotlight_parser.RecursiveGetFullPath(v, all_items)
@@ -272,7 +272,7 @@ def ReadVolumeConfigPlist(plist, output_params, file_path):
     stores = plist.get('Stores', None)
     if stores:
         log.info (str(len(stores)) + " store(s) found")
-        for k, v in stores.items():
+        for k, v in list(stores.items()):
             store_uuid = k
             config = [ store_uuid, v.get('CreationDate', None),
                         v.get('CreationVersion', ''), v.get('IndexVersion', 0),

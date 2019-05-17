@@ -27,9 +27,9 @@ import struct
 import zlib
 import pytsk3
 import logging
-from common import CommonFunctions
-from btree import AttributesTree, CatalogTree, ExtentsOverflowTree
-from structs import *
+from plugins.helpers.common import CommonFunctions
+from plugins.helpers.btree import AttributesTree, CatalogTree, ExtentsOverflowTree
+from plugins.helpers.structs import *
 
 log = logging.getLogger('MAIN.HELPERS.HFS_ALT')
 lzfse_capable = False
@@ -37,7 +37,7 @@ lzfse_capable = False
 try:
     import lzfse
     lzfse_capable = True
-except ImportError, Exception:
+except ImportError as Exception:
     print("lzfse not found. Won't decompress lzfse/lzvn streams")
 
 def write_file(filename,data):
@@ -49,8 +49,8 @@ def lzvn_decompress(compressed_stream, compressed_size, uncompressed_size): #TOD
     '''Adds Prefix and Postfix bytes as required by decompressor, 
         then decompresses and returns uncompressed bytes buffer
     '''
-    header = 'bvxn' + struct.pack('<I', uncompressed_size) + struct.pack('<I', compressed_size)
-    footer = 'bvx$'
+    header = b'bvxn' + struct.pack('<I', uncompressed_size) + struct.pack('<I', compressed_size)
+    footer = b'bvx$'
     return lzfse.decompress(header + compressed_stream + footer)
 
 class HFSFile(object):
@@ -78,7 +78,7 @@ class HFSFile(object):
 
     def copyOutFile(self, outputfile, truncate=True):
         f = open(outputfile, "wb")
-        for i in xrange(self.totalBlocks):
+        for i in range(self.totalBlocks):
             f.write(self.readBlock(i))
         if truncate:
             f.truncate(self.logicalSize)
@@ -240,11 +240,12 @@ class HFSVolume(object):
         return struct.pack(">LL", self.header.finderInfo[6], self.header.finderInfo[7])
 
     def isBlockInUse(self, block):
-        thisByte = ord(self.allocationBitmap[block / 8])
+        block = int(block)
+        thisByte = self.allocationBitmap[block // 8]
         return (thisByte & (1 << (7 - (block % 8)))) != 0
 
     def unallocatedBlocks(self):
-        for i in xrange(self.header.totalBlocks):
+        for i in range(self.header.totalBlocks):
             if not self.isBlockInUse(i):
                 yield i, self.read(i*self.blockSize, self.blockSize)
 
