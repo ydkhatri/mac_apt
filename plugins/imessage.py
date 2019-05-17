@@ -6,8 +6,6 @@
 
 '''
 
-from __future__ import print_function
-#from __future__ import unicode_literals
 import sqlite3
 from helpers.macinfo import *
 from helpers.writer import *

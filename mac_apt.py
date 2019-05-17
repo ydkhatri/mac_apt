@@ -13,11 +13,9 @@
    For usage information, run: 
      python mac_apt.py -h
 
-   NOTE: This currently works only on Python2.
+   NOTE: This currently works only on Python3.6 or higher.
    
 '''
-from __future__ import print_function
-from __future__ import unicode_literals
 
 import sys
 import os

@@ -6,8 +6,7 @@
    terms of the MIT License.
    
 '''
-from __future__ import print_function
-#from __future__ import unicode_literals # sqlite does not like
+
 import os
 import biplist
 import sys

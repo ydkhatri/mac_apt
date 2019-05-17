@@ -15,9 +15,8 @@
    For usage information, run: 
      python mac_apt_singleplugin.py -h
   
-   NOTE: This currently works only on Python2.
+   NOTE: This currently works only on Python3.6 or higher.
 '''
-from __future__ import print_function
 
 import sys
 import os

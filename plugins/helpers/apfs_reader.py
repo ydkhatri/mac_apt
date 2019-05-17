@@ -6,8 +6,7 @@
    terms of the MIT License.
 
 '''
-from __future__ import unicode_literals
-from __future__ import print_function
+
 from kaitaistruct import __version__ as ks_version, KaitaiStream, BytesIO
 import plugins.helpers.apfs as apfs
 import binascii

@@ -13,8 +13,6 @@
    Create better output, html in xl is not readable.
    Export attachments contained within individual notes.
 '''
-from __future__ import print_function
-#from __future__ import unicode_literals # Must disable for sqlite.row_factory
 
 import os
 from helpers.macinfo import *

@@ -12,8 +12,6 @@
    print job data located at /private/var/spool/cups
 '''
 
-from __future__ import print_function
-from __future__ import unicode_literals
 import pkipplib
 import datetime
 from plugins.helpers.macinfo import *

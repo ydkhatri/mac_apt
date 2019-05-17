@@ -19,8 +19,6 @@ THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND 
 # and is now a part of the mac_apt framework
 #
 
-#from __future__ import unicode_literals
-from __future__ import print_function
 import os
 import sys
 import struct

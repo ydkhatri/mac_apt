@@ -6,8 +6,6 @@
    terms of the MIT License.
 
 '''
-from __future__ import print_function
-#from __future__ import unicode_literals # Must disable for sqlite.row_factory
 
 from helpers.macinfo import *
 from helpers.writer import *

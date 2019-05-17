@@ -13,9 +13,6 @@
    <YourOutputFolder>/Exports/IDEVICEBACKUPS/<USER>_<BACKUP_UUID>
 '''
 
-from __future__ import print_function
-from __future__ import unicode_literals
-
 from helpers.macinfo import *
 from helpers.writer import *
 from helpers.common import *

@@ -6,8 +6,7 @@
    terms of the MIT License.
    
 '''
-from __future__ import print_function
-#from __future__ import unicode_literals <-- left out as sqlite3 has issues with it !
+
 import codecs
 import sqlite3
 import sys

@@ -13,8 +13,6 @@
    written by Mike Ryan to parse ClassOfDevice. 
 
 '''
-from __future__ import print_function
-from __future__ import unicode_literals
 
 from helpers.macinfo import *
 from helpers.writer import *

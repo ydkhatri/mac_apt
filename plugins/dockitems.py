@@ -10,8 +10,6 @@
    Reads the dock plist file for each user.
 
 '''
-from __future__ import print_function
-from __future__ import unicode_literals
 
 import logging
 from biplist import *

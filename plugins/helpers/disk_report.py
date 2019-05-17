@@ -6,9 +6,6 @@
    terms of the MIT License.
    
 '''
-from __future__ import print_function
-from __future__ import unicode_literals
-from __future__ import division
 
 import pytsk3
 from plugins.helpers.writer import *
