@@ -6,15 +6,15 @@
    terms of the MIT License.
    
 '''
-from __future__ import print_function
-from __future__ import unicode_literals
+#from __future__ import print_function
+#from __future__ import unicode_literals
 
 import os
 import biplist
 import sys
 import logging
 import struct
-from plugins.helpers import ccl_bplist
+import plugins.helpers.ccl_bplist as ccl_bplist
 
 from biplist import *
 from enum import IntEnum
