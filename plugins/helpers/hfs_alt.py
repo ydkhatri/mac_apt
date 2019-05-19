@@ -94,7 +94,7 @@ class HFSFile(object):
         '''Write to output_file if valid, else return a buffer of data'''
         r = b""
         bs = self.volume.blockSize
-        blocks_max = 52428800 / bs  # 50MB
+        blocks_max = 52428800 // bs  # 50MB
         for extent in self.extents:
             if extent.blockCount == 0: continue
             #if not self.deleted and self.fileID != kHFSAllocationFileID and not self.volume.isBlockInUse(lba):

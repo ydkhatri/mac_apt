@@ -149,15 +149,7 @@ BTHeaderRec = "BTHeaderRec" / Struct(
     "attributes" / Int32ub,
     Array(16, "reserved3" / Int32ub)
 )
-'''THIS WAS MODIFIED'''
-'''
 
-HFSUniStr255 = "HFSUniStr255" / Struct(
-    "length" / Int16ub,
-    "unicode" / String(lambda ctx: ctx["length"] * 2, encoding="utf-16-be") # "unicode", 
-)
-
-'''
 HFSUniStr255 = "HFSUniStr255" / Struct(
     "length" / Int16ub,
     "unicode" / String(lambda ctx: ctx["length"] * 2, encoding="utf-16-be") # "unicode",
@@ -223,16 +215,6 @@ Rect = "Rect" / Struct(
     "bottom" / Int16sb,
     "right" / Int16sb
 )
-'''THIS WAS MODIFIED'''
-'''
-FileInfo = "FileInfo" / Struct(
-    "fileType" / String(4), #Int32ub,
-    "fileCreator" / String(4), #Int32ub,
-    "finderFlags" / Int16ub,
-    Point,
-    "reservedField" / Int16ub
-)
-'''
 
 FileInfo = "FileInfo" / Struct(
     "fileType" / String(4), #Int32ub,
@@ -341,7 +323,7 @@ HFSPlusCmpfRsrcHead = "HFSPlusCmpfRsrcHead" / Struct(
 
 HFSPlusCmpfLZVNRsrcHead = "HFSPlusCmpfLZVNRsrcHead" / Struct(
     "headerSize" / Int32ul,
-    "chunkOffsets" / Array(lambda ctx:ctx["headerSize"]/4 - 1, Int32ul)
+    "chunkOffsets" / Array(lambda ctx:ctx["headerSize"]//4 - 1, Int32ul)
 )
 
 HFSPlusCmpfRsrcBlock = "HFSPlusCmpfRsrcBlock" / Struct(

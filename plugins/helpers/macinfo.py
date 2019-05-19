@@ -937,11 +937,11 @@ class ApfsMacInfo(MacInfo):
 
     def GetFileSize(self, full_path, error=None):
         try:
-            apfs_file_meta = self.osx_FS.GetFileMetadataByPath(self.apfs_db, path)
+            apfs_file_meta = self.osx_FS.GetFileMetadataByPath(full_path, self.apfs_db)
             if apfs_file_meta:
                 return apfs_file_meta.logical_size
-        except:
-            pass
+        except Exception as ex:
+            log.debug ("APFSMacInfo->Exception from GetFileSize() " + str(ex))
         return error
 
     def OpenSmallFile(self, path):

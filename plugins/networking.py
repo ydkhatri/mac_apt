@@ -191,8 +191,8 @@ def GetFileContents(mac_info, path):
     if f != None:
         try:
             for line in f:
-                if not line.startswith('#'):
-                    line = line.rstrip(' \t\n\r')
+                if not line.startswith(b'#'):
+                    line = line.rstrip(b' \t\n\r')
                     #log.debug("Content --> " + line)
                     lines.append(line)
         except Exception as ex:

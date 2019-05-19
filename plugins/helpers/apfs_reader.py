@@ -9,12 +9,12 @@
 
 from kaitaistruct import __version__ as ks_version, KaitaiStream, BytesIO
 import plugins.helpers.apfs as apfs
-import binascii
 import collections
 import logging
 import lzfse
 import struct
 import tempfile
+from uuid import UUID
 from plugins.helpers.writer import DataType
 from plugins.helpers.common import *
 
@@ -244,12 +244,12 @@ class ApfsFileSystemParser:
                 if row[4] == None:
                     # No resource fork , data must be in decmpfs_extent
                     if logical_size <= 32: # If < 32 bytes, write to db, else leave in extent
-                        to_write.append([row[0], buffer(decmpfs), uncompressed_size, 0, 0, 0])
+                        to_write.append([row[0], decmpfs, uncompressed_size, 0, 0, 0])
                     else:
                         to_write.append([row[0], None, uncompressed_size, row[1], 1, logical_size])
                 else: 
                     # resource fork has data
-                    to_write.append([row[0], buffer(decmpfs), uncompressed_size, row[4], 0, row[6]])
+                    to_write.append([row[0], decmpfs, uncompressed_size, row[4], 0, row[6]])
             if to_write:
                 self.db.WriteRows(to_write, self.name + '_Compressed_Files')      
 
@@ -329,7 +329,7 @@ class ApfsFileSystemParser:
                     self.num_records_read_batch += 1
                     self.num_records_read_total += 1
                     rec = entry.data
-                    data = buffer(rec.data)
+                    data = memoryview(rec.data)
                     rsrc_extent_cnid = 0
                     logical_size = 0
                     rec_type = rec.type_ea.value
@@ -421,14 +421,10 @@ class ApfsVolume:
         self.root_block_num = vol_btree.body.root.value
         #log.debug ("root_block_num = {}".format(self.root_block_num))
 
-    def ReadUUID(self, uuid):
+    def ReadUUID(self, uuid_bytes):
         '''Return a string from binary uuid blob'''
-        uuid_str =  binascii.hexlify(uuid[0:4]) + '-' + \
-                    binascii.hexlify(uuid[4:6]) + '-' +\
-                    binascii.hexlify(uuid[6:8]) + '-' +\
-                    binascii.hexlify(uuid[8:10]) + '-' +\
-                    binascii.hexlify(uuid[10:16])
-        return uuid_str.upper()
+        uuid =  UUID(bytes=uuid_bytes)
+        return str(uuid).upper()
 
     def CopyOutFolderRecursive(self, path, db, output_folder):
         '''Internal Test function'''
@@ -799,7 +795,7 @@ class ApfsFile():
                 i = 0
 
                 headerSize = struct.unpack('<I', compressed_data[0:4])[0]
-                num_chunkOffsets = headerSize/4  - 1
+                num_chunkOffsets = headerSize//4  - 1
                 chunkOffsets = struct.unpack('<{}I'.format(num_chunkOffsets), compressed_data[4 : 4 + (num_chunkOffsets * 4)])
 
                 src_offset = headerSize

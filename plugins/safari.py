@@ -221,7 +221,7 @@ def ReadHistoryPlist(plist, safari_items, source_path, user):
         history_domains = plist['WebHistoryDomains.v2']
         for item in history_domains:
             si = SafariItem(SafariItemType.HISTORYDOMAINS, '', item.get('', ''), None, 
-                            'ITEMCOUNT:' + unicode(item.get('itemCount', 0)) , user, source_path)
+                            'ITEMCOUNT:' + str(item.get('itemCount', 0)) , user, source_path)
             safari_items.append(si)
     except:
         log.error('WebHistoryDomains.v2 not found')
@@ -369,7 +369,7 @@ def ProcessSafariFolder(mac_info, folder_path, user, safari_items):
             log.debug('Safari File not found : {}'.format(source_path))
     # Yosemite onwards there is History.db
     source_path = folder_path + '/History.db'
-    if mac_info.IsValidFilePath(source_path) and mac_info.GetFileSize(source_path) > 0:
+    if mac_info.IsValidFilePath(source_path) and mac_info.GetFileSize(source_path, 0) > 0:
         mac_info.ExportFile(source_path, __Plugin_Name, user + "_")
         try:
             sqlite = SqliteWrapper(mac_info)

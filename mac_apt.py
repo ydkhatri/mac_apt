@@ -20,10 +20,10 @@
 import sys
 import os
 import argparse
-import binascii
 import pyewf
 import pytsk3
 import traceback
+from uuid import UUID
 import plugins.helpers.macinfo as macinfo
 from plugins.helpers.apfs_reader import ApfsContainer, ApfsDbInfo
 from plugins.helpers.writer import *
@@ -135,8 +135,10 @@ def IsApfsContainer(img, partition_start_offset):
     return False
 
 def GetApfsContainerUuid(img, container_start_offset):
-    uuid = img.read(container_start_offset + 72, 16)
-    return binascii.hexlify(uuid).upper()
+    '''Returns a UUID object'''
+    uuid_bytes = img.read(container_start_offset + 72, 16)
+    uuid = UUID(bytes=uuid_bytes)
+    return uuid
 
 def FindOsxPartitionInApfsContainer(img, vol_info, container_size, container_start_offset, container_uuid):
     global mac_info
@@ -149,7 +151,7 @@ def FindOsxPartitionInApfsContainer(img, vol_info, container_size, container_sta
     try:
         # start db
         use_existing_db = False
-        apfs_sqlite_path = os.path.join(mac_info.output_params.output_path, "APFS_Volumes_" + container_uuid + ".db")
+        apfs_sqlite_path = os.path.join(mac_info.output_params.output_path, "APFS_Volumes_" + str(container_uuid).upper() + ".db")
         if os.path.exists(apfs_sqlite_path): # Check if db already exists
             existing_db = SqliteWriter()     # open & check if it has the correct data
             existing_db.OpenSqliteDb(apfs_sqlite_path)
@@ -162,6 +164,7 @@ def FindOsxPartitionInApfsContainer(img, vol_info, container_size, container_sta
             else:
                 # db does not seem up to date, create a new one and read info
                 existing_db.CloseDb()
+                os.remove(apfs_sqlite_path)
         if not use_existing_db:
             apfs_sqlite_path = SqliteWriter.CreateSqliteDb(apfs_sqlite_path) # Will create with next avail file name
             mac_info.apfs_db = SqliteWriter()
@@ -207,7 +210,7 @@ def FindOsxPartition(img, vol_info, vs_info):
             
             if IsApfsContainer(img, partition_start_offset):
                 uuid = GetApfsContainerUuid(img, partition_start_offset)
-                log.info('Found an APFS container with uuid: {}-{}-{}-{}-{}'.format(uuid[0:8], uuid[8:12], uuid[12:16], uuid[16:20], uuid[20:]))
+                log.info('Found an APFS container with uuid: {}'.format(str(uuid).upper()))
                 return FindOsxPartitionInApfsContainer(img, vol_info, vs_info.block_size * part.len, partition_start_offset, uuid)
 
             elif IsOsxPartition(img, partition_start_offset, mac_info): # Assumes there is only one single OSX installation partition
@@ -368,7 +371,7 @@ if args.input_type.upper() != 'MOUNTED':
             log.info(" Info: Probably not a disk image, trying to parse as a File system")
             if IsApfsContainer(img, 0):
                 uuid = GetApfsContainerUuid(img, 0)
-                log.info('Found an APFS container with uuid: {}-{}-{}-{}-{}'.format(uuid[0:8], uuid[8:12], uuid[12:16], uuid[16:20], uuid[20:]))
+                log.info('Found an APFS container with uuid: {}'.format(str(uuid).upper()))
                 found_osx = FindOsxPartitionInApfsContainer(img, None, img.get_size(), 0, uuid)
             else:
                 found_osx = IsOsxPartition(img, 0, mac_info)

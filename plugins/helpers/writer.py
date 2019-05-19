@@ -125,7 +125,7 @@ class DataWriter:
                 if self.cols_with_blobs:
                     row_copy = list(row)
                     for col_name, index in self.cols_with_blobs:
-                        row_copy[index] = buffer(row_copy[index])
+                        row_copy[index] = bytes(row_copy[index])
                     self.sql_writer.WriteRow(row_copy)
                 else:
                     self.sql_writer.WriteRow(row)
@@ -143,7 +143,7 @@ class DataWriter:
                 if self.cols_with_blobs:
                     row_copy = list(list_to_write)
                     for col_name, index in self.cols_with_blobs:
-                        row_copy[index] = buffer(row_copy[index])
+                        row_copy[index] = bytes(row_copy[index])
                     self.sql_writer.WriteRow(row_copy)
                 else: self.sql_writer.WriteRow(list_to_write)
             if self.csv or self.xlsx:
@@ -171,7 +171,7 @@ class DataWriter:
                     rows_copy = [list(k) for k in rows]
                     for row_copy in rows_copy:
                         for col_name, index in self.cols_with_blobs:
-                            row_copy[index] = buffer(row_copy[index]) if row_copy[index] else ''
+                            row_copy[index] = bytes(row_copy[index]) if row_copy[index] else ''
                     self.sql_writer.WriteRows(rows_copy)
                 else:
                     self.sql_writer.WriteRows(rows)
@@ -196,7 +196,7 @@ class DataWriter:
                     rows_copy = [list(k) for k in list_to_write]
                     for row_copy in rows_copy:
                         for col_name, index in self.cols_with_blobs:
-                            row_copy[index] = buffer(row_copy[index])
+                            row_copy[index] = bytes(row_copy[index])
                     self.sql_writer.WriteRows(rows_copy)
                 else:
                     self.sql_writer.WriteRows(list_to_write)
@@ -574,7 +574,7 @@ class ExcelWriter:
             col_index = 0
             for col_width in sheet_info.col_width_list:
                 if sheet_info.col_types[col_index] in [DataType.INTEGER, DataType.REAL]:
-                    col_width += col_width/4 - 1
+                    col_width += col_width//4 - 1
                 elif sheet_info.col_types[col_index] == DataType.DATE:
                     col_width = 18
                 if col_width > 60 : col_width = 60 # Setting max width to 60

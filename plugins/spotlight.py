@@ -7,7 +7,6 @@
    
 '''
 
-#from __future__ import unicode_literals
 import os
 import logging
 import struct
@@ -47,15 +46,15 @@ def ProcessStoreItem(item):
             if type(v) == list:
                 if len(v) == 1:
                     v = v[0]
-                    if type(v) in (str, str):
+                    if type(v) == str:
                         if v.endswith('\x16\x02'):
                             v = v[:-2]
                     if type(v) == str: v = v.decode('utf-8')
                 else:
-                    if type(v[0]) == str:
-                        v = ', '.join([x.decode('utf-8') for x in v]) # removes 'u' in string output
-                    else:
-                        v = ', '.join([str(x) for x in v])
+                    #if type(v[0]) == str:
+                    #    v = ', '.join([x.decode('utf-8') for x in v]) # removes 'u' in string output
+                    #else:
+                    v = ', '.join([str(x) for x in v])
             data_dict[k] = v
 
         return data_dict
@@ -162,7 +161,7 @@ def ProcessStoreDb(input_file_path, input_file, output_path, output_params, item
                 fullpath_writer = DataWriter(out_params, "Spotlight-" + file_name_prefix + '-paths', path_type_info, input_file_path)
                 with open(output_path_full_paths, 'wb') as output_paths_file:
                     log.info('Inodes and Path information being written to {}'.format(output_path_full_paths))
-                    output_paths_file.write("Inode_Number\tFull_Path\r\n")
+                    output_paths_file.write(b"Inode_Number\tFull_Path\r\n")
                     if items_to_compare: 
                         items_to_compare.update(items) # This updates items_to_compare ! 
                         WriteFullPaths(items, items_to_compare, output_paths_file, fullpath_writer)
@@ -248,9 +247,9 @@ def DropReadme(output_folder, message, filename='Readme.txt'):
             os.makedirs(output_folder)
         output_file_path = os.path.join(output_folder, filename)
         with open(output_file_path, 'wb') as output_file:
-            output_file.write(message + '\r\n')
+            output_file.write(message.encode('utf-8') + b'\r\n')
     except Exception as ex:
-        log.exception('Exception writing {} file'.format(filename))
+        log.exception('Exception writing file - {}'.format(filename))
 
 def ReadVolumeConfigPlistFromImage(mac_info, file_path):
     success, plist, error = mac_info.ReadPlist(file_path)

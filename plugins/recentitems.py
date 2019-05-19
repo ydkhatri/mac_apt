@@ -76,7 +76,7 @@ class RecentItem:
                 elif self.Type == 0x0901: # UTF8 string for URL
                     self.Data = bookmark[self.Pos + 8:self.Pos + 8 + self.Size].decode('utf-8')
                 elif self.Type == 0x0601:
-                    num = self.Size / 4
+                    num = self.Size // 4
                     self.Data = struct.unpack("<{}L".format(num), bookmark[self.Pos + 8:self.Pos + 8 + self.Size]) # array is returned
                 elif self.Type == 0x0303: # uint
                     self.Data = struct.unpack("<L", bookmark[self.Pos + 8:self.Pos + 8 + self.Size])[0]
