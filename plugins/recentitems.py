@@ -149,7 +149,7 @@ class RecentItem:
                             if fs_type != 'H+': # Format is unknown for this!
                                 data = alias[pos + 6:pos + 6 + data_size-2]
                                 protocol = data[0:4].decode('utf-8')
-                                url = data[10:].decode('utf-8')
+                                url = data[10:].decode('utf-8').rstrip('\x00')
                                 self.URL = url
                                 log.debug('Tag={} Protocol={} Url={}'.format(tag, protocol, url))
                                 return
