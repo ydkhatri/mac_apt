@@ -78,8 +78,7 @@ def GetText(string_or_binary):
     '''Converts binary or text string into text string. UUID in Sierra is now binary blob instead of hex text.'''
     uuid_text = ''
     try:
-        if isinstance(string_or_binary, bytes): # Python3 is 'bytes'
-            #hex_str = ''.join('{:02X}'.format(ord(x)) for x in string_or_binary)
+        if isinstance(string_or_binary, bytes):
             uuid_text = str(uuid.UUID(bytes=string_or_binary)).upper()
         else:
             uuid_text = string_or_binary.upper()

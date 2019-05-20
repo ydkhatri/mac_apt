@@ -61,11 +61,11 @@ def Plugin_Start(mac_info):
 def ProcessActiveDirectoryPlist(plist_path, plist):
     active_directory = {'source': plist_path}
     try:
-        for item, value in plist.iteritems(): # .items() for Python 3
+        for item, value in plist.items()
             if item in ['node name','trustaccount','trustkerberosprincipal','trusttype']:
                 active_directory[item] = value
         ad_dict = plist['module options']['ActiveDirectory']
-        for item, value in ad_dict.iteritems():
+        for item, value in ad_dict.items():
             if item in ['allow multi-domain','cache last user logon','domain','forest','trust domain']:
                 active_directory[item] = value
     except Exception as ex:

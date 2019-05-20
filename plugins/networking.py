@@ -127,7 +127,7 @@ def GetNetworkInterfaceInfo(mac_info):
                 continue
             for interface in cat_array:
                 interface_info = {'Category':category, 'Source':path }
-                for item, value in interface.items(): # .items() for Python 3
+                for item, value in interface.items():
                     if item in ['Active','BSD Name','IOBuiltin','IOInterfaceNamePrefix','IOInterfaceType',
                                 'IOInterfaceUnit','IOPathMatch','SCNetworkInterfaceType']:
                         interface_info[item] = value
@@ -166,7 +166,7 @@ def GetDhcpInfo(mac_info):
                                         'Interface':if_name,
                                         'MAC_Address':mac_address }
 
-                    for item, value in list(plist.items()): # .items() for Python 3
+                    for item, value in list(plist.items()):
                         if item in ['IPAddress','LeaseLength','LeaseStartDate','PacketData','RouterIPAddress','SSID']:
                             interface_info[item] = value
                         elif item == 'RouterHardwareAddress':  # convert binary blob to MAC address

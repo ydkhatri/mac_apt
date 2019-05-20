@@ -105,7 +105,7 @@ class DataWriter:
                 if self.PYTHON_VER == 2: 
                     s = binascii.hexlify(blob).upper()
                 else:
-                    s = binascii.hexlify(blob).decode("ascii").upper() # For python3!
+                    s = binascii.hexlify(blob).decode("ascii").upper()
             except Exception as ex:
                 log.error('Exception from BlobToHex() : ' + str(ex))
         return s    
