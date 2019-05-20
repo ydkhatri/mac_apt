@@ -267,11 +267,11 @@ class RecentItem:
                 return
             if size > 0x200: return # likely non-standard, below method won't work!
             pos = size - 6 # alias ends with ...relevant_data.. 00 FF FF 00 00
-            if alias[pos] == b'\x00': pos -= 1
+            if alias[pos] == 0x00: pos -= 1
             reached_start = False
             data = b'\x00'
             while (pos > 0x3B and not reached_start):
-                if alias[pos] == b'\x00':
+                if alias[pos] == 0x00:
                     reached_start = True
                 else:
                     data = alias[pos] + data

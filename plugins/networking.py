@@ -194,7 +194,7 @@ def GetFileContents(mac_info, path):
                 if not line.startswith(b'#'):
                     line = line.rstrip(b' \t\n\r')
                     #log.debug("Content --> " + line)
-                    lines.append(line)
+                    lines.append(line.decode('utf-8'))
         except Exception as ex:
             log.error("Unknown error while reading file " + path + " : " + str(ex))
     else:

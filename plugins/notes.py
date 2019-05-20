@@ -138,11 +138,11 @@ def ReadLengthField(blob):
     length = 0
     skip = 0
     try:
-        data_length = int(struct.unpack('<B', blob[0])[0])
+        data_length = int(blob[0])
         length = data_length & 0x7F
         while data_length > 0x7F:
             skip += 1
-            data_length = int(struct.unpack('<B', blob[skip])[0])
+            data_length = int(blob[skip])
             length = ((data_length & 0x7F) << (skip * 7)) + length
     except:
         log.exception('Error trying to read length field in note data blob')
@@ -150,7 +150,7 @@ def ReadLengthField(blob):
     return length, skip
 
 def ProcessNoteBodyBlob(blob):
-    data = ''
+    data = b''
     if blob == None: return data
     try:
         pos = 0
@@ -169,15 +169,15 @@ def ProcessNoteBodyBlob(blob):
         pos += skip
 
         # Now text data begins
-        if blob[pos] != b'\x1A':
-            log.error('Unexpected byte in text header pos {} - byte is {}'.format(pos, binascii.hexlify(blob[pos])))
+        if blob[pos] != 0x1A:
+            log.error('Unexpected byte in text header pos {} - byte is 0x{:X}'.format(pos, blob[pos]))
             return ''
         pos += 1
         length, skip = ReadLengthField(blob[pos:])
         pos += skip
         # Read text tag next
-        if blob[pos] != b'\x12':
-            log.error('Unexpected byte in pos {} - byte is {}'.format(pos, binascii.hexlify(blob[pos])))
+        if blob[pos] != 0x12:
+            log.error('Unexpected byte in pos {} - byte is 0x{:X}'.format(pos, blob[pos]))
             return ''
         pos += 1
         length, skip = ReadLengthField(blob[pos:])

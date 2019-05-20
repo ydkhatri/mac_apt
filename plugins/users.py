@@ -37,23 +37,23 @@ user_info = [ ('Username',DataType.TEXT),('Realname',DataType.TEXT),('Homedir',D
              ]
 
 # Decryption XOR key from http://www.brock-family.org/gavin/perl/kcpassword.html
-def decrypt_kcpassword(enc_list):
+def decrypt_kcpassword(enc_bytes):
     '''Decrypt the password stored in /etc/kcpassword'''
     password = ''
     try:
         key_list = [0x7D, 0x89, 0x52, 0x23, 0xD2, 0xBC, 0xDD, 0xEA, 0xA3, 0xB9, 0x1F] # size = 11
-        size = len(enc_list)
+        size = len(enc_bytes)
         counter = 0
-        decrypted = ''
-        for byte in enc_list:
-            decoded_char = chr(byte ^ key_list[counter])
-            if decoded_char == b'\x00': break
-            decrypted += decoded_char
+        decrypted = b''
+        for byte in enc_bytes:
+            decoded_byte = byte ^ key_list[counter]
+            if decoded_byte == 0: break
+            decrypted += bytes([decoded_byte])
             counter += 1
             if counter == 11:
                 counter = 0
     
-        password = decrypted
+        password = decrypted.decode('utf-8')
     except:
         log.exception('Error decrypting kcpassword')
     return password
@@ -66,14 +66,7 @@ def GetAutoLoginPass(mac_info):
     try:
         f = mac_info.OpenSmallFile(kc_path)
         if f:
-            enc_data = []
-            while True:
-                byte = f.read(1)
-                if not byte:
-                    break
-                else:
-                    enc_data.append(ord(byte))
-            
+            enc_data = f.read()            
             dec_data = decrypt_kcpassword(enc_data)
         else:
             log.error('Could not open file ' + kc_path)

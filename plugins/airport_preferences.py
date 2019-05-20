@@ -39,7 +39,7 @@ class NetType(IntEnum):
     PREVIOUSREMEMBERED = 2 # Perhaps after an update ?
 
     def __str__(self):
-        return self.name # This return 'KNOWN' instead of 'NetType.KNOWN'
+        return self.name # This returns 'KNOWN' instead of 'NetType.KNOWN'
 
 class Network: 
     
@@ -219,12 +219,12 @@ def ReadAirportPrefPlist(plist, networks):
                         net.ChannelHistory = []
                         
                         high = 0
-                        for i in xrange(len(history) - 1):
+                        for i in range(len(history) - 1):
                             if history[i]['Timestamp'] < history[i + 1]['Timestamp']:
                                 high = i + 1
                         time = history[high]['Timestamp'].strftime('%Y/%m/%d %H:%M:%S')
                         net.lastChannelHistory = [time, str(history[high]['Channel'])]
-                        for i in xrange(len(history) - 1):
+                        for i in range(len(history) - 1):
                             if i != high:
                                 string = '(' + history[high]['Timestamp'].strftime('%Y/%m/%d %H:%M:%S') + ', ' + str(history[high]['Channel']) + ')'
                                 net.ChannelHistory.append(string)

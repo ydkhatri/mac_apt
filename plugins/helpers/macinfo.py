@@ -104,16 +104,7 @@ class NativeHfsParser:
             hfs_info.is_HFSX = header.signature == 0x4858
             hfs_info.block_size = header.blockSize
             hfs_info.version = 0
-            hfs_info.last_mounted_version = struct.unpack("<4c", struct.pack(">I", header.lastMountedVersion))# ugly, is there a better way?
-            ''' 
-            Had to add this because the above would return a tuple of bytes which would then cause plugins calling GetVolumeInfo
-            and assigning it to a variable would cause an exception here and return None
-            '''
-            lmv = ""
-            for singleByte in hfs_info.last_mounted_version:
-                singleChar = singleByte.decode('utf-8')
-                lmv += singleChar
-            hfs_info.last_mounted_version = lmv
+            hfs_info.last_mounted_version = struct.unpack("<4s", struct.pack(">I", header.lastMountedVersion))[0].decode('utf-8', 'ignore') # ugly, is there a better way?
             hfs_info.date_created_local_time = CommonFunctions.ReadMacHFSTime(header.createDate)
             hfs_info.date_modified = CommonFunctions.ReadMacHFSTime(header.modifyDate)
             hfs_info.date_backup = CommonFunctions.ReadMacHFSTime(header.backupDate)

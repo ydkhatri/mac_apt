@@ -779,11 +779,11 @@ class ApfsFile():
             num_blocks = struct.unpack('<I', compressed_data[header_size + 4 : header_size + 8])[0]
             base_offset = header_size + 8
             # Read chunks
-            for i in xrange(num_blocks):
+            for i in range(num_blocks):
                 chunk_offset, chunk_size = struct.unpack('<II', compressed_data[base_offset + i*8 : base_offset + i*8 + 8])
                 #log.debug("ChunkOffset={} ChunkSize={} start={} end={}".format(chunk_offset, chunk_size, header_size + 4 + chunk_offset, header_size + 4 + chunk_offset + chunk_size))
                 start = header_size + 4 + chunk_offset
-                if compressed_data[start] == b'\xFF':
+                if compressed_data[start] == 0xFF:
                     decompressed += compressed_data[start + 1 : start + chunk_size]
                 else:
                     decompressed += zlib.decompress(compressed_data[start : start + chunk_size])
@@ -809,7 +809,7 @@ class ApfsFile():
                         chunk_uncomp = 65536
                         if num_chunkOffsets == i + 1: # last chunk
                             chunk_uncomp = full_uncomp - (65536 * i)
-                    if chunk_uncomp < compressed_size and data[0] == b'\x06':
+                    if chunk_uncomp < compressed_size and data[0] == 0x06:
                         decompressed += data[1:]
                     else:
                         decompressed += self._lzvn_decompress(data, compressed_size, chunk_uncomp)
@@ -835,7 +835,7 @@ class ApfsFile():
         if compression_type == 1:
             decompressed = decmpfs[16:]
         elif compression_type == 3: # zlib
-            if (uncompressed_size <= total_len - 16) and (decmpfs[16] == b'\xFF'):
+            if (uncompressed_size <= total_len - 16) and (decmpfs[16] == 0xFF):
                 decompressed = decmpfs[17:]
             else:
                 decompressed = zlib.decompress(decmpfs[16:])
@@ -843,7 +843,7 @@ class ApfsFile():
             log.error ("compression_type = {} in DecompressInline --> ERROR! Should not go here!".format(compression_type))
         elif compression_type == 7: # LZVN inline
             data = decmpfs[16:]
-            if (uncompressed_size <= total_len - 16) and (data[0] == b'\x06'):
+            if (uncompressed_size <= total_len - 16) and (data[0] == 0x06):
                     decompressed = decmpfs[17:] #tested OK
             else:
                 compressed_size = total_len - 16

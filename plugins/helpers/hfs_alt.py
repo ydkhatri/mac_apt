@@ -84,7 +84,7 @@ class HFSFile(object):
 
     '''def readAllBuffer(self, truncate=True):
         r = b""
-        for i in xrange(self.totalBlocks):
+        for i in range(self.totalBlocks):
             r += self.readBlock(i)
         if truncate:
             r = r[:self.logicalSize]
@@ -129,7 +129,7 @@ class HFSFile(object):
     def readBlock(self, n):
         bs = self.volume.blockSize
         if n*bs > self.logicalSize:
-            raise Exception("BLOCK OUT OF BOUNDS" + "\xFF" * (bs - len("BLOCK OUT OF BOUNDS")))
+            raise Exception("BLOCK OUT OF BOUNDS")
         bc = 0
         for extent in self.extents:
             bc += extent.blockCount
@@ -190,7 +190,7 @@ class HFSCompressedResourceFork(HFSFile):
                         chunk_uncomp = 65536
                         if len(self.header.chunkOffsets) == i + 1: # last chunk
                             chunk_uncomp = full_uncomp - (65536 * i)
-                    if chunk_uncomp < compressed_size and data[0] == b'\x06':
+                    if chunk_uncomp < compressed_size and data[0] == 0x06:
                         decompressed = data[1:]
                     else:
                         decompressed = lzvn_decompress(data, compressed_size, chunk_uncomp)
@@ -238,7 +238,6 @@ class HFSVolume(object):
         return struct.pack(">LL", self.header.finderInfo[6], self.header.finderInfo[7])
 
     def isBlockInUse(self, block):
-        block = int(block)
         thisByte = self.allocationBitmap[block // 8]
         return (thisByte & (1 << (7 - (block % 8)))) != 0
 
@@ -343,7 +342,7 @@ class HFSVolume(object):
                 f = HFSCompressedResourceFork(self, v.data.resourceFork, v.data.fileID, decmpfs.compression_type, decmpfs.uncompressed_size)
                 data = f.readAllBuffer(True, output_file)
             elif decmpfs.compression_type in [7, 11]:
-                if xattr[16] == b'\x06': # perhaps even 0xF?
+                if xattr[16] == 0x06: # perhaps even 0xF?
                     data = xattr[17:] #tested OK
                 else: #tested OK
                     uncompressed_size = struct.unpack('<I', xattr[8:12])[0]

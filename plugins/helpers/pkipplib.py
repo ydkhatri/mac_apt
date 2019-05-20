@@ -493,7 +493,7 @@ class IPPRequest :
         self._curname = None
         self._curattributes = None
         
-        self.setVersion((ord(self._data[0]), ord(self._data[1])))
+        self.setVersion((self._data[0], self._data[1]))
         self.setOperationId(unpack(">H", self._data[2:4])[0])
         self.setRequestId(unpack(">I", self._data[4:8])[0])
         self.position = 8
@@ -501,18 +501,18 @@ class IPPRequest :
         maxdelimiter = self.tagvalues["event_notification-attributes-tag"]
         nulloffset = lambda : 0
         try :
-            tag = ord(self._data[self.position])
+            tag = self._data[self.position]
             while tag != endofattributes :
                 self.position += 1
                 name = self.tags[tag]
                 if name is not None :
                     func = getattr(self, name.replace("-", "_"), nulloffset)
                     self.position += func()
-                    if ord(self._data[self.position]) > maxdelimiter :
+                    if self._data[self.position] > maxdelimiter :
                         self.position -= 1
                         continue
                 oldtag = tag        
-                tag = ord(self._data[self.position])
+                tag = self._data[self.position]
                 if tag == oldtag :
                     self._curattributes.append([])
         except IndexError :
@@ -524,7 +524,7 @@ class IPPRequest :
     def parseTag(self) :    
         """Extracts information from an IPP tag."""
         pos = self.position
-        tagtype = self.tags[ord(self._data[pos])]
+        tagtype = self.tags[self._data[pos]]
         pos += 1
         posend = pos2 = pos + 2
         namelength = unpack(">H", self._data[pos:pos2])[0]
@@ -532,7 +532,7 @@ class IPPRequest :
             name = self._curname
         else :    
             posend += namelength
-            self._curname = name = self._data[pos2:posend]
+            self._curname = name = self._data[pos2:posend].decode('utf8')
         pos2 = posend + 2
         valuelength = unpack(">H", self._data[posend:pos2])[0]
         posend = pos2 + valuelength
@@ -540,7 +540,7 @@ class IPPRequest :
         if tagtype in ("integer", "enum") :
             value = unpack(">I", value)[0]
         elif tagtype == "boolean" :    
-            value = ord(value)
+            value = bool(value)
         try :    
             (oldname, oldval) = self._curattributes[-1][-1]
             if oldname == name :

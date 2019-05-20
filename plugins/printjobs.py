@@ -12,7 +12,7 @@
    print job data located at /private/var/spool/cups
 '''
 
-import pkipplib
+import plugins.helpers.pkipplib as pkipplib
 import datetime
 from plugins.helpers.macinfo import *
 from plugins.helpers.writer import *
@@ -89,6 +89,8 @@ def Plugin_Start(mac_info):
                 jobs.append(['', '', None, '', '', '', '', '', '', '', '', '', '', '', '', None, '', filename, ''])
     if jobs:
         PrintAll(jobs, mac_info.output_params, cupsDirectory)
+    else:
+        log.info("No print jobs found.")
 
 def get_job_detail(request, job_request, ret_all_replies=False, ret_on_error=''):
     '''Returns the specific data requested in job_request. If ret_all_replies=True, a list is returned'''
@@ -98,10 +100,10 @@ def get_job_detail(request, job_request, ret_all_replies=False, ret_on_error='')
             return [reply[1] for reply in replies]
         else:
             return replies[0][1]
-
+    except KeyError:
+        pass # That property does not exist!
     except Exception as ex:
-        #log.debug ('Error retrieving value for ' + job_request)
-        pass
+        log.debug ('Error retrieving value for ' + job_request)
     if ret_all_replies: return []
     return ret_on_error
 
@@ -116,24 +118,33 @@ def get_job_state_str(state):
     else:
         return str(state)
 
+def stringify(binary_str):
+    '''Tries to convert a binary string to normal string'''
+    if binary_str:
+        try:
+            return binary_str.decode('utf8')
+        except AttributeError:
+            return str(binary_str)
+    return ''
+
 def get_job_properties(request, filepath):
     '''Get job properties from request object'''
-    job_name = get_job_detail(request, "job-name").decode("utf8")
-    job_origin_username = get_job_detail(request, "job-originating-user-name").decode("utf8")
-    printer_uri = get_job_detail(request, "printer-uri").decode("utf8")
-    doc_format = get_job_detail(request, "document-format").decode("utf8")
+    job_name = stringify(get_job_detail(request, "job-name"))
+    job_origin_username = stringify(get_job_detail(request, "job-originating-user-name"))
+    printer_uri = stringify(get_job_detail(request, "printer-uri"))
+    doc_format = stringify(get_job_detail(request, "document-format"))
     job_ID = get_job_detail(request, "job-id")
-    job_origin_hostname = get_job_detail(request, "job-originating-host-name").decode("utf8")
-    job_uuid = get_job_detail(request, "job-uuid").decode("utf8")
+    job_origin_hostname = stringify(get_job_detail(request, "job-originating-host-name"))
+    job_uuid = stringify(get_job_detail(request, "job-uuid"))
     job_state = get_job_state_str(get_job_detail(request, "job-state"))
-    job_printer_state_message = get_job_detail(request, "job-printer-state-message").decode("utf8")
+    job_printer_state_message = stringify(get_job_detail(request, "job-printer-state-message"))
     reasons = get_job_detail(request, "job-printer-state-reasons", ret_all_replies=True)
-    job_printer_state_reason = ', '.join([reason.decode("utf8") for reason in reasons])
+    job_printer_state_reason = ', '.join([stringify(reason) for reason in reasons])
     job_media_sheets_completed = get_job_detail(request, "job-media-sheets-completed")
 
     copies = get_job_detail(request, "copies")
-    destination_printer = get_job_detail(request, "DestinationPrinterID").decode("utf8")
-    app = get_job_detail(request, "com.apple.print.JobInfo.PMApplicationName").decode("utf8")
+    destination_printer = stringify(get_job_detail(request, "DestinationPrinterID"))
+    app = stringify(get_job_detail(request, "com.apple.print.JobInfo.PMApplicationName"))
 
     time_at_creation = CommonFunctions.ReadUnixTime(get_job_detail(request, "time-at-creation"))
     time_at_processing = CommonFunctions.ReadUnixTime(get_job_detail(request, "time-at-processing"))

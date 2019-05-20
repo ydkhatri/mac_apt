@@ -47,7 +47,7 @@ class BTree(object):
     def readEmptySpace(self):
         res = ""
         z = 0
-        for i in xrange(self.header.totalNodes):
+        for i in range(self.header.totalNodes):
             if not self.isNodeInUse(i):
                 z += 1
                 res += self.readNode(i)
@@ -91,9 +91,8 @@ class BTree(object):
 
     def readNode(self, nodeNumber):
         node = b""
-        nodeNumber = int(nodeNumber)
-        for i in range(int(self.blocksForNode)):
-            node += self.file.readBlock((nodeNumber * int(self.blocksForNode)) + i)
+        for i in range(self.blocksForNode):
+            node += self.file.readBlock((nodeNumber * self.blocksForNode) + i)
         return node
     
     def readBtreeNode(self, nodeNumber):
@@ -162,7 +161,7 @@ class BTree(object):
         type, stuff = self.readBtreeNode(node)
         
         if type == kBTIndexNode: 
-            for i in xrange(len(stuff)):
+            for i in range(len(stuff)):
                 count += self.traverse(stuff[i].childNode, callback=callback)
         elif type == kBTLeafNode:
             for k,v in stuff:
