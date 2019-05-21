@@ -61,7 +61,7 @@ def Plugin_Start(mac_info):
 def ProcessActiveDirectoryPlist(plist_path, plist):
     active_directory = {'source': plist_path}
     try:
-        for item, value in plist.items()
+        for item, value in plist.items():
             if item in ['node name','trustaccount','trustkerberosprincipal','trusttype']:
                 active_directory[item] = value
         ad_dict = plist['module options']['ActiveDirectory']
