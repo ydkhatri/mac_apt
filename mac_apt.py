@@ -17,23 +17,24 @@
    
 '''
 
-import sys
-import os
 import argparse
+import logging
+import os
 import pyewf
 import pytsk3
+import pyvmdk
+import sys
+import textwrap
+import time
 import traceback
 from uuid import UUID
 import plugins.helpers.macinfo as macinfo
 from plugins.helpers.apfs_reader import ApfsContainer, ApfsDbInfo
 from plugins.helpers.writer import *
 from plugins.helpers.disk_report import *
-import logging
-import time
-import textwrap
 from plugin import *
 
-__VERSION = "0.3"
+__VERSION = "0.4"
 __PROGRAMNAME = "macOS Artifact Parsing Tool"
 __EMAIL = "yogesh@swiftforensics.com"
 
@@ -48,7 +49,7 @@ def IsItemPresentInList(collection, item):
 
 def CheckInputType(input_type):
     input_type = input_type.upper()
-    return input_type in ['E01','DD','MOUNTED']
+    return input_type in ['E01','DD','VMDK','MOUNTED']
 
 ######### FOR HANDLING E01 file ###############
 class ewf_Img_Info(pytsk3.Img_Info):
@@ -61,8 +62,6 @@ class ewf_Img_Info(pytsk3.Img_Info):
     self._ewf_handle.close()
 
   def read(self, offset, size):
-    #self._ewf_handle.seek(int(offset))
-    #return self._ewf_handle.read(int(size))
     self._ewf_handle.seek(offset)
     return self._ewf_handle.read(size)
 
@@ -88,6 +87,63 @@ def GetImgInfoObjectForE01(path):
     return img_info
 
 ####### End special handling for E01 #########
+
+######### FOR HANDLING VMDK file ###############
+class vmdk_Img_Info(pytsk3.Img_Info):
+  def __init__(self, vmdk_handle):
+    self._vmdk_handle = vmdk_handle
+    super(vmdk_Img_Info, self).__init__(
+        url="", type=pytsk3.TSK_IMG_TYPE_EXTERNAL)
+
+  def close(self):
+    self._vmdk_handle.close()
+
+  def read(self, offset, size):
+    self._vmdk_handle.seek(offset)
+    return self._vmdk_handle.read(size)
+
+  def get_size(self):
+    return self._vmdk_handle.get_media_size()
+
+def OpenExtentDataFiles(vmdk_handle, base_directory):
+    '''Because vmdk_handle.open_extent_data_files() is broken in 20170226'''
+    extent_data_files = []
+    for extent_descriptor in vmdk_handle.extent_descriptors:
+        extent_data_filename = extent_descriptor.filename
+
+        _, path_separator, filename = extent_data_filename.rpartition("/")
+        if not path_separator:
+            _, path_separator, filename = extent_data_filename.rpartition("\\")
+
+        if not path_separator:
+            filename = extent_data_filename
+
+        extent_data_file_path = os.path.join(base_directory, filename)
+
+        if not os.path.exists(extent_data_file_path):
+            break
+
+        extent_data_files.append(extent_data_file_path)
+
+    if len(extent_data_files) != vmdk_handle.number_of_extents:
+        raise RuntimeError("Unable to locate all extent data files.")
+
+    file_objects = []
+    for extent_data_file_path in extent_data_files:
+        file_object = open(extent_data_file_path, "rb")
+        file_objects.append(file_object)
+
+    vmdk_handle.open_extent_data_files_file_objects(file_objects)
+
+def GetImgInfoObjectForVMDK(path):
+    vmdk_handle = pyvmdk.handle()
+    vmdk_handle.open(path)
+    base_directory = os.path.dirname(path)
+    #vmdk_handle.open_extent_data_files() Broken in current version #20170226
+    OpenExtentDataFiles(vmdk_handle, base_directory)
+    img_info = vmdk_Img_Info(vmdk_handle)
+    return img_info
+####### End special handling for VMDK #########
 
 def FindOsxFiles(mac_info):
     if mac_info.IsValidFilePath('/System/Library/CoreServices/SystemVersion.plist'):
@@ -123,8 +179,7 @@ def IsOsxPartition(img, partition_start_offset, mac_info):
             log.error ("Could not open / (root folder on partition)")
             log.debug ("Exception info", exc_info=True)
     except Exception as ex:
-        log.info(" Error: Failed to detect/parse file system!" + str(ex))
-        log.exception("Exception") #traceback.print_exc(
+        log.exception("Exception")
     return False
 
 def IsApfsContainer(img, partition_start_offset):
@@ -262,7 +317,7 @@ for plugin in plugins:
 arg_parser = argparse.ArgumentParser(description='mac_apt is a framework to process forensic artifacts on a Mac OSX system\n'\
                                                  'You are running {} version {}'.format(__PROGRAMNAME, __VERSION),
                                     epilog=plugins_info, formatter_class=argparse.RawTextHelpFormatter)
-arg_parser.add_argument('input_type', help='Specify Input type as either E01, DD or MOUNTED')
+arg_parser.add_argument('input_type', help='Specify Input type as either E01, DD, VMDK or MOUNTED')
 arg_parser.add_argument('input_path', help='Path to OSX image/volume')
 arg_parser.add_argument('-o', '--output_path', help='Path where output files will be created')
 arg_parser.add_argument('-x', '--xlsx', action="store_true", help='Save output in excel spreadsheet(s)')
@@ -345,6 +400,9 @@ try:
     if args.input_type.upper() == 'E01':
         img = GetImgInfoObjectForE01(args.input_path) # Use this function instead of pytsk3.Img_Info()
         mac_info = macinfo.MacInfo(output_params)
+    elif args.input_type.upper() == 'VMDK':
+        img = GetImgInfoObjectForVMDK(args.input_path) # Use this function instead of pytsk3.Img_Info()
+        mac_info = macinfo.MacInfo(output_params)
     elif args.input_type.upper() == 'DD':
         img = pytsk3.Img_Info(args.input_path) # Works for split dd images too! Works for DMG too, if no compression/encryption is used!
         mac_info = macinfo.MacInfo(output_params)
@@ -395,7 +453,7 @@ if found_osx:
             except Exception as ex:
                 log.exception ("An exception occurred while running plugin - {}".format(plugin.__Plugin_Name))
 else:
-    log.warning (":( Could not find a partition having an OSX installation on it")
+    log.warning (":( Could not find a partition having a macOS installation on it")
 
 log.info("-"*50)
 

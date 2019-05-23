@@ -16,6 +16,7 @@ import os
 import sys
 import pyewf
 import pytsk3
+import pyvmdk
 import traceback
 
 def ImportPlugins(plugins, only_standalone=False):
@@ -119,3 +120,4 @@ def LogLibraryVersions(log):
     '''Log the versions of libraries used'''
     log.info('Pytsk version = {}'.format(pytsk3.get_version()))
     log.info('Pyewf version = {}'.format(pyewf.get_version()))
+    log.info('Pyvmdk version= {}'.format(pyvmdk.get_version()))
