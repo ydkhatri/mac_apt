@@ -22,6 +22,36 @@ import zlib
 
 log = logging.getLogger('MAIN.HELPERS.APFS_READER')
 
+# HFSPlusBSDInfo.fileMode values:
+S_ISUID = 0o004000     # set user id on execution
+S_ISGID = 0o002000     # set group id on execution
+S_ISTXT = 0o001000     # sticky bit
+
+S_IRWXU = 0o000700     # RWX mask for owner
+S_IRUSR = 0o000400     # R for owner
+S_IWUSR = 0o000200     # W for owner
+S_IXUSR = 0o000100     # X for owner
+
+S_IRWXG = 0o000070     # RWX mask for group
+S_IRGRP = 0o000040     # R for group
+S_IWGRP = 0o000020     # W for group
+S_IXGRP = 0o000010     # X for group
+
+S_IRWXO = 0o000007     # RWX mask for other
+S_IROTH = 0o000004     # R for other
+S_IWOTH = 0o000002     # W for other
+S_IXOTH = 0o000001     # X for other
+
+S_IFMT   = 0o170000    # type of file mask
+S_IFIFO  = 0o010000    # named pipe (fifo)
+S_IFCHR  = 0o020000    # character special
+S_IFDIR  = 0o040000    # directory
+S_IFBLK  = 0o060000    # block special
+S_IFREG  = 0o100000    # regular
+S_IFLNK  = 0o120000    # symbolic link
+S_IFSOCK = 0o140000    # socket
+S_IFWHT  = 0o160000    # whiteout
+
 class ApfsDbInfo:
     '''
     This class writes information about db version and volumes to the database. 
@@ -203,7 +233,7 @@ class ApfsFileSystemParser:
                 " b.logical_uncompressed_size, 0 as extent_cnid, 0 as fpmc_in_extent, 0 as Extent_Logical_Size"\
                 " from {0}_Attributes as b "\
                 " left join {0}_Attributes as a on (a.cnid = b.cnid and a.Name = 'com.apple.ResourceFork') "\
-                " where b.Name='com.apple.decmpfs' and b.Type=2 and a.cnid is null".format(self.name)
+                " where b.Name='com.apple.decmpfs' and (b.Type & 2)=2 and a.cnid is null".format(self.name)
         if not self.run_query(type2_no_rsrc_query, True):
             return
 
@@ -212,7 +242,7 @@ class ApfsFileSystemParser:
                 "SELECT b.CNID, b.Data, b.logical_uncompressed_size, a.extent_cnid as extent_cnid, 0 as fpmc_in_extent, "\
                 " a.logical_uncompressed_size as Extent_Logical_Size FROM {0}_Attributes as b "\
                 " left join {0}_Attributes as a on (a.cnid = b.cnid and a.Name = 'com.apple.ResourceFork')"\
-                " where b.Name='com.apple.decmpfs' and b.Type=2 and a.cnid is not null".format(self.name)
+                " where b.Name='com.apple.decmpfs' and (b.Type & 2)=2 and a.cnid is not null".format(self.name)
         if not self.run_query(type2_rsrc_query, True):
             return
          
@@ -226,7 +256,7 @@ class ApfsFileSystemParser:
                 " left join {0}_Attributes as a on (a.cnid = b.cnid and a.Name = 'com.apple.ResourceFork') "\
                 " left join {0}_Extents as e on e.cnid=b.extent_cnid "\
                 " left join {0}_Extents as er on er.cnid=a.extent_cnid "\
-                " where b.Name='com.apple.decmpfs' and b.Type=1"\
+                " where b.Name='com.apple.decmpfs' and (b.Type & 1)=1"\
                 " and (e.offset=0 or e.offset is null) and (er.offset = 0 or er.offset is null)".format(self.name)
         success, cursor, error = self.db.RunQuery(type1_query, writing=False)
         if success:
@@ -333,14 +363,18 @@ class ApfsFileSystemParser:
                     rsrc_extent_cnid = 0
                     logical_size = 0
                     rec_type = rec.type_ea.value
-                    if rec_type == 1: # Extent based record
+                    if rec_type & 1: # Extent based record
                         #rsrc_extent_cnid, logical_size, physical_size = struct.unpack('<QQQ', rsrc[1][0:24]) # True for all Type 1
                         rsrc_extent_cnid, logical_size = struct.unpack('<QQ', data[0:16])
-                    elif rec_type == 2: # BLOB type
+                    elif rec_type & 2: # BLOB type
                         if entry.key.content.attr_name == 'com.apple.decmpfs':
                             #magic, compression_type, uncompressed_size = struct.unpack('<IIQ', decmpfs[1][0:16])
                             logical_size = struct.unpack('<Q', data[8:16])[0] # uncompressed data size
+                    else:
+                        log.warning('Unknown rec_type 0x{:X} block_num={}'.format(rec_type, block_num))
                     self.attr_records.append([entry.key.key_value, entry.key.content.attr_name, rec.type_ea.value, data, logical_size, rsrc_extent_cnid])
+                else:
+                    log.warning('Unknown entry_type 0x{:X} block_num={}'.format(entry_type, block_num))
 
         elif block.header.type_content == self.container_type_location:
             for _, entry in enumerate(block.body.entries):
@@ -359,7 +393,7 @@ class ApfsFileSystemParser:
                     except:
                         log.exception('Exception trying to read block {}'.format(entry.data.block_num.value))
         else:
-            raise ValueError("unexpected entry in block {}".format(block_num))
+            log.exception("unexpected entry {} in block {}".format(repr(block.header.type_content), block_num))
 
         if self.num_records_read_batch > 400000:
             self.num_records_read_batch = 0
@@ -368,6 +402,42 @@ class ApfsFileSystemParser:
             self.clear_records() # Clear the data once written
         return
 
+class DataCache:
+    '''Cache of ApfsFileMeta objects'''
+    def __init__(self, max_size=2000):
+        self.cache_limit = max_size
+        self.cache = {} # key=path, value=(ApfsFileMeta object, id)
+        self.cache_index = {} # key=id, value=path
+        self.index = 0
+        self.count = 0
+
+    def Insert(self, apfs_file_meta, path):
+        if self.Find(path):
+            log.debug('Obj already cached for path {}'.format(path))
+            return
+        self.index += 1
+        self.cache[path] = (apfs_file_meta, self.index)
+        self.cache_index[self.index] = path
+        #self.count += 1
+        if self.count >= self.cache_limit: # should not got to >
+            # remove oldest element
+            oldest_id = self.index - self.cache_limit
+            oldest_path = self.cache_index[oldest_id]
+            del(self.cache_index[oldest_id])
+            del(self.cache[oldest_path])
+        else:
+            self.count += 1
+    
+    def Find(self, path):
+        if path.endswith('/'):
+            if path != '/':
+                path = path.rstrip('/')
+        cached_obj = self.cache.get(path, None)
+        if cached_obj:
+            return cached_obj[0]
+        return None   
+        
+#TODO Add db as class variable, remove it from functions
 class ApfsVolume:
     def __init__(self, apfs_container, name=""):
         self.container = apfs_container
@@ -383,6 +453,7 @@ class ApfsVolume:
         self.time_created = None
         self.time_updated = None
         self.uuid = ''
+        self.files_meta_cache = DataCache()
 
     def read_volume_info(self, volume_super_block_num):
         """Read volume information"""
@@ -455,19 +526,48 @@ class ApfsVolume:
                 destination_path = os.path.join(output_folder, name)
                 self.CopyOutFile(file_path, destination_path, db)
 
-    def GetFile(self, path, db):
+    def GetFile(self, path, db, apfs_file_meta=None):
         '''Returns an ApfsFile object given path. Returns None if file not found'''
         if not path:
             return None
-        apfs_file_meta = self.GetFileMetadataByPath(path, db)
+        if apfs_file_meta == None:
+            apfs_file_meta = self.files_meta_cache.Find(path)
+        if apfs_file_meta == None:
+            apfs_file_meta = self.GetFileMetadataByPath(path, db)
+            if apfs_file_meta:
+                self.files_meta_cache.Insert(apfs_file_meta, path)
         if apfs_file_meta:
-            return ApfsFile(apfs_file_meta, apfs_file_meta.logical_size, apfs_file_meta.extents, self.container)
+            if apfs_file_meta.is_compressed:
+                return ApfsFileCompressed(apfs_file_meta, apfs_file_meta.logical_size, apfs_file_meta.extents, self.container)
+            else:
+                return ApfsFile(apfs_file_meta, apfs_file_meta.logical_size, apfs_file_meta.extents, self.container)
         return None
 
-    def OpenSmallFile(self, path, db):
+    def IsSymbolicLink(self, db, path):
+        '''Returns True if the path is a symbolic link'''
+        if not path:
+            return False
+        apfs_file_meta = self.files_meta_cache.Find(path)
+        if apfs_file_meta == None:
+            apfs_file_meta = self.GetFileMetadataByPath(path, db)
+            if apfs_file_meta:
+                return apfs_file_meta.is_symlink
+        return False
+
+    def open(self, path, db, apfs_file_meta=None):
+        '''Open file, returns file-like object'''
+        log.debug("Trying to open file : " + path)
+        apfs_file = self.GetFile(path, db, apfs_file_meta)
+        if apfs_file == None:
+            log.info('File not found! Path was: ' + path)
+        elif apfs_file.meta.logical_size > 209715200:
+            log.debug('File size > 200 MB')
+        return apfs_file
+
+    def OpenSmallFile(self, path, db, apfs_file_meta=None):
         '''Open small files (<200MB), returns open file handle'''
         log.debug("Trying to open file : " + path)
-        apfs_file = self.GetFile(path, db)
+        apfs_file = self.GetFile(path, db, apfs_file_meta)
         if apfs_file == None:
             log.info('File not found! Path was: ' + path)
             return None
@@ -508,14 +608,17 @@ class ApfsVolume:
             log.debug("Failed to find file for export: " + path)
         return retval
 
+    #TODO SEearch  self.files_meta_cache first!
     def DoesFileExist(self, db, path):
         '''Returns True if file exists'''
         return self.DoesPathExist(db, path, EntryType.FILES)
 
+    #TODO SEearch  self.files_meta_cache first!
     def DoesFolderExist(self, db, path):
         '''Returns True if folder exists'''
         return self.DoesPathExist(db, path, EntryType.FOLDERS)        
 
+    #TODO SEearch  self.files_meta_cache first!
     def DoesPathExist(self, db, path, type=EntryType.FILES_AND_FOLDERS):
         '''Returns True if path exists'''
         if not path: 
@@ -540,12 +643,31 @@ class ApfsVolume:
                 return True
         return False
 
+    def GetFileMetadataByCnid(self, cnid, db):
+        '''Returns ApfsFileMeta object from database given path and db handle'''
+        cnid = int(cnid)
+        if cnid <= 0: 
+            return None
+        where_clause = " where p.CNID={} ".format(cnid)
+        return self.GetFileMetadata(where_clause, db)
+
     def GetFileMetadataByPath(self, path, db):
         '''Returns ApfsFileMeta object from database given path and db handle'''
         if not path: 
             return None
         if not path.startswith('/'): 
             path = '/' + path
+        path = path.replace("'", "''") # if path contains single quote, replace with double to escape it!
+        where_clause = " where p.Path = '{}' ".format(path)
+        return self.GetFileMetadata(where_clause, db)
+
+    def GetFilePathFromCnid(self, cnid, db):
+        #TODO: add/use cacheing
+        meta = self.GetFileMetadataByCnid(cnid, db)
+        return meta.path
+
+    def GetFileMetadata(self, where_clause, db):
+        '''Returns ApfsFileMeta object from database. A where_clause specifies either cnid or path to find'''
                     #   0         1              2             3         4        5          6             7         8        9
         query = "SELECT p.CNID, p.Path, t.Parent_CNID, t.Extent_CNID, t.Name, t.Created, t.Modified, t.Changed, t.Accessed, t.Flags,"\
                 " t.Links_or_Children, t.BSD_flags, t.UID, t.GID, t.Mode, t.Logical_Size, t.Physical_Size, " \
@@ -558,11 +680,10 @@ class ApfsVolume:
                 " left join {0}_Extents as e on e.CNID = t.Extent_CNID "\
                 " left join {0}_Compressed_Files as c on c.CNID = t.CNID "\
                 " left join {0}_Extents as e_c on e_c.CNID = c.Extent_CNID "\
-                " where p.Path = '{1}' "\
+                " {1} "\
                 " order by Extent_Offset, compressed_Extent_Offset"
         # This query gets file metadata as well as extents for file. If compressed, it gets compressed extents.
-        path = path.replace("'", "''") # if path contains single quote, replace with double to escape it!
-        success, cursor, error_message = db.RunQuery(query.format(self.name, path))
+        success, cursor, error_message = db.RunQuery(query.format(self.name, where_clause))
         if success:
             apfs_file_meta = None
             #extent_cnid = 0
@@ -571,7 +692,11 @@ class ApfsVolume:
             for row in cursor:
                 if index == 0:
                     # sqlite does not like unicode strings as index names, hence not using dictionary row
-                    apfs_file_meta = ApfsFileMeta(row[4], row[0], row[2], CommonFunctions.ReadAPFSTime(row[5]), CommonFunctions.ReadAPFSTime(row[6]), CommonFunctions.ReadAPFSTime(row[7]), CommonFunctions.ReadAPFSTime(row[8]), CommonFunctions.ReadAPFSTime(row[18]), row[9], row[10], row[11], row[12], row[13], row[14], row[15], row[16], row[17])
+                    apfs_file_meta = ApfsFileMeta(row[4], row[1], row[0], row[2], CommonFunctions.ReadAPFSTime(row[5]), \
+                                        CommonFunctions.ReadAPFSTime(row[6]), CommonFunctions.ReadAPFSTime(row[7]), \
+                                        CommonFunctions.ReadAPFSTime(row[8]), \
+                                        CommonFunctions.ReadAPFSTime(row[18]), \
+                                        row[9], row[10], row[11], row[12], row[13], row[14], row[15], row[16], row[17])
                     #extent_cnid = row[3]
                     if row[22] != None: # uncompressed_size
                         apfs_file_meta.logical_size = row[22]
@@ -590,7 +715,8 @@ class ApfsVolume:
                 return None
             # Let's also get Attributes, except decmpfs and ResourceFork (we already got those in _Compressed_Files table)
             # TODO: Remove Logical_uncompressed_size, Extent_CNID, perhaps not needed now!
-            attrib_query = "SELECT Name, Type, Data, Logical_uncompressed_size, Extent_CNID from {0}_Attributes WHERE cnid={1} and Name not in ('com.apple.decmpfs', 'com.apple.ResourceFork')"
+            attrib_query = "SELECT Name, Type, Data, Logical_uncompressed_size, Extent_CNID from {0}_Attributes "\
+                            "WHERE cnid={1} and Name not in ('com.apple.decmpfs', 'com.apple.ResourceFork')"
             success, cursor, error_message = db.RunQuery(attrib_query.format(self.name, apfs_file_meta.cnid))
             if success:
                 for row in cursor:
@@ -599,9 +725,113 @@ class ApfsVolume:
                 log.debug('Failed to execute attribute query, error was : ' + error_message)
             return apfs_file_meta
         else:
-            log.debug('Failed to execute GetFileMetadataByPath query, error was : ' + error_message)
+            log.debug('Failed to execute GetFileMetadata query, error was : ' + error_message)
 
         return None
+
+    def GetManyFileMetadataByCnids(self, cnids, db):
+        '''Returns ApfsFileMeta object from database given path and db handle'''
+        # for cnid in cnids:
+        #     if cnid <= 0:
+        #         continue # skip that
+        cnids = [str(int(x)) for x in cnids]
+        cnids_str = ",".join(cnids)
+        where_clause = " where p.CNID IN ({}) ".format(cnids_str)
+        return self.GetManyFileMetadata(where_clause, db)
+
+    def GetManyFileMetadataByPaths(self, paths, db):
+        '''Returns ApfsFileMeta object from database given path and db handle'''   
+        for path in paths:
+            if not path.startswith('/'): 
+                path = '/' + path
+            path = path.replace("'", "''") # if path contains single quote, replace with double to escape it!
+            path = "'{}'".format(path)
+        paths_str = ",".join(paths)
+        where_clause = " where p.Path IN ({}) ".format(paths_str)
+        return self.GetManyFileMetadata(where_clause, db)
+
+    # def GetManyFilePathFromCnid(self, cnid, db):
+    #     #TODO: add/use cacheing
+    #     meta = self.GetManyFileMetadataByCnid(cnid, db)
+    #     return meta.path
+
+    def GetManyFileMetadata(self, where_clause, db):
+        '''Returns ApfsFileMeta object from database. A where_clause specifies either cnids or paths to find. No Attribute data is returned!!'''
+        apfs_file_meta_list = []
+                    #   0         1              2             3         4        5          6             7         8        9
+        query = "SELECT p.CNID, p.Path, t.Parent_CNID, t.Extent_CNID, t.Name, t.Created, t.Modified, t.Changed, t.Accessed, t.Flags,"\
+                " t.Links_or_Children, t.BSD_flags, t.UID, t.GID, t.Mode, t.Logical_Size, t.Physical_Size, " \
+                " i.ItemType, i.TimeStamp, e.Offset as Extent_Offset, e.Size as Extent_Size, e.Block_Num as Extent_Block_Num, " \
+                " c.Uncompressed_size, c.Data, c.Extent_Logical_Size, "\
+                " e_c.Offset as compressed_Extent_Offset, e_c.Size as compressed_Extent_Size, e_c.Block_Num as compressed_Extent_Block_Num"\
+                " from {0}_Paths as p "\
+                " left join {0}_Threads as t on t.CNID = p.CNID "\
+                " left join {0}_IndexNodes as i on i.CNID = p.CNID "\
+                " left join {0}_Extents as e on e.CNID = t.Extent_CNID "\
+                " left join {0}_Compressed_Files as c on c.CNID = t.CNID "\
+                " left join {0}_Extents as e_c on e_c.CNID = c.Extent_CNID "\
+                " {1} "\
+                " order by p.CNID, Extent_Offset, compressed_Extent_Offset"
+        # This query gets file metadata as well as extents for file. If compressed, it gets compressed extents.
+        success, cursor, error_message = db.RunQuery(query.format(self.name, where_clause))
+        if success:
+            apfs_file_meta = None
+            #extent_cnid = 0
+            index = 0
+            prev_extent = None
+            last_cnid = 0
+            for row in cursor:
+                if last_cnid == row[0]: # same file
+                    pass
+                else:                  # new file
+                    if last_cnid:      # save old info
+                        apfs_file_meta_list.append(apfs_file_meta)
+                    index = 0
+                    last_cnid = row[0]
+                    prev_extent = None
+
+                if index == 0:
+                    apfs_file_meta = ApfsFileMeta(row[4], row[1], row[0], row[2], CommonFunctions.ReadAPFSTime(row[5]), \
+                                        CommonFunctions.ReadAPFSTime(row[6]), CommonFunctions.ReadAPFSTime(row[7]), \
+                                        CommonFunctions.ReadAPFSTime(row[8]), \
+                                        CommonFunctions.ReadAPFSTime(row[18]), \
+                                        row[9], row[10], row[11], row[12], row[13], row[14], row[15], row[16], row[17])
+                    #extent_cnid = row[3]
+                    if row[22] != None: # uncompressed_size
+                        apfs_file_meta.logical_size = row[22]
+                        apfs_file_meta.is_compressed = True
+                        apfs_file_meta.decmpfs = row[23]
+                        apfs_file_meta.compressed_extent_size = row[24]
+                extent = ApfsExtent(row[25], row[26], row[27]) if apfs_file_meta.is_compressed else ApfsExtent(row[19], row[20], row[21])
+                if prev_extent and extent.offset == prev_extent.offset:
+                    #This file may have hard links, hence the same data is in another row, skip this!
+                    pass
+                else:
+                    apfs_file_meta.extents.append(extent)
+                prev_extent = extent
+                index += 1
+            #if index == 0: # No such file!
+            #    return None
+            # Let's also get Attributes, except decmpfs and ResourceFork (we already got those in _Compressed_Files table)
+            #  Skipping this for now.
+            # TODO: Remove Logical_uncompressed_size, Extent_CNID, perhaps not needed now!
+            # attrib_query = "SELECT Name, Type, Data, Logical_uncompressed_size, Extent_CNID from {0}_Attributes "\
+            #                 "WHERE cnid={1} and Name not in ('com.apple.decmpfs', 'com.apple.ResourceFork')"
+            # success, cursor, error_message = db.RunQuery(attrib_query.format(self.name, apfs_file_meta.cnid))
+            # if success:
+            #     for row in cursor:
+            #         apfs_file_meta.attributes[row[0]] = [row[1], row[2], row[3], row[4]]
+            # else:
+            #     log.debug('Failed to execute attribute query, error was : ' + error_message)
+            #return apfs_file_meta
+
+            # get last one
+            if apfs_file_meta:
+                apfs_file_meta_list.append(apfs_file_meta)
+        else:
+            log.debug('Failed to execute GetFileMetadata query, error was : ' + error_message)
+
+        return apfs_file_meta_list
 
     def ListItemsInFolder(self, path, db):
         ''' 
@@ -688,15 +918,15 @@ class ApfsContainer:
     def close(self):
         pass
 
-    def seek(self, offset, from_what=0):
-        if from_what == 0: # Beginning of file
+    def seek(self, offset, whence=0):
+        if whence == 0: # Beginning of file
             self.position = offset
-        elif from_what == 1: # current position
+        elif whence == 1: # current position
             self.position += offset
-        elif from_what == 2: # end of file (offset must be -ve)
+        elif whence == 2: # end of file (offset must be -ve)
             self.position = self.apfs_container_size + offset
         else:
-            raise Exception('Unexpected value in from_what (only 0,1,2 are allowed), value was ' + str(from_what))
+            raise Exception('Unexpected value in whence (only 0,1,2 are allowed), value was ' + str(whence))
 
     def tell(self):
         return self.position
@@ -732,6 +962,21 @@ class ApfsExtent:
         container.seek(self.block_num * container.block_size)
         ## TODO: Create buffered read, in case of really large files!!
         return container.read(self.size)
+    
+    def GetSomeData(self, container, max_size=41943040): # max 40MB
+        try:
+            container.seek(self.block_num * container.block_size)
+            # return data in chunks of max_size
+            if self.size <= max_size:
+                yield container.read(self.size)
+            else:
+                num_full_pieces = self.size // max_size
+                for i in range(num_full_pieces):
+                    yield container.read(max_size)
+                if self.size % max_size:
+                    yield container.read(self.size % max_size)
+        except GeneratorExit:
+            pass
 
 class ApfsFile():
     def __init__(self, apfs_file_meta, logical_size, extents, apfs_container):
@@ -739,7 +984,246 @@ class ApfsFile():
         self.file_size = logical_size
         self.extents = extents
         self.container = apfs_container
+        self.closed = False
+        self._pointer = 0
+        self._buffer = b''
+        self._buffer_start = 0
 
+    def _GetDataFromExtents(self, extents, total_size):
+        '''Retrieves data from extents'''
+        content = b''
+        if total_size == 0: 
+            return content
+        bytes_left = total_size
+        for extent in extents:
+            if bytes_left <= 0:
+                # Not so uncommon in reality! For files that grow and shrink, APFS does not reclaim clusters immediately.
+                log.debug ("mismatch between logical size and extents!")
+                break
+            data = extent.GetData(self.container)
+            data_len = extent.size
+            if data_len >= bytes_left:
+                content += data[:bytes_left]
+                bytes_left = 0
+            else:
+                content += data
+                bytes_left -= data_len
+        if bytes_left > 0:
+            log.error ("Error, could not get all pieces of file for file - " + self.meta.name + " cnid=" + str(self.meta.cnid))
+        return content
+
+    def _GetSomeDataFromExtents(self, extents, total_size, offset, size):
+        '''Retrieves data from extents, corresponding to a file offset and specific size
+           It is assumed that size and offset values are sanitized and fall within
+           the range of logical file content
+        '''
+        content = b''
+        ext_content = b''
+        if total_size == 0: 
+            return content
+        bytes_left_in_file = total_size
+        bytes_consumed = 0
+        desired_size = size
+
+        break_main_loop = False
+        for extent in extents:
+            if bytes_left_in_file <= 0:
+                # Not so uncommon in reality! For files that grow and shrink, APFS does not reclaim clusters immediately.
+                log.debug ("mismatch between logical size and extents!")
+                break
+            data_len = extent.size
+            if (bytes_consumed <= offset):
+                if offset >= (bytes_consumed + data_len):
+                    # not in range yet
+                    bytes_consumed += data_len
+                    bytes_left_in_file -= data_len
+                else:
+                    # reached desired start offset
+                    extent_slice_consumed = 0
+                    for data in extent.GetSomeData(self.container):
+                        start_pos = offset - bytes_consumed - extent_slice_consumed
+                        if start_pos >= len(data): # Case when extent slicing results in this, we only want let's say 3rd yield onwards!
+                            extent_slice_consumed += len(data)
+                            continue
+                        ext_content = data[start_pos : start_pos + size] # Perhaps return full buffer, let caller truncate buffer!
+                        content += ext_content
+                        ext_content_len = len(ext_content)
+                        
+                        if ext_content_len == size: # will be <= size
+                            break_main_loop = True
+                            break
+                        else:
+                            offset += ext_content_len
+                            size -= ext_content_len
+                            extent_slice_consumed += len(data) #ext_content_len 
+
+                    bytes_consumed += data_len
+                    bytes_left_in_file -= data_len
+                    if break_main_loop: break
+            else:
+                log.debug('Should it ever be here?? bytes_consumed={} offset={}, file={} cnid={}'.format(bytes_consumed, offset, self.meta.name, self.meta.cnid))
+                break
+        if len(content) != desired_size:
+            log.error ("Error, could not get some pieces of file={} cnid={} len(content)={} desired_size={}".format(self.meta.name, self.meta.cnid, len(content), desired_size))
+        return content
+
+    def readAll(self):
+        '''return entire file in one buffer'''
+        self.closed = False
+        file_content = b''
+        if self.meta.is_symlink: # if symlink, return symlink  path as data
+            file_content = self.meta.attributes['com.apple.fs.symlink'][1]
+        #elif self.meta.is_compressed:
+        #    file_content = self._readCompressedAll() #moved to ApfsFileCompressed
+        else:
+            file_content = self._GetDataFromExtents(self.extents, self.meta.logical_size)
+        self.closed = True
+        return file_content
+
+    def _check_closed(self):
+        if self.closed:
+            raise ValueError("File is closed!")
+
+    # file methods
+    def close(self):
+        self.closed = True
+        self._buffer = None
+        self._buffer_start = 0
+
+    def tell(self):
+        self._check_closed()
+        return self._pointer
+
+    def seek(self, offset, whence=0):
+        self._check_closed()
+        if whence == 0:   # absolute
+            self._pointer = offset
+        elif whence == 1: # relative
+            self._pointer += offset
+        elif whence == 2: # relative to file's end
+            self._pointer = self.file_size + offset
+
+    def read(self, size_to_read=None):
+        self._check_closed()
+        avail_to_read = self.file_size - self._pointer
+        if avail_to_read <= 0: # at or beyond the end of file
+            return b''
+        if (size_to_read is None) or (size_to_read > avail_to_read):
+            size_to_read = avail_to_read
+        data = b''
+        original_file_pointer = self._pointer
+        buffer_len = len(self._buffer)
+        if buffer_len:
+            if  (self._pointer >= self._buffer_start) and \
+                (self._pointer < (self._buffer_start + buffer_len) ):
+                # Data requested (or part of it) is in our cached buffer
+                start_pos = self._pointer - self._buffer_start
+                data = self._buffer[start_pos : start_pos + min(size_to_read, buffer_len)]
+                self._pointer += len(data)
+                if size_to_read <= buffer_len: # got all required data
+                    return data
+                else:                          # still more data needed!
+                    size_to_read -= len(data)
+                    self._buffer = data
+        #TODO check
+        if self.meta.is_symlink: # if symlink, return symlink  path as data
+            data += self.meta.attributes['com.apple.fs.symlink'][1][0:size_to_read]
+        else:
+            data += self._GetSomeDataFromExtents(self.extents, self.meta.logical_size, self._pointer, size_to_read)
+
+        self._buffer_start = original_file_pointer
+        self._pointer += len(data)
+        self._buffer = data
+        return data
+
+class LzvnCompressionParams(object):
+    def __init__(self, header_size, chunk_offsets, uncompressed_size):
+        self.header_size = header_size
+        self.chunk_offsets = chunk_offsets
+        self.num_blocks = len(chunk_offsets)
+        self.chunk_info = [] # [ [chunk_offset, chunk_size, uncomp_offset_start, uncomp_offset_end], .. ] List of lists
+        uncomp_offset_start = 0
+        i = 1
+        src_offset = header_size
+        for offset in chunk_offsets:
+            compressed_size = offset - src_offset
+            if self.num_blocks == i: # last block
+                uncomp_offset_end = uncompressed_size
+                if uncomp_offset_end - uncomp_offset_start <= 0 or uncomp_offset_end - uncomp_offset_start > 65536:
+                    log.error("Problem reading LZVN offsets, looks like corrupted data!")
+            else:
+                uncomp_offset_end = uncomp_offset_start + 65536
+            self.chunk_info.append([src_offset, compressed_size, uncomp_offset_start, uncomp_offset_end])
+            src_offset = offset
+            uncomp_offset_start += 65536
+            i += 1
+
+
+class ZlibCompressionParams(object):
+    def __init__(self, header_size, total_size, data_size, flags, blocks_data_size, num_blocks):
+        self.header_size = header_size
+        self.total_size = total_size
+        self.data_size = data_size
+        self.flags = flags
+        self.blocks_data_size = blocks_data_size
+        self.num_blocks = num_blocks
+        self.chunk_info = [] # [ [chunk_offset, chunk_size, uncomp_offset_start, uncomp_offset_end], .. ] List of lists
+
+class ApfsFileCompressed(ApfsFile):
+    def __init__(self, apfs_file_meta, logical_size, extents, apfs_container):
+        super().__init__(apfs_file_meta, logical_size, extents, apfs_container)
+        self.data_is_inline = (self.meta.decmpfs == None) # header & data in extent, data is inline with header
+        self.compressed_header = None
+        self.magic = None
+        self.compression_type = None
+        self.uncompressed_size = logical_size
+        if apfs_file_meta.compressed_extent_size:
+            self.file_size = apfs_file_meta.compressed_extent_size # Needed, so base class can read compressed extents
+
+        # Following will store info/data about uncompressed stream, the base class will store compressed data
+        self.uncomp_pointer = 0
+        self.uncomp_buffer = b''
+        self.uncomp_buffer_start = 0
+        self.lzvn_info = None
+        self.zlib_info = None
+
+    def getChunkList(self, chunk_info, req_offset, req_size):
+        '''Returns a list of chunk_info based on required uncompressed offset and size'''
+        ret_list = []
+        start_found = False
+        end_found = False
+        req_offset_end = req_offset + req_size
+        for chunk_offset, chunk_size, uncomp_offset_start, uncomp_offset_end in chunk_info:
+            if not start_found:
+                if uncomp_offset_start <= req_offset:
+                    if req_offset < uncomp_offset_end:
+                        # start found in this chunk
+                        ret_list.append([chunk_offset, chunk_size, uncomp_offset_start, uncomp_offset_end])
+                        start_found = True
+                        if req_offset_end <= uncomp_offset_end:
+                            end_found = True
+                            break
+                    else:
+                        continue
+                else:
+                    log.debug("should not go here getChunkList()...")
+                    break
+            # looking for end
+            else: # if not end_found:
+                if uncomp_offset_start < req_offset_end:
+                    if req_offset_end <= uncomp_offset_end:
+                        # end found in this chunk
+                        ret_list.append([chunk_offset, chunk_size, uncomp_offset_start, uncomp_offset_end])
+                        end_found = True
+                        break
+                    else:
+                        # not the end, but an intermediate block
+                        ret_list.append([chunk_offset, chunk_size, uncomp_offset_start, uncomp_offset_end])
+                else:
+                    log.debug("should not go here getChunkList()....")
+        return ret_list
+
+        
     def _lzvn_decompress(self, compressed_stream, compressed_size, uncompressed_size):
         '''
             Adds Prefix and Postfix bytes as required by decompressor, 
@@ -747,10 +1231,15 @@ class ApfsFile():
         '''
         header = b'bvxn' + struct.pack('<I', uncompressed_size) + struct.pack('<I', compressed_size)
         footer = b'bvx$'
-        return lzfse.decompress(header + compressed_stream + footer)
+        decompressed_stream = lzfse.decompress(header + compressed_stream + footer)
+        len_dec = len(decompressed_stream)
+        if len_dec != uncompressed_size:
+            log.error("_lzvn_decompress ERROR - decompressed_stream size is incorrect! Decompressed={} Expected={}. Padding stream with nulls".format(len_dec, uncompressed_size))
+            decompressed_stream += b'\x00'*(uncompressed_size - len_dec)
+        return decompressed_stream
 
     def _readCompressedAll(self):
-        '''Read compressed data'''
+        '''Read all compressed data in a file'''
         file_content = b''
         decmpfs = self.meta.decmpfs
         if decmpfs == None: # header & data in extent, data is inline with header
@@ -765,6 +1254,100 @@ class ApfsFile():
                 compressed_data = self._GetDataFromExtents(self.extents, extent_data_size)
                 # Now decompress it according to compression_type
                 file_content = self._DecompressNotInline(decmpfs, compressed_data)
+        return file_content
+
+    def _readCompressed(self, size): #TODO complete
+        '''Read compressed data given offset and size'''
+        file_content = b''
+        decmpfs = self.meta.decmpfs
+        #if decmpfs == None: # header & data in extent, data is inline with header
+        if self.data_is_inline:
+            decmpfs = self._GetDataFromExtents(self.extents, self.meta.compressed_extent_size)
+            # Now decompress it according to compression_type
+            file_content = self._DecompressInline(decmpfs)
+            self.uncomp_buffer = file_content # Buffer has whole file
+            self.uncomp_buffer_start = 0
+        else: # we already have header, data is in extent or inline
+            extent_data_size = self.meta.compressed_extent_size
+            if extent_data_size == 0:   # data is inline
+                file_content = self._DecompressInline(decmpfs)
+                self.uncomp_buffer = file_content # Buffer has whole file
+                self.uncomp_buffer_start = 0
+            else:                       # data is in extent (resource fork)
+                # First read the header size first from 1st extent block, then read all those extent blocks
+                if self.compressed_header == None: # read compressed header
+                    compressed_header = self._GetSomeDataFromExtents(self.extents, extent_data_size, 0, min(extent_data_size, 8192)) # replace with super().read() ??
+                    self.magic, self.compression_type, self.uncompressed_size = struct.unpack('<IIQ', decmpfs[0:16])
+                    if self.compression_type == 4:   # zlib in ResourceFork
+                        # Read Header (HFSPlusCmpfRsrcHead)
+                        header_size, total_size, data_size, flags = struct.unpack('>IIII', compressed_header[0:16])
+                        # Read Block info
+                        blocks_data_size = struct.unpack('>I', compressed_header[header_size : header_size + 4])[0]
+                        num_blocks = struct.unpack('<I', compressed_header[header_size + 4 : header_size + 8])[0]
+                        base_offset = header_size + 8
+                        self.zlib_info = ZlibCompressionParams(header_size, total_size, data_size, flags, blocks_data_size, num_blocks)
+
+                        # Calculate if we need to read more extents to read all chunk info
+                        farthest_pos = base_offset + (num_blocks - 1)*8 + 8
+                        if farthest_pos > 8192: # fetch more data
+                            compressed_header += self._GetSomeDataFromExtents(self.extents, extent_data_size, 8192, min(extent_data_size, farthest_pos))
+                        # Read chunks
+                        uncomp_offset_start = 0
+                        for i in range(num_blocks):
+                            chunk_offset, chunk_size = struct.unpack('<II', compressed_header[base_offset + i*8 : base_offset + i*8 + 8])
+                            if i == num_blocks - 1: # last block
+                                uncomp_offset_end = uncomp_offset_start + (self.uncompressed_size % 65536)
+                            else:
+                                uncomp_offset_end = uncomp_offset_start + 65536
+                            self.zlib_info.chunk_info.append([header_size + 4 + chunk_offset, chunk_size, uncomp_offset_start, uncomp_offset_end])
+                            uncomp_offset_start += 65536
+                    elif self.compression_type == 8: # lzvn in ResourceFork
+                        headerSize = struct.unpack('<I', compressed_header[0:4])[0]
+                        num_chunkOffsets = headerSize//4 - 1
+
+                        # Calculate if we need to read more extents to read all chunk info
+                        farthest_pos = headerSize
+                        if farthest_pos > 8192: # fetch more data
+                            compressed_header += self._GetSomeDataFromExtents(self.extents, extent_data_size, 8192, min(extent_data_size, farthest_pos))
+                        chunkOffsets = struct.unpack('<{}I'.format(num_chunkOffsets), compressed_header[4 : 4 + (num_chunkOffsets * 4)])
+                        self.lzvn_info = LzvnCompressionParams(headerSize, chunkOffsets, self.uncompressed_size)
+                
+                # Read compressed_data chunks and decrypt them
+                decompressed = b''
+                req_start = self.uncomp_pointer
+                #req_end   = self.uncomp_pointer + size
+                if self.compression_type == 4:   # zlib
+                   # Determine chunks to decryt
+                    chunks_to_decompress = self.getChunkList(self.zlib_info.chunk_info, req_start, size)
+                    for chunk_offset, chunk_size, uncomp_offset_start, uncomp_offset_end in chunks_to_decompress:
+                        super().seek(self.zlib_info.header_size + 4 + chunk_offset)
+                        compressed_data = super().read(chunk_size)
+                        if compressed_data[0] == 0xFF:
+                            decompressed += compressed_data[1 : chunk_size]
+                        else:
+                            decompressed += zlib.decompress(compressed_data)
+                elif self.compression_type == 8: # lzvn
+                    chunks_to_decompress = self.getChunkList(self.lzvn_info.chunk_info, req_start, size)
+                    for chunk_offset, chunk_size, uncomp_offset_start, uncomp_offset_end in chunks_to_decompress:
+                        super().seek(chunk_offset)
+                        compressed_data = super().read(chunk_size)
+                        if compressed_data[0] == 0x06:
+                            decompressed += compressed_data[1:]
+                        else:
+                            decompressed += self._lzvn_decompress(compressed_data, chunk_size, uncomp_offset_end - uncomp_offset_start)
+
+                # got all decompressed data, now slice to required part
+                buffer_start = chunks_to_decompress[0][2]
+                if buffer_start == req_start: pass # OK
+                elif buffer_start < req_start:
+                    decompressed = decompressed[req_start - buffer_start : req_start - buffer_start + size]
+                else:
+                    log.error("Should not be here buffer_start > req_start")
+
+                file_content = decompressed
+
+        #self.uncomp_buffer = file_content # TODO
+        #self.uncomp_buffer_start = 0
         return file_content
 
     def _DecompressNotInline(self, decmpfs, compressed_data):
@@ -828,7 +1411,6 @@ class ApfsFile():
 
     def _DecompressInline(self, decmpfs):
         decompressed = b''
-        #decmpfs = decmpfs.tobytes()
         total_len = len(decmpfs)
         magic, compression_type, uncompressed_size = struct.unpack('<IIQ', decmpfs[0:16])
 
@@ -855,44 +1437,84 @@ class ApfsFile():
             log.error ("compression_type = {} --> Not seen before (inline), don't know how to handle!".format(compression_type))
         return decompressed
 
-    def _GetDataFromExtents(self, extents, total_size):
-        '''Retrieves data from extents'''
-        content = b''
-        if total_size == 0: 
-            return content
-        bytes_left = total_size
-        for extent in extents:
-            if bytes_left <= 0:
-                # Not so uncommon in reality! For files that grow and shrink, APFS does not reclaim clusters immediately.
-                log.debug ("mismatch between logical size and extents!")
-                break
-            data = extent.GetData(self.container)
-            data_len = extent.size
-            if data_len >= bytes_left:
-                content += data[:bytes_left]
-                bytes_left = 0
-            else:
-                content += data
-                bytes_left -= data_len
-        if bytes_left > 0:
-            log.error ("Error, could not get all pieces of file for file - " + self.meta.name + " cnid=" + str(self.meta.cnid))
-        return content
-
     def readAll(self):
         '''return entire file in one buffer'''
+        self.closed = False
         file_content = b''
-        if self.meta.is_compressed:
-            return self._readCompressedAll()
-        elif self.meta.is_symlink: # if symlink, return symlink  path as data
-            return self.meta.attributes['com.apple.fs.symlink'][1]
+        if self.meta.is_symlink: # if symlink, return symlink  path as data
+            file_content = self.meta.attributes['com.apple.fs.symlink'][1]
+            log.error("This should not happen, compressed + symlink? symlink={}".format(file_content))
         else:
-            file_content = self._GetDataFromExtents(self.extents, self.meta.logical_size)
+            file_content = self._readCompressedAll()
+
+        self.closed = True
         return file_content
-    
+
+    def close(self):
+        self.uncomp_pointer = None
+        self.uncomp_buffer_start = 0
+        self.uncomp_buffer = None
+        super().close()
+
+    def tell(self):
+        self._check_closed()
+        return self.uncomp_pointer
+
+    def seek(self, offset, whence=0):
+        self._check_closed()
+        if whence == 0:   # absolute
+            self.uncomp_pointer = offset
+        elif whence == 1: # relative
+            self.uncomp_pointer += offset
+        elif whence == 2: # relative to file's end
+            self.uncomp_pointer = self.uncompressed_size + offset
+
+    def read(self, size_to_read=None):
+        self._check_closed()
+        avail_to_read = self.uncompressed_size - self.uncomp_pointer
+        if avail_to_read <= 0: # at or beyond the end of file
+            return b''
+        if size_to_read is None:
+            size_to_read = avail_to_read
+        data = b''
+        original_file_pointer = self.uncomp_pointer
+        buffer_len = len(self.uncomp_buffer)
+        if buffer_len:
+            if  (self.uncomp_pointer >= self.uncomp_buffer_start) and \
+                (self.uncomp_pointer < (self.uncomp_buffer_start + buffer_len) ):
+                # Data requested (or part of it) is in our cached buffer
+                start_pos = self.uncomp_pointer - self.uncomp_buffer_start
+                data = self.uncomp_buffer[start_pos : start_pos + min(size_to_read, buffer_len)]
+                self.uncomp_pointer += len(data)
+                if size_to_read <= buffer_len: # got all required data
+                    return data
+                else:                          # still more data needed!
+                    size_to_read -= len(data)
+                    self.uncomp_buffer = data
+        #TODO READ THE DATA
+        if self.meta.is_symlink: # if symlink, return symlink  path as data 
+            data += self.meta.attributes['com.apple.fs.symlink'][1][0:size_to_read]
+            log.error("This should not happen, compressed + symlink?")
+        
+        # If file is < 10MB, read entire file
+        if self.uncompressed_size < 10485760:
+            self.uncomp_buffer = self._readCompressedAll()
+            self.uncomp_buffer_start = 0
+            data = self.uncomp_buffer[self.uncomp_pointer : self.uncomp_pointer + size_to_read]
+            self.uncomp_pointer += len(data)
+            return data
+        else:
+            data += self._readCompressed(size_to_read) # TODO
+
+        self.uncomp_buffer_start = original_file_pointer
+        self.uncomp_pointer += len(data)
+        self.uncomp_buffer = data 
+        return data
 
 class ApfsFileMeta:
-    def __init__(self, name, cnid, parent_cnid, created, modified, changed, accessed, index_time, flags, links, bsd_flags, uid, gid, mode, logical_size, physical_size, item_type):
+    def __init__(self, name, path, cnid, parent_cnid, created, modified, changed, accessed, index_time, flags, links, bsd_flags, uid, gid, mode, logical_size, physical_size, item_type):
         self.name = name
+        self.path = path
         self.cnid = cnid
         self.parent_cnid = parent_cnid
         #self.extent_cnid = extent_cnid
