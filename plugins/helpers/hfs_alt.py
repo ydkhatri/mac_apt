@@ -35,7 +35,7 @@ lzfse_capable = False
 try:
     import lzfse
     lzfse_capable = True
-except ImportError as Exception:
+except ImportError:
     print("lzfse not found. Won't decompress lzfse/lzvn streams")
 
 def write_file(filename,data):
@@ -129,14 +129,14 @@ class HFSFile(object):
     def readBlock(self, n):
         bs = self.volume.blockSize
         if n*bs > self.logicalSize:
-            raise Exception("BLOCK OUT OF BOUNDS")
+            raise ValueError("BLOCK OUT OF BOUNDS")
         bc = 0
         for extent in self.extents:
             bc += extent.blockCount
             if n < bc:
                 lba = extent.startBlock+(n-(bc-extent.blockCount))
                 if not self.deleted and self.fileID != kHFSAllocationFileID and  not self.volume.isBlockInUse(lba):
-                    raise Exception("FAIL, block %x not marked as used" % n)
+                    raise ValueError("FAIL, block %x not marked as used" % n)
                 return self.processBlock(self.volume.read(lba*bs, bs), lba)
         return b""
 
@@ -163,7 +163,7 @@ class HFSCompressedResourceFork(HFSFile):
         buff = super(HFSCompressedResourceFork, self).readAllBuffer()
         r = b""
         if self.compression_type in [7, 11]: # lzvn or lzfse # Does it ever go here????
-            raise Exception("Did not expect type " + str(self.compression_type) + " in resource fork")
+            raise ValueError("Did not expect type " + str(self.compression_type) + " in resource fork")
             try:
                 # The following is only for lzvn, not encountered lzfse yet!
                 data_start = self.header.headerSize
@@ -172,7 +172,7 @@ class HFSCompressedResourceFork(HFSFile):
                 if output_file: output_file.write(decompressed)
                 else: r += decompressed
             except Exception as ex:
-                raise Exception("Exception from lzfse_lzvn decompressor")
+                raise ValueError("Exception from lzfse_lzvn decompressor")
         elif self.compression_type in [8, 12]: # lzvn or lzfse in 64k chunks
             try:
                 # The following is only for lzvn, not encountered lzfse yet!
@@ -198,7 +198,7 @@ class HFSCompressedResourceFork(HFSFile):
                     else: r += decompressed
                     i += 1
             except Exception as ex:
-                raise Exception("Exception from lzfse_lzvn decompressor")
+                raise ValueError("Exception from lzfse_lzvn decompressor")
         else:
             base = self.header.headerSize + 4
             for b in self.blocks.HFSPlusCmpfRsrcBlock:
@@ -217,7 +217,7 @@ class HFSVolume(object):
             self.header = HFSPlusVolumeHeader.parse(data[0x400:0x800])
             assert self.header.signature == 0x4858 or self.header.signature == 0x482B
         except:
-            raise Exception("Not an HFS+ image")
+            raise ValueError("Not an HFS+ image")
         #self.is_hfsx = self.header.signature == 0x4858
         self.blockSize = self.header.blockSize
         self.allocationFile = HFSFile(self, self.header.allocationFile, kHFSAllocationFileID)
@@ -382,7 +382,7 @@ class HFSVolume(object):
         k,v = self.catalogTree.getRecordFromPath(file_path)
         if k and v.recordType in (kHFSPlusFileRecord, kHFSPlusFolderRecord):
             return self.GetFileMACTimesFromFileRecord(v)
-        raise Exception("Path not found or not file/folder!")
+        raise ValueError("Path not found or not file/folder!")
 
     def IsValidFilePath(self, path):
         '''Check if a file path is valid, does not check for folders!'''
@@ -398,6 +398,13 @@ class HFSVolume(object):
             return False
         return v.recordType == kHFSPlusFolderRecord #TODO: Check for hard links , sym links?
 
+    def IsSymbolicLink(self, path):
+        '''Check if a path points to a file/folder or symbolic link'''
+        mode = self.GetFileMode(path)
+        if mode:
+            return (mode & S_IFLNK) == S_IFLNK
+        return False
+
     def GetFileSizeFromFileRecord(self, v):
         xattr = self.getXattr(v.data.fileID, "com.apple.decmpfs")
         if xattr:
@@ -412,11 +419,19 @@ class HFSVolume(object):
         if k and v.recordType == kHFSPlusFileRecord:
             return self.GetFileSizeFromFileRecord(v)
         else:
-            raise Exception("Path not found")
+            raise ValueError("Path not found")
 
     def GetUserAndGroupID(self, path):
         k,v = self.catalogTree.getRecordFromPath(path)
         if k and v.recordType in (kHFSPlusFileRecord, kHFSPlusFolderRecord):
             return (v.data.HFSPlusBSDInfo.ownerID, v.data.HFSPlusBSDInfo.groupID)
         else:
-            raise Exception("Path not found") 
+            raise ValueError("Path not found")
+
+    def GetFileMode(self, path):
+        '''Returns the file or folder's fileMode '''
+        k,v = self.catalogTree.getRecordFromPath(path)
+        if k and v and v.recordType in (kHFSPlusFileRecord, kHFSPlusFolderRecord):
+            return v.data.HFSPlusBSDInfo.fileMode
+        else:
+            raise ValueError("Path not found or not a file/folder")

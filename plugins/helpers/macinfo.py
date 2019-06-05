@@ -190,6 +190,14 @@ class NativeHfsParser:
             log.exception('NativeHFSParser->Error trying to get MAC times')
         return { 'c_time':None, 'm_time':None, 'cr_time':None, 'a_time':None }
 
+    def IsSymbolicLink(self, path):
+        '''Check if a path is a symbolic link'''
+        try:
+            return self.volume.IsSymbolicLink(path)
+        except Exception:
+            log.exception('NativeHFSParser->Failed trying to check for symbolic link')
+        return False
+
     def IsValidFilePath(self, path):
         '''Check if a file path is valid, does not check for folders!'''
         try:
@@ -440,6 +448,21 @@ class MacInfo:
         except Exception as ex:
             error = 'Exception from ReadPlist, trying to open file. Exception=' + str(ex)
         return (False, None, error)
+
+    def IsSymbolicLink(self, path):
+        '''Check if path represents a symbolic link'''
+        if self.use_native_hfs_parser:
+            return self.hfs_native.IsSymbolicLink(path)
+        return False
+
+    def ReadSymLinkTargetPath(self, path):
+        '''Returns the target file/folder's path from the sym link path provided'''
+        f = self.OpenSmallFile(path)
+        if f:
+            target_path = f.read()
+            f.close()
+            return target_path.decode('utf8')
+        return ''
 
     def IsValidFilePath(self, path):
         '''Check if a file path is valid, does not check for folders!'''
@@ -920,6 +943,9 @@ class ApfsMacInfo(MacInfo):
             log.exception('Error trying to get MAC times')
         return times
 
+    def IsSymbolicLink(self, path):
+        return self.osx_FS.IsSymbolicLink(self.apfs_db, path)
+
     def IsValidFilePath(self, path):
         return self.osx_FS.DoesFileExist(self.apfs_db, path)
 
@@ -938,6 +964,10 @@ class ApfsMacInfo(MacInfo):
     def OpenSmallFile(self, path):
         '''Open files less than 200 MB, returns open file handle'''
         return self.osx_FS.OpenSmallFile(path, self.apfs_db)
+
+    def open(self, path):
+        '''Open file and return a file-like object'''
+        return self.osx_FS.open(path, self.apfs_db)
 
     def ExtractFile(self, tsk_path, destination_path):
         return self.osx_FS.CopyOutFile(tsk_path, destination_path, self.apfs_db)
@@ -1104,6 +1134,18 @@ class MountedMacInfo(MacInfo):
                 log.debug("Exception details:\n", exc_info=True) #traceback.print_exc()
                 log.error("Failed to get dir info!")
         return items
+
+    def ReadSymLinkTargetPath(self, path):
+        '''Returns the target file/folder's path from the sym link path provided'''
+        target_path = ''
+        try:
+            if not self.is_windows:
+                target_path = os.readlink(self.BuildFullPath(path))
+            else:
+                target_path = MacInfo.ReadSymLinkTargetPath(path)
+        except:
+            log.exception("Error resolving symlink : " + path)
+        return target_path
 
     def OpenSmallFile(self, path):
         try:

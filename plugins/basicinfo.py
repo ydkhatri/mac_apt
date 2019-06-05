@@ -128,27 +128,37 @@ def GetTimezone(mac_info):
                 basic_data.append(['TIMEZONE', 'SelectedCity.' + item, data, '', global_pref_plist_path])
                 num_items_read += 1
             except Exception: pass
-        if num_items_read < 2:
+        if num_items_read < 2 and (mac_info.GetVersionDictionary()['minor'] < 12): # Not seen in later versions! 
             log.info('Only read {} items from TimeZone.SelectedCity, this does not seem right!'.format(num_items_read))
     else:
         log.error('Failed to read plist ' + global_pref_plist_path + " Error was : " + error_message)
 
     # Read /private/etc/localtime --> /usr/share/zoneinfo/xxxxxxx
-    f = mac_info.OpenSmallFile('/private/etc/localtime')
-    if f:
-        try:
-            data = f.read(128).decode('utf8')
-            if data.startswith('/usr/share/zoneinfo'):
-                data = data[20:]
-            elif data.startswith('/var/db/timezone/zoneinfo/'): # on HighSierra
-                data = data[26:]
-            data = data.rstrip('\x00')
-            basic_data.append(['TIMEZONE', 'TimeZone Set', data, 'Timezone on machine', '/private/etc/localtime'])
-        except:
-            # if mounted on local system, this will resolve to the actual file and throw exception, we just wanted the symlink path!
-            log.warning('Could not read file /private/etc/localtime. If this you are parsing local system using MOUNTED option this is normal!')
-    else:
-        log.error('Could not open file /private/etc/localtime to read timezone information')
+    try:
+        tz_symlink_path = mac_info.ReadSymLinkTargetPath('/private/etc/localtime')
+        if tz_symlink_path.startswith('/usr/share/zoneinfo'):
+            tz_symlink_path = tz_symlink_path[20:]
+        elif tz_symlink_path.startswith('/var/db/timezone/zoneinfo/'): # on HighSierra
+            tz_symlink_path = tz_symlink_path[26:]
+        basic_data.append(['TIMEZONE', 'TimeZone Set', tz_symlink_path, 'Timezone on machine', '/private/etc/localtime'])
+    except Exception as ex:
+        log.error('Error trying to read timezone information - ' + str(ex))
+
+    # f = mac_info.OpenSmallFile('/private/etc/localtime')
+    # if f:
+    #     try:
+    #         data = f.read(128).decode('utf8')
+    #         if data.startswith('/usr/share/zoneinfo'):
+    #             data = data[20:]
+    #         elif data.startswith('/var/db/timezone/zoneinfo/'): # on HighSierra
+    #             data = data[26:]
+    #         data = data.rstrip('\x00')
+    #         basic_data.append(['TIMEZONE', 'TimeZone Set', data, 'Timezone on machine', '/private/etc/localtime'])
+    #     except:
+    #         # if mounted on local system, this will resolve to the actual file and throw exception, we just wanted the symlink path!
+    #         log.warning('Could not read file /private/etc/localtime. If this you are parsing local system using MOUNTED option this is normal!')
+    # else:
+    #     log.error('Could not open file /private/etc/localtime to read timezone information')
 
 # Source - /Library/Preferences/com.apple.loginwindow.plist
 # TODO: Perhaps move this to users plugin?
@@ -158,7 +168,7 @@ def GetLastLoggedInUser(mac_info):
     success, plist, error_message = mac_info.ReadPlist(loginwindow_plist_path)
     if success:
         try:
-            for item, value in list(plist.items()):
+            for item, value in plist.items():
                 if item in ['autoLoginUser','GuestEnabled','lastUserName']:
                     basic_data.append(['USER-LOGIN', item, value, '', loginwindow_plist_path])
                 elif item == 'lastUser':
@@ -168,7 +178,7 @@ def GetLastLoggedInUser(mac_info):
                 elif item.startswith('Optimizer') or item in ['SHOWFULLNAME']:
                     continue
                 elif item == 'AccountInfo':
-                    for k, v in list(value.items()):
+                    for k, v in value.items():
                         basic_data.append(['USER-LOGIN', item + '.' +  k, str(v), '?', loginwindow_plist_path])
                 else:
                     basic_data.append(['USER-LOGIN', item, str(value), 'unknown', loginwindow_plist_path])

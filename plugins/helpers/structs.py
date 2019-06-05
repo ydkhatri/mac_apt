@@ -79,6 +79,36 @@ kHFSVolumeSoftwareLockBit       = 15
 kHFSCaseFolding   = 0xCF	#Case folding (case-insensitive) # For HFSX only
 kHFSBinaryCompare = 0xBC	#Binary compare (case-sensitive) # For HFSX only
 
+# HFSPlusBSDInfo.fileMode values:
+S_ISUID = 0o004000     # set user id on execution
+S_ISGID = 0o002000     # set group id on execution
+S_ISTXT = 0o001000     # sticky bit
+
+S_IRWXU = 0o000700     # RWX mask for owner
+S_IRUSR = 0o000400     # R for owner
+S_IWUSR = 0o000200     # W for owner
+S_IXUSR = 0o000100     # X for owner
+
+S_IRWXG = 0o000070     # RWX mask for group
+S_IRGRP = 0o000040     # R for group
+S_IWGRP = 0o000020     # W for group
+S_IXGRP = 0o000010     # X for group
+
+S_IRWXO = 0o000007     # RWX mask for other
+S_IROTH = 0o000004     # R for other
+S_IWOTH = 0o000002     # W for other
+S_IXOTH = 0o000001     # X for other
+
+S_IFMT   = 0o170000    # type of file mask
+S_IFIFO  = 0o010000    # named pipe (fifo)
+S_IFCHR  = 0o020000    # character special
+S_IFDIR  = 0o040000    # directory
+S_IFBLK  = 0o060000    # block special
+S_IFREG  = 0o100000    # regular
+S_IFLNK  = 0o120000    # symbolic link
+S_IFSOCK = 0o140000    # socket
+S_IFWHT  = 0o160000    # whiteout
+
 DECMPFS_MAGIC = 0x636d7066  #cmpf
 
 HFSPlusExtentDescriptor = "HFSPlusExtentDescriptor" / Struct(
