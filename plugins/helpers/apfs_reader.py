@@ -61,7 +61,7 @@ class ApfsDbInfo:
 
     def __init__(self, db):
         self.db = db
-        self.version = 1 # This will change if db structure changes in future
+        self.version = 2 # This will change if db structure changes in future
         self.ver_table_name = 'Version_Info'
         self.vol_table_name = 'Volumes_Info'
         self.version_info = collections.OrderedDict([('Version',DataType.INTEGER)])
@@ -137,20 +137,20 @@ class ApfsFileSystemParser:
 
         self.hardlink_records = []
         self.extent_records = []
-        self.thread_records = []
-        self.named_records = []
+        self.inode_records = []
+        self.dir_records = []
         self.attr_records = []
         
         self.hardlink_info = collections.OrderedDict([('CNID',DataType.INTEGER), ('Parent_CNID',DataType.INTEGER), 
                                                     ('Name',DataType.TEXT)])
         self.extent_info = collections.OrderedDict([('CNID',DataType.INTEGER), ('Offset',DataType.INTEGER), 
                                                     ('Size',DataType.INTEGER), ('Block_Num',DataType.INTEGER)])
-        self.attr_info = collections.OrderedDict([('CNID',DataType.INTEGER), ('Name',DataType.TEXT),('Type',DataType.INTEGER),('Data',DataType.BLOB),
+        self.attr_info = collections.OrderedDict([('CNID',DataType.INTEGER), ('Name',DataType.TEXT),('Flags',DataType.INTEGER),('Data',DataType.BLOB),
                                                     ('Logical_uncompressed_size',DataType.INTEGER),('Extent_CNID',DataType.INTEGER)])
-        self.thread_info = collections.OrderedDict([('CNID',DataType.INTEGER), ('Parent_CNID',DataType.INTEGER),
+        self.inode_info = collections.OrderedDict([('CNID',DataType.INTEGER), ('Parent_CNID',DataType.INTEGER),
                                                      ('Extent_CNID',DataType.INTEGER), ('Name',DataType.TEXT), ('Created',DataType.INTEGER), ('Modified',DataType.INTEGER), ('Changed',DataType.INTEGER), ('Accessed',DataType.INTEGER), ('Flags',DataType.INTEGER), ('Links_or_Children',DataType.INTEGER), ('BSD_flags',DataType.INTEGER), ('UID',DataType.INTEGER), ('GID',DataType.INTEGER), ('Mode',DataType.INTEGER), ('Logical_Size',DataType.INTEGER), ('Physical_Size',DataType.INTEGER)])
-        self.named_info = collections.OrderedDict([('CNID',DataType.INTEGER), ('Parent_CNID',DataType.INTEGER),
-                                                    ('Timestamp',DataType.INTEGER),('ItemType',DataType.INTEGER), 
+        self.dir_info = collections.OrderedDict([('CNID',DataType.INTEGER), ('Parent_CNID',DataType.INTEGER),
+                                                    ('DateAdded',DataType.INTEGER),('ItemType',DataType.INTEGER), 
                                                     ('Name',DataType.TEXT)])
         self.compressed_info = collections.OrderedDict([('CNID',DataType.INTEGER),('Data',DataType.BLOB),('Uncompressed_size',DataType.INTEGER),
                                                     ('Extent_CNID',DataType.INTEGER),('fpmc_in_extent',DataType.INTEGER),('Extent_Logical_Size',DataType.INTEGER)]) 
@@ -162,9 +162,9 @@ class ApfsFileSystemParser:
         self.container_type_files = self.container.apfs.ContentType.files
         self.container_type_location = self.container.apfs.ContentType.location
         self.ptr_type = apfs.Apfs.PointerRecord
-        self.ext_type = self.container.apfs.EntryType.extent.value
-        self.name_type = self.container.apfs.EntryType.name.value
-        self.thrd_type = self.container.apfs.EntryType.thread.value
+        self.file_ext_type = self.container.apfs.EntryType.file_extent.value
+        self.dir_rec_type = self.container.apfs.EntryType.dir_rec.value
+        self.inode_type = self.container.apfs.EntryType.inode.value
         self.hard_type = self.container.apfs.EntryType.hardlink.value
         self.attr_type = self.container.apfs.EntryType.extattr.value
         ## End optimization
@@ -174,27 +174,27 @@ class ApfsFileSystemParser:
             self.db.WriteRows(self.hardlink_records, self.name + '_Hardlinks')
         if self.extent_records:
             self.db.WriteRows(self.extent_records, self.name + '_Extents')
-        if self.thread_records:
-            self.db.WriteRows(self.thread_records, self.name + '_Threads')
+        if self.inode_records:
+            self.db.WriteRows(self.inode_records, self.name + '_Inodes')
         if self.attr_records:
             self.db.WriteRows(self.attr_records, self.name + '_Attributes')
-        if self.named_records:
-            self.db.WriteRows(self.named_records, self.name + '_IndexNodes')
+        if self.dir_records:
+            self.db.WriteRows(self.dir_records, self.name + '_IndexNodes')
 
     def create_tables(self):
         self.db.CreateTable(self.hardlink_info, self.name + '_Hardlinks')
         self.db.CreateTable(self.extent_info, self.name + '_Extents')
         self.db.CreateTable(self.attr_info, self.name + '_Attributes')
-        self.db.CreateTable(self.thread_info, self.name + '_Threads')
-        self.db.CreateTable(self.named_info, self.name + '_IndexNodes')
+        self.db.CreateTable(self.inode_info, self.name + '_Inodes')
+        self.db.CreateTable(self.dir_info, self.name + '_IndexNodes')
         self.db.CreateTable(self.compressed_info, self.name + '_Compressed_Files')
         self.db.CreateTable(self.paths_info, self.name + '_Paths')
 
     def clear_records(self):
         self.hardlink_records = []
         self.extent_records = []
-        self.thread_records = []
-        self.named_records = []
+        self.inode_records = []
+        self.dir_records = []
         self.attr_records = []
     
     def create_indexes(self):
@@ -203,7 +203,7 @@ class ApfsFileSystemParser:
                          "CREATE INDEX {0}_extent_cnid ON {0}_Extents (CNID)".format(self.name),
                          "CREATE INDEX {0}_index_cnid ON {0}_IndexNodes (CNID)".format(self.name),
                          "CREATE INDEX {0}_paths_path_cnid ON {0}_Paths (Path, CNID)".format(self.name),
-                         "CREATE INDEX {0}_threads_cnid_parent_cnid ON {0}_Threads (CNID, Parent_CNID)".format(self.name),
+                         "CREATE INDEX {0}_inodes_cnid_parent_cnid ON {0}_Inodes (CNID, Parent_CNID)".format(self.name),
                          "CREATE INDEX {0}_compressed_files_cnid ON {0}_Compressed_Files (CNID)".format(self.name)]
         for query in index_queries:
             success, cursor, error = self.db.RunQuery(query, writing=True)
@@ -233,7 +233,7 @@ class ApfsFileSystemParser:
                 " b.logical_uncompressed_size, 0 as extent_cnid, 0 as fpmc_in_extent, 0 as Extent_Logical_Size"\
                 " from {0}_Attributes as b "\
                 " left join {0}_Attributes as a on (a.cnid = b.cnid and a.Name = 'com.apple.ResourceFork') "\
-                " where b.Name='com.apple.decmpfs' and (b.Type & 2)=2 and a.cnid is null".format(self.name)
+                " where b.Name='com.apple.decmpfs' and (b.Flags & 2)=2 and a.cnid is null".format(self.name)
         if not self.run_query(type2_no_rsrc_query, True):
             return
 
@@ -242,7 +242,7 @@ class ApfsFileSystemParser:
                 "SELECT b.CNID, b.Data, b.logical_uncompressed_size, a.extent_cnid as extent_cnid, 0 as fpmc_in_extent, "\
                 " a.logical_uncompressed_size as Extent_Logical_Size FROM {0}_Attributes as b "\
                 " left join {0}_Attributes as a on (a.cnid = b.cnid and a.Name = 'com.apple.ResourceFork')"\
-                " where b.Name='com.apple.decmpfs' and (b.Type & 2)=2 and a.cnid is not null".format(self.name)
+                " where b.Name='com.apple.decmpfs' and (b.Flags & 2)=2 and a.cnid is not null".format(self.name)
         if not self.run_query(type2_rsrc_query, True):
             return
          
@@ -256,7 +256,7 @@ class ApfsFileSystemParser:
                 " left join {0}_Attributes as a on (a.cnid = b.cnid and a.Name = 'com.apple.ResourceFork') "\
                 " left join {0}_Extents as e on e.cnid=b.extent_cnid "\
                 " left join {0}_Extents as er on er.cnid=a.extent_cnid "\
-                " where b.Name='com.apple.decmpfs' and (b.Type & 1)=1"\
+                " where b.Name='com.apple.decmpfs' and (b.Flags & 1)=1"\
                 " and (e.offset=0 or e.offset is null) and (er.offset = 0 or er.offset is null)".format(self.name)
         success, cursor, error = self.db.RunQuery(type1_query, writing=False)
         if success:
@@ -336,33 +336,33 @@ class ApfsFileSystemParser:
                 if type(entry.data) == self.ptr_type: #apfs.Apfs.PointerRecord: 
                     continue
                 entry_type = entry.key.type_entry
-                if entry_type == self.ext_type: #container.apfs.EntryType.extent.value:
+                if entry_type == self.file_ext_type: #container.apfs.EntryType.file_extent.value:
                     self.num_records_read_batch += 1
                     self.num_records_read_total += 1
-                    self.extent_records.append([entry.key.key_value, entry.key.content.offset, entry.data.size, entry.data.block_num.value])
-                elif entry_type == self.name_type: #container.apfs.EntryType.name.value:
-                    # named key!!    
-                    self.num_records_read_batch += 1
-                    self.num_records_read_total += 1
-                    rec = entry.data
-                    self.named_records.append([rec.node_id, entry.key.key_value, rec.timestamp, rec.type_item.value, entry.key.content.dirname])
-                elif entry_type == self.thrd_type: #container.apfs.EntryType.thread.value:
+                    self.extent_records.append([entry.key.key_value, entry.key.content.offset, entry.data.size, entry.data.phys_block_num.value])
+                elif entry_type == self.dir_rec_type: #container.apfs.EntryType.dir_rec.value:
+                    # dir_rec key!!    
                     self.num_records_read_batch += 1
                     self.num_records_read_total += 1
                     rec = entry.data
-                    self.thread_records.append([entry.key.key_value, rec.parent_id, rec.node_id, rec.dirname, rec.creation_timestamp, rec.modified_timestamp, rec.changed_timestamp, rec.accessed_timestamp, rec.flags, rec.nchildren_or_nlink, rec.bsdflags, rec.owner_id, rec.group_id, rec.mode, rec.size1, rec.size2])
+                    self.dir_records.append([rec.node_id, entry.key.key_value, rec.date_added, rec.type_item.value, entry.key.content.dirname])
+                elif entry_type == self.inode_type: #container.apfs.EntryType.inode.value:
+                    self.num_records_read_batch += 1
+                    self.num_records_read_total += 1
+                    rec = entry.data
+                    self.inode_records.append([entry.key.key_value, rec.parent_id, rec.node_id, rec.dirname, rec.creation_timestamp, rec.modified_timestamp, rec.changed_timestamp, rec.accessed_timestamp, rec.flags, rec.nchildren_or_nlink, rec.bsdflags, rec.owner_id, rec.group_id, rec.mode, rec.size1, rec.size2])
                 elif entry_type == self.hard_type: #container.apfs.EntryType.hardlink.value:
                     self.num_records_read_batch += 1
                     self.num_records_read_total += 1
-                    self.hardlink_records.append([entry.key.key_value, entry.data.node_id, entry.data.dirname])
+                    self.hardlink_records.append([entry.key.key_value, entry.data.parent_id, entry.data.dirname])
                 elif entry_type == self.attr_type: #container.apfs.EntryType.extattr.value:
                     self.num_records_read_batch += 1
                     self.num_records_read_total += 1
                     rec = entry.data
-                    data = memoryview(rec.data)
+                    data = rec.data
                     rsrc_extent_cnid = 0
                     logical_size = 0
-                    rec_type = rec.type_ea.value
+                    rec_type = rec.flags
                     if rec_type & 1: # Extent based record
                         #rsrc_extent_cnid, logical_size, physical_size = struct.unpack('<QQQ', rsrc[1][0:24]) # True for all Type 1
                         rsrc_extent_cnid, logical_size = struct.unpack('<QQ', data[0:16])
@@ -370,12 +370,17 @@ class ApfsFileSystemParser:
                         if entry.key.content.attr_name == 'com.apple.decmpfs':
                             #magic, compression_type, uncompressed_size = struct.unpack('<IIQ', decmpfs[1][0:16])
                             logical_size = struct.unpack('<Q', data[8:16])[0] # uncompressed data size
-                    else:
-                        log.warning('Unknown rec_type 0x{:X} block_num={}'.format(rec_type, block_num))
-                    self.attr_records.append([entry.key.key_value, entry.key.content.attr_name, rec.type_ea.value, data, logical_size, rsrc_extent_cnid])
-                else:
+                    #else:
+                    #    log.warning('Unknown rec_type 0x{:X} block_num={}'.format(rec_type, block_num))
+                    self.attr_records.append([entry.key.key_value, entry.key.content.attr_name, rec.flags, data, logical_size, rsrc_extent_cnid])
+                elif entry_type == 6: # dstream_id
+                    pass # TODO: Must process this later
+                elif entry_type == 0xc: # sibling_map
+                    pass # TODO: Maybe process this later
+                elif entry_type >= 0xd:
                     log.warning('Unknown entry_type 0x{:X} block_num={}'.format(entry_type, block_num))
-
+                else:
+                    log.debug('Got entry_type 0x{:X} block_num={}'.format(entry_type, block_num))
         elif block.header.type_content == self.container_type_location:
             for _, entry in enumerate(block.body.entries):
                 if type(entry.data) == self.ptr_type: #apfs.Apfs.PointerRecord: 
@@ -671,11 +676,11 @@ class ApfsVolume:
                     #   0         1              2             3         4        5          6             7         8        9
         query = "SELECT p.CNID, p.Path, t.Parent_CNID, t.Extent_CNID, t.Name, t.Created, t.Modified, t.Changed, t.Accessed, t.Flags,"\
                 " t.Links_or_Children, t.BSD_flags, t.UID, t.GID, t.Mode, t.Logical_Size, t.Physical_Size, " \
-                " i.ItemType, i.TimeStamp, e.Offset as Extent_Offset, e.Size as Extent_Size, e.Block_Num as Extent_Block_Num, " \
+                " i.ItemType, i.DateAdded, e.Offset as Extent_Offset, e.Size as Extent_Size, e.Block_Num as Extent_Block_Num, " \
                 " c.Uncompressed_size, c.Data, c.Extent_Logical_Size, "\
                 " e_c.Offset as compressed_Extent_Offset, e_c.Size as compressed_Extent_Size, e_c.Block_Num as compressed_Extent_Block_Num"\
                 " from {0}_Paths as p "\
-                " left join {0}_Threads as t on t.CNID = p.CNID "\
+                " left join {0}_Inodes as t on t.CNID = p.CNID "\
                 " left join {0}_IndexNodes as i on i.CNID = p.CNID "\
                 " left join {0}_Extents as e on e.CNID = t.Extent_CNID "\
                 " left join {0}_Compressed_Files as c on c.CNID = t.CNID "\
@@ -715,7 +720,7 @@ class ApfsVolume:
                 return None
             # Let's also get Attributes, except decmpfs and ResourceFork (we already got those in _Compressed_Files table)
             # TODO: Remove Logical_uncompressed_size, Extent_CNID, perhaps not needed now!
-            attrib_query = "SELECT Name, Type, Data, Logical_uncompressed_size, Extent_CNID from {0}_Attributes "\
+            attrib_query = "SELECT Name, Flags, Data, Logical_uncompressed_size, Extent_CNID from {0}_Attributes "\
                             "WHERE cnid={1} and Name not in ('com.apple.decmpfs', 'com.apple.ResourceFork')"
             success, cursor, error_message = db.RunQuery(attrib_query.format(self.name, apfs_file_meta.cnid))
             if success:
@@ -761,11 +766,11 @@ class ApfsVolume:
                     #   0         1              2             3         4        5          6             7         8        9
         query = "SELECT p.CNID, p.Path, t.Parent_CNID, t.Extent_CNID, t.Name, t.Created, t.Modified, t.Changed, t.Accessed, t.Flags,"\
                 " t.Links_or_Children, t.BSD_flags, t.UID, t.GID, t.Mode, t.Logical_Size, t.Physical_Size, " \
-                " i.ItemType, i.TimeStamp, e.Offset as Extent_Offset, e.Size as Extent_Size, e.Block_Num as Extent_Block_Num, " \
+                " i.ItemType, i.DateAdded, e.Offset as Extent_Offset, e.Size as Extent_Size, e.Block_Num as Extent_Block_Num, " \
                 " c.Uncompressed_size, c.Data, c.Extent_Logical_Size, "\
                 " e_c.Offset as compressed_Extent_Offset, e_c.Size as compressed_Extent_Size, e_c.Block_Num as compressed_Extent_Block_Num"\
                 " from {0}_Paths as p "\
-                " left join {0}_Threads as t on t.CNID = p.CNID "\
+                " left join {0}_Inodes as t on t.CNID = p.CNID "\
                 " left join {0}_IndexNodes as i on i.CNID = p.CNID "\
                 " left join {0}_Extents as e on e.CNID = t.Extent_CNID "\
                 " left join {0}_Compressed_Files as c on c.CNID = t.CNID "\
@@ -815,7 +820,7 @@ class ApfsVolume:
             # Let's also get Attributes, except decmpfs and ResourceFork (we already got those in _Compressed_Files table)
             #  Skipping this for now.
             # TODO: Remove Logical_uncompressed_size, Extent_CNID, perhaps not needed now!
-            # attrib_query = "SELECT Name, Type, Data, Logical_uncompressed_size, Extent_CNID from {0}_Attributes "\
+            # attrib_query = "SELECT Name, Flags, Data, Logical_uncompressed_size, Extent_CNID from {0}_Attributes "\
             #                 "WHERE cnid={1} and Name not in ('com.apple.decmpfs', 'com.apple.ResourceFork')"
             # success, cursor, error_message = db.RunQuery(attrib_query.format(self.name, apfs_file_meta.cnid))
             # if success:
@@ -843,9 +848,9 @@ class ApfsVolume:
             path = path[:-1]
         items = [] # List of dictionaries
         query = "SELECT t.Name, p.CNID, i.ItemType, t.Logical_Size, t.Created, t.Modified, t.Changed, t.Accessed, "\
-                " c.Uncompressed_size, i.TimeStamp "\
+                " c.Uncompressed_size, i.DateAdded "\
                 " from {0}_Paths as p "\
-                " left join {0}_Threads as t on p.cnid=t.cnid  "\
+                " left join {0}_Inodes as t on p.cnid=t.cnid  "\
                 " left join {0}_IndexNodes as i on i.CNID = t.CNID "\
                 " left join {0}_Compressed_Files as c on c.CNID=t.CNID "\
                 " WHERE t.Parent_CNID in (select CNID from {0}_Paths  where path='{1}')"
@@ -944,7 +949,6 @@ class ApfsContainer:
     def read_block(self, block_num):
         """ Parse a singe block """
         data = self.get_block(block_num)
-        #data = memoryview(self.get_block(block_num)) # no improvement 
         if not data:
             return None
         block = self.apfs.Block(KaitaiStream(BytesIO(data)), self.apfs, self.apfs)
@@ -1125,7 +1129,7 @@ class ApfsFile():
                 else:                          # still more data needed!
                     size_to_read -= len(data)
                     self._buffer = data
-        #TODO check
+
         if self.meta.is_symlink: # if symlink, return symlink  path as data
             data += self.meta.attributes['com.apple.fs.symlink'][1][0:size_to_read]
         else:
@@ -1157,7 +1161,6 @@ class LzvnCompressionParams(object):
             src_offset = offset
             uncomp_offset_start += 65536
             i += 1
-
 
 class ZlibCompressionParams(object):
     def __init__(self, header_size, total_size, data_size, flags, blocks_data_size, num_blocks):
@@ -1223,7 +1226,6 @@ class ApfsFileCompressed(ApfsFile):
                     log.debug("should not go here getChunkList()....")
         return ret_list
 
-        
     def _lzvn_decompress(self, compressed_stream, compressed_size, uncompressed_size):
         '''
             Adds Prefix and Postfix bytes as required by decompressor, 
@@ -1315,7 +1317,6 @@ class ApfsFileCompressed(ApfsFile):
                 # Read compressed_data chunks and decrypt them
                 decompressed = b''
                 req_start = self.uncomp_pointer
-                #req_end   = self.uncomp_pointer + size
                 if self.compression_type == 4:   # zlib
                    # Determine chunks to decryt
                     chunks_to_decompress = self.getChunkList(self.zlib_info.chunk_info, req_start, size)
@@ -1352,7 +1353,6 @@ class ApfsFileCompressed(ApfsFile):
 
     def _DecompressNotInline(self, decmpfs, compressed_data):
         decompressed = b''
-        #compressed_data = compressed_data.tobytes()
         magic, compression_type, uncompressed_size = struct.unpack('<IIQ', decmpfs[0:16])
         if compression_type == 4: # zlib in ResourceFork
             # Read Header (HFSPlusCmpfRsrcHead)
@@ -1491,7 +1491,7 @@ class ApfsFileCompressed(ApfsFile):
                 else:                          # still more data needed!
                     size_to_read -= len(data)
                     self.uncomp_buffer = data
-        #TODO READ THE DATA
+
         if self.meta.is_symlink: # if symlink, return symlink  path as data 
             data += self.meta.attributes['com.apple.fs.symlink'][1][0:size_to_read]
             log.error("This should not happen, compressed + symlink?")

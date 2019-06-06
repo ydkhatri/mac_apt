@@ -264,8 +264,8 @@ class SqliteWriter:
             if writing: 
                 self.conn.commit()
             success = True
-        except Exception as ex:
-            log.exception('Query execution error, query was - ' + query)
+        except sqlite3.Error as ex:
+            log.error('Query execution error, query was - ' + query)
             error_message = str(ex)
 
         return success, cursor, error_message
@@ -288,7 +288,7 @@ class SqliteWriter:
             cursor.execute(query)
             self.conn.commit()
             self.executemany_query = 'INSERT INTO "' + table_name + '" VALUES (?' + ',?'*(len(self.column_info) - 1) + ')'
-        except Exception as ex:
+        except sqlite3.Error as ex:
             if  str(ex).find('table "{}" already exists'.format(table_name)) >= 0:
                 log.info(str(ex))
                 self.table_name = self.GetNextAvailableTableName(table_name)
@@ -333,7 +333,7 @@ class SqliteWriter:
                 try:
                     index = self.table_names.index(table_name)
                     query = self.executemany_querys[index]
-                except Exception as ex:
+                except sqlite3.Error as ex:
                     log.exception("Could not find table name {}".format(table_name))
                     raise ex
             cursor.executemany(query, rows)
