@@ -18,6 +18,13 @@ instances:
 #    size: block_size
 
 types:
+  
+  prange:
+    seq:
+      - id: start_paddr
+        type: s8
+      - id: block_count
+        type: u8
 
 # block navigation
 
@@ -92,36 +99,66 @@ types:
         type: u4
       - id: num_blocks
         type: u8
-      - id: padding
+      - id: features
+        type: u8
+      - id: readonly_compatible_features
+        type: u8
+      - id: incompatible_features
+        type: u8
+      - id: uuid
         size: 16
-      - id: unknown_64
+      - id: next_oid
         type: u8
-      - id: guid
-        size: 16
-      - id: next_free_block_id
+      - id: next_xid
         type: u8
-      - id: next_version
-        type: u8
-      - id: unknown_104
-        size: 32
-      - id: previous_containersuperblock_block
+      - id: xp_desc_blocks
         type: u4
-      - id: unknown_140
-        size: 12
-      - id: spaceman_id
-        type: u8
-      - id: block_map_block
-        type: ref_block
-      - id: unknown_168_id
-        type: u8
-      - id: padding2
+      - id: xp_data_blocks
         type: u4
-      - id: num_volumesuperblock_ids
+      - id: xp_desc_base
+        type: s8
+      - id: xp_data_base
+        type: s8
+      - id: xp_desc_next
         type: u4
-      - id: volumesuperblock_ids
+      - id: xp_data_next
+        type: u4
+      - id: xp_desc_index
+        type: u4
+      - id: xp_desc_len
+        type: u4
+      - id: xp_data_index
+        type: u4
+      - id: xp_data_len
+        type: u4
+      - id: spaceman_oid
+        type: u8
+      - id: omap_oid
+        type: u8 # ref_block
+      - id: reaper_oid
+        type: u8
+      - id: test_type
+        type: u4
+      - id: num_volumesuperblock_ids # max_file_systems
+        type: u4
+      - id: volumesuperblock_ids # fs_oid
         type: u8
         repeat: expr
         repeat-expr: num_volumesuperblock_ids
+      - id: counters
+        type: u8
+        repeat: expr
+        repeat-expr: 32
+      - id: blocked_out_start_paddr
+        type: s8
+      - id: blocked_out_block_count
+        type: u8
+      - id: evict_mapping_tree_oid
+        type: u8
+      - id: flags
+        type: u8
+      - id: efi_jumpstart
+      
 
 # node (type: 0x02)
 
@@ -718,7 +755,7 @@ enums:
 
   entry_type:      # APFS j_obj_types
     0x0: location  # APFS_TYPE_ANY 
-    0x1: snap_metadata # Not impl yet
+    0x1: snap_metadata
     0x2: extent
     0x3: inode
     0x4: extattr

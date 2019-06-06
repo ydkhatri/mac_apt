@@ -140,6 +140,7 @@ class ApfsFileSystemParser:
         self.inode_records = []
         self.dir_records = []
         self.attr_records = []
+        self.dir_stats_records = []
         
         self.hardlink_info = collections.OrderedDict([('CNID',DataType.INTEGER), ('Parent_CNID',DataType.INTEGER), 
                                                     ('Name',DataType.TEXT)])
@@ -156,6 +157,7 @@ class ApfsFileSystemParser:
                                                     ('Extent_CNID',DataType.INTEGER),('fpmc_in_extent',DataType.INTEGER),('Extent_Logical_Size',DataType.INTEGER)]) 
                                                     #TODO: Remove fpmc_in_extent, this can be detected by checking Data == None
         self.paths_info = collections.OrderedDict([('CNID',DataType.INTEGER),('Path',DataType.TEXT)])
+        self.dir_stats_info = collections.OrderedDict([('CNID',DataType.INTEGER),('NumChildren',DataType.INTEGER),('TotalSize',DataType.INTEGER),('Counter',DataType.INTEGER)])
         ## Optimization for search
         self.blocks_read = set()
 
@@ -167,7 +169,21 @@ class ApfsFileSystemParser:
         self.inode_type = self.container.apfs.EntryType.inode.value
         self.hard_type = self.container.apfs.EntryType.hardlink.value
         self.attr_type = self.container.apfs.EntryType.extattr.value
+        self.dir_stats_type = self.container.apfs.EntryType.dir_stats.value
         ## End optimization
+
+        self.debug_stats = {}
+
+    def AddToStats(self, entry_type):
+        item_count = self.debug_stats.get(entry_type, 0)
+        item_count += 1
+        self.debug_stats[entry_type] = item_count
+    
+    def PrintStats(self):
+        for entry_type in self.container.apfs.EntryType:
+            item_count = self.debug_stats.get(entry_type.value, 0)
+            if item_count:
+                log.info('{} Type={}  Count={}'.format(self.name, str(entry_type)[10:], item_count))
 
     def write_records(self):
         if  self.hardlink_records: 
@@ -180,6 +196,8 @@ class ApfsFileSystemParser:
             self.db.WriteRows(self.attr_records, self.name + '_Attributes')
         if self.dir_records:
             self.db.WriteRows(self.dir_records, self.name + '_IndexNodes')
+        if self.dir_stats_records:
+            self.db.WriteRows(self.dir_records, self.name + '_DirStats')
 
     def create_tables(self):
         self.db.CreateTable(self.hardlink_info, self.name + '_Hardlinks')
@@ -187,6 +205,7 @@ class ApfsFileSystemParser:
         self.db.CreateTable(self.attr_info, self.name + '_Attributes')
         self.db.CreateTable(self.inode_info, self.name + '_Inodes')
         self.db.CreateTable(self.dir_info, self.name + '_IndexNodes')
+        self.db.CreateTable(self.dir_stats_info, self.name + '_DirStats')
         self.db.CreateTable(self.compressed_info, self.name + '_Compressed_Files')
         self.db.CreateTable(self.paths_info, self.name + '_Paths')
 
@@ -196,6 +215,7 @@ class ApfsFileSystemParser:
         self.inode_records = []
         self.dir_records = []
         self.attr_records = []
+        self.dir_stats_records = []
     
     def create_indexes(self):
         '''Create indexes on cnid and path in database'''
@@ -204,7 +224,8 @@ class ApfsFileSystemParser:
                          "CREATE INDEX {0}_index_cnid ON {0}_IndexNodes (CNID)".format(self.name),
                          "CREATE INDEX {0}_paths_path_cnid ON {0}_Paths (Path, CNID)".format(self.name),
                          "CREATE INDEX {0}_inodes_cnid_parent_cnid ON {0}_Inodes (CNID, Parent_CNID)".format(self.name),
-                         "CREATE INDEX {0}_compressed_files_cnid ON {0}_Compressed_Files (CNID)".format(self.name)]
+                         "CREATE INDEX {0}_compressed_files_cnid ON {0}_Compressed_Files (CNID)".format(self.name),
+                         "CREATE INDEX {0}_dir_stats_cnid ON {0}_DirStats (CNID)".format(self.name)]
         for query in index_queries:
             success, cursor, error = self.db.RunQuery(query, writing=True)
             if not success:
@@ -304,6 +325,7 @@ class ApfsFileSystemParser:
             self.clear_records() # Clear the data once written   
 
         self.create_other_tables_and_indexes()
+        self.PrintStats()
 
     def create_other_tables_and_indexes(self):
         '''Populate paths table in db, create compressed_files table and create indexes for faster queries'''
@@ -336,6 +358,7 @@ class ApfsFileSystemParser:
                 if type(entry.data) == self.ptr_type: #apfs.Apfs.PointerRecord: 
                     continue
                 entry_type = entry.key.type_entry
+                self.AddToStats(entry_type)
                 if entry_type == self.file_ext_type: #container.apfs.EntryType.file_extent.value:
                     self.num_records_read_batch += 1
                     self.num_records_read_total += 1
@@ -355,6 +378,10 @@ class ApfsFileSystemParser:
                     self.num_records_read_batch += 1
                     self.num_records_read_total += 1
                     self.hardlink_records.append([entry.key.key_value, entry.data.parent_id, entry.data.dirname])
+                elif entry_type == self.dir_stats_type: #container.apfs.EntryType.dir_stats.value:
+                    self.num_records_read_batch += 1
+                    self.num_records_read_total += 1
+                    self.dir_stats_records.append([entry.data.chained_key, entry.data.num_children, entry.data.total_size, entry.data.gen_count])
                 elif entry_type == self.attr_type: #container.apfs.EntryType.extattr.value:
                     self.num_records_read_batch += 1
                     self.num_records_read_total += 1
@@ -447,7 +474,7 @@ class ApfsVolume:
     def __init__(self, apfs_container, name=""):
         self.container = apfs_container
         self.root_dir_block_id = 0 # unused?
-        self.block_map_block_num = 0
+        self.omap_oid = 0
         self.root_block_num = 0
         # volume basic info
         self.name = name
@@ -465,7 +492,7 @@ class ApfsVolume:
 
         # get volume superblock
         super_block = self.container.read_block(volume_super_block_num)
-        self.block_map_block_num = super_block.body.block_map_block.value  # mapping btree
+        self.omap_oid = super_block.body.omap_oid  # mapping btree
         self.root_dir_block_id = super_block.body.root_dir_id 
 
         self.volume_name = super_block.body.volume_name
@@ -480,7 +507,7 @@ class ApfsVolume:
         self.is_encrypted = (super_block.body.encryption_flags & 0x1 != 1)
 
         #log.debug("%s (volume, Mapping-Btree: %d, Rootdir-Block_ID: %d)" % (
-        #    super_block.body.volume_name, self.block_map_block_num, self.root_dir_block_id))
+        #    super_block.body.volume_name, self.omap_oid, self.root_dir_block_id))
         log.debug(" -- Volume information:")
         log.debug("  Vol name  = %s" % super_block.body.volume_name)
         log.debug("  Num files = %d" % super_block.body.num_files)
@@ -493,7 +520,7 @@ class ApfsVolume:
             log.info("If you think this is incorrect (volume is not encrypted), please contact the developer.")
             return
         # get volume btree
-        vol_btree = self.container.read_block(self.block_map_block_num)
+        vol_btree = self.container.read_block(self.omap_oid)
         self.root_block_num = vol_btree.body.root.value
         #log.debug ("root_block_num = {}".format(self.root_block_num))
 
@@ -901,13 +928,13 @@ class ApfsContainer:
         self.containersuperblock = self.read_block(0)
         # get list of volume ids
         apfss = [x for x in self.containersuperblock.body.volumesuperblock_ids if x != 0 ] # removing the invalid ones
-        block_map_block_num = self.containersuperblock.body.block_map_block.value
+        omap_oid = self.containersuperblock.body.omap_oid
         self.num_volumes = len(apfss)
 
         log.debug("There are {} volumes in this container".format(self.num_volumes))
-        log.debug("Volume Block IDs: %s, Mapping-Btree: %d" % (apfss, block_map_block_num))
+        log.debug("Volume Block IDs: %s, Mapping-Btree: %d" % (apfss, omap_oid))
 
-        block_map = self.read_block(block_map_block_num)
+        block_map = self.read_block(omap_oid)
         self.apfs_locations = {}
         block_map_btree_root = self.read_block(block_map.body.root.value)
         for _, entry in enumerate(block_map_btree_root.body.entries):

@@ -143,7 +143,7 @@ class Apfs(KaitaiStruct):
             self.unknown_64 = self._io.read_bytes(24)
             self.num_blocks_used = self._io.read_u8le()
             self.unknown_96 = self._io.read_bytes(32)
-            self.block_map_block = self._root.RefBlock(self._io, self, self._root)
+            self.omap_oid = self._io.read_u8le() #self._root.RefBlock(self._io, self, self._root)
             self.root_dir_id = self._io.read_u8le()
             self.inode_map_block = self._root.RefBlock(self._io, self, self._root)
             self.unknown_152_blk = self._root.RefBlock(self._io, self, self._root)
@@ -241,35 +241,36 @@ class Apfs(KaitaiStruct):
             _pos = self._io.pos()
             self._io.seek(((self._root.block_size - self.header.ofs_data) - (40 * (self._parent.type_flags & 1))))
             _on = ((256 if (self._parent.type_flags & 2) == 0 else 0) + (self.key.type_entry * (0 if (self._parent.type_flags & 2) == 0 else 1)))
-            if _on == 12: #self._root.EntryType.sibling_map.value:
-                self._m_data = self._root.SiblingMapRecord(self._io, self, self._root)
-                self.has_m_data = True
-            elif _on == 5: #self._root.EntryType.hardlink.value:
-                self._m_data = self._root.HardlinkRecord(self._io, self, self._root)
-                self.has_m_data = True
-            elif _on == 0: #self._root.EntryType.location.value:
-                self._m_data = self._root.LocationRecord(self._io, self, self._root)
+            # In order of most occurrance
+            if _on == 9: #self._root.EntryType.dir_rec.value:
+                self._m_data = self._root.DrecHashedRecord(self._io, self, self._root)
                 self.has_m_data = True
             elif _on == 3: #self._root.EntryType.inode.value:
                 self._m_data = self._root.InodeRecord(self._io, self, self._root)
                 self.has_m_data = True
+            elif _on == 4: #self._root.EntryType.extattr.value:
+                self._m_data = self._root.ExtattrRecord(self._io, self, self._root)
+                self.has_m_data = True
             elif _on == 8: #self._root.EntryType.file_extent.value:
                 self._m_data = self._root.FileExtentRecord(self._io, self, self._root)
-                self.has_m_data = True
-            elif _on == 2: #self._root.EntryType.extent.value:
-                self._m_data = self._root.ExtentRecord(self._io, self, self._root)
                 self.has_m_data = True
             elif _on == 6: #self._root.EntryType.dstream_id.value:
                 self._m_data = self._root.DstreamIdRecord(self._io, self, self._root)
                 self.has_m_data = True
+            elif _on == 5: #self._root.EntryType.hardlink.value:
+                self._m_data = self._root.HardlinkRecord(self._io, self, self._root)
+                self.has_m_data = True
+            elif _on == 12: #self._root.EntryType.sibling_map.value:
+                self._m_data = self._root.SiblingMapRecord(self._io, self, self._root)
+                self.has_m_data = True
+            elif _on == 0: #self._root.EntryType.location.value:
+                self._m_data = self._root.LocationRecord(self._io, self, self._root)
+                self.has_m_data = True
+            elif _on == 2: #self._root.EntryType.extent.value:
+                self._m_data = self._root.ExtentRecord(self._io, self, self._root)
+                self.has_m_data = True
             elif _on == 256:
                 self._m_data = self._root.PointerRecord(self._io, self, self._root)
-                self.has_m_data = True
-            elif _on == 9: #self._root.EntryType.drec_hashed.value:
-                self._m_data = self._root.DrecHashedRecord(self._io, self, self._root)
-                self.has_m_data = True
-            elif _on == 4: #self._root.EntryType.extattr.value:
-                self._m_data = self._root.ExtattrRecord(self._io, self, self._root)
                 self.has_m_data = True
             elif _on == 1: #self._root.EntryType.snap_metadata.value:
                 self._m_data = self._root.SnapMetadataRecord(self._io, self, self._root)
@@ -349,23 +350,37 @@ class Apfs(KaitaiStruct):
             self.magic = self._io.ensure_fixed_contents(struct.pack('4b', 78, 88, 83, 66))
             self.block_size = self._io.read_u4le()
             self.num_blocks = self._io.read_u8le()
-            self.padding = self._io.read_bytes(16)
-            self.unknown_64 = self._io.read_u8le()
-            self.guid = self._io.read_bytes(16)
-            self.next_free_block_id = self._io.read_u8le()
-            self.next_version = self._io.read_u8le()
-            self.unknown_104 = self._io.read_bytes(32)
-            self.previous_containersuperblock_block = self._io.read_u4le()
-            self.unknown_140 = self._io.read_bytes(12)
-            self.spaceman_id = self._io.read_u8le()
-            self.block_map_block = self._root.RefBlock(self._io, self, self._root)
-            self.unknown_168_id = self._io.read_u8le()
-            self.padding2 = self._io.read_u4le()
+            self.features = self._io.read_u8le()
+            self.readonly_compatible_features = self._io.read_u8le()
+            self.incompatible_features = self._io.read_u8le()
+            self.uuid = self._io.read_bytes(16)
+            self.next_oid = self._io.read_u8le()
+            self.next_xid = self._io.read_u8le()
+            self.xp_desc_blocks = self._io.read_u4le()
+            self.xp_data_blocks = self._io.read_u4le()
+            self.xp_desc_base = self._io.read_s8le()
+            self.xp_data_base = self._io.read_s8le()
+            self.xp_desc_next = self._io.read_u4le()
+            self.xp_data_next = self._io.read_u4le()
+            self.xp_desc_index = self._io.read_u4le()
+            self.xp_desc_len = self._io.read_u4le()
+            self.xp_data_index = self._io.read_u4le()
+            self.xp_data_len = self._io.read_u4le()
+            self.spaceman_oid = self._io.read_u8le()
+            self.omap_oid = self._io.read_u8le() #self._root.RefBlock(self._io, self, self._root)
+            self.reaper_oid = self._io.read_u8le()
+            self.test_type = self._io.read_u4le()
             self.num_volumesuperblock_ids = self._io.read_u4le()
             self.volumesuperblock_ids = [None] * (self.num_volumesuperblock_ids)
             for i in range(self.num_volumesuperblock_ids):
                 self.volumesuperblock_ids[i] = self._io.read_u8le()
-
+            self.counters = [None] * 32
+            for i in range(32):
+                self.counters[i] = self._io.read_u8le()
+            self.blocked_out_start_paddr = self._io.read_s8le()
+            self.blocked_out_block_count = self._io.read_u8le()
+            self.evict_mapping_tree_oid = self._io.read_u8le()
+            self.flags = self._io.read_u8le()
 
 
     class DrecHashedRecord(KaitaiStruct):

@@ -221,6 +221,7 @@ def FindOsxPartitionInApfsContainer(img, vol_info, container_size, container_sta
             else:
                 # db does not seem up to date, create a new one and read info
                 existing_db.CloseDb()
+                log.info('Found an existing APFS_Volumes.db in the output folder, but it is STALE, creating a new one!')
                 os.remove(apfs_sqlite_path)
         if not use_existing_db:
             apfs_sqlite_path = SqliteWriter.CreateSqliteDb(apfs_sqlite_path) # Will create with next avail file name
