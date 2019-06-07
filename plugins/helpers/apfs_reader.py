@@ -161,8 +161,8 @@ class ApfsFileSystemParser:
         ## Optimization for search
         self.blocks_read = set()
 
-        self.container_type_files = self.container.apfs.ContentType.files
-        self.container_type_location = self.container.apfs.ContentType.location
+        self.container_type_files = self.container.apfs.ObjType.fstree
+        self.container_type_location = self.container.apfs.ObjType.omap
         self.ptr_type = apfs.Apfs.PointerRecord
         self.file_ext_type = self.container.apfs.EntryType.file_extent.value
         self.dir_rec_type = self.container.apfs.EntryType.dir_rec.value
@@ -309,7 +309,7 @@ class ApfsFileSystemParser:
             return
         
     def read_volume_records(self):
-        ''' Get root btree node and parse all children, add 
+        ''' Get tree oid from omap node and parse all children, add 
             all information to a database.
         '''
         self.create_tables()
@@ -425,7 +425,7 @@ class ApfsFileSystemParser:
                     except:
                         log.exception('Exception trying to read block {}'.format(entry.data.block_num.value))
         else:
-            log.exception("unexpected entry {} in block {}".format(repr(block.header.type_content), block_num))
+            log.warning("unexpected entry {} in block {}".format(repr(block.header.type_content), block_num))
 
         if self.num_records_read_batch > 400000:
             self.num_records_read_batch = 0
@@ -492,7 +492,7 @@ class ApfsVolume:
 
         # get volume superblock
         super_block = self.container.read_block(volume_super_block_num)
-        self.omap_oid = super_block.body.omap_oid  # mapping btree
+        self.omap_oid = super_block.body.omap_oid  # mapping omap
         self.root_dir_block_id = super_block.body.root_dir_id 
 
         self.volume_name = super_block.body.volume_name
@@ -506,7 +506,7 @@ class ApfsVolume:
         self.is_case_sensitive = (super_block.body.feature_flags & 0x8 != 0)
         self.is_encrypted = (super_block.body.encryption_flags & 0x1 != 1)
 
-        #log.debug("%s (volume, Mapping-Btree: %d, Rootdir-Block_ID: %d)" % (
+        #log.debug("%s (volume, Mapping-omap: %d, Rootdir-Block_ID: %d)" % (
         #    super_block.body.volume_name, self.omap_oid, self.root_dir_block_id))
         log.debug(" -- Volume information:")
         log.debug("  Vol name  = %s" % super_block.body.volume_name)
@@ -519,9 +519,9 @@ class ApfsVolume:
             log.info("Volume appears to be ENCRYPTED. Encrypted volumes are not supported right now :(")
             log.info("If you think this is incorrect (volume is not encrypted), please contact the developer.")
             return
-        # get volume btree
-        vol_btree = self.container.read_block(self.omap_oid)
-        self.root_block_num = vol_btree.body.root.value
+        # get volume omap
+        vol_omap = self.container.read_block(self.omap_oid)
+        self.root_block_num = vol_omap.body.tree_oid
         #log.debug ("root_block_num = {}".format(self.root_block_num))
 
     def ReadUUID(self, uuid_bytes):
@@ -932,12 +932,12 @@ class ApfsContainer:
         self.num_volumes = len(apfss)
 
         log.debug("There are {} volumes in this container".format(self.num_volumes))
-        log.debug("Volume Block IDs: %s, Mapping-Btree: %d" % (apfss, omap_oid))
+        log.debug("Volume Block IDs: %s, Mapping-omap: %d" % (apfss, omap_oid))
 
         block_map = self.read_block(omap_oid)
         self.apfs_locations = {}
-        block_map_btree_root = self.read_block(block_map.body.root.value)
-        for _, entry in enumerate(block_map_btree_root.body.entries):
+        block_map_omap_root = self.read_block(block_map.body.tree_oid)
+        for _, entry in enumerate(block_map_omap_root.body.entries):
             self.apfs_locations[entry.key.key_value] = entry.data.block_num.value
         log.debug("Volume Blocks:" + str(self.apfs_locations))
         index = 1

@@ -46,14 +46,22 @@ class Apfs(KaitaiStruct):
         HAS_RSRC_FORK = 0x00004000
         NO_RSRC_FORK = 0x00008000
         ALLOCATION_SPILLEDOVER = 0x00010000
-        
-    class ContentType(Enum):
-        empty = 0
-        history = 9
-        location = 11
-        files = 14
-        extents = 15
-        unknown3 = 16
+    
+    class ObjectTypeFlag(Enum):
+        VIRTUAL = 0
+        EPHEMERAL = 0x80000000
+        PHYSICAL = 0x40000000
+        NOHEADER = 0x20000000
+        ENCRYPTED = 0x10000000
+        NONPERSISTENT = 0x08000000
+
+    # class ContentType(Enum):
+    #     empty = 0
+    #     history = 9
+    #     location = 11
+    #     files = 14
+    #     extents = 15
+    #     unknown3 = 16
 
     # class EaType(Enum):
     #     unknown_1 = 1
@@ -61,7 +69,8 @@ class Apfs(KaitaiStruct):
     #     symlink = 6
     #     unknown_17 = 17 # new unknown one!
 
-    class BlockType(Enum):
+    class ObjType(Enum):
+        none = 0
         containersuperblock = 1
         rootnode = 2
         node = 3
@@ -72,7 +81,7 @@ class Apfs(KaitaiStruct):
         spaceman_bitmap = 8
         spaceman_free_queue = 9
         extent_list_tree = 10
-        btree = 11
+        omap = 11
         checkpoint = 12
         volumesuperblock = 13
         fstree = 14
@@ -312,7 +321,8 @@ class Apfs(KaitaiStruct):
 
 
     class BlockHeader(KaitaiStruct):
-        __slots__ = ['_io', '_parent', '_root', 'checksum', 'block_id', 'version', 'type_block', 'flags', 'type_content', 'padding']
+        __slots__ = ['_io', '_parent', '_root', 'checksum', 'block_id', 'version', 
+                    'type_block', 'flags', 'type_content', 'type_storage']
         def __init__(self, _io, _parent=None, _root=None):
             self._io = _io
             self._parent = _parent
@@ -320,10 +330,11 @@ class Apfs(KaitaiStruct):
             self.checksum = self._io.read_u8le()
             self.block_id = self._io.read_u8le()
             self.version = self._io.read_u8le()
-            self.type_block = self._root.BlockType(self._io.read_u2le())
+            self.type_block = self._root.ObjType(self._io.read_u2le())
             self.flags = self._io.read_u2le()
-            self.type_content = self._root.ContentType(self._io.read_u2le())
-            self.padding = self._io.read_u2le()
+            subtype = self._io.read_u4le()
+            self.type_content = self._root.ObjType(0xff & subtype)
+            self.type_storage = 0xc0000000 & subtype
 
 
     class CheckpointEntry(KaitaiStruct):
@@ -331,9 +342,9 @@ class Apfs(KaitaiStruct):
             self._io = _io
             self._parent = _parent
             self._root = _root if _root else self
-            self.type_block = self._root.BlockType(self._io.read_u2le())
+            self.type_block = self._root.ObjType(self._io.read_u2le())
             self.flags = self._io.read_u2le()
-            self.type_content = self._root.ContentType(self._io.read_u4le())
+            self.type_content = self._root.ObjType(self._io.read_u4le())
             self.block_size = self._io.read_u4le()
             self.unknown_52 = self._io.read_u4le()
             self.unknown_56 = self._io.read_u4le()
@@ -530,21 +541,21 @@ class Apfs(KaitaiStruct):
             self._root = _root if _root else self
             self.header = self._root.BlockHeader(self._io, self, self._root)
             _on = self.header.type_block.value
-            if _on == 3: #self._root.BlockType.node:
+            if _on == 3: #self._root.ObjType.node:
                 self.body = self._root.Node(self._io, self, self._root)
-            elif _on == 7: #self._root.BlockType.allocationinfofile:
+            elif _on == 7: #self._root.ObjType.allocationinfofile:
                 self.body = self._root.Allocationinfofile(self._io, self, self._root)
-            elif _on == 5: #self._root.BlockType.spaceman:
+            elif _on == 5: #self._root.ObjType.spaceman:
                 self.body = self._root.Spaceman(self._io, self, self._root)
-            elif _on == 11: #self._root.BlockType.btree:
-                self.body = self._root.Btree(self._io, self, self._root)
-            elif _on == 2: #self._root.BlockType.rootnode:
+            elif _on == 11: #self._root.ObjType.omap:
+                self.body = self._root.Omap(self._io, self, self._root)
+            elif _on == 2: #self._root.ObjType.rootnode:
                 self.body = self._root.Node(self._io, self, self._root)
-            elif _on == 13: #self._root.BlockType.volumesuperblock:
+            elif _on == 13: #self._root.ObjType.volumesuperblock:
                 self.body = self._root.Volumesuperblock(self._io, self, self._root)
-            elif _on == 12: #self._root.BlockType.checkpoint:
+            elif _on == 12: #self._root.ObjType.checkpoint:
                 self.body = self._root.Checkpoint(self._io, self, self._root)
-            elif _on == 1: #self._root.BlockType.containersuperblock:
+            elif _on == 1: #self._root.ObjType.containersuperblock:
                 self.body = self._root.Containersuperblock(self._io, self, self._root)
 
 
@@ -663,14 +674,23 @@ class Apfs(KaitaiStruct):
                 self.entries[i] = self._root.CheckpointEntry(self._io, self, self._root)
 
 
-    class Btree(KaitaiStruct):
-        __slots__ = ['_io', '_parent', '_root', 'unknown_0', 'root']
+    class Omap(KaitaiStruct):
+        __slots__ = ['_io', '_parent', '_root', 'flags', 'snap_count','tree_type',
+                        'snapshot_tree_type', 'tree_oid', 'snapshot_tree_oid', 'most_recent_snap'
+                        'pending_revert_min', 'pending_revert_min']
         def __init__(self, _io, _parent=None, _root=None):
             self._io = _io
             self._parent = _parent
             self._root = _root if _root else self
-            self.unknown_0 = self._io.read_bytes(16)
-            self.root = self._root.RefBlock(self._io, self, self._root)
+            self.flags = self._io.read_u4le()
+            self.snap_count = self._io.read_u4le()
+            self.tree_type = self._io.read_u4le()
+            self.snapshot_tree_type = self._io.read_u4le()
+            self.tree_oid = self._io.read_u8le()
+            self.snapshot_tree_oid = self._io.read_u8le()
+            self.most_recent_snap = self._io.read_u8le()
+            self.pending_revert_min = self._io.read_u8le()
+            self.pending_revert_min = self._io.read_u8le()
 
 
     class Node(KaitaiStruct):

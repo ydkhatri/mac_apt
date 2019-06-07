@@ -46,28 +46,32 @@ types:
 
 # meta structs
 
-  block_header:
+  block_header: # obj_phys_t
     seq:
       - id: checksum
         type: u8
         doc: Flechters checksum, according to the docs.
-      - id: block_id  # APFS oid
+      - id: block_id  # APFS o_oid
         type: u8
         doc: ID of the block itself. Either the position of the block or an incrementing number starting at 1024.
-      - id: version   # APFS xid
+      - id: version   # APFS o_xid
         type: u8
         doc: Incrementing number of the version of the block (highest == latest)
       - id: type_block  # APFS object type o_type (one 32 bit num)
         type: u2
-        enum: block_type
-      - id: flags
+        enum: obj_type
+      - id: flags # <-- object_type_flag
         type: u2
         doc: 0x4000 block_id = position, 0x8000 = container
-      - id: type_content # APFS o_subtype
-        type: u2
-        enum: content_type
-      - id: padding
-        type: u2
+      - id: subtype # type_content
+        type: u4
+    instances:
+      type_content:
+        value: 0xff & subtype
+        enum: obj_type
+      type_storage:
+        value: 0xc0000000 & subtype
+        #enum: object_type_flag
 
   block:
     seq:
@@ -78,14 +82,14 @@ types:
         type:
           switch-on: header.type_block
           cases:
-            block_type::containersuperblock: containersuperblock
-            block_type::rootnode: node
-            block_type::node: node
-            block_type::spaceman: spaceman
-            block_type::allocationinfofile: allocationinfofile
-            block_type::btree: btree
-            block_type::checkpoint: checkpoint
-            block_type::volumesuperblock: volumesuperblock
+            obj_type::containersuperblock: containersuperblock
+            obj_type::rootnode: node
+            obj_type::node: node
+            obj_type::spaceman: spaceman
+            obj_type::allocationinfofile: allocationinfofile
+            obj_type::omap: omap
+            obj_type::checkpoint: checkpoint
+            obj_type::volumesuperblock: volumesuperblock
             
 
 # containersuperblock (type: 0x01)
@@ -157,8 +161,6 @@ types:
         type: u8
       - id: flags
         type: u8
-      - id: efi_jumpstart
-      
 
 # node (type: 0x02)
 
@@ -614,14 +616,29 @@ types:
       - id: allocationfile_block
         type: u8
 
-# btree (type: 0x0b)
+# omap (type: 0x0b)
 
-  btree:
+  omap:
     seq:
-      - id: unknown_0
-        size: 16
-      - id: root
-        type: ref_block
+      - id: flags
+        type: u4
+        #enum: object_map_flag
+      - id: snap_count
+        type: u4
+      - id: tree_type
+        type: u4
+      - id: snapshot_tree_type
+        type: u4
+      - id: tree_oid
+        type: u8 #ref_block
+      - id: snapshot_tree_oid
+        type: u8
+      - id: most_recent_snap
+        type: u8
+      - id: pending_revert_min
+        type: u8
+      - id: pending_revert_max
+        type: u8
 
 # checkpoint (type: 0x0c)
 
@@ -640,12 +657,12 @@ types:
     seq:
       - id: type_block
         type: u2
-        enum: block_type
+        enum: obj_type
       - id: flags
         type: u2
       - id: type_content
         type: u4
-        enum: content_type
+        enum: obj_type
       - id: block_size
         type: u4
       - id: unknown_52
@@ -724,7 +741,7 @@ types:
 
 enums:
 
-  block_type: # APFS Object types
+  obj_type: # APFS Object types
     0x01: containersuperblock # NX_SUPERBLOCK
     0x02: rootnode            # BTREE
     0x03: node                # BTREE_NODE
@@ -735,7 +752,7 @@ enums:
     0x08: spaceman_bitmap       # Not impl here
     0x09: spaceman_free_queue   # Not impl here
     0x0a: extent_list_tree      # Not impl here
-    0x0b: btree               # OMAP
+    0x0b: omap
     0x0c: checkpoint           # CHECKPOINT_MAP
     0x0d: volumesuperblock    # FS
     0x0e: fstree              # FSTREE
@@ -753,6 +770,21 @@ enums:
     0x1a: GBITMAP_TREE
     0x1b: GBITMAP_BLOCK
 
+  object_type_flag:
+    0x00000000: virtual
+    0x80000000: ephemeral
+    0x40000000: physical
+    0x20000000: noheader
+    0x10000000: encrypted
+    0x08000000: nonpersistent
+
+  object_map_flag:
+    0x01: MANUALLY_MANAGED
+    0x02: ENCRYPTING
+    0x04: DECRYPTING
+    0x08: KEYROLLING
+    0x10: CRYPTO_GENERATION
+
   entry_type:      # APFS j_obj_types
     0x0: location  # APFS_TYPE_ANY 
     0x1: snap_metadata
@@ -763,7 +795,7 @@ enums:
     0x6: dstream_id
     0x7: crypto_state
     0x8: file_extent
-    0x9: dir_rec      # APFS DIR_REC
+    0x9: dir_rec
     0xa: dir_stats
     0xb: snap_name
     0xc: sibling_map
@@ -772,13 +804,13 @@ enums:
     0xf: invalid
 # Seems dstream_id is only for files, not folders
 
-  content_type:
-    0: empty
-    9: history
-    11: location
-    14: files
-    15: extents
-    16: unknown3
+#  content_type:
+#    0: empty
+#    9: history
+#    11: location
+#    14: files
+#    15: extents
+#    16: unknown3
 
   item_type: # Directory Entry File types
     0: unknown
