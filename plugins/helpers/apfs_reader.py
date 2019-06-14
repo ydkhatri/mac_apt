@@ -956,7 +956,7 @@ class ApfsContainer:
         if max_xid > self.containersuperblock.header.xid:
             log.info("Found newer xid={} @ block num {}".format(max_xid, base_cp_block_num + max_xid_cp_index))
             log.info("Using new XID now..")
-            self.containersuperblock = cp[max_xid_cp_index]
+            self.containersuperblock = checkpoint_blocks[max_xid_cp_index]
 
         # get list of volume ids
         apfss = [x for x in self.containersuperblock.body.volumesuperblock_ids if x != 0 ] # removing the invalid ones
