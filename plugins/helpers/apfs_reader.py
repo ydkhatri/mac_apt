@@ -161,14 +161,14 @@ class ApfsFileSystemParser:
         ## Optimization for search
         self.blocks_read = set()
 
-        self.container_type_files = self.container.apfs.ObjType.fstree
-        self.container_type_location = self.container.apfs.ObjType.omap
+        self.container_type_files = self.container.apfs.ObjType.fstree.value
+        self.container_type_location = self.container.apfs.ObjType.omap.value
         self.ptr_type = apfs.Apfs.PointerRecord
         self.file_ext_type = self.container.apfs.EntryType.file_extent.value
         self.dir_rec_type = self.container.apfs.EntryType.dir_rec.value
         self.inode_type = self.container.apfs.EntryType.inode.value
-        self.hard_type = self.container.apfs.EntryType.hardlink.value
-        self.attr_type = self.container.apfs.EntryType.extattr.value
+        self.hard_type = self.container.apfs.EntryType.sibling_link.value
+        self.attr_type = self.container.apfs.EntryType.xattr.value
         self.dir_stats_type = self.container.apfs.EntryType.dir_stats.value
         ## End optimization
 
@@ -353,7 +353,9 @@ class ApfsFileSystemParser:
         if block_num in self.blocks_read: return # block already processed
         else: self.blocks_read.add(block_num)
 
-        if block.header.type_content == self.container_type_files:
+        if block.header.subtype == self.container_type_files:
+            if block.body.level > 0: # not leaf nodes
+                return
             for _, entry in enumerate(block.body.entries):
                 if type(entry.data) == self.ptr_type: #apfs.Apfs.PointerRecord: 
                     continue
@@ -362,31 +364,31 @@ class ApfsFileSystemParser:
                 if entry_type == self.file_ext_type: #container.apfs.EntryType.file_extent.value:
                     self.num_records_read_batch += 1
                     self.num_records_read_total += 1
-                    self.extent_records.append([entry.key.key_value, entry.key.content.offset, entry.data.size, entry.data.phys_block_num.value])
+                    self.extent_records.append([entry.key.obj_id, entry.key.content.offset, entry.data.size, entry.data.phys_block_num])
                 elif entry_type == self.dir_rec_type: #container.apfs.EntryType.dir_rec.value:
                     # dir_rec key!!    
                     self.num_records_read_batch += 1
                     self.num_records_read_total += 1
                     rec = entry.data
-                    self.dir_records.append([rec.node_id, entry.key.key_value, rec.date_added, rec.type_item.value, entry.key.content.dirname])
+                    self.dir_records.append([rec.node_id, entry.key.obj_id, rec.date_added, rec.type_item.value, entry.key.content.name])
                 elif entry_type == self.inode_type: #container.apfs.EntryType.inode.value:
                     self.num_records_read_batch += 1
                     self.num_records_read_total += 1
                     rec = entry.data
-                    self.inode_records.append([entry.key.key_value, rec.parent_id, rec.node_id, rec.dirname, rec.creation_timestamp, rec.modified_timestamp, rec.changed_timestamp, rec.accessed_timestamp, rec.flags, rec.nchildren_or_nlink, rec.bsdflags, rec.owner_id, rec.group_id, rec.mode, rec.size1, rec.size2])
-                elif entry_type == self.hard_type: #container.apfs.EntryType.hardlink.value:
+                    self.inode_records.append([entry.key.obj_id, rec.parent_id, rec.node_id, rec.name, rec.creation_timestamp, rec.modified_timestamp, rec.changed_timestamp, rec.accessed_timestamp, rec.flags, rec.nchildren_or_nlink, rec.bsdflags, rec.owner_id, rec.group_id, rec.mode, rec.logical_size, rec.physical_size])
+                elif entry_type == self.hard_type: #container.apfs.EntryType.sibling_link.value:
                     self.num_records_read_batch += 1
                     self.num_records_read_total += 1
-                    self.hardlink_records.append([entry.key.key_value, entry.data.parent_id, entry.data.dirname])
+                    self.hardlink_records.append([entry.key.obj_id, entry.data.parent_id, entry.data.name])
                 elif entry_type == self.dir_stats_type: #container.apfs.EntryType.dir_stats.value:
                     self.num_records_read_batch += 1
                     self.num_records_read_total += 1
                     self.dir_stats_records.append([entry.data.chained_key, entry.data.num_children, entry.data.total_size, entry.data.gen_count])
-                elif entry_type == self.attr_type: #container.apfs.EntryType.extattr.value:
+                elif entry_type == self.attr_type: #container.apfs.EntryType.xattr.value:
                     self.num_records_read_batch += 1
                     self.num_records_read_total += 1
                     rec = entry.data
-                    data = rec.data
+                    data = rec.xdata
                     rsrc_extent_cnid = 0
                     logical_size = 0
                     rec_type = rec.flags
@@ -394,38 +396,41 @@ class ApfsFileSystemParser:
                         #rsrc_extent_cnid, logical_size, physical_size = struct.unpack('<QQQ', rsrc[1][0:24]) # True for all Type 1
                         rsrc_extent_cnid, logical_size = struct.unpack('<QQ', data[0:16])
                     elif rec_type & 2: # BLOB type
-                        if entry.key.content.attr_name == 'com.apple.decmpfs':
+                        if entry.key.content.name == 'com.apple.decmpfs':
                             #magic, compression_type, uncompressed_size = struct.unpack('<IIQ', decmpfs[1][0:16])
                             logical_size = struct.unpack('<Q', data[8:16])[0] # uncompressed data size
                     #else:
                     #    log.warning('Unknown rec_type 0x{:X} block_num={}'.format(rec_type, block_num))
-                    self.attr_records.append([entry.key.key_value, entry.key.content.attr_name, rec.flags, data, logical_size, rsrc_extent_cnid])
+                    self.attr_records.append([entry.key.obj_id, entry.key.content.name, rec.flags, data, logical_size, rsrc_extent_cnid])
                 elif entry_type == 6: # dstream_id
-                    pass # TODO: Must process this later
+                    pass # this just has refcnts
                 elif entry_type == 0xc: # sibling_map
                     pass # TODO: Maybe process this later
                 elif entry_type >= 0xd:
                     log.warning('Unknown entry_type 0x{:X} block_num={}'.format(entry_type, block_num))
                 else:
                     log.debug('Got entry_type 0x{:X} block_num={}'.format(entry_type, block_num))
-        elif block.header.type_content == self.container_type_location:
+        elif block.header.subtype == self.container_type_location:
             for _, entry in enumerate(block.body.entries):
                 if type(entry.data) == self.ptr_type: #apfs.Apfs.PointerRecord: 
                     # Must process this!!!!
-                    if type(entry.key.content) == apfs.Apfs.LocationKey:
-                        try:
+                    #if type(entry.key) == apfs.Apfs.OmapKey:
+                    try:
+                        if not entry.data.pointer in self.blocks_read:
                             newblock = self.container.read_block(entry.data.pointer)
                             self.read_entries(entry.data.pointer, newblock)
-                        except:
-                            log.exception('Exception trying to read block {}'.format(entry.data.pointer))
+                    except:
+                        log.exception('Exception trying to read block {}'.format(entry.data.pointer))
                 else:
                     try:
-                        newblock = self.container.read_block(entry.data.block_num.value)
-                        self.read_entries(entry.data.block_num.value, newblock)
+                        newblock = self.container.read_block(entry.data.paddr.value)
+                        self.read_entries(entry.data.paddr.value, newblock)
                     except:
-                        log.exception('Exception trying to read block {}'.format(entry.data.block_num.value))
+                        log.exception('Exception trying to read block {}'.format(entry.data.paddr.value))
+        elif block.header.subtype == 0:
+            pass # invalid object type
         else:
-            log.warning("unexpected entry {} in block {}".format(repr(block.header.type_content), block_num))
+            log.warning("unexpected entry {} in block {}".format(repr(block.header.subtype), block_num))
 
         if self.num_records_read_batch > 400000:
             self.num_records_read_batch = 0
@@ -926,6 +931,33 @@ class ApfsContainer:
         self.apfs = apfs.Apfs(KaitaiStream(self))
         self.block_size = self.apfs.block_size
         self.containersuperblock = self.read_block(0)
+        if self.fletcher64_verify_block_num(0) != 0:
+            log.warning("Superblock checksum failed! Still trying to parse checkpoints to find valid csb!")
+
+        # Scanning checkpoints to get valid CSB
+        base_cp_block_num = self.containersuperblock.body.xp_desc_base
+        num_cp_blocks = self.containersuperblock.body.xp_desc_blocks
+        if num_cp_blocks & 0x80000000: # highest bit set in xp_desc_blocks
+            raise ValueError("Encountered a tree in checkpoint data, this is not yet implemented!")
+
+        checkpoint_blocks = [self.read_block(base_cp_block_num + i) for i in range(num_cp_blocks)]
+
+        max_xid = 0
+        max_xid_cp_index = 0
+
+        for index, cp in enumerate(checkpoint_blocks):
+            if cp.header.type_block.value == 1: # containersuperblock
+                if cp.header.xid >= max_xid:
+                    if self.fletcher64_verify_block_num(base_cp_block_num + index) == 0:
+                        max_xid = cp.header.xid
+                        max_xid_cp_index = index
+                    else:
+                        log.error('Block {} failed checksum'.format(base_cp_block_num + index))
+        if max_xid > self.containersuperblock.header.xid:
+            log.info("Found newer xid={} @ block num {}".format(max_xid, base_cp_block_num + max_xid_cp_index))
+            log.info("Using new XID now..")
+            self.containersuperblock = cp[max_xid_cp_index]
+
         # get list of volume ids
         apfss = [x for x in self.containersuperblock.body.volumesuperblock_ids if x != 0 ] # removing the invalid ones
         omap_oid = self.containersuperblock.body.omap_oid
@@ -938,7 +970,7 @@ class ApfsContainer:
         self.apfs_locations = {}
         block_map_omap_root = self.read_block(block_map.body.tree_oid)
         for _, entry in enumerate(block_map_omap_root.body.entries):
-            self.apfs_locations[entry.key.key_value] = entry.data.block_num.value
+            self.apfs_locations[entry.key.oid] = entry.data.paddr.value
         log.debug("Volume Blocks:" + str(self.apfs_locations))
         index = 1
         for _, volume_block_num in self.apfs_locations.items():
@@ -965,6 +997,8 @@ class ApfsContainer:
 
     def read(self, size):
         data = self.img.read(self.apfs_container_offset + self.position, size)
+        #self.debug_last_block_read_pos = self.apfs_container_offset + self.position
+        #log.debug("debug_last_block_read_pos={}".format(self.debug_last_block_read_pos))
         self.position += len(data)
         return data
 
@@ -980,6 +1014,41 @@ class ApfsContainer:
             return None
         block = self.apfs.Block(KaitaiStream(BytesIO(data)), self.apfs, self.apfs)
         return block
+    
+    def fletcher64_verify_block_num(self, block_num):
+        """Fletchers checksum verification for block, given block number"""
+        data = self.get_block(block_num)
+        if not data:
+            return None
+        return self.fletcher64_verify_block_data(data, self.block_size)
+
+    def fletcher64_verify_block_data(self, data, block_size):
+        """Fletchers checksum verification for block given block data"""
+        cnt = block_size//4 - 2
+        data = struct.unpack('<{}I'.format(block_size//4), data)
+        data_first_two_dwords = data[0:2]
+        data_rest = data[2:]
+
+        sum1 = 0
+        sum2 = 0
+
+        for k in range(cnt):
+            sum1 += data_rest[k]
+            sum2 += sum1
+
+        sum1 = sum1 % 0xFFFFFFFF
+        sum2 = sum2 % 0xFFFFFFFF
+
+        # process first 2 dwords now
+        sum1 += data_first_two_dwords[0]
+        sum2 += sum1
+        sum1 += data_first_two_dwords[1]
+        sum2 += sum1
+
+        sum1 = sum1 % 0xFFFFFFFF
+        sum2 = sum2 % 0xFFFFFFFF
+
+        return ((sum2) << 32) | (sum1)
 
 class ApfsExtent:
     __slots__ = ['offset', 'size', 'block_num']
