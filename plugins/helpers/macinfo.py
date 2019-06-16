@@ -116,6 +116,9 @@ class NativeHfsParser:
             log.exception("Failed to read HFS info")
         return None
 
+    def GetExtendedAttributes(self, path):
+        return None # Not yet implemented #TODO
+
     def GetFileSize(self, path, error=None):
         '''For a given file path, gets logical file size, or None if error'''
         try:
@@ -326,6 +329,11 @@ class MacInfo:
         except Exception as ex:
             log.exception('Error trying to get MAC times')
         return times
+
+    def GetExtendedAttributes(self, path):
+        if self.use_native_hfs_parser:
+            return self.hfs_native.GetExtendedAttributes(path)
+        return None #TODO: implement this properly, only apfs works for now
 
     def ExportFolder(self, artifact_path, subfolder_name, overwrite):
         '''Export an artifact folder to the output\Export\subfolder_name folder. This
@@ -936,7 +944,7 @@ class ApfsMacInfo(MacInfo):
                 times['m_time'] = apfs_file_meta.modified
                 times['cr_time'] = apfs_file_meta.created
                 times['a_time'] = apfs_file_meta.accessed
-                times['i_time'] = apfs_file_meta.index_time
+                times['i_time'] = apfs_file_meta.date_added
             else:
                 log.debug('File not found in GetFileMACTimes() query!, path was ' + file_path)
         except Exception as ex:
@@ -951,6 +959,9 @@ class ApfsMacInfo(MacInfo):
 
     def IsValidFolderPath(self, path):
         return self.osx_FS.DoesFolderExist(self.apfs_db, path)
+
+    def GetExtendedAttributes(self, path):
+        return self.osx_FS.GetExtendedAttributes(path, self.apfs_db):
 
     def GetFileSize(self, full_path, error=None):
         try:

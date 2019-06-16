@@ -195,9 +195,9 @@ class ApfsFileSystemParser:
         if self.attr_records:
             self.db.WriteRows(self.attr_records, self.name + '_Attributes')
         if self.dir_records:
-            self.db.WriteRows(self.dir_records, self.name + '_IndexNodes')
+            self.db.WriteRows(self.dir_records, self.name + '_IndexNodes') #TODO: rename _indexnodes to _DirEntries
         if self.dir_stats_records:
-            self.db.WriteRows(self.dir_records, self.name + '_DirStats')
+            self.db.WriteRows(self.dir_stats_records, self.name + '_DirStats')
 
     def create_tables(self):
         self.db.CreateTable(self.hardlink_info, self.name + '_Hardlinks')
@@ -474,6 +474,29 @@ class DataCache:
             return cached_obj[0]
         return None   
         
+class ApfsExtendedAttribute:
+    def __init__(self, container, xName, xFlags, xData, xSize):
+        self._container = container
+        self.extents = []
+        self.name = xName
+        self.flags = xFlags
+        self._data = xData
+        self.size = xSize
+        self._data_fetched = False
+        self._real_data = None
+
+    @property
+    def data(self):
+        if not self._data_fetched:
+            self._real_data = b''
+            if self.flags & 1: # extent based
+                # get data from extents
+                for extent in self.extents:
+                    self._real_data += extent.GetData(self._container)
+            else: # embedded
+                self._real_data = self._data
+        return self._data
+
 #TODO Add db as class variable, remove it from functions
 class ApfsVolume:
     def __init__(self, apfs_container, name=""):
@@ -579,6 +602,19 @@ class ApfsVolume:
             else:
                 return ApfsFile(apfs_file_meta, apfs_file_meta.logical_size, apfs_file_meta.extents, self.container)
         return None
+
+    def GetFileAttributes(self, path, db, apfs_file_meta=None):
+        if not path:
+            return None
+        if apfs_file_meta == None:
+            apfs_file_meta = self.files_meta_cache.Find(path)
+        if apfs_file_meta == None:
+            apfs_file_meta = self.GetFileMetadataByPath(path, db)
+            if apfs_file_meta:
+                self.files_meta_cache.Insert(apfs_file_meta, path)
+            else:
+                return None
+        return apfs_file_meta.attributes
 
     def IsSymbolicLink(self, db, path):
         '''Returns True if the path is a symbolic link'''
@@ -704,6 +740,90 @@ class ApfsVolume:
         return meta.path
 
     def GetFileMetadata(self, where_clause, db):
+        '''Returns ApfsFileMeta object from database. A where_clause specifies either cnid or path to find'''
+
+        query = "SELECT a.name as xName, a.flags as xFlags, a.data as xData, a.Logical_uncompressed_size as xSize, "\
+                " a.Extent_CNID as xCNID, ex.Offset as xExOff, ex.Size as xExSize, ex.Block_Num as xBlock_Num, "\
+                " p.CNID, p.Path, i.Parent_CNID, i.Extent_CNID, i.Name, i.Created, i.Modified, i.Changed, i.Accessed, i.Flags, "\
+                " i.Links_or_Children, i.BSD_flags, i.UID, i.GID, i.Mode, i.Logical_Size, i.Physical_Size, "\
+                " d.ItemType, d.DateAdded, e.Offset as Extent_Offset, e.Size as Extent_Size, e.Block_Num as Extent_Block_Num, "\
+                " c.Uncompressed_size, c.Data, c.Extent_Logical_Size, "\
+                " ec.Offset as compressed_Extent_Offset, ec.Size as compressed_Extent_Size, ec.Block_Num as compressed_Extent_Block_Num "\
+                " from Vol_1_Macintosh_HD_Paths as p "\
+                " left join Vol_1_Macintosh_HD_Inodes as i on i.CNID = p.CNID "\
+                " left join Vol_1_Macintosh_HD_IndexNodes as d on d.CNID = p.CNID "\
+                " left join Vol_1_Macintosh_HD_Extents as e on e.CNID = i.Extent_CNID "\
+                " left join Vol_1_Macintosh_HD_Compressed_Files as c on c.CNID = i.CNID "\
+                " left join Vol_1_Macintosh_HD_Extents as ec on ec.CNID = c.Extent_CNID "\
+                " left join Vol_1_Macintosh_HD_Attributes as a on a.CNID = p.CNID "\
+                " left join Vol_1_Macintosh_HD_Extents as ex on ex.CNID = a.Extent_CNID "\
+                " {1} "\
+                " order by Extent_Offset, compressed_Extent_Offset, xName, xExOff"
+        # This query gets file metadata as well as extents for file. If compressed, it gets compressed extents.
+        # It gets XAttributes, except decmpfs and ResourceFork (we already got those in _Compressed_Files table)
+        success, cursor, error_message = db.RunQuery(query.format(self.name, where_clause), return_named_objects=True)
+        if success:
+            apfs_file_meta = None
+            #extent_cnid = 0
+            index = 0
+            last_xattr_name = None
+            extent = None
+            prev_extent = None
+            xattr_extent = None
+            prev_xattr_extent = None
+            att = None
+            for row in cursor:
+                if index == 0:
+                    apfs_file_meta = ApfsFileMeta(row['Name'], row['Path'], row['CNID'], row['Parent_CNID'], CommonFunctions.ReadAPFSTime(row['Created']), \
+                                        CommonFunctions.ReadAPFSTime(row['Modified']), CommonFunctions.ReadAPFSTime(row['Changed']), \
+                                        CommonFunctions.ReadAPFSTime(row['Accessed']), \
+                                        CommonFunctions.ReadAPFSTime(row['DateAdded']), \
+                                        row['Flags'], row['Links_or_Children'], row['BSD_flags'], row['UID'], row['GID'], row['Mode'], \
+                                        row['Logical_Size'], row['Physical_Size'], row['ItemType'])
+
+                    if row['Uncompressed_size'] != None:
+                        apfs_file_meta.logical_size = row['Uncompressed_size']
+                        apfs_file_meta.is_compressed = True
+                        apfs_file_meta.decmpfs = row['Data']
+                        apfs_file_meta.compressed_extent_size = row['Extent_Logical_Size']
+                if apfs_file_meta.is_compressed:
+                    extent = ApfsExtent(row['compressed_Extent_Offset'], row['compressed_Extent_Size'], row['compressed_Extent_Block_Num'])
+                else:
+                    extent = ApfsExtent(row['Extent_Offset'], row['Extent_Size'], row['Extent_Block_Num'])
+                if prev_extent and extent.offset == prev_extent.offset:
+                    #This file may have hard links, hence the same data is in another row, skip this!
+                    # Or duplicated row data due to attributes being fetched in query
+                    pass
+                else:
+                    apfs_file_meta.extents.append(extent)
+                prev_extent = extent
+                index += 1
+                # Read attributes
+                xName = row['xName']
+                if xName:
+                    if last_xattr_name == xName: # same as last
+                        # check extents too
+                        if prev_xattr_extent.offset != xattr_extent.offset: # not a repeat
+                            xattr_extent = ApfsExtent(row['xExOff'], row['xExSize'], row['xBlock_Num'])
+                            att.extents.append(xattr_extent)
+                            prev_xattr_extent = xattr_extent
+                    else: # new , read this
+                        att = ApfsExtendedAttribute(self.container, xName, row['xFlags'], row['xData'], row['xSize'])
+                        xattr_extent = ApfsExtent(row['xExOff'], row['xExSize'], row['xBlock_Num'])
+                        att.extents.append(xattr_extent)
+                        apfs_file_meta.attributes.append(att)
+                        prev_xattr_extent = xattr_extent
+                    last_xattr_name = xName
+
+            if index == 0: # No such file!
+                return None
+            return apfs_file_meta
+        else:
+            log.debug('Failed to execute GetFileMetadata query, error was : ' + error_message)
+
+        return None
+
+    def GetFileMetadata_Original(self, where_clause, db):
         '''Returns ApfsFileMeta object from database. A where_clause specifies either cnid or path to find'''
                     #   0         1              2             3         4        5          6             7         8        9
         query = "SELECT p.CNID, p.Path, t.Parent_CNID, t.Extent_CNID, t.Name, t.Created, t.Modified, t.Changed, t.Accessed, t.Flags,"\
@@ -1608,7 +1728,7 @@ class ApfsFileCompressed(ApfsFile):
         return data
 
 class ApfsFileMeta:
-    def __init__(self, name, path, cnid, parent_cnid, created, modified, changed, accessed, index_time, flags, links, bsd_flags, uid, gid, mode, logical_size, physical_size, item_type):
+    def __init__(self, name, path, cnid, parent_cnid, created, modified, changed, accessed, date_added, flags, links, bsd_flags, uid, gid, mode, logical_size, physical_size, item_type):
         self.name = name
         self.path = path
         self.cnid = cnid
@@ -1618,7 +1738,7 @@ class ApfsFileMeta:
         self.modified = modified
         self.changed = changed
         self.accessed = accessed
-        self.index_time = index_time
+        self.date_added = date_added
         self.flags = flags
         self.links = links
         self.bsd_flags = bsd_flags
@@ -1636,8 +1756,8 @@ class ApfsFileMeta:
             self.is_symlink = True
         else:
             self.item_type = str(item_type)   
-        self.decmpfs = None     
-        self.attributes = {}
+        self.decmpfs = None 
+        self.attributes = []
         self.extents = []
         self.is_compressed = False
         #self.is_hardlink = False
