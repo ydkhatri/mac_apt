@@ -635,7 +635,7 @@ class SpotlightStore:
                     if items_to_compare and self.ItemExistsInDictionary(items_to_compare, md_item): pass # if md_item exists in compare_dict, skip it, else add
                     else:
                         items_in_block.append(md_item)
-                        name = md_item.GetFileName()
+                        name = md_item.GetFileName().decode('utf-8')
                         existing_item = items.get(md_item.id, None)
                         if existing_item != None:
                             log.warning('Item already present id={}, name={}, existing_name={}'.format(md_item.id, name, existing_item[2]))

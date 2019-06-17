@@ -59,8 +59,8 @@ class ApfsDbInfo:
     image's volumes.
     '''
 
-    def __init__(self, db):
-        self.db = db
+    def __init__(self, db_writer):
+        self.db_writer = db_writer # SqliteWriter object
         self.version = 2 # This will change if db structure changes in future
         self.ver_table_name = 'Version_Info'
         self.vol_table_name = 'Volumes_Info'
@@ -70,22 +70,22 @@ class ApfsDbInfo:
                                                     ('Created',DataType.INTEGER),('Updated',DataType.INTEGER)])
 
     def WriteVersionInfo(self):
-        self.db.CreateTable(self.version_info, self.ver_table_name)
+        self.db_writer.CreateTable(self.version_info, self.ver_table_name)
         data = [self.version]
-        self.db.WriteRow(data)
+        self.db_writer.WriteRow(data)
 
     def WriteVolInfo(self, volumes):
         '''Write volume info to seperate table'''
-        self.db.CreateTable(self.volume_info, self.vol_table_name)
+        self.db_writer.CreateTable(self.volume_info, self.vol_table_name)
         data = []
         for vol in volumes:
             data.append([vol.volume_name, vol.uuid, vol.num_files, vol.num_folders, vol.time_created, vol.time_updated])
-        self.db.WriteRows(data, self.vol_table_name)
+        self.db_writer.WriteRows(data, self.vol_table_name)
 
     def CheckVerInfo(self):
         '''Returns true if info in db matches current version number'''
         query = 'SELECT Version FROM {}'.format(self.ver_table_name)
-        success, cursor, error = self.db.RunQuery(query)
+        success, cursor, error = self.db_writer.RunQuery(query)
         index = 0
         if success:
             for row in cursor:
@@ -102,7 +102,7 @@ class ApfsDbInfo:
     def CheckVolInfo(self, volumes):
         '''Returns true if info in db matches volume objects'''
         query = 'SELECT Name, UUID, Files, Folders, Created, Updated FROM {}'.format(self.vol_table_name)
-        success, cursor, error = self.db.RunQuery(query)
+        success, cursor, error = self.db_writer.RunQuery(query)
         index = 0
         data_is_unaltered = True
         if success:
@@ -126,11 +126,11 @@ class ApfsFileSystemParser:
     '''
     Reads and parses the file system, writes output to a database.
     '''
-    def __init__(self, apfs_volume, db):
+    def __init__(self, apfs_volume, db_writer):
         self.name = apfs_volume.name
         self.volume = apfs_volume
         self.container = apfs_volume.container
-        self.db = db
+        self.dbo = db_writer
 
         self.num_records_read_total = 0
         self.num_records_read_batch = 0
@@ -187,27 +187,27 @@ class ApfsFileSystemParser:
 
     def write_records(self):
         if  self.hardlink_records: 
-            self.db.WriteRows(self.hardlink_records, self.name + '_Hardlinks')
+            self.dbo.WriteRows(self.hardlink_records, self.name + '_Hardlinks')
         if self.extent_records:
-            self.db.WriteRows(self.extent_records, self.name + '_Extents')
+            self.dbo.WriteRows(self.extent_records, self.name + '_Extents')
         if self.inode_records:
-            self.db.WriteRows(self.inode_records, self.name + '_Inodes')
+            self.dbo.WriteRows(self.inode_records, self.name + '_Inodes')
         if self.attr_records:
-            self.db.WriteRows(self.attr_records, self.name + '_Attributes')
+            self.dbo.WriteRows(self.attr_records, self.name + '_Attributes')
         if self.dir_records:
-            self.db.WriteRows(self.dir_records, self.name + '_IndexNodes') #TODO: rename _indexnodes to _DirEntries
+            self.dbo.WriteRows(self.dir_records, self.name + '_IndexNodes') #TODO: rename _indexnodes to _DirEntries
         if self.dir_stats_records:
-            self.db.WriteRows(self.dir_stats_records, self.name + '_DirStats')
+            self.dbo.WriteRows(self.dir_stats_records, self.name + '_DirStats')
 
     def create_tables(self):
-        self.db.CreateTable(self.hardlink_info, self.name + '_Hardlinks')
-        self.db.CreateTable(self.extent_info, self.name + '_Extents')
-        self.db.CreateTable(self.attr_info, self.name + '_Attributes')
-        self.db.CreateTable(self.inode_info, self.name + '_Inodes')
-        self.db.CreateTable(self.dir_info, self.name + '_IndexNodes')
-        self.db.CreateTable(self.dir_stats_info, self.name + '_DirStats')
-        self.db.CreateTable(self.compressed_info, self.name + '_Compressed_Files')
-        self.db.CreateTable(self.paths_info, self.name + '_Paths')
+        self.dbo.CreateTable(self.hardlink_info, self.name + '_Hardlinks')
+        self.dbo.CreateTable(self.extent_info, self.name + '_Extents')
+        self.dbo.CreateTable(self.attr_info, self.name + '_Attributes')
+        self.dbo.CreateTable(self.inode_info, self.name + '_Inodes')
+        self.dbo.CreateTable(self.dir_info, self.name + '_IndexNodes')
+        self.dbo.CreateTable(self.dir_stats_info, self.name + '_DirStats')
+        self.dbo.CreateTable(self.compressed_info, self.name + '_Compressed_Files')
+        self.dbo.CreateTable(self.paths_info, self.name + '_Paths')
 
     def clear_records(self):
         self.hardlink_records = []
@@ -227,14 +227,14 @@ class ApfsFileSystemParser:
                          "CREATE INDEX {0}_compressed_files_cnid ON {0}_Compressed_Files (CNID)".format(self.name),
                          "CREATE INDEX {0}_dir_stats_cnid ON {0}_DirStats (CNID)".format(self.name)]
         for query in index_queries:
-            success, cursor, error = self.db.RunQuery(query, writing=True)
+            success, cursor, error = self.dbo.RunQuery(query, writing=True)
             if not success:
                 log.error('Error creating index: ' + error)
                 break
     
     def run_query(self, query, writing=True):
         '''Returns True/False on query execution'''
-        success, cursor, error = self.db.RunQuery(query, writing)
+        success, cursor, error = self.dbo.RunQuery(query, writing)
         if not success:
             log.error('Error executing query : Query was {}, Error was {}'.format(query, error))
             return False
@@ -279,7 +279,7 @@ class ApfsFileSystemParser:
                 " left join {0}_Extents as er on er.cnid=a.extent_cnid "\
                 " where b.Name='com.apple.decmpfs' and (b.Flags & 1)=1"\
                 " and (e.offset=0 or e.offset is null) and (er.offset = 0 or er.offset is null)".format(self.name)
-        success, cursor, error = self.db.RunQuery(type1_query, writing=False)
+        success, cursor, error = self.dbo.RunQuery(type1_query, writing=False)
         if success:
             block_size = self.container.apfs.block_size
             to_write = []
@@ -302,7 +302,7 @@ class ApfsFileSystemParser:
                     # resource fork has data
                     to_write.append([row[0], decmpfs, uncompressed_size, row[4], 0, row[6]])
             if to_write:
-                self.db.WriteRows(to_write, self.name + '_Compressed_Files')      
+                self.dbo.WriteRows(to_write, self.name + '_Compressed_Files')      
 
         else:
             log.error('Error executing query : Query was {}, Error was {}'.format(type1_query, error))
@@ -399,8 +399,6 @@ class ApfsFileSystemParser:
                         if entry.key.content.name == 'com.apple.decmpfs':
                             #magic, compression_type, uncompressed_size = struct.unpack('<IIQ', decmpfs[1][0:16])
                             logical_size = struct.unpack('<Q', data[8:16])[0] # uncompressed data size
-                    #else:
-                    #    log.warning('Unknown rec_type 0x{:X} block_num={}'.format(rec_type, block_num))
                     self.attr_records.append([entry.key.obj_id, entry.key.content.name, rec.flags, data, logical_size, rsrc_extent_cnid])
                 elif entry_type == 6: # dstream_id
                     pass # this just has refcnts
@@ -495,9 +493,9 @@ class ApfsExtendedAttribute:
                     self._real_data += extent.GetData(self._container)
             else: # embedded
                 self._real_data = self._data
-        return self._data
+        return self._real_data
 
-#TODO Add db as class variable, remove it from functions
+#TODO Add db_writer as class variable, remove it from functions
 class ApfsVolume:
     def __init__(self, apfs_container, name=""):
         self.container = apfs_container
@@ -514,6 +512,10 @@ class ApfsVolume:
         self.time_updated = None
         self.uuid = ''
         self.files_meta_cache = DataCache()
+        #
+        # SqliteWriter object to read from sqlite. 
+        # This must be populated manually before calling any file/folder/symlink related method!
+        self.dbo = None 
 
     def read_volume_info(self, volume_super_block_num):
         """Read volume information"""
@@ -557,7 +559,7 @@ class ApfsVolume:
         uuid =  UUID(bytes=uuid_bytes)
         return str(uuid).upper()
 
-    def CopyOutFolderRecursive(self, path, db, output_folder):
+    def CopyOutFolderRecursive(self, path, output_folder):
         '''Internal Test function'''
         if not path:
             return
@@ -567,7 +569,7 @@ class ApfsVolume:
             path = path[:-1]
         if not os.path.exists(output_folder):
             os.makedirs(output_folder)
-        items = self.ListItemsInFolder(path, db)
+        items = self.ListItemsInFolder(path)
         for item in items:
             type = item['type']
             if type == 'Folder':
@@ -577,23 +579,23 @@ class ApfsVolume:
                 try:
                     if not os.path.exists(new_out_path):
                         os.makedirs(new_out_path)
-                    self.CopyOutFolderRecursive(new_path, db, new_out_path)
+                    self.CopyOutFolderRecursive(new_path, new_out_path)
                 except:
                     log.exception('Error creating folder ' + new_out_path)
             elif type == 'File':
                 name = item['name']
                 file_path = ('/' + name) if path == '/' else (path + '/' + name)
                 destination_path = os.path.join(output_folder, name)
-                self.CopyOutFile(file_path, destination_path, db)
+                self.CopyOutFile(file_path, destination_path)
 
-    def GetFile(self, path, db, apfs_file_meta=None):
+    def GetFile(self, path, apfs_file_meta=None):
         '''Returns an ApfsFile object given path. Returns None if file not found'''
         if not path:
             return None
         if apfs_file_meta == None:
             apfs_file_meta = self.files_meta_cache.Find(path)
         if apfs_file_meta == None:
-            apfs_file_meta = self.GetFileMetadataByPath(path, db)
+            apfs_file_meta = self.GetFileMetadataByPath(path)
             if apfs_file_meta:
                 self.files_meta_cache.Insert(apfs_file_meta, path)
         if apfs_file_meta:
@@ -603,44 +605,44 @@ class ApfsVolume:
                 return ApfsFile(apfs_file_meta, apfs_file_meta.logical_size, apfs_file_meta.extents, self.container)
         return None
 
-    def GetFileAttributes(self, path, db, apfs_file_meta=None):
+    def GetExtendedAttributes(self, path, apfs_file_meta=None):
         if not path:
             return None
         if apfs_file_meta == None:
             apfs_file_meta = self.files_meta_cache.Find(path)
         if apfs_file_meta == None:
-            apfs_file_meta = self.GetFileMetadataByPath(path, db)
+            apfs_file_meta = self.GetFileMetadataByPath(path)
             if apfs_file_meta:
                 self.files_meta_cache.Insert(apfs_file_meta, path)
             else:
                 return None
         return apfs_file_meta.attributes
 
-    def IsSymbolicLink(self, db, path):
+    def IsSymbolicLink(self, path):
         '''Returns True if the path is a symbolic link'''
         if not path:
             return False
         apfs_file_meta = self.files_meta_cache.Find(path)
         if apfs_file_meta == None:
-            apfs_file_meta = self.GetFileMetadataByPath(path, db)
+            apfs_file_meta = self.GetFileMetadataByPath(path)
             if apfs_file_meta:
                 return apfs_file_meta.is_symlink
         return False
 
-    def open(self, path, db, apfs_file_meta=None):
+    def open(self, path, apfs_file_meta=None):
         '''Open file, returns file-like object'''
         log.debug("Trying to open file : " + path)
-        apfs_file = self.GetFile(path, db, apfs_file_meta)
+        apfs_file = self.GetFile(path, apfs_file_meta)
         if apfs_file == None:
             log.info('File not found! Path was: ' + path)
         elif apfs_file.meta.logical_size > 209715200:
             log.debug('File size > 200 MB')
         return apfs_file
 
-    def OpenSmallFile(self, path, db, apfs_file_meta=None):
+    def OpenSmallFile(self, path, apfs_file_meta=None):
         '''Open small files (<200MB), returns open file handle'''
         log.debug("Trying to open file : " + path)
-        apfs_file = self.GetFile(path, db, apfs_file_meta)
+        apfs_file = self.GetFile(path, apfs_file_meta)
         if apfs_file == None:
             log.info('File not found! Path was: ' + path)
             return None
@@ -658,12 +660,12 @@ class ApfsVolume:
             log.exception("Failed to open file {}".format(path))
         return None
 
-    def CopyOutFile(self, path, destination_path, db):
+    def CopyOutFile(self, path, destination_path):
         '''Copy out file to disk'''
         retval = False
         if not path:
             return False
-        apfs_file = self.GetFile(path, db)
+        apfs_file = self.GetFile(path)
         log.debug('Trying to copy out ' + path)
         if apfs_file:
             try:
@@ -682,17 +684,17 @@ class ApfsVolume:
         return retval
 
     #TODO SEearch  self.files_meta_cache first!
-    def DoesFileExist(self, db, path):
+    def DoesFileExist(self, path):
         '''Returns True if file exists'''
-        return self.DoesPathExist(db, path, EntryType.FILES)
+        return self.DoesPathExist(path, EntryType.FILES)
 
     #TODO SEearch  self.files_meta_cache first!
-    def DoesFolderExist(self, db, path):
+    def DoesFolderExist(self, path):
         '''Returns True if folder exists'''
-        return self.DoesPathExist(db, path, EntryType.FOLDERS)        
+        return self.DoesPathExist(path, EntryType.FOLDERS)        
 
     #TODO SEearch  self.files_meta_cache first!
-    def DoesPathExist(self, db, path, type=EntryType.FILES_AND_FOLDERS):
+    def DoesPathExist(self, path, type=EntryType.FILES_AND_FOLDERS):
         '''Returns True if path exists'''
         if not path: 
             return None
@@ -710,21 +712,21 @@ class ApfsVolume:
                     " left join {0}_IndexNodes as i on i.CNID = p.CNID "\
                     " WHERE Path = '{1}' AND ItemType=4"
         path = path.replace("'", "''") # if path contains single quote, replace with double to escape it!
-        success, cursor, error_message = db.RunQuery(query.format(self.name, path))
+        success, cursor, error_message = self.dbo.RunQuery(query.format(self.name, path))
         if success:
             for row in cursor:
                 return True
         return False
 
-    def GetFileMetadataByCnid(self, cnid, db):
+    def GetFileMetadataByCnid(self, cnid):
         '''Returns ApfsFileMeta object from database given path and db handle'''
         cnid = int(cnid)
         if cnid <= 0: 
             return None
         where_clause = " where p.CNID={} ".format(cnid)
-        return self.GetFileMetadata(where_clause, db)
+        return self.GetFileMetadata(where_clause)
 
-    def GetFileMetadataByPath(self, path, db):
+    def GetFileMetadataByPath(self, path):
         '''Returns ApfsFileMeta object from database given path and db handle'''
         if not path: 
             return None
@@ -732,14 +734,14 @@ class ApfsVolume:
             path = '/' + path
         path = path.replace("'", "''") # if path contains single quote, replace with double to escape it!
         where_clause = " where p.Path = '{}' ".format(path)
-        return self.GetFileMetadata(where_clause, db)
+        return self.GetFileMetadata(where_clause)
 
-    def GetFilePathFromCnid(self, cnid, db):
+    def GetFilePathFromCnid(self, cnid):
         #TODO: add/use cacheing
-        meta = self.GetFileMetadataByCnid(cnid, db)
+        meta = self.GetFileMetadataByCnid(cnid)
         return meta.path
 
-    def GetFileMetadata(self, where_clause, db):
+    def GetFileMetadata(self, where_clause):
         '''Returns ApfsFileMeta object from database. A where_clause specifies either cnid or path to find'''
 
         query = "SELECT a.name as xName, a.flags as xFlags, a.data as xData, a.Logical_uncompressed_size as xSize, "\
@@ -761,7 +763,7 @@ class ApfsVolume:
                 " order by Extent_Offset, compressed_Extent_Offset, xName, xExOff"
         # This query gets file metadata as well as extents for file. If compressed, it gets compressed extents.
         # It gets XAttributes, except decmpfs and ResourceFork (we already got those in _Compressed_Files table)
-        success, cursor, error_message = db.RunQuery(query.format(self.name, where_clause), return_named_objects=True)
+        success, cursor, error_message = self.dbo.RunQuery(query.format(self.name, where_clause), return_named_objects=True)
         if success:
             apfs_file_meta = None
             #extent_cnid = 0
@@ -823,70 +825,7 @@ class ApfsVolume:
 
         return None
 
-    def GetFileMetadata_Original(self, where_clause, db):
-        '''Returns ApfsFileMeta object from database. A where_clause specifies either cnid or path to find'''
-                    #   0         1              2             3         4        5          6             7         8        9
-        query = "SELECT p.CNID, p.Path, t.Parent_CNID, t.Extent_CNID, t.Name, t.Created, t.Modified, t.Changed, t.Accessed, t.Flags,"\
-                " t.Links_or_Children, t.BSD_flags, t.UID, t.GID, t.Mode, t.Logical_Size, t.Physical_Size, " \
-                " i.ItemType, i.DateAdded, e.Offset as Extent_Offset, e.Size as Extent_Size, e.Block_Num as Extent_Block_Num, " \
-                " c.Uncompressed_size, c.Data, c.Extent_Logical_Size, "\
-                " e_c.Offset as compressed_Extent_Offset, e_c.Size as compressed_Extent_Size, e_c.Block_Num as compressed_Extent_Block_Num"\
-                " from {0}_Paths as p "\
-                " left join {0}_Inodes as t on t.CNID = p.CNID "\
-                " left join {0}_IndexNodes as i on i.CNID = p.CNID "\
-                " left join {0}_Extents as e on e.CNID = t.Extent_CNID "\
-                " left join {0}_Compressed_Files as c on c.CNID = t.CNID "\
-                " left join {0}_Extents as e_c on e_c.CNID = c.Extent_CNID "\
-                " {1} "\
-                " order by Extent_Offset, compressed_Extent_Offset"
-        # This query gets file metadata as well as extents for file. If compressed, it gets compressed extents.
-        success, cursor, error_message = db.RunQuery(query.format(self.name, where_clause))
-        if success:
-            apfs_file_meta = None
-            #extent_cnid = 0
-            index = 0
-            prev_extent = None
-            for row in cursor:
-                if index == 0:
-                    # sqlite does not like unicode strings as index names, hence not using dictionary row
-                    apfs_file_meta = ApfsFileMeta(row[4], row[1], row[0], row[2], CommonFunctions.ReadAPFSTime(row[5]), \
-                                        CommonFunctions.ReadAPFSTime(row[6]), CommonFunctions.ReadAPFSTime(row[7]), \
-                                        CommonFunctions.ReadAPFSTime(row[8]), \
-                                        CommonFunctions.ReadAPFSTime(row[18]), \
-                                        row[9], row[10], row[11], row[12], row[13], row[14], row[15], row[16], row[17])
-                    #extent_cnid = row[3]
-                    if row[22] != None: # uncompressed_size
-                        apfs_file_meta.logical_size = row[22]
-                        apfs_file_meta.is_compressed = True
-                        apfs_file_meta.decmpfs = row[23]
-                        apfs_file_meta.compressed_extent_size = row[24]
-                extent = ApfsExtent(row[25], row[26], row[27]) if apfs_file_meta.is_compressed else ApfsExtent(row[19], row[20], row[21])
-                if prev_extent and extent.offset == prev_extent.offset:
-                    #This file may have hard links, hence the same data is in another row, skip this!
-                    pass
-                else:
-                    apfs_file_meta.extents.append(extent)
-                prev_extent = extent
-                index += 1
-            if index == 0: # No such file!
-                return None
-            # Let's also get Attributes, except decmpfs and ResourceFork (we already got those in _Compressed_Files table)
-            # TODO: Remove Logical_uncompressed_size, Extent_CNID, perhaps not needed now!
-            attrib_query = "SELECT Name, Flags, Data, Logical_uncompressed_size, Extent_CNID from {0}_Attributes "\
-                            "WHERE cnid={1} and Name not in ('com.apple.decmpfs', 'com.apple.ResourceFork')"
-            success, cursor, error_message = db.RunQuery(attrib_query.format(self.name, apfs_file_meta.cnid))
-            if success:
-                for row in cursor:
-                    apfs_file_meta.attributes[row[0]] = [row[1], row[2], row[3], row[4]]
-            else:
-                log.debug('Failed to execute attribute query, error was : ' + error_message)
-            return apfs_file_meta
-        else:
-            log.debug('Failed to execute GetFileMetadata query, error was : ' + error_message)
-
-        return None
-
-    def GetManyFileMetadataByCnids(self, cnids, db):
+    def GetManyFileMetadataByCnids(self, cnids):
         '''Returns ApfsFileMeta object from database given path and db handle'''
         # for cnid in cnids:
         #     if cnid <= 0:
@@ -894,9 +833,9 @@ class ApfsVolume:
         cnids = [str(int(x)) for x in cnids]
         cnids_str = ",".join(cnids)
         where_clause = " where p.CNID IN ({}) ".format(cnids_str)
-        return self.GetManyFileMetadata(where_clause, db)
+        return self.GetManyFileMetadata(where_clause)
 
-    def GetManyFileMetadataByPaths(self, paths, db):
+    def GetManyFileMetadataByPaths(self, paths):
         '''Returns ApfsFileMeta object from database given path and db handle'''   
         for path in paths:
             if not path.startswith('/'): 
@@ -905,92 +844,108 @@ class ApfsVolume:
             path = "'{}'".format(path)
         paths_str = ",".join(paths)
         where_clause = " where p.Path IN ({}) ".format(paths_str)
-        return self.GetManyFileMetadata(where_clause, db)
+        return self.GetManyFileMetadata(where_clause)
 
-    # def GetManyFilePathFromCnid(self, cnid, db):
+    # def GetManyFilePathFromCnid(self, cnid):
     #     #TODO: add/use cacheing
-    #     meta = self.GetManyFileMetadataByCnid(cnid, db)
+    #     meta = self.GetManyFileMetadataByCnid(cnid)
     #     return meta.path
 
-    def GetManyFileMetadata(self, where_clause, db):
-        '''Returns ApfsFileMeta object from database. A where_clause specifies either cnids or paths to find. No Attribute data is returned!!'''
+    def GetManyFileMetadata(self, where_clause):
+        '''Returns ApfsFileMeta object from database. A where_clause specifies either cnid or path to find'''
         apfs_file_meta_list = []
-                    #   0         1              2             3         4        5          6             7         8        9
-        query = "SELECT p.CNID, p.Path, t.Parent_CNID, t.Extent_CNID, t.Name, t.Created, t.Modified, t.Changed, t.Accessed, t.Flags,"\
-                " t.Links_or_Children, t.BSD_flags, t.UID, t.GID, t.Mode, t.Logical_Size, t.Physical_Size, " \
-                " i.ItemType, i.DateAdded, e.Offset as Extent_Offset, e.Size as Extent_Size, e.Block_Num as Extent_Block_Num, " \
+        query = "SELECT a.name as xName, a.flags as xFlags, a.data as xData, a.Logical_uncompressed_size as xSize, "\
+                " a.Extent_CNID as xCNID, ex.Offset as xExOff, ex.Size as xExSize, ex.Block_Num as xBlock_Num, "\
+                " p.CNID, p.Path, i.Parent_CNID, i.Extent_CNID, i.Name, i.Created, i.Modified, i.Changed, i.Accessed, i.Flags, "\
+                " i.Links_or_Children, i.BSD_flags, i.UID, i.GID, i.Mode, i.Logical_Size, i.Physical_Size, "\
+                " d.ItemType, d.DateAdded, e.Offset as Extent_Offset, e.Size as Extent_Size, e.Block_Num as Extent_Block_Num, "\
                 " c.Uncompressed_size, c.Data, c.Extent_Logical_Size, "\
-                " e_c.Offset as compressed_Extent_Offset, e_c.Size as compressed_Extent_Size, e_c.Block_Num as compressed_Extent_Block_Num"\
-                " from {0}_Paths as p "\
-                " left join {0}_Inodes as t on t.CNID = p.CNID "\
-                " left join {0}_IndexNodes as i on i.CNID = p.CNID "\
-                " left join {0}_Extents as e on e.CNID = t.Extent_CNID "\
-                " left join {0}_Compressed_Files as c on c.CNID = t.CNID "\
-                " left join {0}_Extents as e_c on e_c.CNID = c.Extent_CNID "\
+                " ec.Offset as compressed_Extent_Offset, ec.Size as compressed_Extent_Size, ec.Block_Num as compressed_Extent_Block_Num "\
+                " from Vol_1_Macintosh_HD_Paths as p "\
+                " left join Vol_1_Macintosh_HD_Inodes as i on i.CNID = p.CNID "\
+                " left join Vol_1_Macintosh_HD_IndexNodes as d on d.CNID = p.CNID "\
+                " left join Vol_1_Macintosh_HD_Extents as e on e.CNID = i.Extent_CNID "\
+                " left join Vol_1_Macintosh_HD_Compressed_Files as c on c.CNID = i.CNID "\
+                " left join Vol_1_Macintosh_HD_Extents as ec on ec.CNID = c.Extent_CNID "\
+                " left join Vol_1_Macintosh_HD_Attributes as a on a.CNID = p.CNID "\
+                " left join Vol_1_Macintosh_HD_Extents as ex on ex.CNID = a.Extent_CNID "\
                 " {1} "\
-                " order by p.CNID, Extent_Offset, compressed_Extent_Offset"
+                " order by p.CNID, Extent_Offset, compressed_Extent_Offset, xName, xExOff"
         # This query gets file metadata as well as extents for file. If compressed, it gets compressed extents.
-        success, cursor, error_message = db.RunQuery(query.format(self.name, where_clause))
+        # It gets XAttributes, except decmpfs and ResourceFork (we already got those in _Compressed_Files table)
+        success, cursor, error_message = self.dbo.RunQuery(query.format(self.name, where_clause), return_named_objects=True)
         if success:
             apfs_file_meta = None
             #extent_cnid = 0
             index = 0
-            prev_extent = None
             last_cnid = 0
+            last_xattr_name = None
+            extent = None
+            prev_extent = None
+            xattr_extent = None
+            prev_xattr_extent = None
+            att = None
             for row in cursor:
-                if last_cnid == row[0]: # same file
+                if last_cnid == row['CNID']: # same file
                     pass
                 else:                  # new file
                     if last_cnid:      # save old info
                         apfs_file_meta_list.append(apfs_file_meta)
                     index = 0
-                    last_cnid = row[0]
+                    last_cnid = row['CNID']
                     prev_extent = None
 
                 if index == 0:
-                    apfs_file_meta = ApfsFileMeta(row[4], row[1], row[0], row[2], CommonFunctions.ReadAPFSTime(row[5]), \
-                                        CommonFunctions.ReadAPFSTime(row[6]), CommonFunctions.ReadAPFSTime(row[7]), \
-                                        CommonFunctions.ReadAPFSTime(row[8]), \
-                                        CommonFunctions.ReadAPFSTime(row[18]), \
-                                        row[9], row[10], row[11], row[12], row[13], row[14], row[15], row[16], row[17])
-                    #extent_cnid = row[3]
-                    if row[22] != None: # uncompressed_size
-                        apfs_file_meta.logical_size = row[22]
+                    apfs_file_meta = ApfsFileMeta(row['Name'], row['Path'], row['CNID'], row['Parent_CNID'], CommonFunctions.ReadAPFSTime(row['Created']), \
+                                        CommonFunctions.ReadAPFSTime(row['Modified']), CommonFunctions.ReadAPFSTime(row['Changed']), \
+                                        CommonFunctions.ReadAPFSTime(row['Accessed']), \
+                                        CommonFunctions.ReadAPFSTime(row['DateAdded']), \
+                                        row['Flags'], row['Links_or_Children'], row['BSD_flags'], row['UID'], row['GID'], row['Mode'], \
+                                        row['Logical_Size'], row['Physical_Size'], row['ItemType'])
+
+                    if row['Uncompressed_size'] != None:
+                        apfs_file_meta.logical_size = row['Uncompressed_size']
                         apfs_file_meta.is_compressed = True
-                        apfs_file_meta.decmpfs = row[23]
-                        apfs_file_meta.compressed_extent_size = row[24]
-                extent = ApfsExtent(row[25], row[26], row[27]) if apfs_file_meta.is_compressed else ApfsExtent(row[19], row[20], row[21])
+                        apfs_file_meta.decmpfs = row['Data']
+                        apfs_file_meta.compressed_extent_size = row['Extent_Logical_Size']
+                if apfs_file_meta.is_compressed:
+                    extent = ApfsExtent(row['compressed_Extent_Offset'], row['compressed_Extent_Size'], row['compressed_Extent_Block_Num'])
+                else:
+                    extent = ApfsExtent(row['Extent_Offset'], row['Extent_Size'], row['Extent_Block_Num'])
                 if prev_extent and extent.offset == prev_extent.offset:
                     #This file may have hard links, hence the same data is in another row, skip this!
+                    # Or duplicated row data due to attributes being fetched in query
                     pass
                 else:
                     apfs_file_meta.extents.append(extent)
                 prev_extent = extent
                 index += 1
-            #if index == 0: # No such file!
-            #    return None
-            # Let's also get Attributes, except decmpfs and ResourceFork (we already got those in _Compressed_Files table)
-            #  Skipping this for now.
-            # TODO: Remove Logical_uncompressed_size, Extent_CNID, perhaps not needed now!
-            # attrib_query = "SELECT Name, Flags, Data, Logical_uncompressed_size, Extent_CNID from {0}_Attributes "\
-            #                 "WHERE cnid={1} and Name not in ('com.apple.decmpfs', 'com.apple.ResourceFork')"
-            # success, cursor, error_message = db.RunQuery(attrib_query.format(self.name, apfs_file_meta.cnid))
-            # if success:
-            #     for row in cursor:
-            #         apfs_file_meta.attributes[row[0]] = [row[1], row[2], row[3], row[4]]
-            # else:
-            #     log.debug('Failed to execute attribute query, error was : ' + error_message)
-            #return apfs_file_meta
+                # Read attributes
+                xName = row['xName']
+                if xName:
+                    if last_xattr_name == xName: # same as last
+                        # check extents too
+                        if prev_xattr_extent.offset != xattr_extent.offset: # not a repeat
+                            xattr_extent = ApfsExtent(row['xExOff'], row['xExSize'], row['xBlock_Num'])
+                            att.extents.append(xattr_extent)
+                            prev_xattr_extent = xattr_extent
+                    else: # new , read this
+                        att = ApfsExtendedAttribute(self.container, xName, row['xFlags'], row['xData'], row['xSize'])
+                        xattr_extent = ApfsExtent(row['xExOff'], row['xExSize'], row['xBlock_Num'])
+                        att.extents.append(xattr_extent)
+                        apfs_file_meta.attributes.append(att)
+                        prev_xattr_extent = xattr_extent
+                    last_xattr_name = xName
 
             # get last one
             if apfs_file_meta:
                 apfs_file_meta_list.append(apfs_file_meta)
         else:
-            log.debug('Failed to execute GetFileMetadata query, error was : ' + error_message)
+            log.debug('Failed to execute GetManyFileMetadata query, error was : ' + error_message)
 
         return apfs_file_meta_list
 
-    def ListItemsInFolder(self, path, db):
+    def ListItemsInFolder(self, path):
         ''' 
         Returns a list of files and/or folders in a list
         Format of list = [ { 'name':'got.txt', 'type':EntryType.FILE, 'size':10, 'dates': {} }, .. ]
@@ -1008,7 +963,7 @@ class ApfsVolume:
                 " WHERE t.Parent_CNID in (select CNID from {0}_Paths  where path='{1}')"
         try:
             path = path.replace("'", "''") # if path contains single quote, replace with double to escape it!
-            success, cursor, error_message = db.RunQuery(query.format(self.name, path))
+            success, cursor, error_message = self.dbo.RunQuery(query.format(self.name, path))
             if success:
                 for row in cursor:
                     item = { 'name':row[0] }
@@ -1016,13 +971,12 @@ class ApfsVolume:
                         item['size'] = row[3]
                     else:
                         item['size'] = row[8]
-                    item['dates'] = { 'c_time':CommonFunctions.ReadAPFSTime(row[6]), 'm_time':CommonFunctions.ReadAPFSTime(row[5]), 'cr_time':CommonFunctions.ReadAPFSTime(row[4]), 'a_time':CommonFunctions.ReadAPFSTime(row[7]),
-                    'i_time':CommonFunctions.ReadAPFSTime(row[9]) }
-                    if row[2] == 4:    item['type'] = 'Folder'
-                    elif row[2] == 8:  item['type'] = 'File'
-                    elif row[2] == 10: item['type'] = 'Symlink'
-                    else:
-                        item['type'] = row[2]
+                    item['dates'] = { 'c_time':CommonFunctions.ReadAPFSTime(row[6]), 
+                                        'm_time':CommonFunctions.ReadAPFSTime(row[5]), 
+                                        'cr_time':CommonFunctions.ReadAPFSTime(row[4]), 
+                                        'a_time':CommonFunctions.ReadAPFSTime(row[7]),
+                                        'i_time':CommonFunctions.ReadAPFSTime(row[9]) }
+                    item['type'] = ApfsFileMeta.ItemTypeString(row[2])
                     items.append(item)
             else:
                 log.error('Failed to execute ListItemsInFolder query, error was : ' + error_message)
@@ -1110,7 +1064,7 @@ class ApfsContainer:
         elif whence == 2: # end of file (offset must be -ve)
             self.position = self.apfs_container_size + offset
         else:
-            raise Exception('Unexpected value in whence (only 0,1,2 are allowed), value was ' + str(whence))
+            raise ValueError('Unexpected value in whence (only 0,1,2 are allowed), value was ' + str(whence))
 
     def tell(self):
         return self.position
@@ -1728,7 +1682,11 @@ class ApfsFileCompressed(ApfsFile):
         return data
 
 class ApfsFileMeta:
-    def __init__(self, name, path, cnid, parent_cnid, created, modified, changed, accessed, date_added, flags, links, bsd_flags, uid, gid, mode, logical_size, physical_size, item_type):
+    __slots__ = ['name', 'path', 'cnid', 'parent_cnid', 'created', 'modified', 'changed', 'accessed', 'date_added', 
+                'flags', 'links', 'bsd_flags', 'uid', 'gid', 'mode', 'logical_size', 'compressed_extent_size', 
+                'physical_size', 'is_symlink', 'item_type', 'decmpfs', 'attributes', 'extents', 'is_compressed']
+    def __init__(self, name, path, cnid, parent_cnid, created, modified, changed, accessed, date_added, 
+                flags, links, bsd_flags, uid, gid, mode, logical_size, physical_size, item_type):
         self.name = name
         self.path = path
         self.cnid = cnid
@@ -1748,17 +1706,24 @@ class ApfsFileMeta:
         self.logical_size = logical_size
         self.compressed_extent_size = 0
         self.physical_size = physical_size
-        self.is_symlink = False
-        if   item_type == 4: self.item_type = 'Folder'
-        elif item_type == 8: self.item_type = 'File'
-        elif item_type ==10: 
-            self.item_type = 'SymLink'
-            self.is_symlink = True
-        else:
-            self.item_type = str(item_type)   
+        self.is_symlink = (item_type == 10)
+        self.item_type = item_type
         self.decmpfs = None 
         self.attributes = []
         self.extents = []
         self.is_compressed = False
         #self.is_hardlink = False
 
+    @staticmethod
+    def ItemTypeString(item_type):
+        type_str = ''
+        if   item_type == 1: type_str = 'Named Pipe'
+        if   item_type == 2: type_str = 'Character Special File'
+        if   item_type == 4: type_str = 'Folder'
+        if   item_type == 6: type_str = 'Block Special File'
+        elif item_type == 8: type_str = 'File'
+        elif item_type ==10: type_str = 'SymLink'
+        elif item_type ==12: type_str = 'Socket'
+        elif item_type ==14: type_str = 'Whiteout'
+        else:                type_str = 'Unknown_' + str(item_type)
+        return type_str

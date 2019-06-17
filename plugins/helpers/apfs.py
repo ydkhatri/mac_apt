@@ -320,7 +320,7 @@ class Apfs(KaitaiStruct):
             self.has_m_key = True
             self._io.seek(_pos)
             return self._m_key 
-            
+
         @property
         def data(self):
             if self.has_m_data:
@@ -665,7 +665,7 @@ class Apfs(KaitaiStruct):
             #if _on == 6: #self._root.EaType.symlink:
             #    self.data = (KaitaiStream.bytes_terminate(self._io.read_bytes(self.xdata_len), 0, False)).decode(UTF-8")
             #else:
-            self.xdata = self._io.read_bytes(self.xdata_len)
+            self.xdata = self._io.read_bytes(self.xdata_len) # Either data inline or objId and DstreamRecord
 
 
     class RefBlock(KaitaiStruct):

@@ -43,7 +43,7 @@ def IsItemPresentInList(collection, item):
     try:
         collection.index(item)
         return True
-    except Exception:
+    except ValueError:
         pass
     return False
 
@@ -243,6 +243,7 @@ def FindOsxPartitionInApfsContainer(img, vol_info, container_size, container_sta
                 continue
             if vol.is_encrypted: continue
             mac_info.osx_FS = vol
+            vol.dbo = mac_info.apfs_db
             if FindOsxFiles(mac_info):
                 return True
         # Did not find macOS installation
