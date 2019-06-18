@@ -443,10 +443,11 @@ class DataCache:
     '''Cache of ApfsFileMeta objects'''
     def __init__(self, max_size=2000):
         self.cache_limit = max_size
-        self.cache = {} # key=path, value=(ApfsFileMeta object, id)
-        self.cache_index = {} # key=id, value=path
+        self.cache = {} # key=path, value=(ApfsFileMeta object, index)
+        self.cache_index = {} # key=index, value=path
         self.index = 0
         self.count = 0
+        #self.cnid_cache = {} # key=cnid, value=index
 
     def Insert(self, apfs_file_meta, path):
         if self.Find(path):
@@ -455,13 +456,16 @@ class DataCache:
         self.index += 1
         self.cache[path] = (apfs_file_meta, self.index)
         self.cache_index[self.index] = path
+        #self.cnid_cache[apfs_file_meta.cnid] = self.index
         #self.count += 1
         if self.count >= self.cache_limit: # should not got to >
             # remove oldest element
             oldest_id = self.index - self.cache_limit
             oldest_path = self.cache_index[oldest_id]
+            #oldest_cnid = self.cache[oldest_path][0].cnid
             del(self.cache_index[oldest_id])
             del(self.cache[oldest_path])
+            #del(self.cache_index[oldest_path])
         else:
             self.count += 1
     
@@ -472,8 +476,14 @@ class DataCache:
         cached_obj = self.cache.get(path, None)
         if cached_obj:
             return cached_obj[0]
-        return None   
-        
+        return None
+
+    # def FindFileId(self, id):
+    #     cached_path = self.cache_index.get(id, None)
+    #     if cached_path:
+    #         return self.cache[path][0]
+    #     return None  
+
 class ApfsExtendedAttribute:
     def __init__(self, container, xName, xFlags, xData, xSize):
         self._container = container
@@ -512,7 +522,7 @@ class ApfsVolume:
         self.time_created = None
         self.time_updated = None
         self.uuid = ''
-        self.files_meta_cache = DataCache()
+        self.files_meta_cache = DataCache(100)
         #
         # SqliteWriter object to read from sqlite. 
         # This must be populated manually before calling any file/folder/symlink related method!
@@ -589,45 +599,50 @@ class ApfsVolume:
                 destination_path = os.path.join(output_folder, name)
                 self.CopyOutFile(file_path, destination_path)
 
+    def GetApfsFileMeta(self, path):
+        '''Retrieve from cache or fetch from database if not found and insert into cache'''
+        apfs_file_meta = self.files_meta_cache.Find(path)
+        if apfs_file_meta == None:
+            apfs_file_meta = self.GetFileMetadataByPath(path)
+            if apfs_file_meta:
+                self.files_meta_cache.Insert(apfs_file_meta, path)
+        return apfs_file_meta
+
     def GetFile(self, path, apfs_file_meta=None):
         '''Returns an ApfsFile object given path. Returns None if file not found'''
         if not path:
             return None
         if apfs_file_meta == None:
-            apfs_file_meta = self.files_meta_cache.Find(path)
-        if apfs_file_meta == None:
-            apfs_file_meta = self.GetFileMetadataByPath(path)
-            if apfs_file_meta:
-                self.files_meta_cache.Insert(apfs_file_meta, path)
+            apfs_file_meta = self.GetApfsFileMeta(path)
         if apfs_file_meta:
             if apfs_file_meta.is_compressed:
                 return ApfsFileCompressed(apfs_file_meta, apfs_file_meta.logical_size, apfs_file_meta.extents, self.container)
             else:
                 return ApfsFile(apfs_file_meta, apfs_file_meta.logical_size, apfs_file_meta.extents, self.container)
+        else:
+            log.error("Failed to open file as no metadata was found for it. File path={}".format(path))
         return None
 
     def GetExtendedAttributes(self, path, apfs_file_meta=None):
         if not path:
             return None
         if apfs_file_meta == None:
-            apfs_file_meta = self.files_meta_cache.Find(path)
-        if apfs_file_meta == None:
-            apfs_file_meta = self.GetFileMetadataByPath(path)
-            if apfs_file_meta:
-                self.files_meta_cache.Insert(apfs_file_meta, path)
-            else:
-                return None
-        return apfs_file_meta.attributes
+            apfs_file_meta = self.GetApfsFileMeta(path)
+        if apfs_file_meta:
+            return apfs_file_meta.attributes
+        else:
+            log.error("Failed to get Xattr as no metadata was found for this file. File path={}".format(path))
+        return None
 
     def IsSymbolicLink(self, path):
         '''Returns True if the path is a symbolic link'''
         if not path:
             return False
-        apfs_file_meta = self.files_meta_cache.Find(path)
-        if apfs_file_meta == None:
-            apfs_file_meta = self.GetFileMetadataByPath(path)
-            if apfs_file_meta:
-                return apfs_file_meta.is_symlink
+        apfs_file_meta = self.GetApfsFileMeta(path)
+        if apfs_file_meta:
+            return apfs_file_meta.is_symlink
+        else:
+            log.error("Failed to get symlink status as no metadata was found for this file. File path={}".format(path))
         return False
 
     def open(self, path, apfs_file_meta=None):
@@ -684,17 +699,22 @@ class ApfsVolume:
             log.debug("Failed to find file for export: " + path)
         return retval
 
-    #TODO SEearch  self.files_meta_cache first!
     def DoesFileExist(self, path):
         '''Returns True if file exists'''
-        return self.DoesPathExist(path, EntryType.FILES)
+        apfs_file_meta = self.GetApfsFileMeta(path)
+        if apfs_file_meta:
+            return apfs_file_meta.item_type in (8, 10) # will also return true for symlink which may point to folder!
+        return False
+        #return self.DoesPathExist(path, EntryType.FILES)
 
-    #TODO SEearch  self.files_meta_cache first!
     def DoesFolderExist(self, path):
         '''Returns True if folder exists'''
-        return self.DoesPathExist(path, EntryType.FOLDERS)        
+        apfs_file_meta = self.GetApfsFileMeta(path)
+        if apfs_file_meta:
+            return apfs_file_meta.item_type in (4, 10) # will also return true for symlink which may point to file!
+        return False
+        #return self.DoesPathExist(path, EntryType.FOLDERS)        
 
-    #TODO SEearch  self.files_meta_cache first!
     def DoesPathExist(self, path, type=EntryType.FILES_AND_FOLDERS):
         '''Returns True if path exists'''
         if not path: 
@@ -702,34 +722,39 @@ class ApfsVolume:
         if not path.startswith('/'): 
             path = '/' + path
 
-        if type == EntryType.FILES_AND_FOLDERS:
-            query = "SELECT CNID from {0}_Paths WHERE Path = '{1}'"
-        elif type == EntryType.FILES:
-            query = "SELECT p.CNID from {0}_Paths as p "\
-                    " left join {0}_IndexNodes as i on i.CNID = p.CNID "\
-                    " WHERE Path = '{1}' AND ItemType=8"
-        else: # folders
-            query = "SELECT p.CNID from {0}_Paths as p "\
-                    " left join {0}_IndexNodes as i on i.CNID = p.CNID "\
-                    " WHERE Path = '{1}' AND ItemType=4"
-        path = path.replace("'", "''") # if path contains single quote, replace with double to escape it!
-        success, cursor, error_message = self.dbo.RunQuery(query.format(self.name, path))
-        if success:
-            for row in cursor:
-                return True
+        apfs_file_meta = self.GetApfsFileMeta(path)
+        if apfs_file_meta:
+            return apfs_file_meta.item_type in (4, 8, 10) # folder, file, symlink
         return False
+
+        # if type == EntryType.FILES_AND_FOLDERS:
+        #     query = "SELECT CNID from {0}_Paths WHERE Path = '{1}'"
+        # elif type == EntryType.FILES:
+        #     query = "SELECT p.CNID from {0}_Paths as p "\
+        #             " left join {0}_IndexNodes as i on i.CNID = p.CNID "\
+        #             " WHERE Path = '{1}' AND ItemType=8"
+        # else: # folders
+        #     query = "SELECT p.CNID from {0}_Paths as p "\
+        #             " left join {0}_IndexNodes as i on i.CNID = p.CNID "\
+        #             " WHERE Path = '{1}' AND ItemType=4"
+        # path = path.replace("'", "''") # if path contains single quote, replace with double to escape it!
+        # success, cursor, error_message = self.dbo.RunQuery(query.format(self.name, path))
+        # if success:
+        #     for row in cursor:
+        #         return True
+        # return False
 
     def GetFileMetadataByCnid(self, cnid):
         '''Returns ApfsFileMeta object from database given path and db handle'''
         cnid = int(cnid)
-        if cnid <= 0: 
+        if cnid <= 0:
             return None
         where_clause = " where p.CNID={} ".format(cnid)
         return self.GetFileMetadata(where_clause)
 
     def GetFileMetadataByPath(self, path):
         '''Returns ApfsFileMeta object from database given path and db handle'''
-        if not path: 
+        if not path:
             return None
         if not path.startswith('/'): 
             path = '/' + path
@@ -752,14 +777,14 @@ class ApfsVolume:
                 " d.ItemType, d.DateAdded, e.Offset as Extent_Offset, e.Size as Extent_Size, e.Block_Num as Extent_Block_Num, "\
                 " c.Uncompressed_size, c.Data, c.Extent_Logical_Size, "\
                 " ec.Offset as compressed_Extent_Offset, ec.Size as compressed_Extent_Size, ec.Block_Num as compressed_Extent_Block_Num "\
-                " from Vol_1_Macintosh_HD_Paths as p "\
-                " left join Vol_1_Macintosh_HD_Inodes as i on i.CNID = p.CNID "\
-                " left join Vol_1_Macintosh_HD_IndexNodes as d on d.CNID = p.CNID "\
-                " left join Vol_1_Macintosh_HD_Extents as e on e.CNID = i.Extent_CNID "\
-                " left join Vol_1_Macintosh_HD_Compressed_Files as c on c.CNID = i.CNID "\
-                " left join Vol_1_Macintosh_HD_Extents as ec on ec.CNID = c.Extent_CNID "\
-                " left join Vol_1_Macintosh_HD_Attributes as a on a.CNID = p.CNID "\
-                " left join Vol_1_Macintosh_HD_Extents as ex on ex.CNID = a.Extent_CNID "\
+                " from {0}_Paths as p "\
+                " left join {0}_Inodes as i on i.CNID = p.CNID "\
+                " left join {0}_IndexNodes as d on d.CNID = p.CNID "\
+                " left join {0}_Extents as e on e.CNID = i.Extent_CNID "\
+                " left join {0}_Compressed_Files as c on c.CNID = i.CNID "\
+                " left join {0}_Extents as ec on ec.CNID = c.Extent_CNID "\
+                " left join {0}_Attributes as a on a.CNID = p.CNID "\
+                " left join {0}_Extents as ex on ex.CNID = a.Extent_CNID "\
                 " {1} "\
                 " order by Extent_Offset, compressed_Extent_Offset, xName, xExOff"
         # This query gets file metadata as well as extents for file. If compressed, it gets compressed extents.
@@ -848,9 +873,28 @@ class ApfsVolume:
         return self.GetManyFileMetadata(where_clause)
 
     # def GetManyFilePathFromCnid(self, cnid):
-    #     #TODO: add/use cacheing
+    #     #TODO: add/use cacheing, yield and limit query
     #     meta = self.GetManyFileMetadataByCnid(cnid)
     #     return meta.path
+
+    def GetManyFileMetadataCountOnly(self, where_clause):
+        '''Only returns a count of items. A where_clause specifies either cnid or path to find'''
+        query = "SELECT count(DISTINCT p.cnid)"\
+                " from {0}_Paths as p "\
+                " left join {0}_Inodes as i on i.CNID = p.CNID "\
+                " left join {0}_IndexNodes as d on d.CNID = p.CNID "\
+                " left join {0}_Extents as e on e.CNID = i.Extent_CNID "\
+                " left join {0}_Compressed_Files as c on c.CNID = i.CNID "\
+                " left join {0}_Extents as ec on ec.CNID = c.Extent_CNID "\
+                " left join {0}_Attributes as a on a.CNID = p.CNID "\
+                " left join {0}_Extents as ex on ex.CNID = a.Extent_CNID "\
+                " {1} "
+        success, cursor, error_message = self.dbo.RunQuery(query.format(self.name, where_clause))
+        if success:
+            for row in cursor:
+                return row[0]
+        else:
+            log.debug('Failed to execute GetManyFileMetadataCountOnly query, error was : ' + error_message)
 
     def GetManyFileMetadata(self, where_clause):
         '''Returns ApfsFileMeta object from database. A where_clause specifies either cnid or path to find'''
@@ -862,14 +906,14 @@ class ApfsVolume:
                 " d.ItemType, d.DateAdded, e.Offset as Extent_Offset, e.Size as Extent_Size, e.Block_Num as Extent_Block_Num, "\
                 " c.Uncompressed_size, c.Data, c.Extent_Logical_Size, "\
                 " ec.Offset as compressed_Extent_Offset, ec.Size as compressed_Extent_Size, ec.Block_Num as compressed_Extent_Block_Num "\
-                " from Vol_1_Macintosh_HD_Paths as p "\
-                " left join Vol_1_Macintosh_HD_Inodes as i on i.CNID = p.CNID "\
-                " left join Vol_1_Macintosh_HD_IndexNodes as d on d.CNID = p.CNID "\
-                " left join Vol_1_Macintosh_HD_Extents as e on e.CNID = i.Extent_CNID "\
-                " left join Vol_1_Macintosh_HD_Compressed_Files as c on c.CNID = i.CNID "\
-                " left join Vol_1_Macintosh_HD_Extents as ec on ec.CNID = c.Extent_CNID "\
-                " left join Vol_1_Macintosh_HD_Attributes as a on a.CNID = p.CNID "\
-                " left join Vol_1_Macintosh_HD_Extents as ex on ex.CNID = a.Extent_CNID "\
+                " from {0}_Paths as p "\
+                " left join {0}_Inodes as i on i.CNID = p.CNID "\
+                " left join {0}_IndexNodes as d on d.CNID = p.CNID "\
+                " left join {0}_Extents as e on e.CNID = i.Extent_CNID "\
+                " left join {0}_Compressed_Files as c on c.CNID = i.CNID "\
+                " left join {0}_Extents as ec on ec.CNID = c.Extent_CNID "\
+                " left join {0}_Attributes as a on a.CNID = p.CNID "\
+                " left join {0}_Extents as ex on ex.CNID = a.Extent_CNID "\
                 " {1} "\
                 " order by p.CNID, Extent_Offset, compressed_Extent_Offset, xName, xExOff"
         # This query gets file metadata as well as extents for file. If compressed, it gets compressed extents.
