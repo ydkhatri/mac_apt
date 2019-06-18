@@ -423,6 +423,8 @@ class ApfsFileSystemParser:
                     try:
                         newblock = self.container.read_block(entry.data.paddr.value)
                         self.read_entries(entry.data.paddr.value, newblock)
+                        if entry.data.flags & 1: #OMAP_VAL_DELETED
+                            log.warning("Block values are deleted? ,block={}".format(entry.data.paddr.value))
                     except:
                         log.exception('Exception trying to read block {}'.format(entry.data.paddr.value))
         elif block.header.subtype == 0:
@@ -495,7 +497,6 @@ class ApfsExtendedAttribute:
                 self._real_data = self._data
         return self._real_data
 
-#TODO Add db_writer as class variable, remove it from functions
 class ApfsVolume:
     def __init__(self, apfs_container, name=""):
         self.container = apfs_container
@@ -1189,7 +1190,8 @@ class ApfsFile():
     def _GetSomeDataFromExtents(self, extents, total_size, offset, size):
         '''Retrieves data from extents, corresponding to a file offset and specific size
            It is assumed that size and offset values are sanitized and fall within
-           the range of logical file content
+           the range of logical file content. Returned size of data may be larger than 
+           requested. It reads full extent even if only partial is requested.
         '''
         content = b''
         ext_content = b''
@@ -1219,11 +1221,11 @@ class ApfsFile():
                         if start_pos >= len(data): # Case when extent slicing results in this, we only want let's say 3rd yield onwards!
                             extent_slice_consumed += len(data)
                             continue
-                        ext_content = data[start_pos : start_pos + size] # Perhaps return full buffer, let caller truncate buffer!
+                        ext_content = data[start_pos : ] #start_pos + size] # Perhaps return full buffer, let caller truncate buffer!
                         content += ext_content
                         ext_content_len = len(ext_content)
                         
-                        if ext_content_len == size: # will be <= size
+                        if ext_content_len >= size: # will be <= size
                             break_main_loop = True
                             break
                         else:
@@ -1237,7 +1239,7 @@ class ApfsFile():
             else:
                 log.debug('Should it ever be here?? bytes_consumed={} offset={}, file={} cnid={}'.format(bytes_consumed, offset, self.meta.name, self.meta.cnid))
                 break
-        if len(content) != desired_size:
+        if len(content) < desired_size:
             log.error ("Error, could not get some pieces of file={} cnid={} len(content)={} desired_size={}".format(self.meta.name, self.meta.cnid, len(content), desired_size))
         return content
 
@@ -1284,6 +1286,7 @@ class ApfsFile():
             return b''
         if (size_to_read is None) or (size_to_read > avail_to_read):
             size_to_read = avail_to_read
+        requested_size = size_to_read
         data = b''
         original_file_pointer = self._pointer
         buffer_len = len(self._buffer)
@@ -1294,7 +1297,7 @@ class ApfsFile():
                 start_pos = self._pointer - self._buffer_start
                 data = self._buffer[start_pos : start_pos + min(size_to_read, buffer_len)]
                 self._pointer += len(data)
-                if size_to_read <= buffer_len: # got all required data
+                if size_to_read <= len(data): # got all required data
                     return data
                 else:                          # still more data needed!
                     size_to_read -= len(data)
@@ -1302,13 +1305,19 @@ class ApfsFile():
 
         if self.meta.is_symlink: # if symlink, return symlink  path as data
             data += self.meta.attributes['com.apple.fs.symlink'][1][0:size_to_read]
+
         else:
-            data += self._GetSomeDataFromExtents(self.extents, self.meta.logical_size, self._pointer, size_to_read)
+            new_data_fetched = self._GetSomeDataFromExtents(self.extents, self.meta.logical_size, self._pointer, size_to_read)
+            new_data_len = len(new_data_fetched)
+            data += new_data_fetched
+
+            if new_data_len < size_to_read:
+                log.error("Did not get enough data! Debug this new_data_len={} size_to_read={}".format(new_data_len, size_to_read))            
 
         self._buffer_start = original_file_pointer
-        self._pointer += len(data)
+        self._pointer += size_to_read
         self._buffer = data
-        return data
+        return data[0:requested_size]
 
 class LzvnCompressionParams(object):
     def __init__(self, header_size, chunk_offsets, uncompressed_size):
@@ -1428,7 +1437,7 @@ class ApfsFileCompressed(ApfsFile):
                 file_content = self._DecompressNotInline(decmpfs, compressed_data)
         return file_content
 
-    def _readCompressed(self, size): #TODO complete
+    def _readCompressed(self, size):
         '''Read compressed data given offset and size'''
         file_content = b''
         decmpfs = self.meta.decmpfs
@@ -1448,7 +1457,9 @@ class ApfsFileCompressed(ApfsFile):
             else:                       # data is in extent (resource fork)
                 # First read the header size first from 1st extent block, then read all those extent blocks
                 if self.compressed_header == None: # read compressed header
-                    compressed_header = self._GetSomeDataFromExtents(self.extents, extent_data_size, 0, min(extent_data_size, 8192)) # replace with super().read() ??
+                    super().seek(0)
+                    initial_read_size = min(extent_data_size, 8192)
+                    compressed_header = super().read(initial_read_size)
                     self.magic, self.compression_type, self.uncompressed_size = struct.unpack('<IIQ', decmpfs[0:16])
                     if self.compression_type == 4:   # zlib in ResourceFork
                         # Read Header (HFSPlusCmpfRsrcHead)
@@ -1461,8 +1472,9 @@ class ApfsFileCompressed(ApfsFile):
 
                         # Calculate if we need to read more extents to read all chunk info
                         farthest_pos = base_offset + (num_blocks - 1)*8 + 8
-                        if farthest_pos > 8192: # fetch more data
-                            compressed_header += self._GetSomeDataFromExtents(self.extents, extent_data_size, 8192, min(extent_data_size, farthest_pos))
+                        if farthest_pos > initial_read_size: # fetch more data
+                            super().seek(initial_read_size)
+                            compressed_header += super().read(min(extent_data_size, farthest_pos))
                         # Read chunks
                         uncomp_offset_start = 0
                         for i in range(num_blocks):
@@ -1479,8 +1491,9 @@ class ApfsFileCompressed(ApfsFile):
 
                         # Calculate if we need to read more extents to read all chunk info
                         farthest_pos = headerSize
-                        if farthest_pos > 8192: # fetch more data
-                            compressed_header += self._GetSomeDataFromExtents(self.extents, extent_data_size, 8192, min(extent_data_size, farthest_pos))
+                        if farthest_pos > initial_read_size: # fetch more data
+                            super().seek(initial_read_size)
+                            compressed_header += super().read(min(extent_data_size, farthest_pos))
                         chunkOffsets = struct.unpack('<{}I'.format(num_chunkOffsets), compressed_header[4 : 4 + (num_chunkOffsets * 4)])
                         self.lzvn_info = LzvnCompressionParams(headerSize, chunkOffsets, self.uncompressed_size)
                 
@@ -1511,14 +1524,12 @@ class ApfsFileCompressed(ApfsFile):
                 buffer_start = chunks_to_decompress[0][2]
                 if buffer_start == req_start: pass # OK
                 elif buffer_start < req_start:
-                    decompressed = decompressed[req_start - buffer_start : req_start - buffer_start + size]
+                    decompressed = decompressed[req_start - buffer_start : ] #req_start - buffer_start + size] Returning all decompressed data starting at req offset
                 else:
                     log.error("Should not be here buffer_start > req_start")
 
                 file_content = decompressed
 
-        #self.uncomp_buffer = file_content # TODO
-        #self.uncomp_buffer_start = 0
         return file_content
 
     def _DecompressNotInline(self, decmpfs, compressed_data):
@@ -1644,8 +1655,9 @@ class ApfsFileCompressed(ApfsFile):
         avail_to_read = self.uncompressed_size - self.uncomp_pointer
         if avail_to_read <= 0: # at or beyond the end of file
             return b''
-        if size_to_read is None:
+        if (size_to_read is None) or (size_to_read > avail_to_read):
             size_to_read = avail_to_read
+        requested_size = size_to_read
         data = b''
         original_file_pointer = self.uncomp_pointer
         buffer_len = len(self.uncomp_buffer)
@@ -1674,12 +1686,17 @@ class ApfsFileCompressed(ApfsFile):
             self.uncomp_pointer += len(data)
             return data
         else:
-            data += self._readCompressed(size_to_read) # TODO
+            new_data_fetched = self._readCompressed(size_to_read) # can be more than requested
+            new_data_len = len(new_data_fetched)
+            data += new_data_fetched
+
+            if new_data_len < size_to_read:
+                log.error("Did not get enough data in ApfsFileCompressed.read() Debug this new_data_len={} size_to_read={}".format(new_data_len, size_to_read))    
 
         self.uncomp_buffer_start = original_file_pointer
-        self.uncomp_pointer += len(data)
+        self.uncomp_pointer += size_to_read
         self.uncomp_buffer = data 
-        return data
+        return data[:requested_size]
 
 class ApfsFileMeta:
     __slots__ = ['name', 'path', 'cnid', 'parent_cnid', 'created', 'modified', 'changed', 'accessed', 'date_added', 
