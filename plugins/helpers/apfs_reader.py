@@ -505,6 +505,7 @@ class ApfsExtendedAttribute:
                     self._real_data += extent.GetData(self._container)
             else: # embedded
                 self._real_data = self._data
+            self._data_fetched = True
         return self._real_data
 
 class ApfsVolume:
@@ -621,6 +622,20 @@ class ApfsVolume:
                 return ApfsFile(apfs_file_meta, apfs_file_meta.logical_size, apfs_file_meta.extents, self.container)
         else:
             log.error("Failed to open file as no metadata was found for it. File path={}".format(path))
+        return None
+
+    def GetExtendedAttribute(self, path, att_name, apfs_file_meta=None):
+        '''Returns Xattr's data or none if not found'''
+        if not path:
+            return None
+        if apfs_file_meta == None:
+            apfs_file_meta = self.GetApfsFileMeta(path)
+        if apfs_file_meta:
+            xattr = apfs_file_meta.attributes.get(att_name, None)
+            if xattr:
+                return xattr.data
+        else:
+            log.error("Failed to get Xattr as no metadata was found for this file. File path={}".format(path))
         return None
 
     def GetExtendedAttributes(self, path, apfs_file_meta=None):
@@ -763,9 +778,10 @@ class ApfsVolume:
         return self.GetFileMetadata(where_clause)
 
     def GetFilePathFromCnid(self, cnid):
-        #TODO: add/use cacheing
-        meta = self.GetFileMetadataByCnid(cnid)
-        return meta.path
+        apfs_file_meta = self.GetApfsFileMeta(path)
+        if not apfs_file_meta:
+            apfs_file_meta = self.GetFileMetadataByCnid(cnid)
+        return apfs_file_meta.path
 
     def GetFileMetadata(self, where_clause):
         '''Returns ApfsFileMeta object from database. A where_clause specifies either cnid or path to find'''
@@ -800,6 +816,7 @@ class ApfsVolume:
             xattr_extent = None
             prev_xattr_extent = None
             att = None
+            got_all_xattr = False
             for row in cursor:
                 if index == 0:
                     apfs_file_meta = ApfsFileMeta(row['Name'], row['Path'], row['CNID'], row['Parent_CNID'], CommonFunctions.ReadAPFSTime(row['Created']), \
@@ -827,21 +844,32 @@ class ApfsVolume:
                 prev_extent = extent
                 index += 1
                 # Read attributes
-                xName = row['xName']
-                if xName:
-                    if last_xattr_name == xName: # same as last
-                        # check extents too
-                        if prev_xattr_extent.offset != xattr_extent.offset: # not a repeat
-                            xattr_extent = ApfsExtent(row['xExOff'], row['xExSize'], row['xBlock_Num'])
-                            att.extents.append(xattr_extent)
+                if not got_all_xattr:
+                    xName = row['xName']
+                    if xName:
+                        if last_xattr_name == xName: # same as last
+                            # check extents too
+                            if row['xFlags'] & 1 == 0: # not extent based, means repeat of last, skip it
+                                pass
+                            else: # extent based
+                                xattr_extent = ApfsExtent(row['xExOff'], row['xExSize'], row['xBlock_Num'])
+                                if prev_xattr_extent.offset == xattr_extent.offset: 
+                                    got_all_xattr = True # There must only be 1 xattr and its extent based and repeating now!
+                                else: # not a repeat
+                                    att.extents.append(xattr_extent)
+                                    prev_xattr_extent = xattr_extent
+                        elif apfs_file_meta.attributes.get(xName, None) != None: # check if existing
+                            got_all_xattr = True # based on our query sorting, attributes will now be repeated, we got all of them, processing attribs can stop now
+                        else: # new , read this
+                            att = ApfsExtendedAttribute(self.container, xName, row['xFlags'], row['xData'], row['xSize'])
+                            if row['xFlags'] & 1: #row['xExSize']:
+                                xattr_extent = ApfsExtent(row['xExOff'], row['xExSize'], row['xBlock_Num'])
+                                att.extents.append(xattr_extent)
+                            else:
+                                xattr_extent = None
+                            apfs_file_meta.attributes[xName] = att
                             prev_xattr_extent = xattr_extent
-                    else: # new , read this
-                        att = ApfsExtendedAttribute(self.container, xName, row['xFlags'], row['xData'], row['xSize'])
-                        xattr_extent = ApfsExtent(row['xExOff'], row['xExSize'], row['xBlock_Num'])
-                        att.extents.append(xattr_extent)
-                        apfs_file_meta.attributes.append(att)
-                        prev_xattr_extent = xattr_extent
-                    last_xattr_name = xName
+                        last_xattr_name = xName
 
             if index == 0: # No such file!
                 return None
@@ -859,7 +887,11 @@ class ApfsVolume:
         cnids = [str(int(x)) for x in cnids]
         cnids_str = ",".join(cnids)
         where_clause = " where p.CNID IN ({}) ".format(cnids_str)
-        return self.GetManyFileMetadata(where_clause)
+        try:
+            for item in self.GetManyFileMetadata(where_clause):
+                yield item
+        except GeneratorExit:
+            pass
 
     def GetManyFileMetadataByPaths(self, paths):
         '''Returns ApfsFileMeta object from database given path and db handle'''   
@@ -870,12 +902,12 @@ class ApfsVolume:
             path = "'{}'".format(path)
         paths_str = ",".join(paths)
         where_clause = " where p.Path IN ({}) ".format(paths_str)
-        return self.GetManyFileMetadata(where_clause)
+        try:
+            for item in self.GetManyFileMetadata(where_clause):
+                yield item
+        except GeneratorExit:
+            pass
 
-    # def GetManyFilePathFromCnid(self, cnid):
-    #     #TODO: add/use cacheing, yield and limit query
-    #     meta = self.GetManyFileMetadataByCnid(cnid)
-    #     return meta.path
 
     def GetManyFileMetadataCountOnly(self, where_clause):
         '''Only returns a count of items. A where_clause specifies either cnid or path to find'''
@@ -898,7 +930,7 @@ class ApfsVolume:
 
     def GetManyFileMetadata(self, where_clause):
         '''Returns ApfsFileMeta object from database. A where_clause specifies either cnid or path to find'''
-        apfs_file_meta_list = []
+        #apfs_file_meta_list = []
         query = "SELECT a.name as xName, a.flags as xFlags, a.data as xData, a.Logical_uncompressed_size as xSize, "\
                 " a.Extent_CNID as xCNID, ex.Offset as xExOff, ex.Size as xExSize, ex.Block_Num as xBlock_Num, "\
                 " p.CNID, p.Path, i.Parent_CNID, i.Extent_CNID, i.Name, i.Created, i.Modified, i.Changed, i.Accessed, i.Flags, "\
@@ -930,65 +962,88 @@ class ApfsVolume:
             xattr_extent = None
             prev_xattr_extent = None
             att = None
-            for row in cursor:
-                if last_cnid == row['CNID']: # same file
-                    pass
-                else:                  # new file
-                    if last_cnid:      # save old info
-                        apfs_file_meta_list.append(apfs_file_meta)
-                    index = 0
-                    last_cnid = row['CNID']
-                    prev_extent = None
+            got_all_xattr = False
+            try:
+                for row in cursor:
+                    if last_cnid == row['CNID']: # same file
+                        pass
+                    else:                  # new file
+                        if last_cnid:      # save old info
+                            #apfs_file_meta_list.append(apfs_file_meta)
+                            yield apfs_file_meta
+                        index = 0
+                        last_cnid = row['CNID']
+                        last_xattr_name = None
+                        extent = None
+                        prev_extent = None
+                        xattr_extent = None
+                        prev_xattr_extent = None
+                        att = None
+                        got_all_xattr = False
 
-                if index == 0:
-                    apfs_file_meta = ApfsFileMeta(row['Name'], row['Path'], row['CNID'], row['Parent_CNID'], CommonFunctions.ReadAPFSTime(row['Created']), \
-                                        CommonFunctions.ReadAPFSTime(row['Modified']), CommonFunctions.ReadAPFSTime(row['Changed']), \
-                                        CommonFunctions.ReadAPFSTime(row['Accessed']), \
-                                        CommonFunctions.ReadAPFSTime(row['DateAdded']), \
-                                        row['Flags'], row['Links_or_Children'], row['BSD_flags'], row['UID'], row['GID'], row['Mode'], \
-                                        row['Logical_Size'], row['Physical_Size'], row['ItemType'])
+                    if index == 0:
+                        apfs_file_meta = ApfsFileMeta(row['Name'], row['Path'], row['CNID'], row['Parent_CNID'], CommonFunctions.ReadAPFSTime(row['Created']), \
+                                            CommonFunctions.ReadAPFSTime(row['Modified']), CommonFunctions.ReadAPFSTime(row['Changed']), \
+                                            CommonFunctions.ReadAPFSTime(row['Accessed']), \
+                                            CommonFunctions.ReadAPFSTime(row['DateAdded']), \
+                                            row['Flags'], row['Links_or_Children'], row['BSD_flags'], row['UID'], row['GID'], row['Mode'], \
+                                            row['Logical_Size'], row['Physical_Size'], row['ItemType'])
 
-                    if row['Uncompressed_size'] != None:
-                        apfs_file_meta.logical_size = row['Uncompressed_size']
-                        apfs_file_meta.is_compressed = True
-                        apfs_file_meta.decmpfs = row['Data']
-                        apfs_file_meta.compressed_extent_size = row['Extent_Logical_Size']
-                if apfs_file_meta.is_compressed:
-                    extent = ApfsExtent(row['compressed_Extent_Offset'], row['compressed_Extent_Size'], row['compressed_Extent_Block_Num'])
-                else:
-                    extent = ApfsExtent(row['Extent_Offset'], row['Extent_Size'], row['Extent_Block_Num'])
-                if prev_extent and extent.offset == prev_extent.offset:
-                    #This file may have hard links, hence the same data is in another row, skip this!
-                    # Or duplicated row data due to attributes being fetched in query
-                    pass
-                else:
-                    apfs_file_meta.extents.append(extent)
-                prev_extent = extent
-                index += 1
-                # Read attributes
-                xName = row['xName']
-                if xName:
-                    if last_xattr_name == xName: # same as last
-                        # check extents too
-                        if prev_xattr_extent.offset != xattr_extent.offset: # not a repeat
-                            xattr_extent = ApfsExtent(row['xExOff'], row['xExSize'], row['xBlock_Num'])
-                            att.extents.append(xattr_extent)
-                            prev_xattr_extent = xattr_extent
-                    else: # new , read this
-                        att = ApfsExtendedAttribute(self.container, xName, row['xFlags'], row['xData'], row['xSize'])
-                        xattr_extent = ApfsExtent(row['xExOff'], row['xExSize'], row['xBlock_Num'])
-                        att.extents.append(xattr_extent)
-                        apfs_file_meta.attributes.append(att)
-                        prev_xattr_extent = xattr_extent
-                    last_xattr_name = xName
+                        if row['Uncompressed_size'] != None:
+                            apfs_file_meta.logical_size = row['Uncompressed_size']
+                            apfs_file_meta.is_compressed = True
+                            apfs_file_meta.decmpfs = row['Data']
+                            apfs_file_meta.compressed_extent_size = row['Extent_Logical_Size']
+                    if apfs_file_meta.is_compressed:
+                        extent = ApfsExtent(row['compressed_Extent_Offset'], row['compressed_Extent_Size'], row['compressed_Extent_Block_Num'])
+                    else:
+                        extent = ApfsExtent(row['Extent_Offset'], row['Extent_Size'], row['Extent_Block_Num'])
+                    if prev_extent and extent.offset == prev_extent.offset:
+                        #This file may have hard links, hence the same data is in another row, skip this!
+                        # Or duplicated row data due to attributes being fetched in query
+                        pass
+                    else:
+                        apfs_file_meta.extents.append(extent)
+                    prev_extent = extent
+                    index += 1
+                    # Read attributes
+                    if not got_all_xattr:
+                        xName = row['xName']
+                        if xName:
+                            if last_xattr_name == xName: # same as last
+                                # check extents too
+                                if row['xFlags'] & 1 == 0: # not extent based, means repeat of last, skip it
+                                    pass
+                                else: # extent based
+                                    xattr_extent = ApfsExtent(row['xExOff'], row['xExSize'], row['xBlock_Num'])
+                                    if prev_xattr_extent.offset == xattr_extent.offset: 
+                                        got_all_xattr = True # There must only be 1 xattr and its extent based and repeating now!
+                                    else: # not a repeat
+                                        att.extents.append(xattr_extent)
+                                        prev_xattr_extent = xattr_extent
+                            elif apfs_file_meta.attributes.get(xName, None) != None: # check if existing
+                                got_all_xattr = True # based on our query sorting, attributes will now be repeated, we got all of them, processing attribs can stop now
+                            else: # new , read this
+                                att = ApfsExtendedAttribute(self.container, xName, row['xFlags'], row['xData'], row['xSize'])
+                                if row['xFlags'] & 1: #row['xExSize']:
+                                    xattr_extent = ApfsExtent(row['xExOff'], row['xExSize'], row['xBlock_Num'])
+                                    att.extents.append(xattr_extent)
+                                else:
+                                    xattr_extent = None
+                                apfs_file_meta.attributes[xName] = att
+                                prev_xattr_extent = xattr_extent
+                            last_xattr_name = xName
 
-            # get last one
-            if apfs_file_meta:
-                apfs_file_meta_list.append(apfs_file_meta)
+                # get last one
+                if apfs_file_meta:
+                    #apfs_file_meta_list.append(apfs_file_meta)
+                    yield apfs_file_meta
+            except GeneratorExit:
+                pass
         else:
             log.debug('Failed to execute GetManyFileMetadata query, error was : ' + error_message)
 
-        return apfs_file_meta_list
+        #return apfs_file_meta_list
 
     def ListItemsInFolder(self, path):
         ''' 
@@ -1292,7 +1347,7 @@ class ApfsFile():
         self.closed = False
         file_content = b''
         if self.meta.is_symlink: # if symlink, return symlink  path as data
-            file_content = self.meta.attributes['com.apple.fs.symlink'][1]
+            file_content = self.meta.attributes['com.apple.fs.symlink'].data
         #elif self.meta.is_compressed:
         #    file_content = self._readCompressedAll() #moved to ApfsFileCompressed
         else:
@@ -1348,7 +1403,7 @@ class ApfsFile():
                     self._buffer = data
 
         if self.meta.is_symlink: # if symlink, return symlink  path as data
-            data += self.meta.attributes['com.apple.fs.symlink'][1][0:size_to_read]
+            data += self.meta.attributes['com.apple.fs.symlink'].data[0:size_to_read]
 
         else:
             new_data_fetched = self._GetSomeDataFromExtents(self.extents, self.meta.logical_size, self._pointer, size_to_read)
@@ -1667,7 +1722,7 @@ class ApfsFileCompressed(ApfsFile):
         self.closed = False
         file_content = b''
         if self.meta.is_symlink: # if symlink, return symlink  path as data
-            file_content = self.meta.attributes['com.apple.fs.symlink'][1]
+            file_content = self.meta.attributes['com.apple.fs.symlink'].data
             log.error("This should not happen, compressed + symlink? symlink={}".format(file_content))
         else:
             file_content = self._readCompressedAll()
@@ -1719,7 +1774,7 @@ class ApfsFileCompressed(ApfsFile):
                     self.uncomp_buffer = data
 
         if self.meta.is_symlink: # if symlink, return symlink  path as data 
-            data += self.meta.attributes['com.apple.fs.symlink'][1][0:size_to_read]
+            data += self.meta.attributes['com.apple.fs.symlink'].data[0:size_to_read]
             log.error("This should not happen, compressed + symlink?")
         
         # If file is < 10MB, read entire file
@@ -1770,7 +1825,7 @@ class ApfsFileMeta:
         self.is_symlink = (item_type == 10)
         self.item_type = item_type
         self.decmpfs = None 
-        self.attributes = []
+        self.attributes = {}
         self.extents = []
         self.is_compressed = False
         #self.is_hardlink = False

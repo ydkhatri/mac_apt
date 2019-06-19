@@ -292,12 +292,22 @@ class HFSVolume(object):
 
         return finder_data
 
-    def listXattrs(self, path):
+    def getCnidForPath(self, path):
         k,v = self.catalogTree.getRecordFromPath(path)
+        if not v:
+            raise ValueError("Path not found")
         if k and v.recordType == kHFSPlusFileRecord:
-            return self.xattrTree.getAllXattrs(v.data.fileID)
+            return v.data.fileID
         elif k and v.recordType == kHFSPlusFolderThreadRecord:
-            return self.xattrTree.getAllXattrs(v.data.folderID)
+            return v.data.folderID        
+
+    def getXattrsByPath(self, path):
+        file_id = self.getCnidForPath(path)
+        return self.xattrTree.getAllXattrs(file_id)
+
+    def getXattrByPath(self, path, name):
+        file_id = self.getCnidForPath(path)
+        return self.getXattr(fileID, name)
 
     '''	Compression type in Xattr as per apple:
         Source: https://opensource.apple.com/source/copyfile/copyfile-138/copyfile.c.auto.html
