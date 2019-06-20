@@ -417,7 +417,7 @@ class ApfsFileSystemParser:
                         if not entry.data.pointer in self.blocks_read:
                             newblock = self.container.read_block(entry.data.pointer)
                             self.read_entries(entry.data.pointer, newblock)
-                    except:
+                    except (ValueError, EOFError, OSError):
                         log.exception('Exception trying to read block {}'.format(entry.data.pointer))
                 else:
                     try:
@@ -425,7 +425,7 @@ class ApfsFileSystemParser:
                         self.read_entries(entry.data.paddr.value, newblock)
                         if entry.data.flags & 1: #OMAP_VAL_DELETED
                             log.warning("Block values are deleted? ,block={}".format(entry.data.paddr.value))
-                    except:
+                    except (ValueError, EOFError, OSError):
                         log.exception('Exception trying to read block {}'.format(entry.data.paddr.value))
         elif block.header.subtype == 0:
             pass # invalid object type
@@ -1080,7 +1080,7 @@ class ApfsVolume:
                     items.append(item)
             else:
                 log.error('Failed to execute ListItemsInFolder query, error was : ' + error_message)
-        except Exception as ex:
+        except ValueError as ex:
             log.error(str(ex))
         return items
 
@@ -1099,7 +1099,7 @@ class ApfsContainer:
             magic = self.read(4)
             assert magic == b'NXSB'
         except:
-            raise Exception("Not an APFS image")
+            raise ValueError("Not an APFS image")
 
         self.seek(0)
         self.apfs = apfs.Apfs(KaitaiStream(self))
@@ -1251,7 +1251,7 @@ class ApfsExtent:
                     yield container.read(self.size % max_size)
         except GeneratorExit:
             pass
-
+#TODO: make iterable, implement readlines()
 class ApfsFile():
     def __init__(self, apfs_file_meta, logical_size, extents, apfs_container):
         self.meta = apfs_file_meta
@@ -1259,6 +1259,8 @@ class ApfsFile():
         self.extents = extents
         self.container = apfs_container
         self.closed = False
+        self.mode = 'rb'
+        self.name = apfs_file_meta.path
         self._pointer = 0
         self._buffer = b''
         self._buffer_start = 0
@@ -1378,6 +1380,47 @@ class ApfsFile():
         elif whence == 2: # relative to file's end
             self._pointer = self.file_size + offset
 
+    def __iter__(self):
+        return self
+
+    def __next__(self):
+        line = self.readline()
+        if len(line) == 0:
+            raise StopIteration
+        return line
+
+    def readline(self, size=None):
+        self._check_closed()
+        ret = b''
+        original_file_pos = self.tell()
+        stop_at_one_iteration = True
+        lf_found = False
+        if size == None:
+            stop_at_one_iteration = False
+            size = 1024
+        buffer = self.read(size)
+        while buffer:
+            new_line_pos = buffer.find(b'\n')
+            if new_line_pos == -1: # not_found, add to line
+                ret += buffer
+            else:
+                ret += buffer[0:new_line_pos + 1]
+                lf_found = True
+            self.seek(original_file_pos + len(ret))
+
+            if stop_at_one_iteration or lf_found: break
+            buffer = self.read(size)
+        return ret
+
+    def readlines(self, sizehint=None):
+        self._check_closed()
+        lines = []
+        line = self.readline()
+        while line:
+            lines.append(line)
+            line = self.readline()
+        return lines
+
     def read(self, size_to_read=None):
         self._check_closed()
         avail_to_read = self.file_size - self._pointer
@@ -1450,6 +1493,7 @@ class ZlibCompressionParams(object):
         self.num_blocks = num_blocks
         self.chunk_info = [] # [ [chunk_offset, chunk_size, uncomp_offset_start, uncomp_offset_end], .. ] List of lists
 
+#TODO: make iterable, implement readlines()
 class ApfsFileCompressed(ApfsFile):
     def __init__(self, apfs_file_meta, logical_size, extents, apfs_container):
         super().__init__(apfs_file_meta, logical_size, extents, apfs_container)
@@ -1511,12 +1555,17 @@ class ApfsFileCompressed(ApfsFile):
         '''
         header = b'bvxn' + struct.pack('<I', uncompressed_size) + struct.pack('<I', compressed_size)
         footer = b'bvx$'
-        decompressed_stream = lzfse.decompress(header + compressed_stream + footer)
-        len_dec = len(decompressed_stream)
-        if len_dec != uncompressed_size:
-            log.error("_lzvn_decompress ERROR - decompressed_stream size is incorrect! Decompressed={} Expected={}. Padding stream with nulls".format(len_dec, uncompressed_size))
-            decompressed_stream += b'\x00'*(uncompressed_size - len_dec)
-        return decompressed_stream
+        try:
+            decompressed_stream = lzfse.decompress(header + compressed_stream + footer)
+            len_dec = len(decompressed_stream)
+            if len_dec != uncompressed_size:
+                log.error("_lzvn_decompress ERROR - decompressed_stream size is incorrect! Decompressed={} Expected={}. Padding stream with nulls".format(len_dec, uncompressed_size))
+                decompressed_stream += b'\x00'*(uncompressed_size - len_dec)
+            return decompressed_stream
+        except lzfse.error as ex:
+            log.error('lzvn error - could not decompress stream, returning nulls')
+            #raise ValueError('lzvn decompression failed')
+        return b'\x00'* uncompressed_size
 
     def _readCompressedAll(self):
         '''Read all compressed data in a file'''
@@ -1651,35 +1700,32 @@ class ApfsFileCompressed(ApfsFile):
                 else:
                     decompressed += zlib.decompress(compressed_data[start : start + chunk_size])
         elif compression_type == 8: # lzvn in ResourceFork
-            try:
-                # The following is only for lzvn, not encountered lzfse yet!
-                full_uncomp = uncompressed_size
-                chunk_uncomp = 65536
-                i = 0
+            # The following is only for lzvn, not encountered lzfse yet!
+            full_uncomp = uncompressed_size
+            chunk_uncomp = 65536
+            i = 0
 
-                headerSize = struct.unpack('<I', compressed_data[0:4])[0]
-                num_chunkOffsets = headerSize//4  - 1
-                chunkOffsets = struct.unpack('<{}I'.format(num_chunkOffsets), compressed_data[4 : 4 + (num_chunkOffsets * 4)])
+            headerSize = struct.unpack('<I', compressed_data[0:4])[0]
+            num_chunkOffsets = headerSize//4  - 1
+            chunkOffsets = struct.unpack('<{}I'.format(num_chunkOffsets), compressed_data[4 : 4 + (num_chunkOffsets * 4)])
 
-                src_offset = headerSize
-                for offset in chunkOffsets:
-                    compressed_size = offset - src_offset
-                    data = compressed_data[src_offset:offset]
-                    src_offset = offset
-                    if full_uncomp <= 65536:
-                        chunk_uncomp = full_uncomp
-                    else:
-                        chunk_uncomp = 65536
-                        if num_chunkOffsets == i + 1: # last chunk
-                            chunk_uncomp = full_uncomp - (65536 * i)
-                    if chunk_uncomp < compressed_size and data[0] == 0x06:
-                        decompressed += data[1:]
-                    else:
-                        decompressed += self._lzvn_decompress(data, compressed_size, chunk_uncomp)
-                    i += 1
-            except Exception as ex:
-                log.exception("Exception from lzfse.decompress, decompression failed!")
-                raise Exception("Exception from lzfse.decompress, decompression failed!")
+            src_offset = headerSize
+            for offset in chunkOffsets:
+                compressed_size = offset - src_offset
+                data = compressed_data[src_offset:offset]
+                src_offset = offset
+                if full_uncomp <= 65536:
+                    chunk_uncomp = full_uncomp
+                else:
+                    chunk_uncomp = 65536
+                    if num_chunkOffsets == i + 1: # last chunk
+                        chunk_uncomp = full_uncomp - (65536 * i)
+                if chunk_uncomp < compressed_size and data[0] == 0x06:
+                    decompressed += data[1:]
+                else:
+                    decompressed += self._lzvn_decompress(data, compressed_size, chunk_uncomp)
+                i += 1
+
         # Shouldn't be any of the following:
         elif compression_type in [1,3,7,11]: # types in ResourceFork
             log.error ("compression_type = {} in DecompressNotInline --> ERROR! Should not go here!".format(compression_type))
@@ -1834,9 +1880,9 @@ class ApfsFileMeta:
     def ItemTypeString(item_type):
         type_str = ''
         if   item_type == 1: type_str = 'Named Pipe'
-        if   item_type == 2: type_str = 'Character Special File'
-        if   item_type == 4: type_str = 'Folder'
-        if   item_type == 6: type_str = 'Block Special File'
+        elif item_type == 2: type_str = 'Character Special File'
+        elif item_type == 4: type_str = 'Folder'
+        elif item_type == 6: type_str = 'Block Special File'
         elif item_type == 8: type_str = 'File'
         elif item_type ==10: type_str = 'SymLink'
         elif item_type ==12: type_str = 'Socket'
