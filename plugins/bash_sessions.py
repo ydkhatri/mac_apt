@@ -48,8 +48,8 @@ def ReadFile(mac_info, path):
         lines_utf8 = []
         for line in lines:
             try:
-                lines_utf8.append(line.decode('utf-8')) # This is needed as file was opened in binary mode
-            except:
+                lines_utf8.append(line.decode('utf-8', 'backslashreplace')) # This is needed as file was opened in binary mode
+            except UnicodeDecodeError:
                 log.error('Failed to convert string to utf-8' + binascii.hexlify(line))
         return lines_utf8
     else:
@@ -133,7 +133,7 @@ def ProcessBashSessionsForUser(mac_info, bash_sessions, source_folder, user_name
                                 log.debug('{} has data in it ! There is history content too!'.format(historynew_entry['name']))
                                 session.new_content += '\n' + ''.join(ReadFile(mac_info, source_folder + '/' + historynew_entry['name']))
                         
-                except:
+                except (IndexError, KeyError, ValueError):
                     log.exception('Error getting historynew')
                 # setting variables for next loop iteration
                 prev_content = content

@@ -68,7 +68,7 @@ def ProcessActiveDirectoryPlist(plist_path, plist):
         for item, value in ad_dict.items():
             if item in ['allow multi-domain','cache last user logon','domain','forest','trust domain']:
                 active_directory[item] = value
-    except Exception as ex:
+    except (KeyError, ValueError) as ex:
         log.error('Error reading plist ' + plist_path + ' Exception details: ' + str(ex))
     ad_details.append(active_directory)
 

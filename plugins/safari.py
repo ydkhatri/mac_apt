@@ -92,9 +92,9 @@ def ReadSafariPlist(plist, safari_items, source, user):
             for search in searches:
                 si = SafariItem(SafariItemType.GENERAL, '', search, None, 'RECENT_SEARCH', user, source)
                 safari_items.append(si)
-        except Exception as ex:
+        except ValueError as ex:
             log.exception('Error reading RecentSearchStrings from plist')
-    except: # Not found
+    except  KeyError: # Not found
         pass
     try:
         searches = plist['RecentWebSearches'] # Yosemite
@@ -103,9 +103,9 @@ def ReadSafariPlist(plist, safari_items, source, user):
                 si = SafariItem(SafariItemType.GENERAL, '', search.get('SearchString',''), 
                                 search.get('Date', None), 'RECENT_SEARCH', user, source)
                 safari_items.append(si)
-        except Exception as ex:
+        except ValueError as ex:
             log.exception('Error reading RecentWebSearches from plist')
-    except: # Not found
+    except KeyError: # Not found
         pass        
     try:
         freq_sites = plist['FrequentlyVisitedSitesCache'] # seen in  El Capitan
@@ -114,39 +114,39 @@ def ReadSafariPlist(plist, safari_items, source, user):
                 si = SafariItem(SafariItemType.FREQUENTLY_VISITED, site.get('URL', ''), site.get('Title',''), 
                                 None, 'FrequentlyVisitedSitesCache', user, source)
                 safari_items.append(si)
-        except Exception as ex:
+        except ValueError as ex:
             log.exception('Error reading FrequentlyVisitedSitesCache from plist')
-    except: # Not found
+    except KeyError: # Not found
         pass     
     try:
         download_path = plist['DownloadsPath']
         si = SafariItem(SafariItemType.GENERAL, '', download_path, None, 'DOWNLOADS_PATH', user, source)
         safari_items.append(si) 
-    except: # Not found
+    except KeyError: # Not found
         pass
     try:
         home = plist['HomePage']
         si = SafariItem(SafariItemType.GENERAL, home, '', None, 'HOME_PAGE', user, source)
         safari_items.append(si) 
-    except: # Not found
+    except KeyError: # Not found
         pass
     try:
         last_ext_pref_selected = plist['LastExtensionSelectedInPreferences']
         si = SafariItem(SafariItemType.EXTENSION, '', last_ext_pref_selected, None, 'LastExtensionSelectedInPreferences', user, source)
         safari_items.append(si) 
-    except: # Not found
+    except KeyError: # Not found
         pass
     try:
         last_root_dir = plist['NSNavLastRootDirectory']
         si = SafariItem(SafariItemType.GENERAL, last_root_dir, '', None, 'NSNavLastRootDirectory', user, source)
         safari_items.append(si) 
-    except: # Not found
+    except KeyError: # Not found
         pass
     try:
         time = CommonFunctions.ReadMacAbsoluteTime(plist['SuccessfulLaunchTimestamp'])
         si = SafariItem(SafariItemType.GENERAL, '', '', time, 'SuccessfulLaunchTimestamp', user, source)
         safari_items.append(si)
-    except: # Not found
+    except KeyError: # Not found
         pass        
 
 def ProcessSafariPlist(mac_info, source_path, user, safari_items, read_plist_function):
@@ -170,31 +170,28 @@ def ReadHistoryDb(conn, safari_items, source_path, user):
                     si = SafariItem(SafariItemType.HISTORY, row['url'], row['title'], 
                                     CommonFunctions.ReadMacAbsoluteTime(row['time_utc']),'', user, source_path)
                     safari_items.append(si)
-                except Exception as ex:
+                except sqlite3.Error as ex:
                     log.exception ("Error while fetching row data")
-        except Exception as ex:
+        except sqlite3.Error as ex:
             log.exception ("Db cursor error while reading file " + source_path)
         conn.close()
-    except Exception as ex:
+    except sqlite3.Error as ex:
         log.exception ("Sqlite error")
 
 def ReadExtensionsPlist(plist, safari_items, source_path, user):
     try:
         extensions = plist['Installed Extensions']
         for item in extensions:
-            try:
-                info = item.get('Enabled', '')
-                if info != '':
-                    info = 'Enabled: ' + str(info)
-                apple_signed = item.get('Apple-signed', '')
-                if apple_signed != '':
-                    info = ', '.join([info, 'Apple-signed: ' + str(apple_signed)])
-                si = SafariItem(SafariItemType.EXTENSION, '', item.get('Archive File Name', ''), 
-                                None, info, user, source_path)
-                safari_items.append(si)
-            except:
-                log.exception('Problem parsing extension info')
-    except:
+            info = item.get('Enabled', '')
+            if info != '':
+                info = 'Enabled: ' + str(info)
+            apple_signed = item.get('Apple-signed', '')
+            if apple_signed != '':
+                info = ', '.join([info, 'Apple-signed: ' + str(apple_signed)])
+            si = SafariItem(SafariItemType.EXTENSION, '', item.get('Archive File Name', ''), 
+                            None, info, user, source_path)
+            safari_items.append(si)
+    except KeyError:
         log.error('Installed Extensions not found')
 
 def ReadHistoryPlist(plist, safari_items, source_path, user):
@@ -202,7 +199,7 @@ def ReadHistoryPlist(plist, safari_items, source_path, user):
         version = plist['WebHistoryFileVersion']
         if version != 1:
             log.warning('WebHistoryFileVersion is {}, this may not parse properly!'.format(version))
-    except:
+    except KeyError:
         log.error('WebHistoryFileVersion not found')        
     try:
         history_dates = plist['WebHistoryDates']
@@ -213,9 +210,9 @@ def ReadHistoryPlist(plist, safari_items, source_path, user):
                                 CommonFunctions.ReadMacAbsoluteTime(item.get('lastVisitedDate', '')), \
                                 '' if (redirect_urls == '') else ('REDIRECT_URLS:' + redirect_urls) , user, source_path) # Skipped visitCount
                 safari_items.append(si)
-            except Exception as ex:
+            except ValueError as ex:
                 log.error(str(ex))
-    except:
+    except KeyError:
         log.error('WebHistoryDates not found')
     try:
         history_domains = plist['WebHistoryDomains.v2']
@@ -223,7 +220,7 @@ def ReadHistoryPlist(plist, safari_items, source_path, user):
             si = SafariItem(SafariItemType.HISTORYDOMAINS, '', item.get('', ''), None, 
                             'ITEMCOUNT:' + str(item.get('itemCount', 0)) , user, source_path)
             safari_items.append(si)
-    except:
+    except KeyError:
         log.error('WebHistoryDomains.v2 not found')
 
 def ReadDownloadsPlist(plist, safari_items, source_path, user):
@@ -233,7 +230,7 @@ def ReadDownloadsPlist(plist, safari_items, source_path, user):
             si = SafariItem(SafariItemType.DOWNLOAD, item.get('DownloadEntryURL', ''), os.path.basename(item.get('DownloadEntryPath', '')), 
                             None, item.get('DownloadEntryPath', ''), user, source_path) # Skipping bookmark and file sizes
             safari_items.append(si)
-    except:
+    except KeyError:
         log.error('DownloadHistory not found')
 
 def ReadBookmark(bm, path, safari_items, source_path, user):
@@ -249,7 +246,7 @@ def ReadBookmark(bm, path, safari_items, source_path, user):
             children = bm['Children']
             for item in children:
                 ReadBookmark(item, path, safari_items, source_path, user)
-        except:
+        except KeyError:
             pass#log.debug('Error fetching bookmark children @ {}'.format(path))
     elif bm_type == 'WebBookmarkTypeProxy':
         pass# do nothing
@@ -260,7 +257,7 @@ def ReadBookmark(bm, path, safari_items, source_path, user):
         if path.find('com.apple.ReadingList') > 0:
             try:
                 bm_date = bm['ReadingList']['DateAdded']
-            except: pass
+            except KeyError: pass
         si = SafariItem(SafariItemType.BOOKMARK, bm_url, bm_title, bm_date, path, user, source_path)
         safari_items.append(si)
     else:
@@ -271,7 +268,7 @@ def ReadBookmarksPlist(plist, safari_items, source_path, user):
         version = plist['WebBookmarkFileVersion']
         if version != 1:
             log.warning('WebBookmarkFileVersion is {}, this may not parse properly!'.format(version))
-    except:
+    except KeyError:
         log.error('WebBookmarkFileVersion not found')
     ReadBookmark(plist, '', safari_items, source_path, user)
 
@@ -280,7 +277,7 @@ def ReadTopSitesPlist(plist, safari_items, source_path, user):
     try:
         ts_last_mod_date = plist['DisplayedSitesLastModified']
         log.info('Topsites last modified on {}'.format(ts_last_mod_date))
-    except:
+    except KeyError:
         log.error('DisplayedSitesLastModified not found')
     try:
         banned = plist['BannedURLStrings']
@@ -288,7 +285,7 @@ def ReadTopSitesPlist(plist, safari_items, source_path, user):
             si = SafariItem(SafariItemType.TOPSITE_BANNED, item, '', ts_last_mod_date, 
                             'Date represents DisplayedSitesLastModified for all Topsites', user, source_path)
             safari_items.append(si)
-    except:
+    except KeyError:
         log.error('BannedURLStrings not found')
     try:
         downloads = plist['TopSites']
@@ -296,7 +293,7 @@ def ReadTopSitesPlist(plist, safari_items, source_path, user):
             si = SafariItem(SafariItemType.TOPSITE, item.get('TopSiteURLString', ''), item.get('TopSiteTitle', ''), 
                             ts_last_mod_date, 'Date represents DisplayedSitesLastModified for all Topsites', user, source_path)
             safari_items.append(si)
-    except:
+    except KeyError:
         log.error('TopSites not found')
 
 def ReadLastSessionPlist(plist, safari_items, source_path, user):
@@ -304,22 +301,20 @@ def ReadLastSessionPlist(plist, safari_items, source_path, user):
         version = plist['SessionVersion']
         if version != '1.0':
             log.warning('SessionVersion is {}, this may not parse properly!'.format(version))
-    except:
+    except KeyError:
         log.error('SessionVersion not found')
     try:
         session_windows = plist['SessionWindows']
         for windows in session_windows:
-            selectedIndex = None
-            try: selectedIndex = windows['SelectedTabIndex']
-            except: pass
+            selectedIndex = windows.get('SelectedTabIndex', None)
             index = 0
-            for tab in windows['TabStates']:
+            for tab in windows.get('TabStates', []):
                 si = SafariItem(SafariItemType.LASTSESSION, tab.get('TabURL', ''), tab.get('TabTitle', ''), 
                                 CommonFunctions.ReadMacAbsoluteTime(tab.get('LastVisitTime', '')), 
                                 'SELECTED WINDOW' if index == selectedIndex else '', user, source_path) # Skipping SessionState(its encrypted) & TabIdentifier
                 safari_items.append(si)
                 index += 1
-    except Exception as ex:
+    except KeyError as ex:
         log.error('SessionWindows not found or unable to parse. Error was {}'.format(str(ex)))
 
 def ReadRecentlyClosedTabsPlist(plist, safari_items, source_path, user):
@@ -327,7 +322,7 @@ def ReadRecentlyClosedTabsPlist(plist, safari_items, source_path, user):
         version = plist['ClosedTabOrWindowPersistentStatesVersion']
         if version != '1':
             log.warning('ClosedTabOrWindowPersistentStatesVersion is {}, this may not parse properly!'.format(version))
-    except:
+    except KeyError:
         log.error('ClosedTabOrWindowPersistentStatesVersion not found')
     try:
         tabs = plist['ClosedTabOrWindowPersistentStates']
@@ -353,7 +348,7 @@ def ReadRecentlyClosedTabsPlist(plist, safari_items, source_path, user):
                     safari_items.append(si)
             else:
                 log.error('Key PersistentState not present!')
-    except Exception as ex:
+    except KeyError as ex:
         log.error('ClosedTabOrWindowPersistentStates not found or unable to parse. Error was {}'.format(str(ex)))   
 
 def ProcessSafariFolder(mac_info, folder_path, user, safari_items):
@@ -375,7 +370,7 @@ def ProcessSafariFolder(mac_info, folder_path, user, safari_items):
             sqlite = SqliteWrapper(mac_info)
             conn = sqlite.connect(source_path)
             ReadHistoryDb(conn, safari_items, source_path, user)
-        except Exception as ex:
+        except (sqlite3.Error, OSError, IOError) as ex:
             log.exception ("Failed to open safari history database '{}', is it a valid SQLITE DB?".format(source_path))
 
 def Plugin_Start(mac_info):
@@ -432,7 +427,7 @@ def Plugin_Start_Standalone(input_files_list, output_params):
                     ReadRecentlyClosedTabsPlist(plist, safari_items, input_path, '')
                 else:
                     log.error("Unknown plist type encountered: {}".format(os.path.basename(input_path)))
-            except Exception as ex:
+            except ValueError as ex:
                 log.exception('Failed to open file: {}'.format(input_path))
         elif input_path.endswith('History.db'):
             log.info ("Processing file " + input_path)
@@ -440,7 +435,7 @@ def Plugin_Start_Standalone(input_files_list, output_params):
                 conn = sqlite3.connect(input_path)
                 log.debug ("Opened database successfully")
                 ReadHistoryDb(conn, safari_items, input_path, '')
-            except Exception as ex:
+            except (sqlite3.Error, OSError) as ex:
                 log.exception ("Failed to open database, is it a valid SQLITE DB?")
         else:
             log.error('Input file {} is not a plist!'.fromat(input_path))

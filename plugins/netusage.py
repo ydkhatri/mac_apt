@@ -87,7 +87,7 @@ def ReadNetUsageDb(db, netusage_items, source):
                                     CommonFunctions.ReadMacAbsoluteTime(row['rp_date']), '', '', '', '', '','',  row['zbytesin'], 
                                     row['zbytesout'], "Bytes in/out are based off ArtifactDate", source)
                 netusage_items.append(nu_data)
-            except:
+            except (sqlite3.Error, ValueError):
                 log.exception('Error fetching row data')
         # Get process info now
         query = "SELECT pk.z_name as item_type ,p.zprocname as process_name, "\
@@ -108,9 +108,9 @@ def ReadNetUsageDb(db, netusage_items, source):
                                     row['zwifiin'], row['zwifiout'], row['zwiredin'], row['zwiredout'], row['zwwanin'], row['zwwanout'],
                                     '','', "Data usage is counted from ArtifactDate onwards", source)
                 netusage_items.append(nu_data)
-            except:
+            except (sqlite3.Error, ValueError):
                 log.exception('Error fetching row data')
-    except:
+    except (sqlite3.Error, ValueError):
         log.exception('Query  execution failed. Query was: ' + query)
 
 def OpenDb(inputPath):
@@ -119,7 +119,7 @@ def OpenDb(inputPath):
         conn = sqlite3.connect(inputPath)
         log.debug ("Opened database successfully")
         return conn
-    except:
+    except sqlite3.Error:
         log.exception ("Failed to open database, is it a valid DB?")
     return None
 
@@ -131,7 +131,7 @@ def OpenDbFromImage(mac_info, inputPath):
         conn = sqlite.connect(inputPath)
         log.debug ("Opened database successfully")
         return conn, sqlite
-    except Exception as ex:
+    except sqlite3.Error:
         log.exception ("Failed to open database, is it a valid DB?")
     return None
 

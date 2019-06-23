@@ -101,8 +101,8 @@ def GetReadableSSID(ssid, wifi_plist_ver):
         else:
             ssid = ssid[11:-1]
             ssid = ssid.replace(" ", "")
-        ssid = unhexlify(ssid).decode('utf-8')
-    except Exception as e:
+        ssid = unhexlify(ssid).decode('utf-8', 'backslashreplace')
+    except (ValueError, IndexError) as e:
         log.error ('Error in GetReadableSSID() Details: ' + str(e))
     return ssid
     
@@ -150,7 +150,7 @@ def ParseWifi(input_file):
     try:
         plist = readPlist(input_file)
         ReadAirportPrefPlist(plist, networks)
-    except (InvalidPlistException, NotBinaryPlistException) as e:
+    except (OSError, InvalidPlistException) as e:
         log.error ("Could not open plist, error was : " + str(e) )
     return networks
 
@@ -158,13 +158,10 @@ def ProcessOlderAirportPrefPlist(plist, networks, version):
     try:
         rememberedNetworks = plist['RememberedNetworks']
         for network in rememberedNetworks:
-            try:
-                net = Network(version)
-                net.ReadNetworkInfo(network, NetType.KNOWN)
-                networks.append(net)
-            except Exception as e:
-                log.error ('Error reading RememberedNetworks: ' + str(e))    
-    except:
+            net = Network(version)
+            net.ReadNetworkInfo(network, NetType.KNOWN)
+            networks.append(net)
+    except KeyError:
         log.debug ('RememberedNetworks not found in plist')
 
 def ParseKnownNetworksAndPreferredOrder(known_networks, networks, preferred_order, version, net_type=NetType.KNOWN):
@@ -200,9 +197,8 @@ def ParseKnownNetworksAndPreferredOrder(known_networks, networks, preferred_orde
                         if i != high:
                             string = '(' + history[high]['Timestamp'].strftime('%Y/%m/%d %H:%M:%S') + ', ' + str(history[high]['Channel']) + ')'
                             net.ChannelHistory.append(string)
-            except Exception as e:
-                log.error ("Error could not parse channel history: " + str(e))
-                
+            except (KeyError, ValueError) as e:
+                log.exception ("Error could not parse channel history: " + str(e))
             networks.append(net)
     except Exception as e:
         log.exception('Error parsing and adding a known network to the final known network list')

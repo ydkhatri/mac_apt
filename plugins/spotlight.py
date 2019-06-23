@@ -49,7 +49,7 @@ def ProcessStoreItem(item):
                     if type(v) == str:
                         if v.endswith('\x16\x02'):
                             v = v[:-2]
-                    if type(v) == str: v = v.decode('utf-8')
+                    if type(v) == str: v = v.decode('utf-8', 'backslashreplace')
                 else:
                     #if type(v[0]) == str:
                     #    v = ', '.join([x.decode('utf-8') for x in v]) # removes 'u' in string output
@@ -108,7 +108,7 @@ def EnableSqliteDb(output_path, out_params, file_name_prefix):
         out_params.output_db_path = SqliteWriter.CreateSqliteDb(sqlite_path)
         out_params.write_sql = True
         return True
-    except Exception as ex:
+    except (sqlite3.Error, OSError) as ex:
         log.info('Sqlite db could not be created at : ' + sqlite_path)
         log.exception('Exception occurred when trying to create Sqlite db')
     return False
@@ -148,7 +148,7 @@ def ProcessStoreDb(input_file_path, input_file, output_path, output_params, item
                 log.debug ("Trying to write extracted store data for {}".format(file_name_prefix))
                 data_type_info = Get_Column_Info(store)
                 writer = DataWriter(out_params, "Spotlight-" + file_name_prefix, data_type_info, input_file_path)
-            except Exception as ex:
+            except (sqlite3.Error, ValueError, IOError, OSError) as ex:
                 log.exception ("Failed to initilize data writer")
                 return None
 
@@ -236,7 +236,7 @@ def WriteFullPaths(items, all_items, output_paths_file, fullpath_writer):
         if name:
             fullpath = spotlight_parser.RecursiveGetFullPath(v, all_items)
             to_write = str(k) + '\t' + fullpath + '\r\n'
-            output_paths_file.write(to_write.encode('utf-8'))
+            output_paths_file.write(to_write.encode('utf-8', 'backslashreplace'))
             path_list.append([k, fullpath])
     fullpath_writer.WriteRows(path_list)
 
@@ -248,7 +248,7 @@ def DropReadme(output_folder, message, filename='Readme.txt'):
         output_file_path = os.path.join(output_folder, filename)
         with open(output_file_path, 'wb') as output_file:
             output_file.write(message.encode('utf-8') + b'\r\n')
-    except Exception as ex:
+    except OSError as ex:
         log.exception('Exception writing file - {}'.format(filename))
 
 def ReadVolumeConfigPlistFromImage(mac_info, file_path):
@@ -393,7 +393,7 @@ def Plugin_Start_Standalone(input_files_list, output_params):
                     output_folder = os.path.join(output_params.output_path, 'SPOTLIGHT_DATA')
                     log.info('Now processing file {}'.format(input_path))
                     ProcessStoreDb(input_path, input_file, output_folder, output_params, None, os.path.basename(input_path), False, False)
-            except:
+            except (OSError, IOError):
                 log.exception('Failed to open input file ' + input_path)
         else:
             log.info("Unknown file type: {}".format(os.path.basename()))

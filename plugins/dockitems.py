@@ -101,7 +101,7 @@ def ParseDockItemsPlist(plist, docks, user_name, plist_path):
                         docks.append(instance)
                     else:
                         log.warning('No tile-data found!! Perhaps a newer format?')
-            except:
+            except ValueError:
                 log.exception("Exception while processing {}".format(key))
         else:
             log.debug('Key {} not found!'.format(key))
@@ -135,7 +135,7 @@ def ReadDockPlistFile(input_file, docks):
     try:
         plist = readPlist(input_file)
         ParseDockItemsPlist(plist, docks, '', input_file)
-    except (InvalidPlistException, NotBinaryPlistException) as e:
+    except InvalidPlistException as e:
         log.error ("Could not open plist, error was : " + str(e) )
 
 def Plugin_Start_Standalone(input_files_list, output_params):

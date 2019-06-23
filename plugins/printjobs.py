@@ -102,7 +102,7 @@ def get_job_detail(request, job_request, ret_all_replies=False, ret_on_error='')
             return replies[0][1]
     except KeyError:
         pass # That property does not exist!
-    except Exception as ex:
+    except (ValueError, pkipplib.IPPError) as ex:
         log.debug ('Error retrieving value for ' + job_request)
     if ret_all_replies: return []
     return ret_on_error
@@ -172,10 +172,12 @@ def parse_cups_file(filepath):
     try:
         with open(filepath, 'rb') as j_file:
             ippdatas = j_file.read()
-            request = pkipplib.IPPRequest(ippdatas)
-            request.parse()
-            j_file.close()
-    except:
+            try:
+                request = pkipplib.IPPRequest(ippdatas)
+                request.parse()
+            except pkipplib.IPPError as ex:
+                log.exception ('Error from pkipplib - {} for file {}'.format(str(ex), filepath))
+    except (IOError, OSError):
         log.exception ('Error opening cups job file ' + filepath)
         return None
     return get_job_properties(request, filepath)
@@ -189,7 +191,7 @@ def Plugin_Start_Standalone(input_files_list, output_params):
         try:
             dirList = os.listdir(input_path)
             had_exception = False
-        except:
+        except (IOError, OSError):
             log.exception('Problem listing files.. Is the path provided a file (instead of a folder)?')
             had_exception = True
         if not had_exception:

@@ -91,13 +91,13 @@ class NativeHfsParser:
             self.volume = HFSVolume(pytsk_img, offset)
             self.initialized = True
             return True
-        except Exception as ex:
+        except ValueError as ex:
             log.exception('Could not initialize HFS volume class: '+ str(ex))
         return False
 
     def GetVolumeInfo(self):
         if not self.initialized:
-            raise Exception("Volume not loaded (initialized)!")
+            raise ValueError("Volume not loaded (initialized)!")
         try:
             hfs_info = HfsVolumeInfo()
             header = self.volume.header
@@ -112,7 +112,7 @@ class NativeHfsParser:
             hfs_info.num_files = header.fileCount
             hfs_info.num_folders = header.folderCount
             return hfs_info
-        except Exception as ex:
+        except ValueError as ex:
             log.exception("Failed to read HFS info")
         return None
 
@@ -126,7 +126,7 @@ class NativeHfsParser:
         '''For a given file path, gets logical file size, or None if error'''
         try:
             return self.volume.GetFileSize(path)
-        except Exception as ex:
+        except ValueError as ex:
             log.debug ("NativeHFSParser->Exception from GetFileSize() " + str(ex))
         return error
 
@@ -134,7 +134,7 @@ class NativeHfsParser:
         '''For a file's catalog key & value , gets logical file size, or 0 if error'''
         try:
             return self.volume.GetFileSizeFromFileRecord(v)
-        except Exception as ex:
+        except ValueError as ex:
             name = getString(k)
             log.error ("NativeHFSParser->Exception from _GetSizeFromRec()" +\
                         "\nFilename=" + name + " CNID=" + str(v.data.fileID) +\
@@ -144,7 +144,7 @@ class NativeHfsParser:
     def OpenSmallFile(self, path):
         '''Open files, returns open file handle'''
         if not self.initialized:
-            raise Exception("Volume not loaded (initialized)!")
+            raise ValueError("Volume not loaded (initialized)!")
         try:
             log.debug("Trying to open file : " + path)
             size = self.GetFileSize(path)
@@ -155,8 +155,8 @@ class NativeHfsParser:
             f.write(data)
             f.seek(0)
             return f
-        except:
-            log.exception("NativeHFSParser->Failed to open file {}".format(path))
+        except (OSError, IOError) as ex:
+            log.exception("NativeHFSParser->Failed to open file {} Error was {}".format(path, str(ex)))
 
         return None
 
@@ -166,14 +166,14 @@ class NativeHfsParser:
            This only works on small files currently!
         '''
         if not self.initialized:
-            raise Exception("Volume not loaded!")
+            raise ValueError("Volume not loaded!")
         try:
             log.debug("Trying to export file : " + path + " to " + extract_to_path)
             with open(extract_to_path, "wb") as f:
                 data = self.volume.readFile(path, f)
                 f.close()
                 return True
-        except Exception as ex:
+        except ValueError as ex:
             log.exception("NativeHFSParser->Failed to export file {} to {}".format(path, extract_to_path))
         return False
 
@@ -184,7 +184,7 @@ class NativeHfsParser:
         '''
         try:
             return self.volume.GetFileMACTimes(file_path)
-        except:
+        except ValueError:
             log.exception('NativeHFSParser->Error trying to get MAC times')
         return { 'c_time':None, 'm_time':None, 'cr_time':None, 'a_time':None }
 
@@ -192,7 +192,7 @@ class NativeHfsParser:
         '''Return times from file's catalog record'''
         try:
             return self.volume.GetFileMACTimesFromFileRecord(v)
-        except:
+        except ValueError:
             log.exception('NativeHFSParser->Error trying to get MAC times')
         return { 'c_time':None, 'm_time':None, 'cr_time':None, 'a_time':None }
 
@@ -200,7 +200,7 @@ class NativeHfsParser:
         '''Check if a path is a symbolic link'''
         try:
             return self.volume.IsSymbolicLink(path)
-        except Exception:
+        except ValueError:
             log.exception('NativeHFSParser->Failed trying to check for symbolic link')
         return False
 
@@ -208,7 +208,7 @@ class NativeHfsParser:
         '''Check if a file path is valid, does not check for folders!'''
         try:
             return self.volume.IsValidFilePath(path)
-        except Exception:
+        except ValueError:
             log.exception('NativeHFSParser->Failed trying to check valid file path')
         return False
     
@@ -216,7 +216,7 @@ class NativeHfsParser:
         '''Check if a folder path is valid'''
         try:
             return self.volume.IsValidFolderPath(path)
-        except Exception:
+        except ValueError:
             log.exception('NativeHFSParser->Failed trying to check valid folder path')
         return False
 
@@ -232,7 +232,7 @@ class NativeHfsParser:
             uid = str(uid)
             gid = str(gid)
             success = True
-        except Exception as ex:
+        except ValueError as ex:
             log.error("Exception trying to get uid & gid for " + path + ' Exception details: ' + str(ex))
         return success, uid, gid
 
@@ -450,7 +450,7 @@ class MacInfo:
                         # that has left whitespaces at the start of file before <?xml tag
                         f.seek(0)
                         data = f.read().decode('utf8')
-                        data = data.lstrip(" \r\n\t").encode('utf8')
+                        data = data.lstrip(" \r\n\t").encode('utf8', 'backslashreplace')
                         plist = biplist.readPlistFromString(data)
                         return (True, plist, '')
                     except biplist.InvalidPlistException as ex:
@@ -475,7 +475,7 @@ class MacInfo:
         if f:
             target_path = f.read()
             f.close()
-            return target_path.decode('utf8')
+            return target_path.decode('utf8', 'backslashreplace')
         return ''
 
     def IsValidFilePath(self, path):
@@ -582,7 +582,7 @@ class MacInfo:
                     if not self.hfs_native.initialized:
                         self.hfs_native.Initialize(self.pytsk_image, self.osx_partition_start_offset)
                     return self.hfs_native.OpenSmallFile(path)
-                except Exception as ex2:
+                except (IOError, OSError, ValueError):
                     log.error("Failed to open file: " + path)
                     log.debug("Exception details:\n", exc_info=True)
             else:
@@ -788,24 +788,18 @@ class MacInfo:
             target_user.failed_login_timestamp = plist2.get('failedLoginTimestamp', None)
             target_user.last_login_timestamp = plist2.get('lastLoginTimestamp', None)
             target_user.password_last_set_time = plist2.get('passwordLastSetTime', None)
-        except:
+        except (InvalidPlistException, NotBinaryPlistException):
             log.exception('Error reading password_policy_data embedded plist')
 
     def _ReadAccountPolicyData(self, account_policy_data, target_user):
         try:
             plist2 = biplist.readPlistFromString(account_policy_data[0])
-            try: 
-                target_user.creation_time = CommonFunctions.ReadUnixTime(plist2.get('creationTime', 0))
-            except: pass
+            target_user.creation_time = CommonFunctions.ReadUnixTime(plist2.get('creationTime', None))
             target_user.failed_login_count = plist2.get('failedLoginCount', 0)
-            try: 
-                target_user.failed_login_timestamp = CommonFunctions.ReadUnixTime(plist2.get('failedLoginTimestamp', None))
-            except: pass
-            try: 
-                target_user.password_last_set_time = CommonFunctions.ReadUnixTime(plist2.get('passwordLastSetTime', None))
-            except: pass
-        except:
-            log.exception('Error reading password_policy_data embedded plist')        
+            target_user.failed_login_timestamp = CommonFunctions.ReadUnixTime(plist2.get('failedLoginTimestamp', None))
+            target_user.password_last_set_time = CommonFunctions.ReadUnixTime(plist2.get('passwordLastSetTime', None))
+        except (InvalidPlistException, NotBinaryPlistException):
+            log.exception('Error reading password_policy_data embedded plist')     
 
     def _GetUserInfo(self):
         '''Populates user info from plists under: /private/var/db/dslocal/nodes/Default/users/'''
@@ -819,36 +813,39 @@ class MacInfo:
                     f = self.OpenSmallFile(user_plist_path)
                     if f!= None:
                         self.ExportFile(user_plist_path, 'USERS', '', False)
-                        plist = biplist.readPlist(f)
-                        home_dir = self.GetArrayFirstElement(plist.get('home', ''))
-                        if home_dir != '':
-                            #log.info('{} :  {}'.format(plist_meta['name'], home_dir))
-                            if home_dir.startswith('/var/'): home_dir = '/private' + home_dir # in mac /var is symbolic link to /private/var
-                            target_user = UserInfo()
-                            self.users.append(target_user)
-                            target_user.UID = str(self.GetArrayFirstElement(plist.get('uid', '')))
-                            target_user.GID = str(self.GetArrayFirstElement(plist.get('gid', '')))
-                            target_user.UUID = self.GetArrayFirstElement(plist.get('generateduid', ''))
-                            target_user.home_dir = home_dir
-                            target_user.user_name = self.GetArrayFirstElement(plist.get('name', ''))
-                            target_user.real_name = self.GetArrayFirstElement(plist.get('realname', ''))
-                            target_user.pw_hint = self.GetArrayFirstElement(plist.get('hint', ''))
-                            target_user._source = user_plist_path
-                            osx_version = self.GetVersionDictionary()
-                            if osx_version['major'] == 10 and osx_version['minor'] <= 9: # Mavericks & earlier
-                                password_policy_data = plist.get('passwordpolicyoptions', None)
-                                if password_policy_data == None:
-                                    log.debug('Could not find passwordpolicyoptions for user {}'.format(target_user.user_name))
-                                else:
-                                    self._ReadPasswordPolicyData(password_policy_data, target_user)
-                            else: # 10.10 - Yosemite & higher
-                                account_policy_data = plist.get('accountPolicyData', None)
-                                if account_policy_data == None: 
-                                    pass #log.debug('Could not find accountPolicyData for user {}'.format(target_user.user_name))
-                                else:
-                                    self._ReadAccountPolicyData(account_policy_data, target_user)
-                        else:
-                            log.error('Did not find \'home\' in ' + plist_meta['name'])
+                        try:
+                            plist = biplist.readPlist(f)
+                            home_dir = self.GetArrayFirstElement(plist.get('home', ''))
+                            if home_dir != '':
+                                #log.info('{} :  {}'.format(plist_meta['name'], home_dir))
+                                if home_dir.startswith('/var/'): home_dir = '/private' + home_dir # in mac /var is symbolic link to /private/var
+                                target_user = UserInfo()
+                                self.users.append(target_user)
+                                target_user.UID = str(self.GetArrayFirstElement(plist.get('uid', '')))
+                                target_user.GID = str(self.GetArrayFirstElement(plist.get('gid', '')))
+                                target_user.UUID = self.GetArrayFirstElement(plist.get('generateduid', ''))
+                                target_user.home_dir = home_dir
+                                target_user.user_name = self.GetArrayFirstElement(plist.get('name', ''))
+                                target_user.real_name = self.GetArrayFirstElement(plist.get('realname', ''))
+                                target_user.pw_hint = self.GetArrayFirstElement(plist.get('hint', ''))
+                                target_user._source = user_plist_path
+                                osx_version = self.GetVersionDictionary()
+                                if osx_version['major'] == 10 and osx_version['minor'] <= 9: # Mavericks & earlier
+                                    password_policy_data = plist.get('passwordpolicyoptions', None)
+                                    if password_policy_data == None:
+                                        log.debug('Could not find passwordpolicyoptions for user {}'.format(target_user.user_name))
+                                    else:
+                                        self._ReadPasswordPolicyData(password_policy_data, target_user)
+                                else: # 10.10 - Yosemite & higher
+                                    account_policy_data = plist.get('accountPolicyData', None)
+                                    if account_policy_data == None: 
+                                        pass #log.debug('Could not find accountPolicyData for user {}'.format(target_user.user_name))
+                                    else:
+                                        self._ReadAccountPolicyData(account_policy_data, target_user)
+                            else:
+                                log.error('Did not find \'home\' in ' + plist_meta['name'])
+                        except (InvalidPlistException):
+                            log.exception("biplist failed to read plist " + user_plist_path)
                 except:
                     log.exception ("Could not open plist " + user_plist_path)
         self._GetDomainUserInfo()
@@ -893,8 +890,8 @@ class MacInfo:
             log.debug("Trying to get system version from /System/Library/CoreServices/SystemVersion.plist")
             f = self.OpenSmallFile('/System/Library/CoreServices/SystemVersion.plist')
             if f != None:
-                plist = biplist.readPlist(f)
                 try:
+                    plist = biplist.readPlist(f)
                     self.osx_version = plist.get('ProductVersion', '')
                     if self.osx_version != '':
                         if   self.osx_version.startswith('10.10'): self.osx_friendly_name = 'Yosemite'
@@ -915,8 +912,8 @@ class MacInfo:
                         else: self.osx_friendly_name = 'Unknown version!'
                     log.info ('OSX version detected is: {} ({})'.format(self.osx_friendly_name, self.osx_version))
                     return True
-                except Exception:
-                    log.error ("Error fetching ProductVersion from plist. Is it a valid xml plist?")
+                except (InvalidPlistException, NotBinaryPlistException) as ex:
+                    log.error ("Could not get ProductVersion from plist. Is it a valid xml plist? Error=" + str(ex))
             else:
                 log.error("Could not open plist to get system version info!")
         except:
@@ -985,7 +982,7 @@ class ApfsMacInfo(MacInfo):
 
     def OpenSmallFile(self, path):
         '''Open files less than 200 MB, returns open file handle'''
-        return self.osx_FS.OpenSmallFile(path)
+        return self.osx_FS.open(path) #self.osx_FS.OpenSmallFile(path) #TODO remove this, its only for testing temp
 
     def open(self, path):
         '''Open file and return a file-like object'''
@@ -1175,7 +1172,7 @@ class MountedMacInfo(MacInfo):
             log.debug("Trying to open file : " + mounted_path)
             file = open(mounted_path, 'rb')
             return file
-        except Exception as ex:
+        except (IOError, OSError) as ex:
             log.exception("Error opening file : " + mounted_path)
         return None
 

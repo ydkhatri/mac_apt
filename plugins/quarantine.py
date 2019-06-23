@@ -82,9 +82,9 @@ def ReadQuarantineDb(db, quarantined, source, user):
                                     row['data_url'], row['sender_name'], row['sender_add'], row['type_num'], 
                                     row['o_title'], row['o_url'], row['o_alias'], user, source)
                 quarantined.append(q_event)
-            except:
+            except (sqlite3.Error, KeyError):
                 log.exception('Error fetching row data')
-    except:
+    except sqlite3.Error:
         log.exception('Query  execution failed. Query was: ' + query)
 
 def OpenDb(inputPath):
@@ -93,7 +93,7 @@ def OpenDb(inputPath):
         conn = sqlite3.connect(inputPath)
         log.debug ("Opened database successfully")
         return conn
-    except:
+    except sqlite3.Error:
         log.exception ("Failed to open database, is it a valid DB?")
     return None
 
@@ -105,7 +105,7 @@ def OpenDbFromImage(mac_info, inputPath, user):
         conn = sqlite.connect(inputPath)
         log.debug ("Opened database successfully")
         return conn, sqlite
-    except Exception as ex:
+    except sqlite3.Error as ex:
         log.exception ("Failed to open database, is it a valid DB?")
     return None
 
@@ -154,7 +154,7 @@ def ReadLastGKRejectPlist(plist):
                         log.info
                 else:
                     print ("Error, tid {} not found ".format(orig_vol_bm))
-        except:
+        except (IndexError, ValueError):
             log.exception('Error processing BookmarkData from .LastGKReject')
             log.debug(bm)
 

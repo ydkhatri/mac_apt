@@ -42,7 +42,7 @@ def ParseShortcutFile(input_file, shortcuts):
     try:
         plist = readPlist(input_file)
         ReadShortcutPlist(plist, shortcuts, input_file)
-    except (InvalidPlistException, NotBinaryPlistException) as e:
+    except InvalidPlistException as e:
         log.error ("Could not open plist, error was : " + str(e) )
 
 def ReadSingleShortcutEntry(entry, value, shortcuts, uses_path, source, user):
@@ -66,8 +66,8 @@ def ReadShortcutPlist(plist, shortcuts, source='', user=''):
         else :
             for item, value in plist.items():
                 ReadSingleShortcutEntry(item, value, shortcuts, False, source, user)
-    except Exception as ex:
-        log.exception('Error reading plist')   
+    except ValueError as ex:
+        log.exception('Error reading plist')
     
 def Plugin_Start(mac_info):
     '''Main Entry point function for plugin'''

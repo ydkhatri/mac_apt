@@ -437,7 +437,7 @@ class IPPRequest :
                 else :    
                     try :
                         self.version = [int(p) for p in str(float(version)).split(".")]
-                    except :
+                    except ValueError:
                         self.version = [int(p) for p in IPP_VERSION.split(".")]
         
     def setOperationId(self, opid) :        

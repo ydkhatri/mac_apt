@@ -96,7 +96,7 @@ class FileMetaDataListing:
                 mac_abs_time = old # preserve extra precision after decimal point
         try:
             return datetime.datetime(2001,1,1) + datetime.timedelta(seconds = mac_abs_time)
-        except:
+        except (ValueError, OverflowError, struct.error):
             pass
         return ""
     
@@ -104,7 +104,7 @@ class FileMetaDataListing:
         '''Convert Epoch microseconds timestamp to string'''
         try:
             return datetime.datetime(1970, 1, 1) + datetime.timedelta(seconds=value/1000000.)
-        except:
+        except OverflowError:
             pass
         return ""
     
@@ -198,11 +198,11 @@ class FileMetaDataListing:
             dashed_line = "-"*60
             info = u"Inode_Num --> {}\r\nFlags --> {}\r\nStore_ID --> {}\r\nParent_Inode_Num --> {}\r\nLast_Updated --> {}\r\n".format(self.id, self.flags, self.item_id, self.parent_id, self.ConvertEpochToUtcDateStr(self.date_updated))
 
-            file.write((dashed_line + '\r\n' + info).encode('utf-8'))
+            file.write((dashed_line + '\r\n' + info).encode('utf-8', 'backslashreplace'))
             for k, v in sorted(self.meta_data_dict.items()):
                 orig_debug = v
                 v = self.StringifyValue(v)
-                file.write((k + u" --> " + v).encode('utf-8'))
+                file.write((k + u" --> " + v).encode('utf-8', 'backslashreplace'))
                 file.write(b'\r\n')
         except Exception as ex:
             log.exception("Exception trying to print data : ")
@@ -770,7 +770,7 @@ def ProcessStoreDb(input_file_path, output_path, file_name_prefix='store'):
                 if name:
                     fullpath = RecursiveGetFullPath(v, items)
                     to_write = str(k) + '\t' + fullpath + '\r\n'
-                    output_paths_file.write(to_write.encode('utf-8'))
+                    output_paths_file.write(to_write.encode('utf-8', 'backslashreplace'))
 
     except Exception as ex:
         log.exception('')

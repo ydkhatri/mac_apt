@@ -210,7 +210,7 @@ def ParseClassOfDevice(cod_number):
             services.append('Limited Discoverable Mode')
         device = major + (('[' + minor + ']') if minor else '')
         return (device, ', '.join(services))
-    except:
+    except (KeyError, ValueError):
         log.exception("")
     return ('', '')
 
@@ -265,7 +265,7 @@ def ReadBluetoothPlist(plist):
     # Check to see what devices were paired first for later comparison.
     try:
         connected_devices = plist['PairedDevices']
-    except:
+    except KeyError:
         log.debug("Paired devices missing, did this device ever touch/use another Bluetooth device?")
         connected_devices = []
 
@@ -320,7 +320,7 @@ def Plugin_Start_Standalone(input_files_list, output_params):
         try:
             plist = readPlist(input_file)
             cache_list = ReadBluetoothPlist(plist)
-        except (InvalidPlistException, NotBinaryPlistException) as e:
+        except (OSError, IOError, InvalidPlistException) as e:
             log.error ("Could not open plist, error was : " + str(e) )
 
         if len(cache_list) > 0:

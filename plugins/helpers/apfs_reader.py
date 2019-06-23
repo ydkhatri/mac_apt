@@ -520,6 +520,8 @@ class ApfsVolume:
         self.num_blocks_used = 0
         self.num_files = 0
         self.num_folders = 0
+        self.num_symlinks = 0
+        self.num_snapshots = 0
         self.time_created = None
         self.time_updated = None
         self.uuid = ''
@@ -535,18 +537,20 @@ class ApfsVolume:
         # get volume superblock
         super_block = self.container.read_block(volume_super_block_num)
         self.omap_oid = super_block.body.omap_oid  # mapping omap
-        self.root_dir_block_id = super_block.body.root_dir_id 
+        self.root_dir_block_id = super_block.body.root_tree_oid 
 
         self.volume_name = super_block.body.volume_name
         self.name += '_' + self.volume_name.replace(' ', '_').replace("'", "''") # Replace spaces with underscore and single quotes with doubles, this is for the db
-        self.num_blocks_used = super_block.body.num_blocks_used
+        self.num_blocks_used = super_block.body.fs_alloc_count
         self.num_files = super_block.body.num_files
         self.num_folders = super_block.body.num_folders
+        self.num_symlinks = super_block.body.num_symlinks
+        self.num_snapshots = super_block.body.num_snapshots
         self.time_created = super_block.body.time_created
-        self.time_updated = super_block.body.time_updated
+        self.time_updated = super_block.body.last_mod_time
         self.uuid = self.ReadUUID(super_block.body.volume_uuid)
-        self.is_case_sensitive = (super_block.body.feature_flags & 0x8 != 0)
-        self.is_encrypted = (super_block.body.encryption_flags & 0x1 != 1)
+        self.is_case_sensitive = (super_block.body.incompatible_features & 0x8 != 0)
+        self.is_encrypted = (super_block.body.fs_flags & 0x1 != 1)
 
         #log.debug("%s (volume, Mapping-omap: %d, Rootdir-Block_ID: %d)" % (
         #    super_block.body.volume_name, self.omap_oid, self.root_dir_block_id))
@@ -554,8 +558,8 @@ class ApfsVolume:
         log.debug("  Vol name  = %s" % super_block.body.volume_name)
         log.debug("  Num files = %d" % super_block.body.num_files)
         log.debug("  Num dirs  = %d" % super_block.body.num_folders)
-        log.debug("  Vol used  = %.2f GB" % float((super_block.body.num_blocks_used * self.container.apfs.block_size)/(1024.0*1024.0*1024.0)))
-        log.debug('  feature_flags=0x{:X}, encryption_flags=0x{:X}'.format(super_block.body.feature_flags, super_block.body.encryption_flags))
+        log.debug("  Vol used  = %.2f GB" % float((super_block.body.fs_alloc_count * self.container.apfs.block_size)/(1024.0*1024.0*1024.0)))
+        log.debug('  incompatible_features=0x{:X}, fs_flags=0x{:X}'.format(super_block.body.incompatible_features, super_block.body.fs_flags))
 
         if self.is_encrypted:
             log.info("Volume appears to be ENCRYPTED. Encrypted volumes are not supported right now :(")
@@ -592,7 +596,7 @@ class ApfsVolume:
                     if not os.path.exists(new_out_path):
                         os.makedirs(new_out_path)
                     self.CopyOutFolderRecursive(new_path, new_out_path)
-                except:
+                except OSError:
                     log.exception('Error creating folder ' + new_out_path)
             elif type == 'File':
                 name = item['name']
@@ -687,7 +691,7 @@ class ApfsVolume:
             f.write(apfs_file.readAll())
             f.seek(0)
             return f
-        except:
+        except MemoryError:
             log.exception("Failed to open file {}".format(path))
         return None
 
@@ -708,7 +712,7 @@ class ApfsVolume:
                     retval = True
                     if final_file_size != apfs_file.meta.logical_size and not apfs_file.meta.is_symlink:
                         log.error ("File Size mismatch, Should be {}, but is {} for file: {}".format(apfs_file.meta.logical_size, final_file_size, path))
-            except:
+            except OSError:
                 log.exception ("Failed to create file for writing - " + destination_path)
         else:
             log.debug("Failed to find file for export: " + path)
@@ -1098,7 +1102,7 @@ class ApfsContainer:
             self.seek(0x20)
             magic = self.read(4)
             assert magic == b'NXSB'
-        except:
+        except AssertionError:
             raise ValueError("Not an APFS image")
 
         self.seek(0)

@@ -64,31 +64,27 @@ def ParseAccountFile(input_file, accounts):
     try:
         plist = readPlist(input_file)
         ReadMobileMeAccountPlist(plist, accounts, input_file)
-    except (InvalidPlistException, NotBinaryPlistException) as e:
+    except InvalidPlistException as e:
         log.error ("Could not open plist, error was : " + str(e) )
 
 def ReadMobileMeAccountPlist(plist, accounts, source='', user=''):
-    try:
-        user_accounts = plist.get('Accounts', None)
-        for item in user_accounts:
-            display_name = item.get('DisplayName','') # John Doe
-            user_name = item.get('AccountID','') # usually email
-            description = item.get('AccountDescription','') # iCloud
-            dsid = item.get('AccountDSID','')
-            services = item.get('Services', None)
-            if services:
-                for service in services:
-                    if service.get('Enabled', None) == True: # Only getting enabled ones
-                        account = Account(None, service.get('Name',''), description, user_name, display_name,
-                                          None, None, dsid, service.get('ServiceID', ''), user, source)
-                        accounts.append(account)
-            else:
-                account = Account(None, '', description, user_name, display_name,
-                                  None, None, dsid, '', user, source)
-                accounts.append(account) 
-
-    except Exception as ex:
-        log.exception('Error reading MobileMeAccounts plist')   
+    user_accounts = plist.get('Accounts', None)
+    for item in user_accounts:
+        display_name = item.get('DisplayName','') # John Doe
+        user_name = item.get('AccountID','') # usually email
+        description = item.get('AccountDescription','') # iCloud
+        dsid = item.get('AccountDSID','')
+        services = item.get('Services', None)
+        if services:
+            for service in services:
+                if service.get('Enabled', None) == True: # Only getting enabled ones
+                    account = Account(None, service.get('Name',''), description, user_name, display_name,
+                                        None, None, dsid, service.get('ServiceID', ''), user, source)
+                    accounts.append(account)
+        else:
+            account = Account(None, '', description, user_name, display_name,
+                                None, None, dsid, '', user, source)
+            accounts.append(account) 
 
 def OpenDb(inputPath):
     log.info ("Processing file " + inputPath)
@@ -96,7 +92,7 @@ def OpenDb(inputPath):
         conn = sqlite3.connect(inputPath)
         log.debug ("Opened database successfully")
         return conn
-    except Exception as ex:
+    except sqlite3.Error as ex:
         log.exeption ("Failed to open database, is it a valid Accounts DB?")
     return None
 
@@ -108,7 +104,7 @@ def OpenDbFromImage(mac_info, inputPath, user):
         conn = sqlite.connect(inputPath)
         log.debug ("Opened database successfully")
         return conn, sqlite
-    except Exception as ex:
+    except sqlite3.Error as ex:
         log.exception ("Failed to open database, is it a valid Accounts DB?")
     return None
 
@@ -135,9 +131,9 @@ def ReadAccountsDb(db, accounts, source_path, user):
                             CommonFunctions.ReadMacAbsoluteTime(row['acc_date']), 
                             row['acc_parent_id'], row['acc_uuid'], row['acc_bundle'], user, source_path)
                 accounts.append(account)
-            except:
+            except sqlite3.Error:
                 log.exception('Error fetching row data')
-    except:
+    except sqlite3.Error:
         log.exception('Query  execution failed. Query was: ' + query)
 
 

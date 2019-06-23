@@ -216,7 +216,7 @@ class HFSVolume(object):
             data = self.read(0, 0x1000)
             self.header = HFSPlusVolumeHeader.parse(data[0x400:0x800])
             assert self.header.signature == 0x4858 or self.header.signature == 0x482B
-        except:
+        except AssertionError:
             raise ValueError("Not an HFS+ image")
         #self.is_hfsx = self.header.signature == 0x4858
         self.blockSize = self.header.blockSize

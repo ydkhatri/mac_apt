@@ -98,7 +98,7 @@ def OpenDbFromImage(mac_info, inputPath):
         conn = sqlite.connect(inputPath)
         log.debug ("Opened database successfully")
         return conn, sqlite
-    except Exception as ex:
+    except sqlite3.Error as ex:
         log.exception ("Failed to open database, is it a valid iMessage DB?")
     return None
 
@@ -108,14 +108,14 @@ def OpenDb(inputPath):
         conn = sqlite3.connect(inputPath)
         log.debug ("Opened database successfully")
         return conn
-    except:
+    except sqlite3.Error:
         log.exception ("Failed to open database, is it a valid iMessage DB?")
     return None
 
 
 def ReadiMessages(db, imessages, source, user):
     try:
-        query = u"SELECT m.rowid as msg_id, m.handle_id, m.text ,c.chat_identifier as contact, "\
+        query = "SELECT m.rowid as msg_id, m.handle_id, m.text ,c.chat_identifier as contact, "\
                 " (case when m.is_from_me == 0 then '->' when m.is_from_me == 1 then '<-' end ) as direction, "\
                 " m.account, m.date, m.date_read, m.date_delivered, m.is_from_me, m.is_read, "\
                 " a.filename as att_path, a.transfer_name as att_name, a.total_bytes as att_size"\
@@ -127,21 +127,18 @@ def ReadiMessages(db, imessages, source, user):
         db.row_factory = sqlite3.Row
         cursor = db.execute(query)
         for row in cursor:
-            try:
-                att_path = row['att_path']
-                if att_path != None:
-                    pass
-                imsg = IMessage(row['msg_id'], row['handle_id'], row['text'], row['contact'], row['direction'], row['account'],
-                                CommonFunctions.ReadMacAbsoluteTime(row['date']),
-                                CommonFunctions.ReadMacAbsoluteTime(row['date_read']),
-                                CommonFunctions.ReadMacAbsoluteTime(row['date_delivered']),
-                                row['is_from_me'], row['is_read'],
-                                row['att_path'], row['att_name'], row['att_size'],
-                                user, source)
-                imessages.append(imsg)
-            except:
-                log.exception('Error fetching row data')
-    except:
+            att_path = row['att_path']
+            if att_path != None:
+                pass
+            imsg = IMessage(row['msg_id'], row['handle_id'], row['text'], row['contact'], row['direction'], row['account'],
+                            CommonFunctions.ReadMacAbsoluteTime(row['date']),
+                            CommonFunctions.ReadMacAbsoluteTime(row['date_read']),
+                            CommonFunctions.ReadMacAbsoluteTime(row['date_delivered']),
+                            row['is_from_me'], row['is_read'],
+                            row['att_path'], row['att_name'], row['att_size'],
+                            user, source)
+            imessages.append(imsg)
+    except sqlite3.Error:
         log.exception('Query  execution failed. Query was: ' + query)
 
 def ProcessChatDbFromPath(mac_info, imessages, source_path, user):

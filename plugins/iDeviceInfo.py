@@ -78,7 +78,7 @@ class Country(Enum):
 
 
 class iDeviceInfo:
-    def __init__(self, Username, Device_Class, Serial_Num, Use_Count, Last_Connected, iOS_Vers, Product_Type, ID, IMEI, Build_Version,
+    def __init__(self, Username, Device_Class, Serial_Num, Use_Count, Last_Connected, Firmware_Ver_String, Product_Type, ID, IMEI, Build_Version,
                  MEID, Region, Firmware_Version, source):
 
         self.Username = Username
@@ -86,7 +86,7 @@ class iDeviceInfo:
         self.Serial_Num= Serial_Num
         self.Use_Count = Use_Count
         self.Last_Connected= Last_Connected
-        self.iOS_Vers = iOS_Vers
+        self.Firmware_Ver_String = Firmware_Ver_String
         self.Product_Type = Product_Type
         self.ID = ID
         self.IMEI = IMEI
@@ -98,7 +98,7 @@ class iDeviceInfo:
 
 def PrintAll(output_params, source_path, devices):
     device_labels = [('Username',DataType.TEXT),('Device_Class',DataType.TEXT),('Serial_Num',DataType.TEXT),
-                    ('Use_Count',DataType.INTEGER),('Last_Connected',DataType.DATE), ('iOS_Vers',DataType.TEXT),
+                    ('Use_Count',DataType.INTEGER),('Last_Connected',DataType.DATE), ('Firmware_Ver_String',DataType.TEXT),
                     ('Product_Type',DataType.TEXT),('ID',DataType.TEXT),('IMEI',DataType.TEXT),
                     ('Build_Version',DataType.TEXT),('MEID',DataType.TEXT),('Region',DataType.TEXT),
                     ('Firmware_Version', DataType.TEXT), ('Source',DataType.TEXT)
@@ -107,7 +107,7 @@ def PrintAll(output_params, source_path, devices):
     device_list = []
     for dvc in devices:
         dvcs_item = [ dvc.Username, dvc.Device_Class, dvc.Serial_Num, dvc.Use_Count,
-                      dvc.Last_Connected, dvc.iOS_Vers, dvc.Product_Type, dvc.ID,
+                      dvc.Last_Connected, dvc.Firmware_Ver_String, dvc.Product_Type, dvc.ID,
                       dvc.IMEI, dvc.Build_Version, dvc.MEID, dvc.Region,
                       dvc.Firmware_Version, dvc.source
                      ]
@@ -147,36 +147,27 @@ def deviceReader(devicePlist, userDevicePath, user_name, devices):
     )
     devices.append(dvcs)
 
-
 '''Function to return the data from the plist'''
 def deviceFinder(userDevicePath, user_name, devices, standalone, mac_info = None):
-
     '''Opens com.apple.iPod.plist dependant on standalone flag'''
     if standalone:
         try:
             devicePlist = readPlist(userDevicePath)
-        except Exception as ex:
+        except InvalidPlistException as ex:
             log.exception("Could not read plist: " + userDevicePath + " Exception was: " + str(ex))
     else:
-
         success, devicePlist, error = mac_info.ReadPlist(userDevicePath)
         if not success:
             devicePlist = {}
             log.error('Error reading Info.plist - ' + error)
 
-
     allDevices = devicePlist.get('Devices', {})
     for d in allDevices:
         singleDevice = allDevices.get(d, {})
-
         if standalone:
             deviceReader(singleDevice, userDevicePath, user_name, devices)
         else:
             deviceReader(singleDevice, userDevicePath, user_name, devices)
-
-
-
-
 
 def Plugin_Start(mac_info):
     '''Main Entry point function for plugin'''
