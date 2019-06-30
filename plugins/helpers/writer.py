@@ -454,7 +454,7 @@ class ExcelWriter:
             self.date_format = self.workbook.add_format({'num_format':'YYYY-MM-DD HH:MM:SS'})
             self.num_format = self.workbook.add_format()
             self.num_format.set_num_format('#,###')
-        except (XlsxWriterException, OSError) as ex:
+        except (xlsxwriter.exceptions.XlsxWriterException, OSError) as ex:
             log.error('Failed to create xlsx file at path {}'.format(self.filepath))
             log.exception('Error details')
             raise ex
@@ -466,13 +466,13 @@ class ExcelWriter:
             sheet_name = sheet_name[0:31]
         try:
             self.sheet = self.workbook.add_worksheet(sheet_name)
-        except XlsxWriterException as ex:
+        except xlsxwriter.exceptions.XlsxWriterException as ex:
             if str(ex).find('is already in use') > 0:
                 # find another sheetname
                 try:
                     sheet_name = self.GetNextAvailableSheetName(sheet_name)
                     self.sheet = self.workbook.add_worksheet(sheet_name)
-                except XlsxWriterException as ex:
+                except xlsxwriter.exceptions.XlsxWriterException as ex:
                     log.exception('Unknown error while adding sheet {}'.format(sheet_name))
                     raise ex
             else:
@@ -490,7 +490,7 @@ class ExcelWriter:
             for sheet in sheets:
                 if sheet.get_name().lower() == name:
                     return True
-        except XlsxWriterException as ex:
+        except xlsxwriter.exceptions.XlsxWriterException as ex:
             log.exception('Unknown error while fetching sheet names')
         return False
 
@@ -531,7 +531,7 @@ class ExcelWriter:
                 info = self.current_sheet_info
                 self.CreateSheet(info.name)
                 self.AddHeaders(info.column_info)
-        except XlsxWriterException as ex:
+        except xlsxwriter.exceptions.XlsxWriterException as ex:
             log.exception('Error trying to add sheet for overflow data (>1 million rows)')
         try:
             row_str = map(str, row)
@@ -542,10 +542,10 @@ class ExcelWriter:
                     elif self.col_types[column_index] in [DataType.INTEGER, DataType.REAL]:
                         self.sheet.write_number(self.row_index, column_index, row[column_index], self.num_format)
                     elif (self.col_types[column_index] == DataType.DATE):
-                        self.sheet.write_datetime(self.row_index, column_index, row[column_index], self.date_format)#[0:19], self.date_format)
+                        self.sheet.write_datetime(self.row_index, column_index, row[column_index], self.date_format)
                     else:
                         self.sheet.write(self.row_index, column_index, item)
-                except XlsxWriterException:
+                except (TypeError, ValueError, xlsxwriter.exceptions.XlsxWriterException):
                     log.exception('Error writing data:{} of type:{} in excel row:{} '.format(str(item), str(type(row[column_index])), self.row_index))
                 column_index += 1
 
@@ -553,7 +553,7 @@ class ExcelWriter:
             self.current_sheet_info.max_row_index = self.row_index - 1
             self.current_sheet_info.StoreColWidth(row_str)
             
-        except XlsxWriterException as ex:
+        except xlsxwriter.exceptions.XlsxWriterException as ex:
             log.exception('Error writing excel row {}'.format(self.row_index))
     
     def WriteRows(self, rows):
@@ -608,12 +608,12 @@ def WriteList(data_description, data_name, data_list, data_type_info, output_par
         writer = DataWriter(output_params, data_name, data_type_info, source_file)
         try:
             writer.WriteRows(data_list)
-        except (IOError, OSError, XlsxWriterException, sqlite3.Error) as ex:
+        except (IOError, OSError, xlsxwriter.exceptions.XlsxWriterException, sqlite3.Error) as ex:
             log.error ("Failed to write row data")
             log.exception ("Error details")
         finally:
             writer.FinishWrites()
-    except (IOError, OSError, XlsxWriterException, sqlite3.Error) as ex:
+    except (IOError, OSError, xlsxwriter.exceptions.XlsxWriterException, sqlite3.Error) as ex:
         log.error ("Failed to initilize data writer")
         log.exception ("Error details")
 

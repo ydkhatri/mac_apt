@@ -1075,23 +1075,25 @@ class MountedMacInfo(MacInfo):
         except Exception:
             log.error("Exception in BuildFullPath(), path was " + path_in_image)
             log.exception("Exception details")
+        #log.debug("req={} final={}".format(path_in_image, full_path))
         return full_path
 
     def GetFileMACTimes(self, file_path):
+        file_path = self.BuildFullPath(file_path)
         times = { 'c_time':None, 'm_time':None, 'cr_time':None, 'a_time':None }
         try:
-            times['c_time'] = None if self.is_windows else os.path.getctime(file_path)
-            times['m_time'] = os.path.getmtime(file_path)
-            times['cr_time'] = os.path.getctime(file_path) if self.is_windows else None
-            times['a_time'] = os.path.getatime(file_path)
-        except Exception as ex:
+            times['c_time'] = None if self.is_windows else CommonFunctions.ReadUnixTime(os.path.getctime(file_path))
+            times['m_time'] = CommonFunctions.ReadUnixTime(os.path.getmtime(file_path))
+            times['cr_time'] = CommonFunctions.ReadUnixTime(os.path.getctime(file_path)) if self.is_windows else None
+            times['a_time'] = CommonFunctions.ReadUnixTime(os.path.getatime(file_path))
+        except OSError as ex:
             log.exception('Error trying to get MAC times')
         return times
 
     def IsValidFilePath(self, path):
         try:
-            return os.path.exists(self.BuildFullPath(path)) 
-        except Exception as ex:
+            return os.path.lexists(self.BuildFullPath(path)) 
+        except OSError as ex:
             log.error("Exception in IsValidFilePath() for path : {} " + path)
             log.exception("Exception details")
         return False
@@ -1103,7 +1105,7 @@ class MountedMacInfo(MacInfo):
         '''Simply calls os.path.getsize(), BEWARE-does not build full path!'''
         try:
             return os.path.getsize(full_path)
-        except Exception as ex:
+        except OSError as ex:
             log.error("Exception in _GetFileSizeNoPathMod() : " + str(ex))
         return error
 
@@ -1111,15 +1113,15 @@ class MountedMacInfo(MacInfo):
         '''Builds full path, then gets size'''
         try:
             return os.path.getsize(self.BuildFullPath(full_path))
-        except Exception as ex:
+        except OSError as ex:
             log.debug("Exception in GetFileSize() : " + str(ex) + " Perhaps file does not exist: " + full_path)
         return error
 
     def GetUserAndGroupIDForFile(self, path):
-        return self._GetUserAndGroupID(path)
+        return self._GetUserAndGroupID(self.BuildFullPath(path))
 
     def GetUserAndGroupIDForFolder(self, path):
-        return self._GetUserAndGroupID(path)
+        return self._GetUserAndGroupID(self.BuildFullPath(path))
 
     def ListItemsInFolder(self, path='/', types_to_fetch=EntryType.FILES_AND_FOLDERS, include_dates=False):
         ''' 
@@ -1137,7 +1139,7 @@ class MountedMacInfo(MacInfo):
                 entry_type = EntryType.FOLDERS if os.path.isdir(newpath) else EntryType.FILES
                 item = { 'name':entry, 'type':entry_type, 'size':self._GetFileSizeNoPathMod(newpath, 0)}
                 if include_dates: 
-                    item['dates'] = self.GetFileMACTimes(path + '/' + name)
+                    item['dates'] = self.GetFileMACTimes(path + '/' + entry)
                 if types_to_fetch == EntryType.FILES_AND_FOLDERS:
                     items.append( item )
                 elif types_to_fetch == EntryType.FILES and entry_type == EntryType.FILES:
@@ -1146,6 +1148,7 @@ class MountedMacInfo(MacInfo):
                     items.append( item )
                 
         except Exception as ex:
+            log.exception('')
             if str(ex).find('cannot find the path specified'):
                 log.debug("Path not found : " + mounted_path)
             else:
@@ -1192,11 +1195,11 @@ class MountedMacInfo(MacInfo):
                         offset += len(data)
                         f.write(data)
                     f.flush()
-            except Exception as ex:
+            except (IOError, OSError) as ex:
                 log.exception ("Failed to create file for writing at " + destination_path)
                 return False 
             return True
-        except Exception:
+        except (IOError, OSError):
             log.error("Failed to open/find file " + source_file) 
             log.debug("Exception details:\n", exc_info=True)       
         return False
@@ -1213,7 +1216,7 @@ class MountedMacInfo(MacInfo):
             uid = str(stat.st_uid)
             gid = str(stat.st_gid)
             success = True
-        except Exception as ex:
+        except OSError as ex:
             log.error("Exception trying to get uid & gid for file " + path + ' Exception details: ' + str(ex))
         return success, uid, gid
 
@@ -1280,10 +1283,10 @@ class MountedMacInfo(MacInfo):
                                     break;
                             else:
                                 log.critical ("Unknown database type or bad database! Could not get DARWIN_USER_* paths!")
-                        except Exception as ex:
+                        except sqlite3.Error as ex:
                             log.error ("Failed to execute query on db : {} Error Details:{}".format(path_to_sandbox_db, str(ex)) )
                         conn.close()
-                    except Exception as ex:
+                    except sqlite3.Error as ex:
                         log.error ("Failed to connect to db " + str(ex))
                 #log.debug('found_home={} found_user={}  HOME={}'.format(found_home, found_user, home))
                 if found_home:# and found_user:
