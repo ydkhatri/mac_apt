@@ -39,7 +39,10 @@ def ImportPlugins(plugins, only_standalone=False):
                     else:
                         print ("Failed to import plugin - {}\nPlugin is missing a required variable".format(filename))
                 except Exception as ie: #ImportError, SyntaxError, ..
-                    print ("!!Error in plugin '" + filename + "' at line " + str(sys.exc_info()[2].tb_lineno) + " - " + str(ie))
+                    exc_type, ex, tb = sys.exc_info()
+                    imported_tb_info = traceback.extract_tb(tb)[-1]
+                    line_number = imported_tb_info[1]
+                    print ("!!Error in plugin '" + filename + "' at line " + str(line_number) + " - " + str(exc_type.__name__) + " - " + str(ie))
                     print ("Failed to import plugin - {} ! Check code!".format(filename))
                     continue
     except Exception as ex:
