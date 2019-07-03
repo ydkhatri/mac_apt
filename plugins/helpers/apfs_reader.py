@@ -525,7 +525,7 @@ class ApfsVolume:
         self.time_created = None
         self.time_updated = None
         self.uuid = ''
-        self.files_meta_cache = DataCache(100)
+        self.files_meta_cache = DataCache()
         #
         # SqliteWriter object to read from sqlite. 
         # This must be populated manually before calling any file/folder/symlink related method!
@@ -912,7 +912,6 @@ class ApfsVolume:
         except GeneratorExit:
             pass
 
-
     def GetManyFileMetadataCountOnly(self, where_clause):
         '''Only returns a count of items. A where_clause specifies either cnid or path to find'''
         query = "SELECT count(DISTINCT p.cnid)"\
@@ -951,7 +950,7 @@ class ApfsVolume:
                 " left join {0}_Attributes as a on a.CNID = p.CNID "\
                 " left join {0}_Extents as ex on ex.CNID = a.Extent_CNID "\
                 " {1} "\
-                " order by p.CNID, Extent_Offset, compressed_Extent_Offset, xName, xExOff"
+                " order by p.Path, p.CNID, Extent_Offset, compressed_Extent_Offset, xName, xExOff"
         # This query gets file metadata as well as extents for file. If compressed, it gets compressed extents.
         # It gets XAttributes, except decmpfs and ResourceFork (we already got those in _Compressed_Files table)
         success, cursor, error_message = self.dbo.RunQuery(query.format(self.name, where_clause), return_named_objects=True)
@@ -967,6 +966,7 @@ class ApfsVolume:
             prev_xattr_extent = None
             att = None
             got_all_xattr = False
+            path = ''
             try:
                 for row in cursor:
                     if last_cnid == row['CNID']: # same file
@@ -986,6 +986,7 @@ class ApfsVolume:
                         got_all_xattr = False
 
                     if index == 0:
+                        path = row['Path']
                         apfs_file_meta = ApfsFileMeta(row['Name'], row['Path'], row['CNID'], row['Parent_CNID'], CommonFunctions.ReadAPFSTime(row['Created']), \
                                             CommonFunctions.ReadAPFSTime(row['Modified']), CommonFunctions.ReadAPFSTime(row['Changed']), \
                                             CommonFunctions.ReadAPFSTime(row['Accessed']), \
@@ -1040,52 +1041,33 @@ class ApfsVolume:
 
                 # get last one
                 if apfs_file_meta:
-                    #apfs_file_meta_list.append(apfs_file_meta)
+                    # Also adding to cache
+                    self.files_meta_cache.Insert(apfs_file_meta, path)
                     yield apfs_file_meta
             except GeneratorExit:
                 pass
         else:
             log.debug('Failed to execute GetManyFileMetadata query, error was : ' + error_message)
 
-        #return apfs_file_meta_list
-
     def ListItemsInFolder(self, path):
         ''' 
         Returns a list of files and/or folders in a list
-        Format of list = [ { 'name':'got.txt', 'type':EntryType.FILE, 'size':10, 'dates': {} }, .. ]
+        Format of list = [ { 'name':'got.txt', 'type':'File', 'size':10, 'dates': {} }, .. ]
         'path' should be linux style using forward-slash like '/var/db/xxyy/file.tdc'
         '''
         if path.endswith('/') and path != '/':
             path = path[:-1]
         items = [] # List of dictionaries
-        query = "SELECT t.Name, p.CNID, i.ItemType, t.Logical_Size, t.Created, t.Modified, t.Changed, t.Accessed, "\
-                " c.Uncompressed_size, i.DateAdded "\
-                " from {0}_Paths as p "\
-                " left join {0}_Inodes as t on p.cnid=t.cnid  "\
-                " left join {0}_IndexNodes as i on i.CNID = t.CNID "\
-                " left join {0}_Compressed_Files as c on c.CNID=t.CNID "\
-                " WHERE t.Parent_CNID in (select CNID from {0}_Paths  where path='{1}')"
-        try:
-            path = path.replace("'", "''") # if path contains single quote, replace with double to escape it!
-            success, cursor, error_message = self.dbo.RunQuery(query.format(self.name, path))
-            if success:
-                for row in cursor:
-                    item = { 'name':row[0] }
-                    if row[8] == None:
-                        item['size'] = row[3]
-                    else:
-                        item['size'] = row[8]
-                    item['dates'] = { 'c_time':CommonFunctions.ReadAPFSTime(row[6]), 
-                                        'm_time':CommonFunctions.ReadAPFSTime(row[5]), 
-                                        'cr_time':CommonFunctions.ReadAPFSTime(row[4]), 
-                                        'a_time':CommonFunctions.ReadAPFSTime(row[7]),
-                                        'i_time':CommonFunctions.ReadAPFSTime(row[9]) }
-                    item['type'] = ApfsFileMeta.ItemTypeString(row[2])
-                    items.append(item)
-            else:
-                log.error('Failed to execute ListItemsInFolder query, error was : ' + error_message)
-        except ValueError as ex:
-            log.error(str(ex))
+
+        for meta_item in self.GetManyFileMetadata("where path like '{}/%' and path NOT like '{}/%/%'".format(path, path)):
+            item = { 'name':meta_item.name, 'size':meta_item.logical_size, 
+                    'type':ApfsFileMeta.ItemTypeString(meta_item.item_type) }
+            item['dates'] = { 'c_time':meta_item.changed,
+                                'm_time':meta_item.modified, 
+                                'cr_time':meta_item.created, 
+                                'a_time':meta_item.accessed,
+                                'i_time':meta_item.date_added }
+            items.append(item) 
         return items
 
 class ApfsContainer:
@@ -1255,7 +1237,7 @@ class ApfsExtent:
                     yield container.read(self.size % max_size)
         except GeneratorExit:
             pass
-#TODO: make iterable, implement readlines()
+
 class ApfsFile():
     def __init__(self, apfs_file_meta, logical_size, extents, apfs_container):
         self.meta = apfs_file_meta
@@ -1497,7 +1479,6 @@ class ZlibCompressionParams(object):
         self.num_blocks = num_blocks
         self.chunk_info = [] # [ [chunk_offset, chunk_size, uncomp_offset_start, uncomp_offset_end], .. ] List of lists
 
-#TODO: make iterable, implement readlines()
 class ApfsFileCompressed(ApfsFile):
     def __init__(self, apfs_file_meta, logical_size, extents, apfs_container):
         super().__init__(apfs_file_meta, logical_size, extents, apfs_container)
