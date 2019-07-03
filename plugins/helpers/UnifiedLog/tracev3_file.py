@@ -1165,7 +1165,8 @@ class TraceV3(data_format.BinaryDataFormat):
                     log_msg
                    ) 
         '''
-        logger.debug("-"*100 + "\r\nParsing traceV3 file {}".format(self.file.filename))
+        logger.debug("-"*100)
+        logger.debug("Parsing traceV3 file {}".format(self.file.filename))
         f = self.file.open()
         if not f:
             return False
