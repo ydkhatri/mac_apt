@@ -131,13 +131,13 @@ def ProcessBashSessionsForUser(mac_info, bash_sessions, source_folder, user_name
                         if historynew_entry['size'] > 0:
                             if session.new_content == '':
                                 session.new_content = ''.join(ReadFile(mac_info, source_folder + '/' + historynew_entry['name']))
-                                if session.all_content == '': # Nothing was present in history file!
-                                    session.source = source_folder + '/' + historynew_entry['name']
-                                else: # There was data in history too ! # Not seen this.
-                                    session.source += ', ' + source_folder + '/' + historynew_entry['name']
                             else:
                                 log.info('{} has data in it ! There is history content too!'.format(historynew_entry['name']))
                                 session.new_content += '\n' + ''.join(ReadFile(mac_info, source_folder + '/' + historynew_entry['name']))
+                            if session.all_content == '': # Nothing was present in history file!
+                                session.source = source_folder + '/' + historynew_entry['name']
+                            else: # There was data in history too ! # Not seen this.
+                                session.source += ', ' + source_folder + '/' + historynew_entry['name']
                         
                 except (IndexError, KeyError, ValueError):
                     log.exception('Error getting historynew')
