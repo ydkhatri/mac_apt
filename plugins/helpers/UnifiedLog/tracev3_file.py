@@ -502,7 +502,7 @@ class TraceV3(data_format.BinaryDataFormat):
             msg += format_str[format_str_consumed : hit.start()] # slice from end of last hit to begin of new hit
             format_str_consumed = last_hit_end
             # Now add data from this hit
-            if index >= len(data):
+            if index >= data_count: # len(data):
                 msg += '<decode: missing data>' # Message provided by 'log' program for missing data
                 logger.error('missing data for log @ 0x{:X}'.format(log_file_pos))
                 continue
@@ -562,7 +562,7 @@ class TraceV3(data_format.BinaryDataFormat):
                             chars = '<private>'
                     else:
                         try:
-                            chars = raw_data.decode('utf8', 'backslashreplace').rstrip('\x00')
+                            chars = raw_data.decode('utf8').rstrip('\x00') # , 'backslashreplace'
                         except Exception as ex:
                             logger.error('Error decoding utf8 in log @ 0x{:X}, data was "{}", error was {}'.format(log_file_pos, raw_data.hex(), str(ex)))
                             chars = ''

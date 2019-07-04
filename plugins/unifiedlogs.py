@@ -25,7 +25,7 @@ __Plugin_Description = "Reads macOS unified logging logs from .tracev3 files"
 __Plugin_Author = "Yogesh Khatri"
 __Plugin_Author_Email = "yogesh@swiftforensics.com"
 
-__Plugin_Standalone = True
+__Plugin_Standalone = False #True
 __Plugin_Standalone_Usage = 'Provide the ".logarchive" folder as input to process.'
 
 log = logging.getLogger('MAIN.' + __Plugin_Name) # Do not rename or remove this ! This is the logger object
@@ -151,26 +151,7 @@ def ProcessLogsList(logs, tracev3):
                 senderImagePath, processImagePath,
                 log_msg
     '''
-    # global f
-    # for li in logs:
-    #     try:
-    #         f.write('{}\t'
-    #             '0x{:X}\t{}\t{}\t0x{:X}\t{}\t0x{:X}\t0x{:X}\t'\
-    #             '{}\t{}\t{}\t({})\t{}\t{}\t'\
-    #             '{}\t{}\t'\
-    #             '{}\t{}\t{}\t{}\t{}'\
-    #             #'\t{}'\
-    #             '\r\n'.format(\
-    #             tracev3.file.filename,
-    #             li[0],li[1],UnifiedLogLib.ReadAPFSTime(li[2]),li[3],li[4],li[5],li[6],
-    #             li[7],li[8],li[9],li[10],li[11],li[12],
-    #             li[13],li[14],
-    #             li[15],unicode(li[16]).upper(),unicode(li[17]).upper(),
-    #             li[18],li[19])) #,
-    #             #li[20])
-    #             #li[20].encode('utf8')))
-    #     except:
-    #         log.exception('Error writing to log')
+
     global writer
     global total_logs_processed
 
@@ -286,26 +267,6 @@ def Plugin_Start(mac_info):
     else:
         log.info('No tracev3 files found')
 
-
-def Plugin_Start_Standalone(input_files_list, output_params):
-    log.info("Module Started as standalone")
-    for input_path in input_files_list:
-        log.debug("Input folder passed was: " + input_path)
-        logs = []
-        files_list = os.listdir(input_path)
-        for file_name in files_list:
-            if file_name == 'fseventsd-uuid':
-                pass
-            else:
-                path = os.path.join(input_path, file_name)
-                with open(path, 'rb') as f:
-                    ProcessFile(file_name, f, logs, CommonFunctions.ReadUnixTime(os.path.getmtime(path)), path)
-        if len(logs) > 0:
-            PrintAll(logs, output_params)
-            log.info("The source_date field on the fsevents are from the individual file modified date "\
-                     " (metadata not data)! This may have changed if you are not on a live or read-only image.")
-        else:
-            log.info('No unified logging logs found')
 
 if __name__ == '__main__':
     print ("This plugin is a part of a framework and does not run independently on its own!")
