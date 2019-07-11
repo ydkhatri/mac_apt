@@ -41,9 +41,9 @@ def ImportPlugins(plugins, only_standalone=False):
                 except Exception as ie: #ImportError, SyntaxError, ..
                     exc_type, ex, tb = sys.exc_info()
                     imported_tb_info = traceback.extract_tb(tb)[-1]
-                    filename = imported_tb_info[0]
+                    fail_filename = imported_tb_info[0]
                     line_number = imported_tb_info[1]
-                    print ("!!Error in plugin '" + filename + "' at line " + str(line_number) + " - " + str(exc_type.__name__) + " - " + str(ie))
+                    print ("!!Error in plugin '" + filename + "' - " + str(exc_type.__name__) + " - " + str(ie))
                     print ("Failed to import plugin - {} ! Check code!".format(filename))
                     continue
     except Exception as ex:

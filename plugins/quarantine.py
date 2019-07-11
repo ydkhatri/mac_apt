@@ -7,6 +7,7 @@
 
 '''
 
+from biplist import *
 from helpers.macinfo import *
 from helpers.writer import *
 from helpers.bookmark import *
@@ -107,7 +108,7 @@ def OpenDbFromImage(mac_info, inputPath, user):
         return conn, sqlite
     except sqlite3.Error as ex:
         log.exception ("Failed to open database, is it a valid DB?")
-    return None
+    return None, None
 
 def ProcessDbFromPath(mac_info, quarantined, source_path, user):
     if mac_info.IsValidFilePath(source_path):
