@@ -88,6 +88,18 @@ class CommonFunctions:
         return ''
 
     @staticmethod
+    def ReadWindowsFileTime(file_time): # File time is time epoch beginning 1601/1/1
+        '''Returns datetime object, or empty string upon error'''
+        if file_time not in ( 0, None, ''):
+            try:
+                if isinstance(file_time, str):
+                    file_time = float(file_time)
+                return datetime.datetime(1601, 1, 1) + datetime.timedelta(microseconds=file_time/10.)
+            except (ValueError, OverflowError) as ex:
+                log.error("ReadWindowsFileTime() Failed to convert timestamp from value " + str(file_time) + " Error was: " + str(ex))
+        return ''
+
+    @staticmethod
     def IntFromStr(string, base=10, error_val=0):
         integer = error_val
         try:
