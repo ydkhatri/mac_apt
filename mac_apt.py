@@ -188,7 +188,7 @@ def IsApfsContainer(img, partition_start_offset):
         if img.read(partition_start_offset + 0x20, 4) == b'NXSB':
             return True
     except:
-        raise Exception('Cannot seek into image @ offset {}'.format(partition_start_offset + 0x20))
+        raise ValueError('Cannot seek into image @ offset {}'.format(partition_start_offset + 0x20))
     return False
 
 def GetApfsContainerUuid(img, container_start_offset):

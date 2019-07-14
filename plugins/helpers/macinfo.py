@@ -982,7 +982,7 @@ class ApfsMacInfo(MacInfo):
 
     def OpenSmallFile(self, path):
         '''Open files less than 200 MB, returns open file handle'''
-        return self.osx_FS.open(path) #self.osx_FS.OpenSmallFile(path) #TODO remove this, its only for testing temp
+        return self.osx_FS.open(path) #self.osx_FS.OpenSmallFile(path)
 
     def open(self, path):
         '''Open file and return a file-like object'''
