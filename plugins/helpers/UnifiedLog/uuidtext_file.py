@@ -105,7 +105,7 @@ class Uuidtext(data_format.BinaryDataFormat):
                 file_object = self._file.file_pointer
                 file_object.seek(data_offset + rel_offset)
                 format_string_data = file_object.read(data_len - rel_offset)
-                return self._ReadCString(format_string_data)
+                return self._ReadCString(format_string_data, data_len - rel_offset)
 
         # This is the value returned by the MacOS 'log' program if the uuidtext
         # entry is not found.

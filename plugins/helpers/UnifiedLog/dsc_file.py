@@ -125,7 +125,7 @@ class Dsc(data_format.BinaryDataFormat):
         file_object = self._file.file_pointer
         file_object.seek(range_entry[2] + rel_offset)
         cstring_data = file_object.read(range_entry[3] - rel_offset)
-        cstring = self._ReadCString(cstring_data)
+        cstring = self._ReadCString(cstring_data, range_entry[3] - rel_offset)
         return cstring, range_entry, uuid_entry
 
     def GetUuidEntryFromVirtualOffset(self, v_offset):
