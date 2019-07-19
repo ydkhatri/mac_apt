@@ -155,9 +155,9 @@ def ProcessBashSessionsForUser(mac_info, bash_sessions, source_folder, user_name
                     session = BashSession(user_name, source_folder + '/' + file_name, 'BASH_SESSION')
                     bash_sessions.append(session)
                     session.uuid = uuid
-                    session.start_date = historynew_entry['dates']['cr_time']
+                    session.start_date = file_entry['dates']['cr_time']
                     session.end_date = file_entry['dates']['m_time']
-                    session.new_content = ReadFile(mac_info, source_folder + '/' + file_name)
+                    session.new_content = ''.join(ReadFile(mac_info, source_folder + '/' + file_name))
     else:
         log.info('No files found under {}, bash sessions may have been manually deleted!'.format(source_folder))
 

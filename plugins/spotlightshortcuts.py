@@ -76,12 +76,13 @@ def Plugin_Start(mac_info):
     version = mac_info.GetVersionDictionary()
     if version['major'] == 10 and version['minor'] >= 10:
         user_plist_rel_path = '{}/Library/Application Support/com.apple.spotlight.Shortcuts'
-    processed_paths = []
+    processed_paths = set()
     for user in mac_info.users:
         user_name = user.user_name
         if user.home_dir == '/private/var/empty': continue # Optimization, nothing should be here!
         elif user.home_dir == '/private/var/root': user_name = 'root' # Some other users use the same root folder, we will list such all users as 'root', as there is no way to tell
         if user.home_dir in processed_paths: continue # Avoid processing same folder twice (some users have same folder! (Eg: root & daemon))
+        processed_paths.add(user.home_dir)
         source_path = user_plist_rel_path.format(user.home_dir)
         if mac_info.IsValidFilePath(source_path):
             mac_info.ExportFile(source_path, __Plugin_Name, user_name + "_", False)

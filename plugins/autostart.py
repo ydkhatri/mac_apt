@@ -297,7 +297,7 @@ def Plugin_Start(mac_info):
             full_name = folder['name']
             if len(full_name) > 26 and full_name.startswith('com.apple.launchd.peruser.'):
                 number_str = full_name[26:]
-                uid = CommonFunctions.IntFromStr(number_str, None)
+                uid = CommonFunctions.IntFromStr(number_str, error_val=None)
                 if uid != None:
                     user_name = uid
                     for user in mac_info.users:

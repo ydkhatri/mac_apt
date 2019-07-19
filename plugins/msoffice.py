@@ -305,7 +305,7 @@ def Plugin_Start(mac_info):
         processed_paths.add(user.home_dir)
         plist_path = office_plist_path.format(user.home_dir)
         if mac_info.IsValidFilePath(plist_path):
-            mac_info.ExportFile(full_path, __Plugin_Name, user_name, False)
+            mac_info.ExportFile(plist_path, __Plugin_Name, user_name, False)
             success, plist, error = mac_info.ReadPlist(plist_path)
             if success:
                 ProcessOfficePlist(plist, office_items, user_name, plist_path)

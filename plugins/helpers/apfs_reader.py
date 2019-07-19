@@ -973,7 +973,7 @@ class ApfsVolume:
                         pass
                     else:                  # new file
                         if last_cnid:      # save old info
-                            #apfs_file_meta_list.append(apfs_file_meta)
+                            self.files_meta_cache.Insert(apfs_file_meta, path)
                             yield apfs_file_meta
                         index = 0
                         last_cnid = row['CNID']
