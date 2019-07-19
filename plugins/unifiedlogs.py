@@ -166,7 +166,7 @@ def ProcessLogsList(logs, tracev3):
     except Exception as ex:
         log.exception ("Failed to write log row data to db")
 
-def RecurseProcessLogFiles(vfs, input_path, ts_list, uuidtext_folder_path, caches):
+def RecurseProcessLogFiles(vfs, input_path, ts_list, uuidtext_folder_path, large_data_cache, caches):
     '''Recurse the folder located by input_path and process all .traceV3 files'''
     global files_processed
     files = vfs.listdir(input_path)
@@ -175,10 +175,10 @@ def RecurseProcessLogFiles(vfs, input_path, ts_list, uuidtext_folder_path, cache
         input_file_path = input_path + '/' + file_name
         if file_name.lower().endswith('.tracev3') and not file_name.startswith('._'):
             log.info("Processing tracev3 file - " + input_file_path)
-            TraceV3(vfs, vfs.get_virtual_file(input_file_path, 'traceV3'), ts_list, uuidtext_folder_path, caches).Parse(ProcessLogsList)
+            TraceV3(vfs, vfs.get_virtual_file(input_file_path, 'traceV3'), ts_list, uuidtext_folder_path, large_data_cache, caches).Parse(ProcessLogsList)
             files_processed += 1
         elif vfs.is_dir(input_file_path):
-            RecurseProcessLogFiles(vfs, input_file_path, ts_list, uuidtext_folder_path, caches)
+            RecurseProcessLogFiles(vfs, input_file_path, ts_list, uuidtext_folder_path, large_data_cache, caches)
         else:
             log.debug('Not a log file:' + input_file_path)
 
@@ -256,7 +256,8 @@ def Plugin_Start(mac_info):
         out_params.write_sql = True
         if CreateSqliteDb(output_path, out_params):
             writer = DataWriter(out_params, "UnifiedLogs", data_type_info, traceV3_path)
-            RecurseProcessLogFiles(vfs, traceV3_path, ts_list, uuidtext_folder_path, caches)
+            large_data_cache = {}
+            RecurseProcessLogFiles(vfs, traceV3_path, ts_list, uuidtext_folder_path, large_data_cache, caches)
     except:
         log.exception('')
     if writer:
