@@ -13,7 +13,7 @@
    For usage information, run: 
      python mac_apt.py -h
 
-   NOTE: This currently works only on Python3.6 or higher.
+   NOTE: This currently works only on Python3.7 or higher.
    
 '''
 
