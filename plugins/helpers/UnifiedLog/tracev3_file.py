@@ -1090,7 +1090,7 @@ class TraceV3(data_format.BinaryDataFormat):
                         pad_len = 8 - ((pos - start_skew) % 8)
                         pos += pad_len
                     else:
-                        logger.warning('Avoided padding for firehose chunk ending @ 0x{:X}'.format(debug_file_pos + pos))
+                        logger.debug('Avoided padding for firehose chunk ending @ 0x{:X}'.format(debug_file_pos + pos))
             elif tag == 0x6002: # Oversize
                 ct, data_ref_id, data_len = struct.unpack('<QII', buffer[pos + pos2 : pos + pos2 + 16])
                 pos2 += 16
