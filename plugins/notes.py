@@ -13,8 +13,6 @@
    Create better output, html in xl is not readable.
    Export attachments contained within individual notes.
 '''
-from __future__ import print_function
-#from __future__ import unicode_literals # Must disable for sqlite.row_factory
 
 import os
 from helpers.macinfo import *
@@ -90,9 +88,9 @@ def ReadAttPathFromPlist(plist_blob):
         try:
             path = plist['$objects'][2]
             return path
-        except:
+        except (KeyError, IndexError):
             log.exception('Could not fetch attachment path from plist')
-    except (InvalidPlistException, NotBinaryPlistException, Exception) as e:
+    except (InvalidPlistException, IOError) as e:
         log.error ("Invalid plist in table." + str(e) )
     return ''
 
@@ -102,7 +100,7 @@ def GetUncompressedData(compressed):
     data = None
     try:
         data = zlib.decompress(compressed, 15 + 32)
-    except:
+    except zlib.error:
         log.exception('Zlib Decompression failed!')
     return data
 
@@ -130,9 +128,9 @@ def ReadNotesV2_V4_V6(db, notes, version, source, user):
                             CommonFunctions.ReadMacAbsoluteTime(row['created']), CommonFunctions.ReadMacAbsoluteTime(row['edited']),
                             version, user, source)
                 notes.append(note)
-            except:
+            except (sqlite3.Error, KeyError):
                 log.exception('Error fetching row data')
-    except:
+    except sqlite3.Error:
         log.exception('Query  execution failed. Query was: ' + query)
 
 def ReadLengthField(blob):
@@ -140,19 +138,19 @@ def ReadLengthField(blob):
     length = 0
     skip = 0
     try:
-        data_length = int(struct.unpack('<B', blob[0])[0])
+        data_length = int(blob[0])
         length = data_length & 0x7F
         while data_length > 0x7F:
             skip += 1
-            data_length = int(struct.unpack('<B', blob[skip])[0])
+            data_length = int(blob[skip])
             length = ((data_length & 0x7F) << (skip * 7)) + length
-    except:
+    except (IndexError, ValueError):
         log.exception('Error trying to read length field in note data blob')
     skip += 1
     return length, skip
 
 def ProcessNoteBodyBlob(blob):
-    data = ''
+    data = b''
     if blob == None: return data
     try:
         pos = 0
@@ -171,22 +169,22 @@ def ProcessNoteBodyBlob(blob):
         pos += skip
 
         # Now text data begins
-        if blob[pos] != b'\x1A':
-            log.error('Unexpected byte in text header pos {} - byte is {}'.format(pos, binascii.hexlify(blob[pos])))
+        if blob[pos] != 0x1A:
+            log.error('Unexpected byte in text header pos {} - byte is 0x{:X}'.format(pos, blob[pos]))
             return ''
         pos += 1
         length, skip = ReadLengthField(blob[pos:])
         pos += skip
         # Read text tag next
-        if blob[pos] != b'\x12':
-            log.error('Unexpected byte in pos {} - byte is {}'.format(pos, binascii.hexlify(blob[pos])))
+        if blob[pos] != 0x12:
+            log.error('Unexpected byte in pos {} - byte is 0x{:X}'.format(pos, blob[pos]))
             return ''
         pos += 1
         length, skip = ReadLengthField(blob[pos:])
         pos += skip
         data = blob[pos : pos + length].decode('utf-8')
         # Skipping the formatting Tags
-    except:
+    except (IndexError, ValueError):
         log.exception('Error processing note data blob')
     return data
 
@@ -224,9 +222,9 @@ def ReadNotesHighSierra(db, notes, source, user):
                             CommonFunctions.ReadMacAbsoluteTime(row['created']), CommonFunctions.ReadMacAbsoluteTime(row['modified']),
                             'NoteStore', user, source)
                 notes.append(note)
-            except:
+            except sqlite3.Error:
                 log.exception('Error fetching row data')
-    except:
+    except sqlite3.Error:
         log.exception('Query  execution failed. Query was: ' + query)
 
 def IsHighSierraDb(db):
@@ -236,7 +234,7 @@ def IsHighSierraDb(db):
         for row in cursor:
             if row[0].startswith('Z_') and row[0].endswith('NOTES'):
                 return False
-    except Exception as ex:
+    except sqlite3.Error as ex:
         log.error ("Failed to list tables of db. Error Details:{}".format(str(ex)) )
     return True
 
@@ -246,7 +244,7 @@ def ExecuteQuery(db, query):
         db.row_factory = sqlite3.Row
         cursor = db.execute(query)
         return cursor, ""
-    except Exception as ex:
+    except sqlite3.Error as ex:
         error = str(ex)
         #log.debug('Exception:{}'.format(error))
     return None, error
@@ -308,7 +306,7 @@ def ReadQueryResults(cursor, notes, user, source):
                         CommonFunctions.ReadMacAbsoluteTime(row['created']), CommonFunctions.ReadMacAbsoluteTime(row['modified']),
                         'NoteStore', user, source)
             notes.append(note)
-        except:
+        except sqlite3.Error:
             log.exception('Error fetching row data')
 
 def OpenDb(inputPath):
@@ -317,7 +315,7 @@ def OpenDb(inputPath):
         conn = sqlite3.connect(inputPath)
         log.debug ("Opened database successfully")
         return conn
-    except:
+    except sqlite3.Error:
         log.exception ("Failed to open database, is it a valid Notes DB?")
     return None
 
@@ -329,7 +327,7 @@ def OpenDbFromImage(mac_info, inputPath, user):
         conn = sqlite.connect(inputPath)
         log.debug ("Opened database successfully")
         return conn, sqlite
-    except Exception as ex:
+    except sqlite3.Error:
         log.exception ("Failed to open database, is it a valid Notes DB?")
     return None
 

@@ -6,8 +6,7 @@
    terms of the MIT License.
    
 '''
-from __future__ import print_function
-from __future__ import unicode_literals
+
 import os
 import logging
 import biplist
@@ -62,14 +61,14 @@ def Plugin_Start(mac_info):
 def ProcessActiveDirectoryPlist(plist_path, plist):
     active_directory = {'source': plist_path}
     try:
-        for item, value in plist.iteritems(): # .items() for Python 3
+        for item, value in plist.items():
             if item in ['node name','trustaccount','trustkerberosprincipal','trusttype']:
                 active_directory[item] = value
         ad_dict = plist['module options']['ActiveDirectory']
-        for item, value in ad_dict.iteritems():
+        for item, value in ad_dict.items():
             if item in ['allow multi-domain','cache last user logon','domain','forest','trust domain']:
                 active_directory[item] = value
-    except Exception as ex:
+    except (KeyError, ValueError) as ex:
         log.error('Error reading plist ' + plist_path + ' Exception details: ' + str(ex))
     ad_details.append(active_directory)
 

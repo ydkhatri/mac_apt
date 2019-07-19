@@ -6,13 +6,13 @@
    terms of the MIT License.
    
 '''
-from __future__ import print_function
-from __future__ import unicode_literals
+
+
 import os
 import binascii
 import logging
-from helpers.macinfo import *
-from helpers.writer import *
+from plugins.helpers.macinfo import *
+from plugins.helpers.writer import *
 
 __Plugin_Name = "BASHSESSIONS" # Cannot have spaces, and must be all caps!
 __Plugin_Friendly_Name = "Bash Sessions & History"
@@ -48,8 +48,8 @@ def ReadFile(mac_info, path):
         lines_utf8 = []
         for line in lines:
             try:
-                lines_utf8.append(line.decode('utf-8')) # This is needed as file was opened in binary mode
-            except:
+                lines_utf8.append(line.decode('utf-8', 'backslashreplace')) # This is needed as file was opened in binary mode
+            except UnicodeDecodeError:
                 log.error('Failed to convert string to utf-8' + binascii.hexlify(line))
         return lines_utf8
     else:
@@ -97,6 +97,12 @@ def PrintAll(sessions, output_params, source_path):
 
     WriteList("bash session & history", "BashSessions", data_list, session_info, output_params, source_path)
     
+def FindSession(bash_sessions, uuid):
+    for session in bash_sessions:
+        if session.uuid == uuid:
+            return session
+    return None
+
 def ProcessBashSessionsForUser(mac_info, bash_sessions, source_folder, user_name):
     files_list = mac_info.ListItemsInFolder(source_folder,EntryType.FILES, True)
     if len(files_list) > 0:
@@ -119,27 +125,41 @@ def ProcessBashSessionsForUser(mac_info, bash_sessions, source_folder, user_name
                 session.all_content = ''.join(content)
                 # Get .historynew file
                 try:
-                    historynew_entry = filter(lambda x: x['name'] == session.uuid + '.historynew', files_list)[0]
+                    historynew_entry = [x for x in files_list if x['name'] == session.uuid + '.historynew'][0]
                     if historynew_entry != None:
                         session.start_date = historynew_entry['dates']['cr_time']
                         if historynew_entry['size'] > 0:
                             if session.new_content == '':
                                 session.new_content = ''.join(ReadFile(mac_info, source_folder + '/' + historynew_entry['name']))
-                                if session.all_content == '': # Nothing was present in history file!
-                                    session.source = source_folder + '/' + historynew_entry['name']
-                                else: # There was data in history too ! # Not seen this.
-                                    session.source += ', ' + source_folder + '/' + historynew_entry['name']
                             else:
-                                log.debug('{} has data in it ! There is history content too!'.format(historynew_entry['name']))
+                                log.info('{} has data in it ! There is history content too!'.format(historynew_entry['name']))
                                 session.new_content += '\n' + ''.join(ReadFile(mac_info, source_folder + '/' + historynew_entry['name']))
+                            if session.all_content == '': # Nothing was present in history file!
+                                session.source = source_folder + '/' + historynew_entry['name']
+                            else: # There was data in history too ! # Not seen this.
+                                session.source += ', ' + source_folder + '/' + historynew_entry['name']
                         
-                except:
+                except (IndexError, KeyError, ValueError):
                     log.exception('Error getting historynew')
                 # setting variables for next loop iteration
                 prev_content = content
                 content = []
+        # Proces any .historynew file that was missed (if it didnt have a corresp .history file)
+        for file_entry in files_list:
+            file_name = file_entry['name']
+            if file_name.endswith('.historynew') and file_entry['size'] > 0:
+                uuid = file_name.split('.')[0]
+                existing_session = FindSession(bash_sessions, uuid)
+                if not existing_session:
+                    log.info('Found a .historynew file with no corresponding .history files! - {}'.format(file_name))
+                    session = BashSession(user_name, source_folder + '/' + file_name, 'BASH_SESSION')
+                    bash_sessions.append(session)
+                    session.uuid = uuid
+                    session.start_date = file_entry['dates']['cr_time']
+                    session.end_date = file_entry['dates']['m_time']
+                    session.new_content = ''.join(ReadFile(mac_info, source_folder + '/' + file_name))
     else:
-        log.info('No files found under {} ,  bash sessions may have been manually deleted!'.format(source_folder))
+        log.info('No files found under {}, bash sessions may have been manually deleted!'.format(source_folder))
 
 def Plugin_Start(mac_info):
     '''Main Entry point function for plugin'''

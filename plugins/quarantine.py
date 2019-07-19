@@ -6,9 +6,8 @@
    terms of the MIT License.
 
 '''
-from __future__ import print_function
-#from __future__ import unicode_literals # Must disable for sqlite.row_factory
 
+from biplist import *
 from helpers.macinfo import *
 from helpers.writer import *
 from helpers.bookmark import *
@@ -84,9 +83,9 @@ def ReadQuarantineDb(db, quarantined, source, user):
                                     row['data_url'], row['sender_name'], row['sender_add'], row['type_num'], 
                                     row['o_title'], row['o_url'], row['o_alias'], user, source)
                 quarantined.append(q_event)
-            except:
+            except (sqlite3.Error, KeyError):
                 log.exception('Error fetching row data')
-    except:
+    except sqlite3.Error:
         log.exception('Query  execution failed. Query was: ' + query)
 
 def OpenDb(inputPath):
@@ -95,7 +94,7 @@ def OpenDb(inputPath):
         conn = sqlite3.connect(inputPath)
         log.debug ("Opened database successfully")
         return conn
-    except:
+    except sqlite3.Error:
         log.exception ("Failed to open database, is it a valid DB?")
     return None
 
@@ -107,9 +106,9 @@ def OpenDbFromImage(mac_info, inputPath, user):
         conn = sqlite.connect(inputPath)
         log.debug ("Opened database successfully")
         return conn, sqlite
-    except Exception as ex:
+    except sqlite3.Error as ex:
         log.exception ("Failed to open database, is it a valid DB?")
-    return None
+    return None, None
 
 def ProcessDbFromPath(mac_info, quarantined, source_path, user):
     if mac_info.IsValidFilePath(source_path):
@@ -127,37 +126,44 @@ def ReadLastGKRejectPlist(plist):
     if bookmark_data:
         bm = Bookmark.from_bytes(bookmark_data)
         file_path = ''
+        file_creation_date = None
         vol_path = ''
+        vol_creation_date = None
         orig_vol_path = ''
+        orig_vol_creation_date = None
         try:
             # Get full file path
             vol_path = bm.tocs[0][1].get(BookmarkKey.VolumePath, '')
+            vol_creation_date = bm.tocs[0][1].get(BookmarkKey.VolumeCreationDate, '')
             file_path = bm.tocs[0][1].get(BookmarkKey.Path, [])
 
             file_path = '/' + '/'.join(file_path)
+            file_creation_date = bm.tocs[0][1].get(BookmarkKey.FileCreationDate, '')
             if vol_path and (not file_path.startswith(vol_path)):
                 file_path += vol_path
             
             # If file is on a mounted volume (dmg), get the dmg file details too
             orig_vol_bm = bm.tocs[0][1].get(BookmarkKey.VolumeBookmark, None)
             if orig_vol_bm:
-                filtered = filter(lambda x: x[0]==orig_vol_bm, bm.tocs)
+                filtered = list(filter(lambda x: x[0]==orig_vol_bm, bm.tocs))
                 if filtered:
                     orig_vol_toc = filtered[0][1]
                     orig_vol_path = orig_vol_toc.get(BookmarkKey.Path, '')
+                    orig_vol_creation_date = orig_vol_toc.get(BookmarkKey.VolumeCreationDate, '')
                     if orig_vol_path:
                         orig_vol_path = '/' + '/'.join(orig_vol_path)
+                        log.info
                 else:
                     print ("Error, tid {} not found ".format(orig_vol_bm))
-        except:
-            log.error('Error processing BookmarkData from .LastGKReject')
+        except (IndexError, ValueError):
+            log.exception('Error processing BookmarkData from .LastGKReject')
             log.debug(bm)
 
-        log.info('.LastGKReject -> File   = {}'.format(file_path))
+        log.info('.LastGKReject -> File   = {} Created = {}'.format(file_path, file_creation_date))
         if vol_path:
-            log.info('.LastGKReject -> Volume = {}'.format(vol_path))
+            log.info('.LastGKReject -> Volume = {} Created = {}'.format(vol_path, vol_creation_date))
         if orig_vol_path:
-            log.info('.LastGKReject -> Orininating Volume = {}'.format(orig_vol_path))
+            log.info('.LastGKReject -> Orininating Volume = {} Created = {}'.format(orig_vol_path, orig_vol_creation_date))
 
     if mal_type:
         # According to Patrick Wardle (Synack)

@@ -6,8 +6,7 @@
    terms of the MIT License.
    
 '''
-from __future__ import print_function
-from __future__ import unicode_literals
+
 import os
 import logging
 import biplist
@@ -57,7 +56,7 @@ def ReadInstallHistoryPlist(plist, history):
             inst = InstalledItem()
             inst.ReadInstallHistory(item)
             history.append(inst)
-    except Exception as ex:
+    except ValueError as ex:
         log.info('Error reading plist, error was: {}'.format(str(ex)))
 
 def ParseInstallHistoryFile(input_file):
@@ -65,7 +64,7 @@ def ParseInstallHistoryFile(input_file):
     try:
         plist = readPlist(input_file)
         ReadInstallHistoryPlist(plist, history)
-    except (InvalidPlistException, NotBinaryPlistException) as e:
+    except InvalidPlistException as e:
         log.error ("Could not open plist, error was : " + str(e) )
     return history
 

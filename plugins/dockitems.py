@@ -10,8 +10,6 @@
    Reads the dock plist file for each user.
 
 '''
-from __future__ import print_function
-from __future__ import unicode_literals
 
 import logging
 from biplist import *
@@ -35,11 +33,11 @@ log = logging.getLogger('MAIN.' + __Plugin_Name) # Do not rename or remove this 
 class DockItem:
     def __init__(self, file_label, parent_mod_date, file_mod_date, file_type, file_data, guid, user, source_path):
         self.file_label = file_label
-        if parent_mod_date > 0xFFFFFFFF: # On High Sierra and above..
+        if parent_mod_date and (parent_mod_date > 0xFFFFFFFF): # On High Sierra and above..
             parent_mod_date = parent_mod_date & 0xFFFFFFFF # Killing upper 32 bits!
                                                            # Upper 32 bits maybe the finer resolution (microseconds?).
 
-        if file_mod_date > 0xFFFFFFFF: # On High Sierra and above..
+        if file_mod_date and (file_mod_date > 0xFFFFFFFF): # On High Sierra and above..
             file_mod_date = file_mod_date & 0xFFFFFFFF # Killing upper 32 bits!
 
         self.parent_mod_date = CommonFunctions.ReadMacHFSTime(parent_mod_date)
@@ -73,7 +71,11 @@ def PrintAll(docks, output_params, input_path=''):
 
 def GetPath(file_data):
     if file_data:
-        return file_data.get("_CFURLString", "")
+        path = file_data.get("_CFURLString", "")
+        if path.startswith("file://"):
+            return path[7:]
+        else:
+            return path
     return ""
 
 def GetDockItemsPlistFromImage(mac_info, plist_path):
@@ -103,7 +105,7 @@ def ParseDockItemsPlist(plist, docks, user_name, plist_path):
                         docks.append(instance)
                     else:
                         log.warning('No tile-data found!! Perhaps a newer format?')
-            except:
+            except ValueError:
                 log.exception("Exception while processing {}".format(key))
         else:
             log.debug('Key {} not found!'.format(key))
@@ -137,7 +139,7 @@ def ReadDockPlistFile(input_file, docks):
     try:
         plist = readPlist(input_file)
         ParseDockItemsPlist(plist, docks, '', input_file)
-    except (InvalidPlistException, NotBinaryPlistException) as e:
+    except InvalidPlistException as e:
         log.error ("Could not open plist, error was : " + str(e) )
 
 def Plugin_Start_Standalone(input_files_list, output_params):

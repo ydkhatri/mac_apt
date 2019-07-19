@@ -6,11 +6,11 @@
    terms of the MIT License.
 
 '''
-from __future__ import print_function
-from __future__ import unicode_literals
 
-from helpers.macinfo import *
-from helpers.writer import *
+
+
+from plugins.helpers.macinfo import *
+from plugins.helpers.writer import *
 import logging
 import zlib
 import struct
@@ -126,7 +126,7 @@ def PrintAll(logs, output_params):
 def GetEventFlagsString(flags, flag_values):
     '''Get string names of all flags set'''
     list_flags = []
-    for k, v in flag_values.items():
+    for k, v in list(flag_values.items()):
         if (k & flags) != 0:
             list_flags.append(v)
     return '|'.join(list_flags)
@@ -137,16 +137,20 @@ def ReadCString(buffer, buffer_size, start_pos):
     Returns tuple (string, end_pos)
     '''
     end_pos = start_pos
-    string = b""
+    string = ""
     ch = ''
     while end_pos < buffer_size:
-        ch = buffer[end_pos]
-        if ch == b'\x00':
+        ch = str(chr(buffer[end_pos]))
+
+        if ch == '\x00':
             break
         else:
             end_pos += 1
             string += ch
-    return string.decode('utf-8'), end_pos + 1
+    x = string
+    y = string.encode("utf-8", "backslashreplace")
+
+    return string, end_pos + 1
 
 def ParseData(buffer, logs, source_date, source):
     '''Process buffer to extract log data and return number of logs processed'''
@@ -157,11 +161,12 @@ def ParseData(buffer, logs, source_date, source):
         return
     
     header_sig, unknown, file_size = struct.unpack("<4sII", buffer[0:12])
-    is_version2 = (header_sig == '2SLD') 
-    is_version_unknown = (not is_version2) and (header_sig != '1SLD')
+    #Changed header_sig encoding so that it would actually match true against a string
+    is_version2 = (str(header_sig, 'utf-8') == '2SLD')
+    is_version_unknown = (not is_version2) and (str(header_sig, 'utf-8') != '1SLD')
 
     if is_version_unknown:
-        log.debug("Unsupported version, header = {}".format(header_sig))
+        log.debug("Unsupported version, header = {}".format(str(header_sig)))
         return
     
     pos = 12
@@ -183,7 +188,7 @@ def ParseData(buffer, logs, source_date, source):
                 pos += 12
                 num_logs_processed += 1
                 logs.append([log_id, log_event_flag, log_filepath, None, source_date, source])
-    except:
+    except (ValueError, IndexError, struct.error):
         log.exception('Error processing stream from file {}, stream pos was {}'.format(source, pos))
     return num_logs_processed
 
@@ -213,7 +218,7 @@ def ProcessFile(file_name, f, logs, source_date, source):
             uncompressed_data  += uncompressed_data_temp
             uncompressed_count += len(uncompressed_data_temp)
         log.debug ("decompressed={} bytes from gzip ({}) at pos={}".format(uncompressed_count, file_name, gzip_start))
-    except:
+    except zlib.error:
         log.exception("Error trying to decompress file {}".format(source))
     if uncompressed_data:
         num_logs_processed_this_file += ParseData(uncompressed_data, logs, source_date, source)
@@ -255,8 +260,11 @@ def Plugin_Start_Standalone(input_files_list, output_params):
                 pass
             else:
                 path = os.path.join(input_path, file_name)
-                with open(path, 'rb') as f:
-                    ProcessFile(file_name, f, logs, CommonFunctions.ReadUnixTime(os.path.getmtime(path)), path)
+                try:
+                    with open(path, 'rb') as f:
+                        ProcessFile(file_name, f, logs, CommonFunctions.ReadUnixTime(os.path.getmtime(path)), path)
+                except (IOError, OSError):
+                    log.exception('Failed to open file for reading: ' + path)
         if len(logs) > 0:
             PrintAll(logs, output_params)
             log.info("The source_date field on the fsevents are from the individual file modified date "\

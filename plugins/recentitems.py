@@ -6,21 +6,20 @@
    terms of the MIT License.
    
 '''
-from __future__ import print_function
-from __future__ import unicode_literals
+
 import os
 import biplist
 import sys
 import logging
 import struct
-import helpers.ccl_bplist as ccl_bplist
+import plugins.helpers.ccl_bplist as ccl_bplist
 
 from biplist import *
 from enum import IntEnum
 from binascii import unhexlify
-from helpers.macinfo import *
-from helpers.plist_deserializer import *
-from helpers.writer import *
+from plugins.helpers.macinfo import *
+from plugins.helpers.plist_deserializer import *
+from plugins.helpers.writer import *
 
 
 __Plugin_Name = "RECENTITEMS"
@@ -73,15 +72,15 @@ class RecentItem:
         def ReadData(self, bookmark):
             try:
                 if self.Type == 0x0101: # UTF8 string
-                    self.Data = bookmark[self.Pos + 8:self.Pos + 8 + self.Size].decode('utf-8')
+                    self.Data = bookmark[self.Pos + 8:self.Pos + 8 + self.Size].decode('utf-8', 'backslashreplace')
                 elif self.Type == 0x0901: # UTF8 string for URL
-                    self.Data = bookmark[self.Pos + 8:self.Pos + 8 + self.Size].decode('utf-8')
+                    self.Data = bookmark[self.Pos + 8:self.Pos + 8 + self.Size].decode('utf-8', 'backslashreplace')
                 elif self.Type == 0x0601:
-                    num = self.Size / 4
+                    num = self.Size // 4
                     self.Data = struct.unpack("<{}L".format(num), bookmark[self.Pos + 8:self.Pos + 8 + self.Size]) # array is returned
                 elif self.Type == 0x0303: # uint
                     self.Data = struct.unpack("<L", bookmark[self.Pos + 8:self.Pos + 8 + self.Size])[0]
-            except Exception as ex:
+            except (IndexError, ValueError, struct.error) as ex:
                 log.error('Problem reading Bookmark data, exception was: {}'.format(str(ex)))
 
     def __init__(self, name, url, info, source, recent_type, user):
@@ -144,18 +143,18 @@ class RecentItem:
                 if data_size > 0:
                     try:
                         if tag in (0, 2, 3, 4, 5, 6):
-                            data = alias[pos + 4:pos + 4 + data_size].decode('utf-8')
+                            data = alias[pos + 4:pos + 4 + data_size].decode('utf-8', 'backslashreplace')
                             log.debug('Tag={} Data={}'.format(tag, data))
                         elif tag == 0x9: # Network mount information
                             if fs_type != 'H+': # Format is unknown for this!
                                 data = alias[pos + 6:pos + 6 + data_size-2]
                                 protocol = data[0:4].decode('utf-8')
-                                url = data[10:].decode('utf-8')
+                                url = data[10:].decode('utf-8').rstrip('\x00')
                                 self.URL = url
                                 log.debug('Tag={} Protocol={} Url={}'.format(tag, protocol, url))
                                 return
                         elif tag == 0xE: # Unicode filename of target
-                            data = alias[pos + 6:pos + 6 + data_size - 2].decode('utf-16be')
+                            data = alias[pos + 6:pos + 6 + data_size - 2].decode('utf-16be', 'backslashreplace')
                             log.debug('Tag={} Data={}'.format(tag, data))
                         elif tag == 0xF: # Unicode volume name
                             data = alias[pos + 6:pos + 6 + data_size - 2].decode('utf-16be')
@@ -173,12 +172,12 @@ class RecentItem:
                             break
                         else:
                             log.debug('Skipped tag {} data_size={}'.format(tag, data_size))
-                    except:
+                    except (IndexError, UnicodeDecodeError, ValueError):
                         log.exception('Exception in while loop parsing alias v2')
                 pos += 4 + data_size
                 if data_size % 2 != 0:
                     pos += 1
-        except:
+        except (IndexError, UnicodeDecodeError, ValueError, struct.error):
             log.exception('Exception while processing data in Alias_v2 field')
 
     ''' ALIAS V3 format
@@ -246,12 +245,12 @@ class RecentItem:
                             break
                         else:
                             log.debug('Skipped tag {} data_size = '.format(tag, data_size))
-                    except:
+                    except (IndexError, ValueError):
                         log.exception('Exception in while loop parsing alias v3')
                 pos += 4 + data_size
                 if data_size % 2 != 0:
                     pos += 1
-        except:
+        except (IndexError, ValueError, struct.error):
             log.exception('Exception while processing data in Alias_v3 field')
 
     def ReadAlias(self, alias):
@@ -268,11 +267,11 @@ class RecentItem:
                 return
             if size > 0x200: return # likely non-standard, below method won't work!
             pos = size - 6 # alias ends with ...relevant_data.. 00 FF FF 00 00
-            if alias[pos] == b'\x00': pos -= 1
+            if alias[pos] == 0x00: pos -= 1
             reached_start = False
             data = b'\x00'
             while (pos > 0x3B and not reached_start):
-                if alias[pos] == b'\x00':
+                if alias[pos] == 0x00:
                     reached_start = True
                 else:
                     data = alias[pos] + data
@@ -283,7 +282,7 @@ class RecentItem:
                 #self.URL.translate(None, '\x09\x00')
             else:
                 log.error('Something went wrong! Could not read alias data!')
-        except Exception as ex:
+        except (IndexError, ValueError, struct.error):
             log.exception('Exception while processing data in Alias field')
 
     def ReadBookmark(self, bookmark):
@@ -340,7 +339,7 @@ class RecentItem:
                         self.URL = url
                         return
             
-        except Exception as ex:
+        except (IndexError, ValueError, struct.error) as ex:
             log.exception('Exception while processing data in Bookmark field')
 
 def PrintAll(recent_items, output_params, source_path):
@@ -350,7 +349,13 @@ def PrintAll(recent_items, output_params, source_path):
 
     data_list = []
     for item in recent_items:
-        data_list.append( [ str(item.Type), item.Name, item.URL, item.Info, item.User, item.Source ] )
+        url = item.URL
+        if url.startswith('file://'):
+            url = url[7:]
+        name = item.Name
+        if name.startswith('file://'):
+            name = name[7:]
+        data_list.append( [ str(item.Type), name, url, item.Info, item.User, item.Source ] )
 
     WriteList("Recent item information", "RecentItems", data_list, recent_info, output_params, source_path)
 
@@ -364,7 +369,7 @@ def ParseRecentFile(input_file):
                     ReadSFLPlist(f, recent_items, input_file, '')
                 else: #SFL2
                     ReadSFL2Plist(f, recent_items, input_file, '')
-        except Exception as ex:
+        except (IOError, OSError) as ex:
             log.exception('Failed to open file: {}'.format(input_file))
     elif basename.endswith('.plist'):
         try:
@@ -377,7 +382,7 @@ def ParseRecentFile(input_file):
                 ReadSidebarListsPlist(plist, recent_items, input_file)
             else:
                 ReadRecentPlist(plist, recent_items, input_file)
-        except:
+        except (OSError, InvalidPlistException):
             log.exception ("Could not open plist {}".format(input_file))
     else:
         log.info ('Unknown file: {} '.format(basename))
@@ -387,77 +392,70 @@ def ParseRecentFile(input_file):
 def ReadSidebarListsPlist(plist, recent_items, source, user=''):
     try:
         volumes = plist['systemitems']['VolumesList']
-        try:
-            for vol in volumes:
-                name = vol.get('Name', '')
-                type = str(vol.get('EntryType', ''))
-                ri = RecentItem(name, '', 'EntryType='+ type, source, RecentType.VOLUME, user)
-                recent_items.append(ri)
-                alias = vol.get('Alias', None)
-                if alias:
-                    alias = ri.ReadAlias(alias)
-        except:
-            log.exception('Error reading systemitems.VolumesList from sidebar plist')
-    except:
+        for vol in volumes:
+            name = vol.get('Name', '')
+            type = str(vol.get('EntryType', ''))
+            ri = RecentItem(name, '', 'EntryType='+ type, source, RecentType.VOLUME, user)
+            recent_items.append(ri)
+            alias = vol.get('Alias', None)
+            if alias:
+                alias = ri.ReadAlias(alias)
+    except KeyError:
         pass # Not found!
     try:
         servers = plist['favoriteservers']['CustomListItems']
-        try:
-            for server in servers:
-                name = server.get('Name', '')
-                url  = server.get('URL', '')
-                ri = RecentItem(name, url, 'favoriteservers', source, RecentType.SERVER, user)
-                recent_items.append(ri)
-        except:
-            log.exception('Error reading favoriteservers.CustomListItems from sidebar plist')
-    except:
+        for server in servers:
+            name = server.get('Name', '')
+            url  = server.get('URL', '')
+            ri = RecentItem(name, url, 'favoriteservers', source, RecentType.SERVER, user)
+            recent_items.append(ri)
+    except KeyError:
         pass # Not found!
 
 def ReadFinderPlist(plist, recent_items, source, user=''):
     ReadFinderBulkRenameSettings(plist, recent_items, source, user)
     ReadFinderRecentMoveCopyDest(plist, recent_items, source, user)
     ReadFinderGotoHistory(plist, recent_items, source, user)
-    try:
-        vol_dict = plist['FXDesktopVolumePositions']
+
+    vol_dict = plist.get('FXDesktopVolumePositions', [])
+    for vol in vol_dict:
         try:
-            for vol in vol_dict:
-                vol_name = vol
-                valid_date = ''
-                
-                last_underscore_pos = vol.rfind('_')
-                if last_underscore_pos > 0:
-                    vol_name = vol[0:last_underscore_pos]
-                    vol_date = vol[last_underscore_pos+1:]
-                    vol_date_int = 0
-                    try: 
-                        vol_date_int = int(float.fromhex(vol_date))
-                    except:
-                        log.error('Failed to convert {} to int'.format(vol_date))
-                    if vol_date_int != 0:
-                        valid_date = CommonFunctions.ReadMacAbsoluteTime(vol_date_int)
-                ri = RecentItem(vol_name, vol, 'FXDesktopVolumePositions' + ((', vol_created_date=' + str(valid_date)) if valid_date != '' else ''), source, RecentType.VOLUME, user)
-                recent_items.append(ri)
-        except Exception as ex:
+            vol_name = vol
+            valid_date = ''
+            
+            last_underscore_pos = vol.rfind('_')
+            if last_underscore_pos > 0:
+                vol_name = vol[0:last_underscore_pos]
+                vol_date = vol[last_underscore_pos+1:]
+                vol_date_int = 0
+                try: 
+                    vol_date_int = int(float.fromhex(vol_date))
+                except ValueError:
+                    log.error('Failed to convert {} to int'.format(vol_date))
+                if vol_date_int != 0:
+                    valid_date = CommonFunctions.ReadMacAbsoluteTime(vol_date_int)
+            ri = RecentItem(vol_name, vol, 'FXDesktopVolumePositions' + ((', vol_created_date=' + str(valid_date)) if valid_date != '' else ''), source, RecentType.VOLUME, user)
+            recent_items.append(ri)
+        except ValueError as ex:
             log.exception('Error reading FXDesktopVolumePositions from plist')   
-    except: # Not found
-        pass    
+    
     try:
         last_connected_url = plist['FXConnectToLastURL']
         ri = RecentItem('', last_connected_url, 'FXConnectToLastURL', source, RecentType.SERVER, user)
         recent_items.append(ri)
-    except: # Not found
+    except KeyError: # Not found
         pass
     try:
         last_dir = plist['NSNavLastRootDirectory']
         ri = RecentItem('', last_dir, 'NSNavLastRootDirectory', source, RecentType.PLACE, user)
         recent_items.append(ri)
-    except: # Not found
+    except KeyError: # Not found
         pass
     try:
         last_dir = plist['NSNavLastCurrentDirectory']
         ri = RecentItem('', last_dir, 'NSNavLastCurrentDirectory', source, RecentType.PLACE, user)
         recent_items.append(ri)
-    except: # Not found
+    except KeyError: # Not found
         pass
     try:
         recent_folders = plist['FXRecentFolders']
@@ -478,9 +476,9 @@ def ReadFinderPlist(plist, recent_items, source, user=''):
                     else:
                         log.error('Could not find file-bookmark or file-data in FXRecentFolders item:{}'.format(ri.Name))
                 recent_items.append(ri)
-        except Exception as ex:
+        except (KeyError, ValueError) as ex:
             log.exception('Error reading FXRecentFolders from plist')   
-    except: # Not found
+    except KeyError: # Not found
         pass
 
 def ReadFinderRecentMoveCopyDest(plist, recent_items, source, user=''):
@@ -524,9 +522,9 @@ def ReadGlobalPrefPlist(plist, recent_items, source='', user=''):
             for place in recent_places:
                 ri = RecentItem('', place, 'NSNavRecentPlaces', source, RecentType.PLACE, user)
                 recent_items.append(ri)
-        except Exception as ex:
+        except (KeyError, ValueError) as ex:
             log.exception('Error reading NSNavRecentPlaces from plist')   
-    except: # Not found
+    except KeyError: # Not found
         pass
     try:
         recent_searches = plist['SGTRecentFileSearches']
@@ -534,57 +532,54 @@ def ReadGlobalPrefPlist(plist, recent_items, source='', user=''):
             for search in recent_searches:
                 ri = RecentItem(search['name'], '', 'SGTRecentFileSearches:' + search['type'],  source, RecentType.SEARCH, user)
                 recent_items.append(ri)
-        except Exception as ex:
+        except (KeyError, ValueError) as ex:
             log.exception('Error reading SGTRecentFileSearches from plist')
 
-    except: # Not found
+    except KeyError: # Not found
         pass
 
 def ReadRecentPlist(plist, recent_items, source='', user=''):
-    try:
-        for item_type in plist:
-            if  item_type == 'Hosts':
-                try:
-                    for item in plist['Hosts']['CustomListItems']:
-                        ri = RecentItem(item['Name'], item['URL'], '', source, RecentType.HOST, user)
-                        recent_items.append(ri)
-                except Exception as ex:
-                    log.error('Error reading Hosts from plist, error was {}'.format(str(ex)))
-            elif item_type == 'RecentApplications':
-                try:
-                    for item in plist['RecentApplications']['CustomListItems']:
-                        ri = RecentItem(item['Name'], '', '', source, RecentType.APPLICATION, user)
-                        recent_items.append(ri)
-                except Exception as ex:
-                    log.error('Error reading RecentApplications from plist, error was {}'.format(str(ex)))
-            elif item_type == 'RecentDocuments':
-                try:
-                    for item in plist['RecentDocuments']['CustomListItems']:
-                        ri = RecentItem(item['Name'], '', '', source, RecentType.DOCUMENT, user)
-                        ri.ReadBookmark(item['Bookmark'])                        
-                        recent_items.append(ri)
-                except Exception as ex:
-                    log.error('Error reading RecentDocuments from plist, error was {}'.format(str(ex)))
-            elif item_type == 'RecentServers':
-                try:
-                    for item in plist['RecentServers']['CustomListItems']:
-                        ri = RecentItem(item['Name'], '', '', source, RecentType.SERVER, user)
-                        data = item.get('Alias', None) 
-                        if data == None: # Yosemite onwards it is a bookmark!
-                            data = item.get('Bookmark', None)
-                            if data == None:
-                                log.error('Could not find Bookmark or Alias to read in RecentServers for name={}!'.format(ri.Name))
-                            else:
-                                ri.ReadBookmark(data)
+    for item_type in plist:
+        if  item_type == 'Hosts':
+            try:
+                for item in plist['Hosts']['CustomListItems']:
+                    ri = RecentItem(item['Name'], item['URL'], '', source, RecentType.HOST, user)
+                    recent_items.append(ri)
+            except KeyError as ex:
+                log.error('Error reading Hosts from plist, error was {}'.format(str(ex)))
+        elif item_type == 'RecentApplications':
+            try:
+                for item in plist['RecentApplications']['CustomListItems']:
+                    ri = RecentItem(item['Name'], '', '', source, RecentType.APPLICATION, user)
+                    recent_items.append(ri)
+            except KeyError as ex:
+                log.error('Error reading RecentApplications from plist, error was {}'.format(str(ex)))
+        elif item_type == 'RecentDocuments':
+            try:
+                for item in plist['RecentDocuments']['CustomListItems']:
+                    ri = RecentItem(item['Name'], '', '', source, RecentType.DOCUMENT, user)
+                    ri.ReadBookmark(item['Bookmark'])                        
+                    recent_items.append(ri)
+            except KeyError as ex:
+                log.error('Error reading RecentDocuments from plist, error was {}'.format(str(ex)))
+        elif item_type == 'RecentServers':
+            try:
+                for item in plist['RecentServers']['CustomListItems']:
+                    ri = RecentItem(item['Name'], '', '', source, RecentType.SERVER, user)
+                    data = item.get('Alias', None) 
+                    if data == None: # Yosemite onwards it is a bookmark!
+                        data = item.get('Bookmark', None)
+                        if data == None:
+                            log.error('Could not find Bookmark or Alias to read in RecentServers for name={}!'.format(ri.Name))
                         else:
-                            ri.ReadAlias(data)
-                        recent_items.append(ri)
-                except Exception as ex:
-                    log.error('Error reading RecentServers from plist, error was {}'.format(str(ex)))
-            else:
-                log.info("Found unknown item {} in plist".format(item_type))
-    except Exception as ex:
-        log.exception('Error reading plist')
+                            ri.ReadBookmark(data)
+                    else:
+                        ri.ReadAlias(data)
+                    recent_items.append(ri)
+            except KeyError as ex:
+                log.error('Error reading RecentServers from plist, error was {}'.format(str(ex)))
+        else:
+            log.info("Found unknown item {} in plist".format(item_type))
 
 def ReadSFL2Plist(file_handle, recent_items, source, user=''):
     basename = os.path.basename(source).lower()
@@ -610,7 +605,7 @@ def ReadSFL2Plist(file_handle, recent_items, source, user=''):
                         ri.ReadBookmark(data)
                 else:
                     ri.ReadBookmark(data)
-    except:
+    except(KeyError, ValueError, ccl_bplist.BplistError):
         log.exception('Error reading SFL2 plist')
 
 def ReadSFLPlist(file_handle, recent_items, source, user=''):
@@ -629,10 +624,9 @@ def ReadSFLPlist(file_handle, recent_items, source, user=''):
             url = ''
             name = ''
             try: url = item['URL']['NS.relative']
-            except: pass
+            except KeyError: pass
             if url.find('x-apple-findertag') == 0: continue # skipping these items
-            try: name = item['name']
-            except: pass
+            name = item.get('name', '')
             if name or url:
                 recent_type = RecentType.UNKNOWN
                 if basename.find('recentservers') >=0 : recent_type = RecentType.SERVER
@@ -649,7 +643,7 @@ def ReadSFLPlist(file_handle, recent_items, source, user=''):
                 #     #print "bookmark bytes=", len(bm)
                 # except:
                 #     pass # Not everything has bookmarks
-    except Exception as ex:
+    except (ccl_bplist.BplistError, ValueError, TypeError) as ex:
         log.exception('Error reading SFL plist')
 
 def ProcessSFLFolder(mac_info, user_path, recent_items):

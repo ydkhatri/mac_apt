@@ -13,9 +13,6 @@
    <YourOutputFolder>/Exports/IDEVICEBACKUPS/<USER>_<BACKUP_UUID>
 '''
 
-from __future__ import print_function
-from __future__ import unicode_literals
-
 from helpers.macinfo import *
 from helpers.writer import *
 from helpers.common import *
@@ -172,27 +169,27 @@ def ReadApps(applications_dict):
         if plist_string:
             try:
                 plist = readPlistFromString(plist_string)
-                app_name = plist.get('itemName')
+                app_name = plist.get('itemName', None)
                 if app_name:
                     apps.append(app_name)
-            except:
+            except InvalidPlistException:
                 log.debug('Failed to read embedded plist for {}'.format(k))
     return apps
 
 def ReadBackupsStandalone(info_plist_path, status_plist_path, manifest_plist_path, backups, source):
     try:
         info_plist = readPlist(info_plist_path)
-    except:
+    except (InvalidPlistException, IOError, OSError):
         log.exception("Failed to read Info.plist from path {}".format(info_plist_path))
         info_plist = {}
     try:
         status_plist = readPlist(status_plist_path)
-    except:
+    except (InvalidPlistException, IOError, OSError):
         log.exception("Failed to read Status.plist from path {}".format(status_plist_path))
         status_plist = {}
     try:
         manifest_plist = readPlist(manifest_plist_path)
-    except:
+    except (InvalidPlistException, IOError, OSError):
         log.exception("Failed to read Manifest.plist from path {}".format(manifest_plist_path))
         manifest_plist = {}
 

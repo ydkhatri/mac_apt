@@ -6,21 +6,18 @@
    terms of the MIT License.
    
 '''
-from __future__ import print_function
-from __future__ import unicode_literals
+
+import logging
 import os
 import sqlite3
-import logging
-from helpers.macinfo import *
-from helpers.writer import *
-from helpers.common import *
-
-
+from plugins.helpers.common import *
+from plugins.helpers.macinfo import *
+from plugins.helpers.writer import *
 
 __Plugin_Name = "BASICINFO" 
 __Plugin_Friendly_Name = "Basic machine and OS configuration"
 __Plugin_Version = "0.1"
-__Plugin_Description = "Gets basic machine and OS configuration like SN, timezone, computer name, last logged in user, HFS info, etc.."
+__Plugin_Description = "Gets basic machine and OS configuration like SN, timezone, computer name, last logged in user, FS info, etc.."
 __Plugin_Author = "Yogesh Khatri"
 __Plugin_Author_Email = "yogesh@swiftforensics.com"
 
@@ -50,9 +47,12 @@ def GetVolumeInfo(mac_info):
         basic_data.append(['APFS', 'Size Used (GB)', used_space, 'Space allocated', ''])
         basic_data.append(['APFS', 'Total Files', vol.num_files, 'Total number of files', ''])
         basic_data.append(['APFS', 'Total Folders', vol.num_folders, 'Total number of directories/folders', ''])
+        basic_data.append(['APFS', 'Total Symlinks', vol.num_symlinks, 'Total number of symbolic links', ''])
+        basic_data.append(['APFS', 'Total Snapshots', vol.num_snapshots, 'Total number of snapshots', ''])
         basic_data.append(['APFS', 'Created Time', CommonFunctions.ReadAPFSTime(vol.time_created), 'Created date and time', ''])
         basic_data.append(['APFS', 'Updated Time', CommonFunctions.ReadAPFSTime(vol.time_updated), 'Last updated date and time', ''])
     else:
+
         hfs_info = mac_info.hfs_native.GetVolumeInfo()
         basic_data.append(['HFS', 'Block Size', hfs_info.block_size,'Volume Block size (internal)', ''])
         basic_data.append(['HFS', 'Created date', hfs_info.date_created_local_time,'Volume created date (in local time)', ''])
@@ -81,14 +81,13 @@ def ReadSerialFromDb(mac_info, source):
                         serial_number = row[0] # Was row['SerialNumber'] but sqlite has issues with unicode, so removed it.
                         if len(serial_number) > 1: found_serial = True
                         break;
-                except Exception as ex:
-                    log.error ("Db cursor error while reading file " + source)
-                    log.exception("Exception Details")
+                except sqlite3.Error as ex:
+                    log.exception("Db cursor error while reading file " + source)
                 
-            except Exception as ex:
+            except sqlite3.Error as ex:
                 log.error ("Sqlite error - \nError details: \n" + str(ex))
             conn.close()
-        except Exception as ex:
+        except sqlite3.Error as ex:
             log.error ("Failed to open {} database, is it a valid Notification DB? Error details: ".format(os.path.basename(source)) + str(ex))
     else:
         log.debug("File not found: {}".format(source))
@@ -126,28 +125,38 @@ def GetTimezone(mac_info):
                 data = plist['com.apple.preferences.timezone.selected_city'][item]
                 basic_data.append(['TIMEZONE', 'SelectedCity.' + item, data, '', global_pref_plist_path])
                 num_items_read += 1
-            except Exception: pass
-        if num_items_read < 2:
+            except KeyError: pass
+        if num_items_read < 2 and (mac_info.GetVersionDictionary()['minor'] < 12): # Not seen in later versions! 
             log.info('Only read {} items from TimeZone.SelectedCity, this does not seem right!'.format(num_items_read))
     else:
         log.error('Failed to read plist ' + global_pref_plist_path + " Error was : " + error_message)
 
     # Read /private/etc/localtime --> /usr/share/zoneinfo/xxxxxxx
-    f = mac_info.OpenSmallFile('/private/etc/localtime')
-    if f:
-        try:
-            data = f.read(128).decode('utf8')
-            if data.startswith('/usr/share/zoneinfo'):
-                data = data[20:]
-            elif data.startswith('/var/db/timezone/zoneinfo/'): # on HighSierra
-                data = data[26:]
-            data = data.rstrip('\x00')
-            basic_data.append(['TIMEZONE', 'TimeZone Set', data, 'Timezone on machine', '/private/etc/localtime'])
-        except:
-            # if mounted on local system, this will resolve to the actual file and throw exception, we just wanted the symlink path!
-            log.warning('Could not read file /private/etc/localtime. If this you are parsing local system using MOUNTED option this is normal!')
-    else:
-        log.error('Could not open file /private/etc/localtime to read timezone information')
+    try:
+        tz_symlink_path = mac_info.ReadSymLinkTargetPath('/private/etc/localtime')
+        if tz_symlink_path.startswith('/usr/share/zoneinfo'):
+            tz_symlink_path = tz_symlink_path[20:]
+        elif tz_symlink_path.startswith('/var/db/timezone/zoneinfo/'): # on HighSierra
+            tz_symlink_path = tz_symlink_path[26:]
+        basic_data.append(['TIMEZONE', 'TimeZone Set', tz_symlink_path, 'Timezone on machine', '/private/etc/localtime'])
+    except (IndexError, ValueError) as ex:
+        log.error('Error trying to read timezone information - ' + str(ex))
+
+    # f = mac_info.OpenSmallFile('/private/etc/localtime')
+    # if f:
+    #     try:
+    #         data = f.read(128).decode('utf8')
+    #         if data.startswith('/usr/share/zoneinfo'):
+    #             data = data[20:]
+    #         elif data.startswith('/var/db/timezone/zoneinfo/'): # on HighSierra
+    #             data = data[26:]
+    #         data = data.rstrip('\x00')
+    #         basic_data.append(['TIMEZONE', 'TimeZone Set', data, 'Timezone on machine', '/private/etc/localtime'])
+    #     except:
+    #         # if mounted on local system, this will resolve to the actual file and throw exception, we just wanted the symlink path!
+    #         log.warning('Could not read file /private/etc/localtime. If this you are parsing local system using MOUNTED option this is normal!')
+    # else:
+    #     log.error('Could not open file /private/etc/localtime to read timezone information')
 
 # Source - /Library/Preferences/com.apple.loginwindow.plist
 # TODO: Perhaps move this to users plugin?
@@ -171,7 +180,7 @@ def GetLastLoggedInUser(mac_info):
                         basic_data.append(['USER-LOGIN', item + '.' +  k, str(v), '?', loginwindow_plist_path])
                 else:
                     basic_data.append(['USER-LOGIN', item, str(value), 'unknown', loginwindow_plist_path])
-        except Exception as ex:
+        except ValueError as ex:
             log.error("Plist parsing error from GetLastLoggedInUser: " + str(ex))
     else:
         log.error('Failed to read plist ' + loginwindow_plist_path + " Error was : " + error_message)
@@ -186,20 +195,20 @@ def GetModelAndHostNameFromPreference(mac_info):
         try: 
             model = plist['Model']
             basic_data.append(['HARDWARE', 'Model', model, 'Mac Hardware Model', preference_plist_path])
-        except Exception: pass
+        except KeyError: pass
         try: 
             hostname = plist['System']['System']['HostName']
             basic_data.append(['SYSTEM', 'HostName', hostname, 'Host Name', preference_plist_path])
-        except Exception: log.info('/System/System/HostName not found in ' + preference_plist_path)
+        except KeyError: log.info('/System/System/HostName not found in ' + preference_plist_path)
         try:
             computername = plist['System']['System']['ComputerName']
             basic_data.append(['SYSTEM', 'ComputerName', computername, '', preference_plist_path])
-        except Exception: log.info('/System/System/ComputerName not found in ' + preference_plist_path)
+        except KeyError: log.info('/System/System/ComputerName not found in ' + preference_plist_path)
         try:
             other_host_names = plist['System']['Network']['HostNames']
-            for k,v in other_host_names.items():
+            for k,v in list(other_host_names.items()):
                 basic_data.append(['SYSTEM', k, v, '', preference_plist_path])
-        except Exception: log.info('/System/Network/HostNames not found in ' + preference_plist_path)
+        except KeyError: log.info('/System/Network/HostNames not found in ' + preference_plist_path)
     else:
         log.error('Failed to read plist ' + preference_plist_path + " Error was : " + error_message)    
     return

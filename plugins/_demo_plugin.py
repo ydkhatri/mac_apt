@@ -11,8 +11,6 @@
    Any plugin that starts with underscore '_' will not be included, so
    remember to remove the underscore to include it into mac_apt.
 '''
-from __future__ import print_function
-from __future__ import unicode_literals
 
 import os
 

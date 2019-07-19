@@ -11,7 +11,7 @@
 #  This module deserializes an NSKeyedArchive plist 
 #
 
-import ccl_bplist
+import plugins.helpers.ccl_bplist as ccl_bplist 
 
 def recurseCreatePlist(plist, root):
     if isinstance(root, dict):

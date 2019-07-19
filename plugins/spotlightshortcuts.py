@@ -6,8 +6,7 @@
    terms of the MIT License.
    
 '''
-from __future__ import print_function
-from __future__ import unicode_literals
+
 import os
 import biplist
 import sys
@@ -15,8 +14,8 @@ import logging
 import struct
 
 from biplist import *
-from helpers.macinfo import *
-from helpers.writer import *
+from plugins.helpers.macinfo import *
+from plugins.helpers.writer import *
 
 __Plugin_Name = "SPOTLIGHTSHORTCUTS"
 __Plugin_Friendly_Name = "Spotlight shortcuts"
@@ -43,7 +42,7 @@ def ParseShortcutFile(input_file, shortcuts):
     try:
         plist = readPlist(input_file)
         ReadShortcutPlist(plist, shortcuts, input_file)
-    except (InvalidPlistException, NotBinaryPlistException) as e:
+    except InvalidPlistException as e:
         log.error ("Could not open plist, error was : " + str(e) )
 
 def ReadSingleShortcutEntry(entry, value, shortcuts, uses_path, source, user):
@@ -52,7 +51,10 @@ def ReadSingleShortcutEntry(entry, value, shortcuts, uses_path, source, user):
         if item == 'DISPLAY_NAME': sc['DisplayName'] = val
         elif item == 'LAST_USED':  sc['LastUsed'] = val
         elif (uses_path and (item == 'PATH')) or (item == 'URL'):
-            sc['URL'] = val
+            path = val
+            if path.startswith('file://'):
+                path = path[7:]
+            sc['URL'] = path
         else:
             log.info("Found unknown item - {}, value={} in plist".format(item, value))
     shortcuts.append(sc)
@@ -67,8 +69,8 @@ def ReadShortcutPlist(plist, shortcuts, source='', user=''):
         else :
             for item, value in plist.items():
                 ReadSingleShortcutEntry(item, value, shortcuts, False, source, user)
-    except Exception as ex:
-        log.exception('Error reading plist')   
+    except ValueError as ex:
+        log.exception('Error reading plist')
     
 def Plugin_Start(mac_info):
     '''Main Entry point function for plugin'''
@@ -77,12 +79,13 @@ def Plugin_Start(mac_info):
     version = mac_info.GetVersionDictionary()
     if version['major'] == 10 and version['minor'] >= 10:
         user_plist_rel_path = '{}/Library/Application Support/com.apple.spotlight.Shortcuts'
-    processed_paths = []
+    processed_paths = set()
     for user in mac_info.users:
         user_name = user.user_name
         if user.home_dir == '/private/var/empty': continue # Optimization, nothing should be here!
         elif user.home_dir == '/private/var/root': user_name = 'root' # Some other users use the same root folder, we will list such all users as 'root', as there is no way to tell
         if user.home_dir in processed_paths: continue # Avoid processing same folder twice (some users have same folder! (Eg: root & daemon))
+        processed_paths.add(user.home_dir)
         source_path = user_plist_rel_path.format(user.home_dir)
         if mac_info.IsValidFilePath(source_path):
             mac_info.ExportFile(source_path, __Plugin_Name, user_name + "_", False)

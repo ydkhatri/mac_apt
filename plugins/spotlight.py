@@ -6,16 +6,15 @@
    terms of the MIT License.
    
 '''
-from __future__ import print_function
-#from __future__ import unicode_literals
+
 import os
 import logging
 import struct
-import helpers.spotlight_parser as spotlight_parser
+from plugins.helpers import spotlight_parser as spotlight_parser
 
 from biplist import *
-from helpers.macinfo import *
-from helpers.writer import *
+from plugins.helpers.macinfo import *
+from plugins.helpers.writer import *
 
 __Plugin_Name = "SPOTLIGHT"
 __Plugin_Friendly_Name = "Spotlight"
@@ -42,20 +41,20 @@ def ProcessStoreItem(item):
         data_dict['Flags'] = item.flags
         data_dict['Parent_ID'] = item.parent_id
         data_dict['Date_Updated'] = item.ConvertEpochToUtcDateStr(item.date_updated)
-        for k, v in item.meta_data_dict.items():
+        for k, v in list(item.meta_data_dict.items()):
             orig_debug = v
             if type(v) == list:
                 if len(v) == 1:
                     v = v[0]
-                    if type(v) in (str, unicode):
+                    if type(v) == str:
                         if v.endswith('\x16\x02'):
                             v = v[:-2]
-                    if type(v) == str: v = v.decode('utf-8')
+                    if type(v) == str: v = v.decode('utf-8', 'backslashreplace')
                 else:
-                    if type(v[0]) == str:
-                        v = ', '.join([x.decode('utf-8') for x in v]) # removes 'u' in string output
-                    else:
-                        v = ', '.join([str(x) for x in v])
+                    #if type(v[0]) == str:
+                    #    v = ', '.join([x.decode('utf-8') for x in v]) # removes 'u' in string output
+                    #else:
+                    v = ', '.join([str(x) for x in v])
             data_dict[k] = v
 
         return data_dict
@@ -78,7 +77,7 @@ def Get_Column_Info(store):
     '''Returns a list of columns with data types for use with writer'''
     data_info = [ ('ID',DataType.INTEGER),('Flags',DataType.INTEGER),('Parent_ID',DataType.INTEGER),
                   ('Date_Updated',DataType.TEXT) ]
-    for _, prop in store.properties.items():
+    for _, prop in list(store.properties.items()):
         # prop = [name, prop_type, value_type]
         if prop[0] in ('_kMDXXXX___DUMMY', 'kMDStoreAccumulatedSizes') : continue # skip this
         if prop[2] in [0, 2, 6, 7]:
@@ -109,7 +108,7 @@ def EnableSqliteDb(output_path, out_params, file_name_prefix):
         out_params.output_db_path = SqliteWriter.CreateSqliteDb(sqlite_path)
         out_params.write_sql = True
         return True
-    except Exception as ex:
+    except (sqlite3.Error, OSError) as ex:
         log.info('Sqlite db could not be created at : ' + sqlite_path)
         log.exception('Exception occurred when trying to create Sqlite db')
     return False
@@ -149,7 +148,7 @@ def ProcessStoreDb(input_file_path, input_file, output_path, output_params, item
                 log.debug ("Trying to write extracted store data for {}".format(file_name_prefix))
                 data_type_info = Get_Column_Info(store)
                 writer = DataWriter(out_params, "Spotlight-" + file_name_prefix, data_type_info, input_file_path)
-            except Exception as ex:
+            except (sqlite3.Error, ValueError, IOError, OSError) as ex:
                 log.exception ("Failed to initilize data writer")
                 return None
 
@@ -162,7 +161,7 @@ def ProcessStoreDb(input_file_path, input_file, output_path, output_params, item
                 fullpath_writer = DataWriter(out_params, "Spotlight-" + file_name_prefix + '-paths', path_type_info, input_file_path)
                 with open(output_path_full_paths, 'wb') as output_paths_file:
                     log.info('Inodes and Path information being written to {}'.format(output_path_full_paths))
-                    output_paths_file.write("Inode_Number\tFull_Path\r\n")
+                    output_paths_file.write(b"Inode_Number\tFull_Path\r\n")
                     if items_to_compare: 
                         items_to_compare.update(items) # This updates items_to_compare ! 
                         WriteFullPaths(items, items_to_compare, output_paths_file, fullpath_writer)
@@ -232,12 +231,12 @@ def WriteFullPaths(items, all_items, output_paths_file, fullpath_writer):
         all_items = dictionary of items to recursively search full paths
     '''
     path_list = []
-    for k,v in items.items():
+    for k,v in list(items.items()):
         name = v[2]
         if name:
             fullpath = spotlight_parser.RecursiveGetFullPath(v, all_items)
             to_write = str(k) + '\t' + fullpath + '\r\n'
-            output_paths_file.write(to_write.encode('utf-8'))
+            output_paths_file.write(to_write.encode('utf-8', 'backslashreplace'))
             path_list.append([k, fullpath])
     fullpath_writer.WriteRows(path_list)
 
@@ -248,9 +247,9 @@ def DropReadme(output_folder, message, filename='Readme.txt'):
             os.makedirs(output_folder)
         output_file_path = os.path.join(output_folder, filename)
         with open(output_file_path, 'wb') as output_file:
-            output_file.write(message + '\r\n')
-    except Exception as ex:
-        log.exception('Exception writing {} file'.format(filename))
+            output_file.write(message.encode('utf-8') + b'\r\n')
+    except OSError as ex:
+        log.exception('Exception writing file - {}'.format(filename))
 
 def ReadVolumeConfigPlistFromImage(mac_info, file_path):
     success, plist, error = mac_info.ReadPlist(file_path)
@@ -272,7 +271,7 @@ def ReadVolumeConfigPlist(plist, output_params, file_path):
     stores = plist.get('Stores', None)
     if stores:
         log.info (str(len(stores)) + " store(s) found")
-        for k, v in stores.items():
+        for k, v in list(stores.items()):
             store_uuid = k
             config = [ store_uuid, v.get('CreationDate', None),
                         v.get('CreationVersion', ''), v.get('IndexVersion', 0),
@@ -394,7 +393,7 @@ def Plugin_Start_Standalone(input_files_list, output_params):
                     output_folder = os.path.join(output_params.output_path, 'SPOTLIGHT_DATA')
                     log.info('Now processing file {}'.format(input_path))
                     ProcessStoreDb(input_path, input_file, output_folder, output_params, None, os.path.basename(input_path), False, False)
-            except:
+            except (OSError, IOError):
                 log.exception('Failed to open input file ' + input_path)
         else:
             log.info("Unknown file type: {}".format(os.path.basename()))

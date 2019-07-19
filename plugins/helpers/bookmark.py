@@ -21,24 +21,7 @@ import uuid
 import datetime
 import os
 import sys
-
-try:
-    from urlparse import urljoin
-except ImportError:
-    from urllib.parse import urljoin # python 3
-
-
-def iteritems(x):
-    return x.iteritems()
-
-try:
-    unicode
-except NameError:
-    unicode = str
-    long = int
-    xrange = range
-    def iteritems(x):
-        return x.items()
+from urllib.parse import urljoin # python 3
 
 BMK_DATA_TYPE_MASK    = 0xffffff00
 BMK_DATA_SUBTYPE_MASK = 0x000000ff
@@ -310,13 +293,13 @@ class Bookmark (object):
                 return URL(base, rel)
         elif dtype == BMK_ARRAY:
             result = []
-            for aoff in xrange(offset+8,offset+8+length,4):
+            for aoff in range(offset+8,offset+8+length,4):
                 eltoff, = struct.unpack(b'<I', data[aoff:aoff+4])
                 result.append(cls._get_item(data, hdrsize, eltoff))
             return result
         elif dtype == BMK_DICT:
             result = {}
-            for eoff in xrange(offset+8,offset+8+length,8):
+            for eoff in range(offset+8,offset+8+length,8):
                 keyoff,valoff = struct.unpack(b'<II', data[eoff:eoff+8])
                 key = cls._get_item(data, hdrsize, keyoff)
                 val = cls._get_item(data, hdrsize, valoff)
@@ -378,7 +361,7 @@ class Bookmark (object):
                 raise ValueError('TOC entries overrun TOC size')
 
             toc = {}
-            for n in xrange(0,toccount):
+            for n in range(0,toccount):
                 ebase = tocbase + 20 + 12 * n
                 eid,eoffset,edummy = struct.unpack(b'<III',
                                                    data[ebase:ebase+12])
@@ -419,7 +402,7 @@ class Bookmark (object):
             result = struct.pack(b'<II', 0, BMK_BOOLEAN | BMK_BOOLEAN_ST_TRUE)
         elif item is False:
             result = struct.pack(b'<II', 0, BMK_BOOLEAN | BMK_BOOLEAN_ST_FALSE)
-        elif isinstance(item, unicode):
+        elif isinstance(item, str):
             encoded = item.encode('utf-8')
             result = (struct.pack(b'<II', len(encoded), BMK_STRING | BMK_ST_ONE)
                       + encoded)
@@ -434,7 +417,7 @@ class Bookmark (object):
             result = (struct.pack(b'<II', len(item),
                                   BMK_DATA | BMK_ST_ONE)
                       + bytes(item))
-        elif isinstance(item, int) or isinstance(item, long):
+        elif isinstance(item, int):
             if item > -0x80000000 and item < 0x7fffffff:
                 result = struct.pack(b'<IIi', 4,
                                      BMK_NUMBER | kCFNumberSInt32Type, item)
@@ -478,7 +461,7 @@ class Bookmark (object):
             ioffset = offset + 8 + len(item) * 8
             result = [struct.pack(b'<II', len(item) * 8, BMK_DICT | BMK_ST_ONE)]
             enc = []
-            for k,v in iteritems(item):
+            for k,v in item.items():
                 result.append(struct.pack(b'<I', ioffset))
                 ioffset, ienc = cls._encode_item(k, ioffset)
                 enc.append(ienc)
@@ -512,8 +495,8 @@ class Bookmark (object):
         for tid,toc in self.tocs:
             entries = []
 
-            for k,v in iteritems(toc):
-                if isinstance(k, (str, unicode)):
+            for k,v in toc.items():
+                if isinstance(k, str):
                     noffset = offset
                     voffset, enc = self._encode_item(k, offset)
                     result.append(enc)
@@ -671,10 +654,10 @@ class Bookmark (object):
         result = ['Bookmark([']
         for tid,toc in self.tocs:
             result.append('(0x%x, {\n' % tid)
-            for k,v in iteritems(toc):
-                if isinstance(k, (str, unicode)):
+            for k,v in toc.items():
+                if isinstance(k, str):
                     kf = repr(k)
-                elif type(k) == BookmarkKey:
+                elif isinstance(k, BookmarkKey):
                     kf = '{}(0x{:4X})'.format(k.name, k.value)
                 else:
                     kf = '0x%04x' % k
@@ -692,5 +675,5 @@ class Bookmark (object):
 #         # print(bm)
 #         for tid,toc in bm.tocs:
 #             print('tid=0x{:X}'.format(tid))
-#             for k,v in iteritems(toc):
+#             for k,v in toc.items():
 #                 print('  {} = {}'.format(str(k), v))

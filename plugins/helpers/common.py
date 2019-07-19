@@ -7,14 +7,13 @@
    
 '''
 
-from __future__ import unicode_literals
-
 import biplist
-import os
 import datetime
-import pytz
 import logging
+import os
+import pytz
 from enum import IntEnum
+from sqlite3 import Error as sqlite3Error
 from tzlocal import get_localzone
 
 log = logging.getLogger('MAIN.HELPERS.COMMON')
@@ -43,12 +42,12 @@ class CommonFunctions:
         '''Returns datetime object, or empty string upon error'''
         if mac_abs_time not in ( 0, None, ''):
             try:
-                if type(mac_abs_time) in (str, unicode):
+                if isinstance(mac_abs_time, str):
                     mac_abs_time = float(mac_abs_time)
                 if mac_abs_time > 0xFFFFFFFF: # more than 32 bits, this should be nano-second resolution timestamp (seen only in HighSierra)
                     return datetime.datetime(2001, 1, 1) + datetime.timedelta(seconds=mac_abs_time/1000000000.)
                 return datetime.datetime(2001, 1, 1) + datetime.timedelta(seconds=mac_abs_time)
-            except Exception as ex:
+            except (ValueError, OverflowError) as ex:
                 log.error("ReadMacAbsoluteTime() Failed to convert timestamp from value " + str(mac_abs_time) + " Error was: " + str(ex))
         return ''
 
@@ -57,10 +56,10 @@ class CommonFunctions:
         '''Returns datetime object, or empty string upon error'''
         if mac_hfs_time not in ( 0, None, ''):
             try:
-                if type(mac_hfs_time) in (str, unicode):
+                if isinstance(mac_hfs_time, str):
                     mac_hfs_time = float(mac_hfs_time)
                 return datetime.datetime(1904, 1, 1) + datetime.timedelta(seconds=mac_hfs_time)
-            except Exception as ex:
+            except (ValueError, OverflowError) as ex:
                 log.error("ReadMacHFSTime() Failed to convert timestamp from value " + str(mac_hfs_time) + " Error was: " + str(ex))
         return ''
 
@@ -69,10 +68,10 @@ class CommonFunctions:
         '''Returns datetime object, or empty string upon error'''
         if mac_apfs_time not in ( 0, None, ''):
             try:
-                if type(mac_apfs_time) in (str, unicode):
+                if isinstance(mac_apfs_time, str):
                     mac_apfs_time = float(mac_apfs_time)
                 return datetime.datetime(1970, 1, 1) + datetime.timedelta(seconds=mac_apfs_time/1000000000.)
-            except Exception as ex:
+            except (ValueError, OverflowError) as ex:
                 log.error("ReadAPFSTime() Failed to convert timestamp from value " + str(mac_apfs_time) + " Error was: " + str(ex))
         return ''
 
@@ -81,11 +80,23 @@ class CommonFunctions:
         '''Returns datetime object, or empty string upon error'''
         if unix_time not in ( 0, None, ''):
             try:
-                if type(unix_time) in (str, unicode):
+                if isinstance(unix_time, str):
                     unix_time = float(unix_time)
                 return datetime.datetime(1970, 1, 1) + datetime.timedelta(seconds=unix_time)
-            except Exception as ex:
+            except (ValueError, OverflowError) as ex:
                 log.error("ReadUnixTime() Failed to convert timestamp from value " + str(unix_time) + " Error was: " + str(ex))
+        return ''
+
+    @staticmethod
+    def ReadWindowsFileTime(file_time): # File time is time epoch beginning 1601/1/1
+        '''Returns datetime object, or empty string upon error'''
+        if file_time not in ( 0, None, ''):
+            try:
+                if isinstance(file_time, str):
+                    file_time = float(file_time)
+                return datetime.datetime(1601, 1, 1) + datetime.timedelta(microseconds=file_time/10.)
+            except (ValueError, OverflowError) as ex:
+                log.error("ReadWindowsFileTime() Failed to convert timestamp from value " + str(file_time) + " Error was: " + str(ex))
         return ''
 
     @staticmethod
@@ -93,7 +104,7 @@ class CommonFunctions:
         integer = error_val
         try:
             integer = int(string, base)
-        except: # Will go here if string is '' or contains non-digit characters
+        except ValueError: # Will go here if string is '' or contains non-digit characters
             if string == '' or string == None: pass
             else: log.exception('Could not convert string "{}" to int'.format(string))
         return integer
@@ -132,7 +143,7 @@ class CommonFunctions:
             cursor = db_conn.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='%s'" % table_name)
             for row in cursor:
                 return True
-        except Exception as ex:
+        except sqlite3Error as ex:
             log.error ("In TableExists({}). Failed to list tables of db. Error Details:{}".format(table_name, str(ex)) )
         return False
     
@@ -143,7 +154,7 @@ class CommonFunctions:
             cursor = db_conn.execute("SELECT group_concat(name) from sqlite_master WHERE type='table'")
             for row in cursor:
                 return row[0]
-        except Exception as ex:
+        except sqlite3Error as ex:
             log.error ("Failed to list tables on db. Error Details: {}".format(str(ex)))
         return ''
 

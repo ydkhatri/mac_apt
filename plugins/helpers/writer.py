@@ -6,19 +6,18 @@
    terms of the MIT License.
    
 '''
-from __future__ import print_function
-from __future__ import unicode_literals
 
+import binascii
 import codecs
-import sqlite3
-import sys, os
 import collections
 import logging
-import binascii
+import os
+import sqlite3
+import sys
 import xlsxwriter
 
-from common import *
 from enum import IntEnum
+from plugins.helpers.common import *
 
 log = logging.getLogger('MAIN.HELPERS.WRITER')
 
@@ -103,14 +102,8 @@ class DataWriter:
         '''Convert binary data to hex text'''
         s = ''
         if blob:
-            try:
-                if self.PYTHON_VER == 2: 
-                    s = binascii.hexlify(blob).upper()
-                else:
-                    s = binascii.hexlify(blob).decode("ascii").upper() # For python3!
-            except Exception as ex:
-                log.error('Exception from BlobToHex() : ' + str(ex))
-        return s    
+            s = binascii.hexlify(blob).decode("ascii").upper()
+        return s
 
     def WriteRow(self, row):
         '''Write a single row of data, 'row' can be either a list or dictionary'''
@@ -127,7 +120,7 @@ class DataWriter:
                 if self.cols_with_blobs:
                     row_copy = list(row)
                     for col_name, index in self.cols_with_blobs:
-                        row_copy[index] = buffer(row_copy[index])
+                        row_copy[index] = bytes(row_copy[index])
                     self.sql_writer.WriteRow(row_copy)
                 else:
                     self.sql_writer.WriteRow(row)
@@ -145,7 +138,7 @@ class DataWriter:
                 if self.cols_with_blobs:
                     row_copy = list(list_to_write)
                     for col_name, index in self.cols_with_blobs:
-                        row_copy[index] = buffer(row_copy[index])
+                        row_copy[index] = bytes(row_copy[index])
                     self.sql_writer.WriteRow(row_copy)
                 else: self.sql_writer.WriteRow(list_to_write)
             if self.csv or self.xlsx:
@@ -173,7 +166,7 @@ class DataWriter:
                     rows_copy = [list(k) for k in rows]
                     for row_copy in rows_copy:
                         for col_name, index in self.cols_with_blobs:
-                            row_copy[index] = buffer(row_copy[index]) if row_copy[index] else ''
+                            row_copy[index] = bytes(row_copy[index]) if row_copy[index] else ''
                     self.sql_writer.WriteRows(rows_copy)
                 else:
                     self.sql_writer.WriteRows(rows)
@@ -198,7 +191,7 @@ class DataWriter:
                     rows_copy = [list(k) for k in list_to_write]
                     for row_copy in rows_copy:
                         for col_name, index in self.cols_with_blobs:
-                            row_copy[index] = buffer(row_copy[index])
+                            row_copy[index] = bytes(row_copy[index])
                     self.sql_writer.WriteRows(rows_copy)
                 else:
                     self.sql_writer.WriteRows(list_to_write)
@@ -227,7 +220,7 @@ class SqliteWriter:
         self.filepath = filepath
         try:
             self.conn = sqlite3.connect(self.filepath)
-        except Exception as ex:
+        except (OSError, sqlite3.Error) as ex:
             log.error('Failed to open/create sqlite db at path {}'.format(filepath))
             log.exception('Error details')
             raise ex
@@ -266,8 +259,8 @@ class SqliteWriter:
             if writing: 
                 self.conn.commit()
             success = True
-        except Exception as ex:
-            log.exception('Query execution error, query was - ' + query)
+        except sqlite3.Error as ex:
+            log.error('Query execution error, query was - ' + query)
             error_message = str(ex)
 
         return success, cursor, error_message
@@ -290,7 +283,7 @@ class SqliteWriter:
             cursor.execute(query)
             self.conn.commit()
             self.executemany_query = 'INSERT INTO "' + table_name + '" VALUES (?' + ',?'*(len(self.column_info) - 1) + ')'
-        except Exception as ex:
+        except sqlite3.Error as ex:
             if  str(ex).find('table "{}" already exists'.format(table_name)) >= 0:
                 log.info(str(ex))
                 self.table_name = self.GetNextAvailableTableName(table_name)
@@ -303,7 +296,7 @@ class SqliteWriter:
                     self.conn.commit()
                     self.executemany_query = 'INSERT INTO "' + self.table_name + '" VALUES (?' + ',?'*(len(self.column_info) - 1) + ')'
                     return
-                except Exception as ex:
+                except sqlite3.Error as ex:
                     log.error(str(ex))
                     log.exception("error creating table " + self.table_name)
                     raise ex
@@ -335,12 +328,12 @@ class SqliteWriter:
                 try:
                     index = self.table_names.index(table_name)
                     query = self.executemany_querys[index]
-                except Exception as ex:
+                except sqlite3.Error as ex:
                     log.exception("Could not find table name {}".format(table_name))
                     raise ex
             cursor.executemany(query, rows)
             self.conn.commit()
-        except Exception as ex:
+        except sqlite3.Error as ex:
             log.error(str(ex))
             log.exception("error writing to table " + self.table_name)
             #raise ex
@@ -370,7 +363,7 @@ class CsvWriter:
         self.filepath = CommonFunctions.GetNextAvailableFileName(filepath)
         try:
             self.file_handle = codecs.open(self.filepath, 'w', encoding=self.codec)
-        except Exception as ex:
+        except (OSError, IOError) as ex:
             log.error('Failed to create csv file at path {}'.format(self.filepath))
             log.exception('Error details')
             raise ex
@@ -379,17 +372,17 @@ class CsvWriter:
         '''Remove \r \n \t from each item to write'''
         safe_list = []
         for item in row:
-            safe_str = unicode(item)
+            safe_str = str(item)
             try:
                 safe_str = safe_str.replace('\r\n', ',').replace('\r', ',').replace('\n', ',').replace('\t', ' ')
-            except Exception as ex:
+            except ValueError as ex:
                 log.exception()
             safe_list.append(safe_str)
         return safe_list
 
     def WriteRow(self, row):
         row = self.Sanitize(row)
-        self.file_handle.write("\t".join(map(unicode,row)) + ('\r\n'))
+        self.file_handle.write("\t".join(map(str,row)) + ('\r\n'))
     
     def WriteRows(self, rows):
         for row in rows:
@@ -399,7 +392,7 @@ class CsvWriter:
         '''Return csv's filesize or None if error'''
         try:
             return os.path.getsize(self.filepath)
-        except Exception as ex:
+        except OSError as ex:
             log.warning('Failed to retrieve file size for CSV: {}'.format(self.filepath))
         return None
     
@@ -461,7 +454,7 @@ class ExcelWriter:
             self.date_format = self.workbook.add_format({'num_format':'YYYY-MM-DD HH:MM:SS'})
             self.num_format = self.workbook.add_format()
             self.num_format.set_num_format('#,###')
-        except Exception as ex:
+        except (xlsxwriter.exceptions.XlsxWriterException, OSError) as ex:
             log.error('Failed to create xlsx file at path {}'.format(self.filepath))
             log.exception('Error details')
             raise ex
@@ -473,13 +466,13 @@ class ExcelWriter:
             sheet_name = sheet_name[0:31]
         try:
             self.sheet = self.workbook.add_worksheet(sheet_name)
-        except Exception as ex:
+        except xlsxwriter.exceptions.XlsxWriterException as ex:
             if str(ex).find('is already in use') > 0:
                 # find another sheetname
                 try:
                     sheet_name = self.GetNextAvailableSheetName(sheet_name)
                     self.sheet = self.workbook.add_worksheet(sheet_name)
-                except Exception as ex:
+                except xlsxwriter.exceptions.XlsxWriterException as ex:
                     log.exception('Unknown error while adding sheet {}'.format(sheet_name))
                     raise ex
             else:
@@ -497,7 +490,7 @@ class ExcelWriter:
             for sheet in sheets:
                 if sheet.get_name().lower() == name:
                     return True
-        except Exception as ex:
+        except xlsxwriter.exceptions.XlsxWriterException as ex:
             log.exception('Unknown error while fetching sheet names')
         return False
 
@@ -538,29 +531,29 @@ class ExcelWriter:
                 info = self.current_sheet_info
                 self.CreateSheet(info.name)
                 self.AddHeaders(info.column_info)
-        except Exception as ex:
+        except xlsxwriter.exceptions.XlsxWriterException as ex:
             log.exception('Error trying to add sheet for overflow data (>1 million rows)')
         try:
-            row_unicode = map(unicode, row)
-            for item in row_unicode:
+            row_str = map(str, row)
+            for item in row_str:
                 try:
                     if item == '' or row[column_index] == None: pass
                         #self.sheet.write(self.row_index, column_index, '')
                     elif self.col_types[column_index] in [DataType.INTEGER, DataType.REAL]:
                         self.sheet.write_number(self.row_index, column_index, row[column_index], self.num_format)
                     elif (self.col_types[column_index] == DataType.DATE):
-                        self.sheet.write_datetime(self.row_index, column_index, row[column_index], self.date_format)#[0:19], self.date_format)
+                        self.sheet.write_datetime(self.row_index, column_index, row[column_index], self.date_format)
                     else:
                         self.sheet.write(self.row_index, column_index, item)
-                except:
+                except (TypeError, ValueError, xlsxwriter.exceptions.XlsxWriterException):
                     log.exception('Error writing data:{} of type:{} in excel row:{} '.format(str(item), str(type(row[column_index])), self.row_index))
                 column_index += 1
 
             self.row_index += 1
             self.current_sheet_info.max_row_index = self.row_index - 1
-            self.current_sheet_info.StoreColWidth(row_unicode)
+            self.current_sheet_info.StoreColWidth(row_str)
             
-        except Exception as ex:
+        except xlsxwriter.exceptions.XlsxWriterException as ex:
             log.exception('Error writing excel row {}'.format(self.row_index))
     
     def WriteRows(self, rows):
@@ -576,7 +569,7 @@ class ExcelWriter:
             col_index = 0
             for col_width in sheet_info.col_width_list:
                 if sheet_info.col_types[col_index] in [DataType.INTEGER, DataType.REAL]:
-                    col_width += col_width/4 - 1
+                    col_width += col_width//4 - 1
                 elif sheet_info.col_types[col_index] == DataType.DATE:
                     col_width = 18
                 if col_width > 60 : col_width = 60 # Setting max width to 60
@@ -593,7 +586,7 @@ class ExcelWriter:
     
     def __del__(self):
         if self.workbook != None:
-            raise Exception('ExcelWriter destructor, Dear coder, you forgot to close file.')
+            raise ValueError('ExcelWriter destructor, Dear coder, you forgot to close file.')
 
 # Plugins should call this function to write out data formatted as a spreadsheet/table
 def WriteList(data_description, data_name, data_list, data_type_info, output_params, source_file=''):
@@ -615,12 +608,12 @@ def WriteList(data_description, data_name, data_list, data_type_info, output_par
         writer = DataWriter(output_params, data_name, data_type_info, source_file)
         try:
             writer.WriteRows(data_list)
-        except Exception as ex:
+        except (IOError, OSError, xlsxwriter.exceptions.XlsxWriterException, sqlite3.Error) as ex:
             log.error ("Failed to write row data")
             log.exception ("Error details")
         finally:
             writer.FinishWrites()
-    except Exception as ex:
+    except (IOError, OSError, xlsxwriter.exceptions.XlsxWriterException, sqlite3.Error) as ex:
         log.error ("Failed to initilize data writer")
         log.exception ("Error details")
 

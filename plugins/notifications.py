@@ -6,8 +6,7 @@
    terms of the MIT License.
    
 '''
-from __future__ import print_function
-#from __future__ import unicode_literals <-- left out as sqlite3 has issues with it !
+
 import codecs
 import sqlite3
 import sys
@@ -61,7 +60,7 @@ def ProcessNotificationDb(inputPath, output_params):
         log.debug ("Opened database successfully")
         ParseDb(conn, inputPath, '', output_params.timezone)
         conn.close()
-    except Exception as ex:
+    except sqlite3.Error as ex:
         log.error ("Failed to open database, is it a valid Notification DB? \nError details: " + str(ex.args))
 
 def ProcessNotificationDb_Wrapper(inputPath, mac_info, user):
@@ -72,19 +71,18 @@ def ProcessNotificationDb_Wrapper(inputPath, mac_info, user):
         log.debug ("Opened database successfully")
         ParseDb(conn, inputPath, user, mac_info.output_params.timezone)
         conn.close()
-    except Exception as ex:
+    except sqlite3.Error as ex:
         log.error ("Failed to open database, is it a valid Notification DB? Error details: " + str(ex)) 
 
 def GetText(string_or_binary):
     '''Converts binary or text string into text string. UUID in Sierra is now binary blob instead of hex text.'''
     uuid_text = ''
     try:
-        if type(string_or_binary) == buffer or type(string_or_binary) == bytes: # Python3 is 'bytes'
-            #hex_str = ''.join('{:02X}'.format(ord(x)) for x in string_or_binary)
+        if isinstance(string_or_binary, bytes):
             uuid_text = str(uuid.UUID(bytes=string_or_binary)).upper()
         else:
             uuid_text = string_or_binary.upper()
-    except Exception as ex:
+    except ValueError as ex:
         log.error('Error trying to convert binary value to hex text. Details: ' + str(ex))
     return uuid_text
 
@@ -94,7 +92,7 @@ def GetDbVersion(conn):
         for row in cursor:
             log.debug('db compatibleversion = {}'.format(row[0]))
             return int(row[0])
-    except:
+    except sqlite3.Error:
         log.exception("Exception trying to determine db version")
     return 15 #old version
 
@@ -116,22 +114,20 @@ def Parse_ver_17_Db(conn, inputPath, user, timezone):
                         title = RemoveTabsNewLines(req.get('titl', ''))
                         subtitle = RemoveTabsNewLines(req.get('subt', ''))
                         message = RemoveTabsNewLines(req.get('body', ''))
-                    except Exception as ex: log.debug('Error reading field req - ' + str(ex))
+                    except KeyError as ex: log.debug('Error reading field req - ' + str(ex))
                     try:
                         log.debug('Unknown field orig = {}'.format(plist['orig']))
-                    except Exception: pass
-                except (InvalidPlistException, NotBinaryPlistException, Exception) as e:
+                    except (KeyError, ValueError): pass
+                except InvalidPlistException as e:
                     log.error ("Invalid plist in table." + str(e) )
-                try:
-                    notifications.append([user, CommonFunctions.ReadMacAbsoluteTime(row['delivered_date']) , 
-                                         row['presented'], row['app'], '', GetText(row['uuid']), 
-                                         title, subtitle, message, inputPath])
-                except Exception as ex:
-                    log.error ("Error while fetching row data, error details:\n" + str(ex))        
-        except Exception as ex:
+
+                notifications.append([user, CommonFunctions.ReadMacAbsoluteTime(row['delivered_date']) , 
+                                        row['presented'], row['app'], '', GetText(row['uuid']), 
+                                        title, subtitle, message, inputPath])       
+        except sqlite3.Error as ex:
             log.error ("Db cursor error while reading file " + inputPath)
             log.exception("Exception Details")
-    except Exception as ex:
+    except sqlite3.Error as ex:
         log.error ("Sqlite error - \nError details: \n" + str(ex))
 
 def ParseDb(conn, inputPath, user, timezone):
@@ -159,34 +155,32 @@ def ParseDb(conn, inputPath, user, timezone):
                     text_index = 3 # by default
                     try:
                         title_index = int(plist['$objects'][1]['NSTitle'])
-                    except Exception: pass
+                    except KeyError: pass
                     try:
                         subtitle_index = int(plist['$objects'][1]['NSSubtitle'])
-                    except Exception: pass
+                    except KeyError: pass
                     try:
                         text_index = int(plist['$objects'][1]['NSInformativetext'])
-                    except Exception: pass
+                    except KeyError: pass
                     try:
                         title = RemoveTabsNewLines(plist['$objects'][title_index])
-                    except Exception: pass
+                    except KeyError: pass
                     try:
                         subtitle = RemoveTabsNewLines(plist['$objects'][subtitle_index]) if subtitle_index > -1 else ""
-                    except Exception: pass                        
+                    except KeyError: pass                        
                     try:
                         message = RemoveTabsNewLines(plist['$objects'][text_index])
-                    except Exception: pass
-                except (InvalidPlistException, NotBinaryPlistException, Exception) as e:
+                    except KeyError: pass
+                except (InvalidPlistException, ValueError) as e:
                     log.error ("Invalid plist in table." + str(e) )
-                try:
-                    notifications.append([user, CommonFunctions.ReadMacAbsoluteTime(row['time_utc']) , 
-                                         row['shown'], row['bundle'], row['appPath'], GetText(row['uuid']), 
-                                         title, subtitle, message, inputPath])
-                except Exception as ex:
-                    log.error ("Error while fetching row data, error details:\n" + str(ex))
-        except Exception as ex:
+
+                notifications.append([user, CommonFunctions.ReadMacAbsoluteTime(row['time_utc']) , 
+                                    row['shown'], row['bundle'], row['appPath'], GetText(row['uuid']), 
+                                    title, subtitle, message, inputPath])
+        except sqlite3.Error as ex:
             log.error ("Db cursor error while reading file " + inputPath)
             log.exception("Exception Details")
-    except Exception as ex:
+    except sqlite3.Error as ex:
         log.error ("Sqlite error - \nError details: \n" + str(ex))
 
 def WriteOutput(output_params):

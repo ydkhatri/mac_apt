@@ -6,8 +6,7 @@
    terms of the MIT License.
    
 '''
-from __future__ import print_function
-from __future__ import unicode_literals
+
 import os
 import logging
 from helpers.macinfo import *
@@ -38,25 +37,22 @@ user_info = [ ('Username',DataType.TEXT),('Realname',DataType.TEXT),('Homedir',D
              ]
 
 # Decryption XOR key from http://www.brock-family.org/gavin/perl/kcpassword.html
-def decrypt_kcpassword(enc_list):
+def decrypt_kcpassword(enc_bytes):
     '''Decrypt the password stored in /etc/kcpassword'''
     password = ''
-    try:
-        key_list = [0x7D, 0x89, 0x52, 0x23, 0xD2, 0xBC, 0xDD, 0xEA, 0xA3, 0xB9, 0x1F] # size = 11
-        size = len(enc_list)
-        counter = 0
-        decrypted = ''
-        for byte in enc_list:
-            decoded_char = chr(byte ^ key_list[counter])
-            if decoded_char == b'\x00': break
-            decrypted += decoded_char
-            counter += 1
-            if counter == 11:
-                counter = 0
-    
-        password = decrypted.decode('utf-8')
-    except:
-        log.exception('Error decrypting kcpassword')
+    key_list = [0x7D, 0x89, 0x52, 0x23, 0xD2, 0xBC, 0xDD, 0xEA, 0xA3, 0xB9, 0x1F] # size = 11
+    size = len(enc_bytes)
+    counter = 0
+    decrypted = b''
+    for byte in enc_bytes:
+        decoded_byte = byte ^ key_list[counter]
+        if decoded_byte == 0: break
+        decrypted += bytes([decoded_byte])
+        counter += 1
+        if counter == 11:
+            counter = 0
+
+    password = decrypted.decode('utf-8')
     return password
 
 def GetAutoLoginPass(mac_info):
@@ -67,18 +63,11 @@ def GetAutoLoginPass(mac_info):
     try:
         f = mac_info.OpenSmallFile(kc_path)
         if f:
-            enc_data = []
-            while True:
-                byte = f.read(1)
-                if not byte:
-                    break
-                else:
-                    enc_data.append(ord(byte))
-            
+            enc_data = f.read()            
             dec_data = decrypt_kcpassword(enc_data)
         else:
             log.error('Could not open file ' + kc_path)
-    except:
+    except (IOError, OSError):
         log.exception('Error while trying to open {}'.format(kc_path))
     return dec_data
 
@@ -89,10 +78,7 @@ def GetAutoLoginUser(mac_info):
         mac_info.ExportFile(loginwindow_plist_path, __Plugin_Name, '', False)
         success, plist, error_message = mac_info.ReadPlist(loginwindow_plist_path)
         if success:
-            try:
-                user = plist.get('autoLoginUser', '')
-            except:
-                log.exception('Error trying to fetch autoLoginUser in plist')
+            user = plist.get('autoLoginUser', '')
         else:
             log.error('Failed to read plist ' + loginwindow_plist_path + " Error was : " + error_message)
     return user
@@ -105,25 +91,19 @@ def GetDeletedUsers(mac_info):
         mac_info.ExportFile(plist_path, __Plugin_Name, '', False)
         success, plist, error_message = mac_info.ReadPlist(plist_path)
         if success:
-            try:
-                users = plist.get('deletedUsers', None)
-                if users:
-                    log.debug('Found {} deleted users'.format(len(users)))
-                    for user in users:
-                        deleted_user = UserInfo()
-                        deleted_users.append(deleted_user)
-                        try:
-                            deleted_user.user_name = user.get('name','')
-                            deleted_user.real_name = user.get('dsAttrTypeStandard:RealName','')
-                            deleted_user.UID = str(user.get('dsAttrTypeStandard:UniqueID',''))
-                            deleted_user.deletion_time = user.get('date', None)
-                            deleted_user._source = plist_path
-                        except:
-                            log.exception('Error trying to fetch deleted user info in plist')
-                else:
-                    log.debug('Could not find deletedUsers in com.apple.preferences.accounts.plist')
-            except:
-                log.exception('Error trying to fetch deletedUsers in plist')
+            users = plist.get('deletedUsers', None)
+            if users:
+                log.debug('Found {} deleted users'.format(len(users)))
+                for user in users:
+                    deleted_user = UserInfo()
+                    deleted_users.append(deleted_user)
+                    deleted_user.user_name = user.get('name','')
+                    deleted_user.real_name = user.get('dsAttrTypeStandard:RealName','')
+                    deleted_user.UID = str(user.get('dsAttrTypeStandard:UniqueID',''))
+                    deleted_user.deletion_time = user.get('date', None)
+                    deleted_user._source = plist_path
+            else:
+                log.debug('Could not find deletedUsers in com.apple.preferences.accounts.plist')
         else:
             log.error('Failed to read plist ' + plist_path + " Error was : " + error_message)    
     return deleted_users

@@ -14,9 +14,8 @@ Redistribution and use in source and binary forms, with or without modification,
 THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 '''
 
-from __future__ import print_function
-from __future__ import unicode_literals
-from structs import *
+from io import BytesIO
+from plugins.helpers.structs import *
 
 """
 Probably buggy
@@ -33,8 +32,8 @@ class BTree(object):
         self.header = BTHeaderRec.parse(block0[BTNodeDescriptor.sizeof():])
         #TODO: do more testing when nodeSize != blockSize
         self.nodeSize = self.header.nodeSize
-        self.nodesInBlock = file.blockSize / self.header.nodeSize
-        self.blocksForNode = self.header.nodeSize / file.blockSize
+        self.nodesInBlock = file.blockSize // self.header.nodeSize
+        self.blocksForNode = self.header.nodeSize // file.blockSize
         #print (file.blockSize , self.header.nodeSize)
         self.lastRecordNumber = 0
         type, (hdr, maprec) = self.readBtreeNode(0)
@@ -42,13 +41,13 @@ class BTree(object):
         self.compare_case_sensitive = self.header.keyCompareType == kHFSBinaryCompare # 0xBC
 
     def isNodeInUse(self, nodeNumber):
-        thisByte = ord(self.maprec[nodeNumber / 8])
+        thisByte = ord(self.maprec[nodeNumber // 8])
         return (thisByte & (1 << (7 - (nodeNumber % 8)))) != 0
     
     def readEmptySpace(self):
         res = ""
         z = 0
-        for i in xrange(self.header.totalNodes):
+        for i in range(self.header.totalNodes):
             if not self.isNodeInUse(i):
                 z += 1
                 res += self.readNode(i)
@@ -65,8 +64,8 @@ class BTree(object):
            1. Nulls (empty strings) end up first in sort, but should be last in HFS implementation
            2. Unicode handling is not addressed (Need to port Apple's FastUnicodeCompare())
         '''
-        k1_ci = [(item.lower() if (type(item)==unicode or type(item)==str) else item) for item in k1]
-        k2_ci = [(item.lower() if (type(item)==unicode or type(item)==str) else item) for item in k2]
+        k1_ci = [(item.lower() if (type(item)==str) else item) for item in k1]
+        k2_ci = [(item.lower() if (type(item)==str) else item) for item in k2]
         if operation == '==':
             return k1_ci == k2_ci
         elif operation == '<':
@@ -92,14 +91,14 @@ class BTree(object):
 
     def readNode(self, nodeNumber):
         node = b""
-        for i in xrange(self.blocksForNode):
-            node += self.file.readBlock(nodeNumber * self.blocksForNode + i)
+        for i in range(self.blocksForNode):
+            node += self.file.readBlock((nodeNumber * self.blocksForNode) + i)
         return node
     
     def readBtreeNode(self, nodeNumber):
         self.lastnodeNumber = nodeNumber
-        node = memoryview(self.readNode(nodeNumber))
-        #node = self.readNode(nodeNumber)
+        #node = memoryview(self.readNode(nodeNumber))
+        node = self.readNode(nodeNumber)
         self.lastbtnode = btnode = BTNodeDescriptor.parse(node)
 
         if btnode.kind == kBTHeaderNode:
@@ -111,17 +110,17 @@ class BTree(object):
         elif btnode.kind == kBTIndexNode:
             recs = []
             offsets = Array(btnode.numRecords, "off" / Int16ub).parse(node[-2*btnode.numRecords:])
-            for i in xrange(btnode.numRecords):
-                off = offsets[btnode.numRecords-i-1]
+            for i in range(btnode.numRecords):
+                off = offsets[btnode.numRecords - i - 1]
                 k = self.keyStruct.parse(node[off:])
                 off += 2 + k.keyLength
-                k.childNode = Int32ub.parse(node[off:off+4]) # ("nodeNumber")
+                k.childNode = Int32ub.parse(node[off:off + 4])  # ("nodeNumber")
                 recs.append(k)
             return kBTIndexNode, recs
         elif btnode.kind == kBTLeafNode:
             recs = []
             offsets = Array(btnode.numRecords, "off" / Int16ub).parse(node[-2*btnode.numRecords:])
-            for i in xrange(btnode.numRecords):
+            for i in range(btnode.numRecords):
                 off = offsets[btnode.numRecords-i-1]
                 k = self.keyStruct.parse(node[off:])
                 off += 2 + k.keyLength
@@ -138,7 +137,7 @@ class BTree(object):
         type, stuff = self.readBtreeNode(node)
         
         if type == kBTIndexNode: 
-            for i in xrange(len(stuff)):
+            for i in range(len(stuff)):
                 if self.compareKeys(searchKey, stuff[i]) < 0:
                     if i > 0:
                         i = i - 1
@@ -162,7 +161,7 @@ class BTree(object):
         type, stuff = self.readBtreeNode(node)
         
         if type == kBTIndexNode: 
-            for i in xrange(len(stuff)):
+            for i in range(len(stuff)):
                 count += self.traverse(stuff[i].childNode, callback=callback)
         elif type == kBTLeafNode:
             for k,v in stuff:

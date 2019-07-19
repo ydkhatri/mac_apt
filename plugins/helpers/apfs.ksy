@@ -18,6 +18,13 @@ instances:
 #    size: block_size
 
 types:
+  
+  prange:
+    seq:
+      - id: start_paddr
+        type: s8
+      - id: block_count
+        type: u8
 
 # block navigation
 
@@ -39,28 +46,32 @@ types:
 
 # meta structs
 
-  block_header:
+  block_header: # obj_phys_t
     seq:
       - id: checksum
         type: u8
         doc: Flechters checksum, according to the docs.
-      - id: block_id
+      - id: block_id  # APFS o_oid
         type: u8
         doc: ID of the block itself. Either the position of the block or an incrementing number starting at 1024.
-      - id: version
+      - id: version   # APFS o_xid
         type: u8
         doc: Incrementing number of the version of the block (highest == latest)
-      - id: type_block
+      - id: type_block  # APFS object type o_type (one 32 bit num)
         type: u2
-        enum: block_type
-      - id: flags
+        enum: obj_type
+      - id: flags # <-- object_type_flag
         type: u2
         doc: 0x4000 block_id = position, 0x8000 = container
-      - id: type_content
-        type: u2
-        enum: content_type
-      - id: padding
-        type: u2
+      - id: subtype # type_content
+        type: u4
+    instances:
+      type_content:
+        value: 0xff & subtype
+        enum: obj_type
+      type_storage:
+        value: 0xc0000000 & subtype
+        #enum: object_type_flag
 
   block:
     seq:
@@ -71,14 +82,14 @@ types:
         type:
           switch-on: header.type_block
           cases:
-            block_type::containersuperblock: containersuperblock
-            block_type::rootnode: node
-            block_type::node: node
-            block_type::spaceman: spaceman
-            block_type::allocationinfofile: allocationinfofile
-            block_type::btree: btree
-            block_type::checkpoint: checkpoint
-            block_type::volumesuperblock: volumesuperblock
+            obj_type::containersuperblock: containersuperblock
+            obj_type::rootnode: node
+            obj_type::node: node
+            obj_type::spaceman: spaceman
+            obj_type::allocationinfofile: allocationinfofile
+            obj_type::omap: omap
+            obj_type::checkpoint: checkpoint
+            obj_type::volumesuperblock: volumesuperblock
             
 
 # containersuperblock (type: 0x01)
@@ -92,36 +103,64 @@ types:
         type: u4
       - id: num_blocks
         type: u8
-      - id: padding
+      - id: features
+        type: u8
+      - id: readonly_compatible_features
+        type: u8
+      - id: incompatible_features
+        type: u8
+      - id: uuid
         size: 16
-      - id: unknown_64
+      - id: next_oid
         type: u8
-      - id: guid
-        size: 16
-      - id: next_free_block_id
+      - id: next_xid
         type: u8
-      - id: next_version
-        type: u8
-      - id: unknown_104
-        size: 32
-      - id: previous_containersuperblock_block
+      - id: xp_desc_blocks
         type: u4
-      - id: unknown_140
-        size: 12
-      - id: spaceman_id
-        type: u8
-      - id: block_map_block
-        type: ref_block
-      - id: unknown_168_id
-        type: u8
-      - id: padding2
+      - id: xp_data_blocks
         type: u4
-      - id: num_volumesuperblock_ids
+      - id: xp_desc_base
+        type: s8
+      - id: xp_data_base
+        type: s8
+      - id: xp_desc_next
         type: u4
-      - id: volumesuperblock_ids
+      - id: xp_data_next
+        type: u4
+      - id: xp_desc_index
+        type: u4
+      - id: xp_desc_len
+        type: u4
+      - id: xp_data_index
+        type: u4
+      - id: xp_data_len
+        type: u4
+      - id: spaceman_oid
+        type: u8
+      - id: omap_oid
+        type: u8 # ref_block
+      - id: reaper_oid
+        type: u8
+      - id: test_type
+        type: u4
+      - id: num_volumesuperblock_ids # max_file_systems
+        type: u4
+      - id: volumesuperblock_ids # fs_oid
         type: u8
         repeat: expr
         repeat-expr: num_volumesuperblock_ids
+      - id: counters
+        type: u8
+        repeat: expr
+        repeat-expr: 32
+      - id: blocked_out_start_paddr
+        type: s8
+      - id: blocked_out_block_count
+        type: u8
+      - id: evict_mapping_tree_oid
+        type: u8
+      - id: flags
+        type: u8
 
 # node (type: 0x02)
 
@@ -191,14 +230,17 @@ types:
           cases:
             256: pointer_record # applies to all pointer records, i.e. any entry data in index nodes
             entry_type::location.to_i: location_record
-            entry_type::inode.to_i: inode_record
-            entry_type::name.to_i: named_record
-            entry_type::thread.to_i: thread_record
-            entry_type::hardlink.to_i: hardlink_record
-            entry_type::entry6.to_i: t6_record
             entry_type::extent.to_i: extent_record
-            entry_type::entry12.to_i: t12_record
+            entry_type::dir_rec.to_i: drec_hashed_record
+            entry_type::inode.to_i: inode_record
+            entry_type::hardlink.to_i: hardlink_record
+            entry_type::dstream_id.to_i: dstream_id_record
+            entry_type::file_extent.to_i: file_extent_record
+            entry_type::sibling_map.to_i: sibling_map_record
             entry_type::extattr.to_i: extattr_record
+            entry_type::snap_name.to_i: snap_name_record
+            entry_type::snap_metadata.to_i: snap_metadata_record
+            entry_type::dir_stats.to_i: dir_stats_record
         -webide-parse-mode: eager
     -webide-representation: '{key}: {data}'
 
@@ -216,11 +258,13 @@ types:
           switch-on: type_entry
           cases:
             entry_type::location: location_key
-            entry_type::inode: inode_key
-            entry_type::name: named_key
+            entry_type::extent: extent_key
+            entry_type::dir_rec: drec_hashed_key
             entry_type::hardlink: hardlink_key
             entry_type::extattr: attr_named_key
-            entry_type::extent: extent_key
+            entry_type::file_extent: file_extent_key
+            entry_type::snap_name:snap_name_key
+            # entry_type::dstream_id: dstream_id_key
     instances:
       key_value:
         value: key_low + ((key_high & 0x0FFFFFFF) << 32)
@@ -247,23 +291,24 @@ types:
         type: ref_block
     -webide-representation: '{block_num} v{version:dec}'
 
-  inode_key:
+  extent_key: #TODO check this, spec says nothing here
     seq:
       - id: block_num
         type: ref_block
     -webide-representation: '{block_num}'
 
-  named_key:
+  drec_hashed_key:
     seq:
-      - id: len_name
-        type: u1
-      - id: hash_name
-        type: u1
-        repeat: expr
-        repeat-expr: 3
+      - id: name_len_and_hash
+        type: u4
       - id: dirname
         size: len_name
         type: strz
+      instances:
+        len_name:
+          value: name_len_and_hash & 0x000003ff
+        hash:
+          value: (name_len_and_hash & 0xfffff400) >> 10
     -webide-representation: '"{dirname}"'
 
   attr_named_key:
@@ -277,15 +322,27 @@ types:
 
   hardlink_key:
     seq:
-      - id: id2
+      - id: sibling_id
         type: u8
-    -webide-representation: '#{id2:dec}'
+    -webide-representation: '#{sibling_id:dec}'
 
-  extent_key:
+  file_extent_key:
     seq:
       - id: offset # seek pos in file
         type: u8
     -webide-representation: '{offset:dec}'
+
+#  dstream_id_key:
+#    seq:
+#      - id: no_value
+#        size: 0
+  snap_name_key:
+    seq:
+      - id: name_len
+        type: u2
+      - id: name
+        size: name_len
+        type: strz
 
 ## node entry records
 
@@ -322,7 +379,7 @@ types:
         type: u2
     -webide-representation: '{meta_type}, {size}'
 
-  thread_record: # 0x30
+  inode_record: # 0x30
     seq:
       - id: parent_id
         type: u8
@@ -352,12 +409,10 @@ types:
         type: u4
       - id: mode
         type: u2
-      - id: unknown_82
+      - id: pad1
         type: u2
-      - id: unknown_84
-        type: u4
       - id: unknown_88
-        type: u4
+        type: u8
       - id: num_records
         type: u2
       - id: record_total_len
@@ -373,76 +428,130 @@ types:
 
   hardlink_record: # 0x50
     seq:
-      - id: node_id
+      - id: parent_id
         type: u8
       - id: namelength
         type: u2
       - id: dirname
         size: namelength
         type: strz
-    -webide-representation: '#{node_id:dec} "{dirname}"'
+    -webide-representation: '#{parent_id:dec} "{dirname}"'
 
-  t6_record: # 0x60
+  sibling_map_record:
     seq:
-      - id: unknown_0
-        type: u4
-    -webide-representation: '{unknown_0}'
-
-  inode_record: # 0x20
-    seq:
-      - id: block_count
-        type: u4
-      - id: unknown_4
-        type: u2
-      - id: block_size
-        type: u2
-      - id: inode
+      - id: file_id
         type: u8
-      - id: unknown_16
+    -webide-representation: '{file_id:dec}'
+
+  snap_metadata_record:
+    seq:
+      - id: extentref_tree_oid
+        type: u8
+      - id: sblock_oid
+        type: u8
+      - id: create_time
+        type: u8
+      - id: change_time
+        type: u8
+      - id: inum
+        type: u8
+      - id: extentref_tree_type
         type: u4
-    -webide-representation: '#{inode:dec}, Cnt {block_count:dec} * {block_size:dec}, {unknown_4:dec}, {unknown_16:dec}'
+      - id: flags
+        type: u4
+      - id: name_len
+        type: u2
+      - id: name
+        size: name_len
+        type: strz
+
+  snap_name_record:
+    seq:
+      - id: snap_xid
+        type: u8
+
+  dir_stats_record:
+    seq:
+      - id: num_children
+        type: u8
+      - id: total_size
+        type: u8
+      - id: chained_key
+        type: u8
+      - id: gen_count
+        type: u8
+
+  dstream_id_record: # 0x60
+    seq:
+      - id: refcnt
+        type: u4
+    -webide-representation: '{refcnt:dec}'
+
+  extent_record: # 0x20
+    seq:
+      - id: len_and_kind
+        type: u8
+      - id: owning_obj_id
+        type: u8
+      - id: refcnt
+        type: s4
+    instances:
+      length:
+        value: len_and_kind & 0x0fffffffffffffff
+      kind:  # one of obj_kinds
+        value: (len_and_kind & 0xf000000000000000) >> 60
+    -webide-representation: '{owning_obj_id:dec},  {length:dec}, {kind:dec}, {refcnt:dec}'
   
-  extent_record: # 0x80
+  file_extent_record: # 0x80
     seq:
-      - id: size
+      - id: len_and_flags
         type: u8
-      - id: block_num
+      - id: phys_block_num
         type: ref_block
-      - id: unknown_16
+      - id: crypto_id
         type: u8
-    -webide-representation: '{block_num}, Len {size:dec}, {unknown_16:dec}'
+    instances:
+      length:
+        value: len_and_flags & 0x00ffffffffffffff
+      flags:  # currently no flags defined as per spec
+        value: (len_and_flags & 0xff00000000000000) >> 56
+    -webide-representation: '{phys_block_num}, Len {size:dec}, {crypto_id:dec}'
 
-  named_record: # 0x90
+  drec_hashed_record: # 0x90
     seq:
       - id: node_id
         type: u8
-      - id: timestamp
+      - id: date_added
         type: s8
       - id: type_item
         type: u2
+      # TODO: Add xfields
+    instances:
+      flags:
+        value: type_item & 0xF
         enum: item_type
     -webide-representation: '#{node_id:dec}, {type_item}'
 
-  t12_record: # 0xc0
+  sibling_map_record: # 0xc0
     seq:
-      - id: unknown_0
+      - id: file_id
         type: u8
-    -webide-representation: '{unknown_0:dec}'
+    -webide-representation: '{file_id:dec}'
 
-  extattr_record: # 0x40
+  extattr_record: # 0x40, j_xattr_val_t
     seq:
-      - id: type_ea
+      - id: flags #type_ea
         type: u2
-        enum: ea_type
+        #enum: ea_type
       - id: len_data
         type: u2
       - id: data
         size: len_data
-        type:
-          switch-on: type_ea
-          cases:
-            ea_type::symlink: strz # symlink
-            # all remaining cases are handled as a "bunch of bytes", thanks to the "size" argument
+        #type:
+        #  switch-on: flags #type_ea
+        #  cases:
+        #    ea_type::symlink: strz # symlink
+        #    # all remaining cases are handled as a "bunch of bytes", thanks to the "size" argument
     -webide-representation: '{type_ea} {data}'
 
 
@@ -507,14 +616,29 @@ types:
       - id: allocationfile_block
         type: u8
 
-# btree (type: 0x0b)
+# omap (type: 0x0b)
 
-  btree:
+  omap:
     seq:
-      - id: unknown_0
-        size: 16
-      - id: root
-        type: ref_block
+      - id: flags
+        type: u4
+        #enum: object_map_flag
+      - id: snap_count
+        type: u4
+      - id: tree_type
+        type: u4
+      - id: snapshot_tree_type
+        type: u4
+      - id: tree_oid
+        type: u8 #ref_block
+      - id: snapshot_tree_oid
+        type: u8
+      - id: most_recent_snap
+        type: u8
+      - id: pending_revert_min
+        type: u8
+      - id: pending_revert_max
+        type: u8
 
 # checkpoint (type: 0x0c)
 
@@ -533,12 +657,12 @@ types:
     seq:
       - id: type_block
         type: u2
-        enum: block_type
+        enum: obj_type
       - id: flags
         type: u2
       - id: type_content
         type: u4
-        enum: content_type
+        enum: obj_type
       - id: block_size
         type: u4
       - id: unknown_52
@@ -617,45 +741,91 @@ types:
 
 enums:
 
-  block_type:
-    1: containersuperblock
-    2: rootnode
-    3: node
-    5: spaceman
-    7: allocationinfofile
-    11: btree
-    12: checkpoint
-    13: volumesuperblock
-    17: unknown
+  obj_type: # APFS Object types
+    0x01: containersuperblock # NX_SUPERBLOCK
+    0x02: rootnode            # BTREE
+    0x03: node                # BTREE_NODE
+    0x04: reserved              # Not seen
+    0x05: spaceman            # SPACEMAN
+    0x06: spaceman_cab        # SPACEMAN_CAB # Not impl here
+    0x07: allocationinfofile  # SPACEMAN_CIB
+    0x08: spaceman_bitmap       # Not impl here
+    0x09: spaceman_free_queue   # Not impl here
+    0x0a: extent_list_tree      # Not impl here
+    0x0b: omap
+    0x0c: checkpoint           # CHECKPOINT_MAP
+    0x0d: volumesuperblock    # FS
+    0x0e: fstree              # FSTREE
+    0x0f: blockreftree        # BLOCKREFTREE
+    0x10: snapmetatree        # SNAPMETATREE
+    0x11: NX_REAPER
+    0x12: NX_REAP_LIST
+    0x13: OMAP_SNAPSHOT
+    0x14: EFI_JUMPSTART
+    0x15: FUSION_MIDDLE_TREE
+    0x16: NX_FUSION_WBC
+    0x17: NX_FUSION_WBC_LIST
+    0x18: ER_STAT
+    0x19: GBITMAP
+    0x1a: GBITMAP_TREE
+    0x1b: GBITMAP_BLOCK
 
-  entry_type:
-    0x0: location
-    0x2: inode
-    0x3: thread
+  object_type_flag:
+    0x00000000: virtual
+    0x80000000: ephemeral
+    0x40000000: physical
+    0x20000000: noheader
+    0x10000000: encrypted
+    0x08000000: nonpersistent
+
+  object_map_flag:
+    0x01: MANUALLY_MANAGED
+    0x02: ENCRYPTING
+    0x04: DECRYPTING
+    0x08: KEYROLLING
+    0x10: CRYPTO_GENERATION
+
+  entry_type:      # APFS j_obj_types
+    0x0: location  # APFS_TYPE_ANY 
+    0x1: snap_metadata
+    0x2: extent
+    0x3: inode
     0x4: extattr
-    0x5: hardlink
-    0x6: entry6
-    0x8: extent
-    0x9: name
-    0xc: entry12
-# Seems entry6 (T6) is only for files, not folders
-  content_type:
-    0: empty
-    9: history
-    11: location
-    14: files
-    15: extents
-    16: unknown3
+    0x5: hardlink  # APFS SIBLING_LINK
+    0x6: dstream_id
+    0x7: crypto_state
+    0x8: file_extent
+    0x9: dir_rec
+    0xa: dir_stats
+    0xb: snap_name
+    0xc: sibling_map
+    0xd: unknown_reserved
+    0xe: unknown_reserved2
+    0xf: invalid
+# Seems dstream_id is only for files, not folders
 
-  item_type:
-    0: empty
-    1: unknown_1
-    4: folder
-    8: file
+#  content_type:
+#    0: empty
+#    9: history
+#    11: location
+#    14: files
+#    15: extents
+#    16: unknown3
+
+  item_type: # Directory Entry File types
+    0: unknown
+    1: fifo_named_pipe
+    2: character_special_file
+    4: directory
+    6: block_special_file
+    8: regular_file
     10: symlink
-    12: unknown_12
+    12: socket
+    14: whiteout
 
-  ea_type:
-    1: unknown_1
-    2: generic
-    6: symlink
+#  obj_kinds: # j_obj_kinds # Might be more than these documented ones!
+#    0: any
+#    1: new
+#    2: update
+#    3: dead
+#    4: update_refcnt

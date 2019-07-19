@@ -6,13 +6,10 @@
    terms of the MIT License.
    
 '''
-from __future__ import print_function
-from __future__ import unicode_literals
-from __future__ import division
 
 import pytsk3
-from writer import *
-import macinfo
+from plugins.helpers.writer import *
+import plugins.helpers.macinfo as macinfo
 import logging
 import textwrap
 
