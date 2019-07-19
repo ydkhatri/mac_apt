@@ -28,6 +28,7 @@ IDEVICEINFO | Reads and exports connected iDevice details
 IMESSAGE | Read iMessage chats
 INETACCOUNTS | Retrieve configured internet accounts (iCloud, Google, Linkedin, facebook..)
 INSTALLHISTORY | Software Installation History
+MSOFFICE | Reads Word, Excel, Powerpoint and other office MRU/accessed file paths
 NETUSAGE | Read network usage data statistics per application
 NETWORKING | Interfaces, last IP address, MAC address, DHCP ..
 NOTES | Reads notes databases
