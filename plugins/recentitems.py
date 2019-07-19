@@ -349,7 +349,13 @@ def PrintAll(recent_items, output_params, source_path):
 
     data_list = []
     for item in recent_items:
-        data_list.append( [ str(item.Type), item.Name, item.URL, item.Info, item.User, item.Source ] )
+        url = item.URL
+        if url.startswith('file://'):
+            url = url[7:]
+        name = item.Name
+        if name.startswith('file://'):
+            name = name[7:]
+        data_list.append( [ str(item.Type), name, url, item.Info, item.User, item.Source ] )
 
     WriteList("Recent item information", "RecentItems", data_list, recent_info, output_params, source_path)
 

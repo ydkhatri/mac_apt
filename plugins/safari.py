@@ -80,7 +80,10 @@ def PrintAll(safari_items, output_params, source_path):
 
     data_list = []
     for item in safari_items:
-        data_list.append( [ str(item.type), item.name, item.url, item.date, item.other_info, item.user, item.source ] )
+        url = item.url
+        if url.startswith('file://'):
+            url = url[7:]
+        data_list.append( [ str(item.type), item.name, url, item.date, item.other_info, item.user, item.source ] )
 
     WriteList("safari information", "Safari", data_list, safari_info, output_params, source_path)
     

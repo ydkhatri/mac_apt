@@ -51,7 +51,10 @@ def ReadSingleShortcutEntry(entry, value, shortcuts, uses_path, source, user):
         if item == 'DISPLAY_NAME': sc['DisplayName'] = val
         elif item == 'LAST_USED':  sc['LastUsed'] = val
         elif (uses_path and (item == 'PATH')) or (item == 'URL'):
-            sc['URL'] = val
+            path = val
+            if path.startswith('file://'):
+                path = path[7:]
+            sc['URL'] = path
         else:
             log.info("Found unknown item - {}, value={} in plist".format(item, value))
     shortcuts.append(sc)

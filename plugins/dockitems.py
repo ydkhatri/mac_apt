@@ -71,7 +71,11 @@ def PrintAll(docks, output_params, input_path=''):
 
 def GetPath(file_data):
     if file_data:
-        return file_data.get("_CFURLString", "")
+        path = file_data.get("_CFURLString", "")
+        if path.startswith("file://"):
+            return path[7:]
+        else:
+            return path
     return ""
 
 def GetDockItemsPlistFromImage(mac_info, plist_path):
