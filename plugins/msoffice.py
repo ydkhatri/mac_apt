@@ -248,6 +248,14 @@ def ProcessOfficePlist(plist, office_items, user, source):
         if item.startswith('14\\Web\\TypedURLs\\url'):
             o_item = MSOfficeItem('', None, 'TypedURLs', plist[item], '', user, source)
             office_items.append(o_item)
+        elif item.find('Most Recent MRU File Name') > 0:
+            o_app = ''
+            try:
+                o_app = item[0:-26].split('\\')[-1]
+            except (IndexError, ValueError):
+                pass
+            o_item = MSOfficeItem(o_app, None, item, plist[item], '', user, source)
+            office_items.append(o_item)
 
     mru_list = plist.get('14\\File MRU\\XCEL', None)
     if mru_list and len(mru_list):
@@ -295,7 +303,7 @@ def Plugin_Start(mac_info):
     office_reg_items = []
     processed_paths = set()
     office_plist_path = '{}/Library/Preferences/com.microsoft.office.plist'
-    office_reg_path_partial = '{}/Library/Group Containers/' # /xxxx.Office/MicrosoftRegistrationDB.reg
+    office_reg_path_partial = '{}/Library/Group Containers' # /xxxx.Office/MicrosoftRegistrationDB.reg
 
     for user in mac_info.users:
         user_name = user.user_name
@@ -303,6 +311,7 @@ def Plugin_Start(mac_info):
         elif user.home_dir == '/private/var/root': user_name = 'root' # Some other users use the same root folder, we will list such all users as 'root', as there is no way to tell
         if user.home_dir in processed_paths: continue # Avoid processing same folder twice (some users have same folder! (Eg: root & daemon))
         processed_paths.add(user.home_dir)
+
         plist_path = office_plist_path.format(user.home_dir)
         if mac_info.IsValidFilePath(plist_path):
             mac_info.ExportFile(plist_path, __Plugin_Name, user_name, False)
@@ -313,11 +322,11 @@ def Plugin_Start(mac_info):
                 log.error("Problem reading plist {} - {}".format(plist_path, error))
 
         reg_path_partial = office_reg_path_partial.format(user.home_dir)
-        if mac_info.IsValidFilePath(reg_path_partial):
+        if mac_info.IsValidFolderPath(reg_path_partial):
             folders_list = mac_info.ListItemsInFolder(reg_path_partial, EntryType.FOLDERS, False)
             for folder in folders_list:
                 if folder['name'].endswith('.Office'):
-                    reg_path = office_reg_path_partial + '/' + folder['name'] + '/MicrosoftRegistrationDB.reg'
+                    reg_path = reg_path_partial + '/' + folder['name'] + '/MicrosoftRegistrationDB.reg'
                     if mac_info.IsValidFilePath(reg_path):
                         mac_info.ExportFile(reg_path, __Plugin_Name, user_name, False)
                         conn, wrapper = OpenDbFromImage(mac_info, reg_path, user)
@@ -325,7 +334,7 @@ def Plugin_Start(mac_info):
                             ParseRegistrationDB(conn, office_reg_items, user_name, reg_path)
                             conn.close()
                     else:
-                        log.debug('MicrosoftRegistrationDB.reg not found in path ' + office_reg_path_partial + '/' + folder['name'])
+                        log.debug('MicrosoftRegistrationDB.reg not found in path ' + reg_path_partial + '/' + folder['name'])
 
     if len(office_items) > 0:
         PrintItems(office_items, mac_info.output_params)
@@ -349,26 +358,26 @@ def Plugin_Start_Standalone(input_files_list, output_params):
                 ProcessOfficePlist(plist, office_items, '', input_path)
             except biplist.InvalidPlistException as ex:
                 log.exception('Failed to read file: {}'.format(input_path))
-        
-        basename = path.basename(input_path)
-        if basename.startswith('com.microsoft.') and basename.endswith('.plist'):
-            try:
-                plist = biplist.readPlist(input_path)
-                #basename_len = len(basename)
-                if basename.endswith('securebookmarks.plist'):                    
-                    app_name = basename[14:-22]
-                    ProcessOfficeAppSecureBookmarksPlist(plist, office_items, app_name, '', input_path)
-                else:
-                    app_name = basename[14:-6]
-                    ProcessOfficeAppPlist(plist, office_items, app_name, '', input_path)
-            except biplist.InvalidPlistException as ex:
-                log.exception('Failed to read file: {}'.format(input_path))
+        else:
+            basename = path.basename(input_path)
+            if basename.startswith('com.microsoft.') and basename.endswith('.plist'):
+                try:
+                    plist = biplist.readPlist(input_path)
+                    #basename_len = len(basename)
+                    if basename.endswith('securebookmarks.plist'):                    
+                        app_name = basename[14:-22]
+                        ProcessOfficeAppSecureBookmarksPlist(plist, office_items, app_name, '', input_path)
+                    else:
+                        app_name = basename[14:-6]
+                        ProcessOfficeAppPlist(plist, office_items, app_name, '', input_path)
+                except biplist.InvalidPlistException as ex:
+                    log.exception('Failed to read file: {}'.format(input_path))
 
-        if input_path.endswith('MicrosoftRegistrationDB.reg'):
-            conn = OpenDb(input_path)
-            if conn:
-                ParseRegistrationDB(conn, office_reg_items, '', input_path)
-                conn.close()
+            elif input_path.endswith('MicrosoftRegistrationDB.reg'):
+                conn = OpenDb(input_path)
+                if conn:
+                    ParseRegistrationDB(conn, office_reg_items, '', input_path)
+                    conn.close()
 
         if len(office_items) > 0:
             PrintItems(office_items, output_params)
