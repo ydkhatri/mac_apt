@@ -1,3 +1,22 @@
+Updates in 20190720 (v0.4):
+
++ New plugins - FSEVENTS, SPOTLIGHT, MSOFICE, UNIFIEDLOGS, AUTOSTART, IDEVICEINFO
++ Added ability to process VMDK disk images
++ RecentItems now reads SFL2 files
++ API for reading XATTR on APFS & HFS
++ mac_apt_singleplugin is renamed to mac_apt_artifact_only
++ Lots of changes under the hood for APFS handling, 
+  = enumerating files/folders is now several times faster
+  = encrypted volumes are detected properly now
+  = exporting or opening very large files is now supported
+  = now handles dirty APFS volume mounting using checkpoint processing
+  = disk processing is more robust now, less crash prone now!
+
+! Fixed Bash sessions bug, not retrieving data from .historynew files
+! Fixed a bug with MOUNTED mode
+! Basicinfo now gets vol info on vol-only images
+! Minor bug fixes to several plugins
+
 Updates in 20180606 (v0.3):
 
 + Added FrequentlyVisitedSitesCache, NSNavLastRootDirectory & RecentlyClosedTabls.plist parsing to SAFARI plugin
