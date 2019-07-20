@@ -7,9 +7,9 @@
 '''
 
 import sqlite3
-from helpers.macinfo import *
-from helpers.writer import *
-from helpers.common import *
+from plugins.helpers.macinfo import *
+from plugins.helpers.writer import *
+from plugins.helpers.common import *
 import logging
 import os
 

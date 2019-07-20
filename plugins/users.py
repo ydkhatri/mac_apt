@@ -9,8 +9,8 @@
 
 import os
 import logging
-from helpers.macinfo import *
-from helpers.writer import *
+from plugins.helpers.macinfo import *
+from plugins.helpers.writer import *
 
 __Plugin_Name = "USERS" # Cannot have spaces, and must be all caps!
 __Plugin_Friendly_Name = "User Information"

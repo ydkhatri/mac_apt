@@ -10,8 +10,8 @@
 import os
 import logging
 import biplist
-from helpers.macinfo import *
-from helpers.writer import *
+from plugins.helpers.macinfo import *
+from plugins.helpers.writer import *
 
 __Plugin_Name = "INSTALLHISTORY" # Cannot have spaces, and must be all caps!
 __Plugin_Friendly_Name = "Install History"

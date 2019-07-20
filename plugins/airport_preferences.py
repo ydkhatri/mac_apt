@@ -15,8 +15,8 @@ import logging
 from biplist import *
 from enum import IntEnum
 from binascii import unhexlify
-from helpers.macinfo import *
-from helpers.writer import *
+from plugins.helpers.macinfo import *
+from plugins.helpers.writer import *
 
 
 __Plugin_Name = "WIFI"

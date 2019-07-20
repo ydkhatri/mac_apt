@@ -14,8 +14,8 @@
 
 '''
 
-from helpers.macinfo import *
-from helpers.writer import *
+from plugins.helpers.macinfo import *
+from plugins.helpers.writer import *
 import logging
 from biplist import *
 import re

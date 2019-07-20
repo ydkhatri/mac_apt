@@ -225,6 +225,14 @@ def ProcessFile(file_name, f, logs, source_date, source):
 
     log.debug( "num_logs_processed from {} = {}".format(file_name, num_logs_processed_this_file))
 
+def ReadUuid(f):
+    uuid = ''
+    try:
+        uuid = f.read().decode('utf-8', 'backslashreplace')
+    except (ValueError, AttributeError):
+        log.exception('Error trying to read UUID')
+    return uuid
+
 def Plugin_Start(mac_info):
     '''Main Entry point function for plugin'''
     logs = []
@@ -237,7 +245,8 @@ def Plugin_Start(mac_info):
         f = mac_info.OpenSmallFile(path)
         if f != None:
             if file_name == 'fseventsd-uuid':
-                log.info("fseventsd-uuid={}".format(f.read()))
+                uuid = ReadUuid(f)
+                log.info("fseventsd-uuid={}".format(uuid)
             else:
                 ProcessFile(file_name, f, logs, item['dates']['m_time'], path)
         else:

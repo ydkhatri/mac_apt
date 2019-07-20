@@ -8,9 +8,9 @@
 '''
 
 from biplist import *
-from helpers.macinfo import *
-from helpers.writer import *
-from helpers.bookmark import *
+from plugins.helpers.macinfo import *
+from plugins.helpers.writer import *
+from plugins.helpers.bookmark import *
 import logging
 import sqlite3
 

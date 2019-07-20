@@ -7,7 +7,6 @@ __pycache__/
 *.py[co]
 *_test.py
 mac_apt_compiled*
-mac_apt_singleplugin_compiled*
 mac_apt_artifact_only_compiled*
 mac_apt_vmdk*
 *$py.class

@@ -13,9 +13,9 @@
    <YourOutputFolder>/Exports/IDEVICEBACKUPS/<USER>_<BACKUP_UUID>
 '''
 
-from helpers.macinfo import *
-from helpers.writer import *
-from helpers.common import *
+from plugins.helpers.macinfo import *
+from plugins.helpers.writer import *
+from plugins.helpers.common import *
 from biplist import *
 import logging
 import os

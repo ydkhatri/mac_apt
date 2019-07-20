@@ -15,9 +15,9 @@ import biplist
 from biplist import *
 import logging
 import uuid
-from helpers.macinfo import *
-from helpers.writer import *
-from helpers.common import *
+from plugins.helpers.macinfo import *
+from plugins.helpers.writer import *
+from plugins.helpers.common import *
 
 __Plugin_Name = "NOTIFICATIONS" # Cannot have spaces, and must be all caps!
 __Plugin_Friendly_Name = "Notifications"

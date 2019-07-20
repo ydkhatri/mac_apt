@@ -7,9 +7,9 @@
 
 '''
 
-from helpers.macinfo import *
-from helpers.writer import *
-from helpers.bookmark import *
+from plugins.helpers.macinfo import *
+from plugins.helpers.writer import *
+from plugins.helpers.bookmark import *
 from plistutils.alias import AliasParser
 from os import path
 
