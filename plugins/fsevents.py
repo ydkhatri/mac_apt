@@ -246,7 +246,7 @@ def Plugin_Start(mac_info):
         if f != None:
             if file_name == 'fseventsd-uuid':
                 uuid = ReadUuid(f)
-                log.info("fseventsd-uuid={}".format(uuid)
+                log.info("fseventsd-uuid={}".format(uuid))
             else:
                 ProcessFile(file_name, f, logs, item['dates']['m_time'], path)
         else:

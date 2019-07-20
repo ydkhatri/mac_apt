@@ -46,7 +46,7 @@ class PersistentProgram:
         self.app_path = app_path
 
 def process_loginitems_plist(mac_info, plist_path, user, uid, persistent_programs):
-    mac_info.ExportFile(plist_path, __Plugin_Name, user, False)
+    mac_info.ExportFile(plist_path, __Plugin_Name, user + "_", False)
     success, plist, error = mac_info.ReadPlist(plist_path)
     if success:
         try:
@@ -131,7 +131,7 @@ def process_dir(mac_info, path, persistent_programs, method, user_name, uid):
                 target_path = mac_info.ReadSymLinkTargetPath(full_path)
                 log.debug('SYMLINK {} <==> {}'.format(full_path, target_path))
                 full_path = target_path
-            mac_info.ExportFile(full_path, __Plugin_Name, user_name, False)
+            mac_info.ExportFile(full_path, __Plugin_Name, user_name + "_", False)
 
             if method == 'Daemon' or method == 'Agents':
                 success, plist, error = mac_info.ReadPlist(full_path)
@@ -174,7 +174,7 @@ def process_file(mac_info, file_path, persistent_programs, file_name):
     persistent_programs.append(program)
 
 def process_overrides(mac_info, file_path, user, uid, persistent_programs):
-    mac_info.ExportFile(file_path, __Plugin_Name, user, False)
+    mac_info.ExportFile(file_path, __Plugin_Name, user + "_", False)
     success, plist, error = mac_info.ReadPlist(file_path)
     if success:
         for k, v in plist.items():
@@ -208,7 +208,7 @@ def ProcessLoginRestartApps(mac_info, persistent_programs):
                 file_name = file['name']
                 full_path = folder_path + '/' + file_name
                 if file_name.startswith('com.apple.loginwindow.') and len(file_name) == 64 and file_name.endswith('.plist') and file['size'] > 85:
-                    mac_info.ExportFile(full_path, __Plugin_Name, user_name, False)
+                    mac_info.ExportFile(full_path, __Plugin_Name, user_name + "_", False)
                     success, plist, error = mac_info.ReadPlist(full_path)
                     if success:
                         items = plist.get('TALAppsToRelaunchAtLogin', [])
