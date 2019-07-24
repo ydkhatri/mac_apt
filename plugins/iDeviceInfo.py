@@ -122,9 +122,14 @@ def deviceReader(devicePlist, userDevicePath, user_name, devices):
     rawCode = devicePlist.get('Region Info', '')
     if rawCode:
         if "/" in rawCode:
-            rawCode = rawCode[0:rawCode.find("/")]
-            parsedCode = str(Country(rawCode))
+            parsedCode = rawCode[0:rawCode.find("/")]
+        else:
+            parsedCode = rawCode
+        try:
+            parsedCode = str(Country(parsedCode))
             parsedCode= parsedCode[8:]
+        except ValueError: # The country code is not present in our list
+            pass
     else:
         parsedCode = rawCode
 
