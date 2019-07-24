@@ -107,6 +107,8 @@ class CommonFunctions:
         except ValueError: # Will go here if string is '' or contains non-digit characters
             if string == '' or string == None: pass
             else: log.exception('Could not convert string "{}" to int'.format(string))
+        except TypeError:
+            log.exception('Invalid type passed to IntFromStr()')
         return integer
 
     @staticmethod
