@@ -105,6 +105,7 @@ def PrintAll(output_params, source_path, devices):
                     ]
 
     device_list = []
+    log.info("Found {} iDevice(s)".format(len(devices)))
     for dvc in devices:
         dvcs_item = [ dvc.Username, dvc.Device_Class, dvc.Serial_Num, dvc.Use_Count,
                       dvc.Last_Connected, dvc.Firmware_Ver_String, dvc.Product_Type, dvc.ID,
@@ -169,10 +170,7 @@ def deviceFinder(userDevicePath, user_name, devices, standalone, mac_info = None
     allDevices = devicePlist.get('Devices', {})
     for d in allDevices:
         singleDevice = allDevices.get(d, {})
-        if standalone:
-            deviceReader(singleDevice, userDevicePath, user_name, devices)
-        else:
-            deviceReader(singleDevice, userDevicePath, user_name, devices)
+        deviceReader(singleDevice, userDevicePath, user_name, devices)
 
 def Plugin_Start(mac_info):
     '''Main Entry point function for plugin'''
