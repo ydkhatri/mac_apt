@@ -227,8 +227,31 @@ def ProcessOfficeAppPlist(plist, office_items, app_name, user, source):
             elif item == 'SessionStartTime': info = 'Local time?'
             o_item = MSOfficeItem(app_name, None, item, item_val, info, user, source)
             office_items.append(o_item)
-    # TODO LastSaveFilePathBookmark
 
+    bookmark_data = plist.get('LastSaveFilePathBookmark', None)
+    if bookmark_data:
+        bm = Bookmark.from_bytes(bookmark_data)
+        file_path = ''
+        file_creation_date = None
+        vol_path = ''
+
+        try:
+            # Get full file path
+            vol_path = bm.tocs[0][1].get(BookmarkKey.VolumePath, '')
+            vol_creation_date = bm.tocs[0][1].get(BookmarkKey.VolumeCreationDate, '')
+            file_path = bm.tocs[0][1].get(BookmarkKey.Path, [])
+
+            file_path = '/' + '/'.join(file_path)
+            file_creation_date = bm.tocs[0][1].get(BookmarkKey.FileCreationDate, '')
+            if vol_path and (not file_path.startswith(vol_path)):
+                file_path += vol_path
+
+            o_item = MSOfficeItem(app_name, file_creation_date, 'LastSaveFilePathBookmark', file_path, 'Date is FileCreated', user, source)
+            office_items.append(o_item)
+        except (IndexError, ValueError):
+            log.exception('Error processing BookmarkData from .LastGKReject')
+            log.debug(bm)
+        
 def ProcessOfficeAppSecureBookmarksPlist(plist, office_items, app_name, user, source):
     #TODO process bookmarks
     for k, v in plist.items():
