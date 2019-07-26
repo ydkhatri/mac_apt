@@ -1078,13 +1078,17 @@ class MountedMacInfo(MacInfo):
         #log.debug("req={} final={}".format(path_in_image, full_path))
         return full_path
 
+    def _get_creation_time(self, local_path):
+        return os.stat(local_path).st_birthtime
+
     def GetFileMACTimes(self, file_path):
         file_path = self.BuildFullPath(file_path)
         times = { 'c_time':None, 'm_time':None, 'cr_time':None, 'a_time':None }
         try:
             times['c_time'] = None if self.is_windows else CommonFunctions.ReadUnixTime(os.path.getctime(file_path))
             times['m_time'] = CommonFunctions.ReadUnixTime(os.path.getmtime(file_path))
-            times['cr_time'] = CommonFunctions.ReadUnixTime(os.path.getctime(file_path)) if self.is_windows else None
+            times['cr_time'] = CommonFunctions.ReadUnixTime(os.path.getctime(file_path)) if self.is_windows \
+                                else CommonFunctions.ReadUnixTime(self._get_creation_time(file_path))
             times['a_time'] = CommonFunctions.ReadUnixTime(os.path.getatime(file_path))
         except OSError as ex:
             log.exception('Error trying to get MAC times')
