@@ -1090,12 +1090,18 @@ class MountedMacInfo(MacInfo):
             log.exception('Error trying to get MAC times')
         return times
 
+    def IsSymbolicLink(self, path):
+        try:
+            return os.path.islink(self.BuildFullPath(path))
+        except OSError as ex:
+            log.exception("Exception in IsSymbolicLink() for path : {} " + path)
+        return False
+
     def IsValidFilePath(self, path):
         try:
             return os.path.lexists(self.BuildFullPath(path)) 
         except OSError as ex:
-            log.error("Exception in IsValidFilePath() for path : {} " + path)
-            log.exception("Exception details")
+            log.exception("Exception in IsValidFilePath() for path : {} " + path)
         return False
 
     def IsValidFolderPath(self, path):
