@@ -13,6 +13,7 @@ mac_apt is a DFIR tool to process Mac computer full disk images (or live machine
 * Analyzed files/artifacts are exported for later review
 * zlib, lzvn, lzfse compressed files are supported!
 * Native HFS & APFS parser
+* Reads the Spotlight database and Unified Logging (tracev3) files
 
 Available Plugins (artifacts parsed) | Description 
 ------------------ | ---------------
