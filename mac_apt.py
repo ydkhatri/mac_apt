@@ -34,7 +34,7 @@ from plugins.helpers.writer import *
 from plugins.helpers.disk_report import *
 from plugin import *
 
-__VERSION = "0.4"
+__VERSION = "0.4.1"
 __PROGRAMNAME = "macOS Artifact Parsing Tool"
 __EMAIL = "yogesh@swiftforensics.com"
 
