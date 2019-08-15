@@ -1190,8 +1190,8 @@ class MountedMacInfo(MacInfo):
         return None
 
     def ExtractFile(self, path_in_image, destination_path):
-        try:
-            source_file = self.OpenSmallFile(path_in_image)
+        source_file = self.OpenSmallFile(path_in_image)
+        if source_file:
             size = self.GetFileSize(path_in_image)
 
             BUFF_SIZE = 1024 * 1024
@@ -1209,9 +1209,6 @@ class MountedMacInfo(MacInfo):
                 log.exception ("Failed to create file for writing at " + destination_path)
                 return False 
             return True
-        except (IOError, OSError):
-            log.error("Failed to open/find file " + source_file) 
-            log.debug("Exception details:\n", exc_info=True)       
         return False
 
     def _GetUserAndGroupID(self, path):
