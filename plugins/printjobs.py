@@ -127,6 +127,13 @@ def stringify(binary_str):
             return str(binary_str)
     return ''
 
+def read_as_datetime(request, job_request):
+    '''Gets a datetime object from job response'''
+    dt = get_job_detail(request, job_request)
+    if dt == b'':
+        dt = ''
+    return CommonFunctions.ReadUnixTime(dt)
+
 def get_job_properties(request, filepath):
     '''Get job properties from request object'''
     job_name = stringify(get_job_detail(request, "job-name"))
@@ -146,9 +153,9 @@ def get_job_properties(request, filepath):
     destination_printer = stringify(get_job_detail(request, "DestinationPrinterID"))
     app = stringify(get_job_detail(request, "com.apple.print.JobInfo.PMApplicationName"))
 
-    time_at_creation = CommonFunctions.ReadUnixTime(get_job_detail(request, "time-at-creation"))
-    time_at_processing = CommonFunctions.ReadUnixTime(get_job_detail(request, "time-at-processing"))
-    time_at_completion = CommonFunctions.ReadUnixTime(get_job_detail(request, "time-at-completed"))
+    time_at_creation = read_as_datetime(request, "time-at-creation")
+    time_at_processing = read_as_datetime(request, "time-at-processing")
+    time_at_completion = read_as_datetime(request, "time-at-completed")
 
     return [job_name, job_origin_username, job_ID, destination_printer, app, time_at_creation, time_at_processing, time_at_completion,\
              copies, doc_format, job_origin_hostname, job_state, job_media_sheets_completed, job_printer_state_message,\
