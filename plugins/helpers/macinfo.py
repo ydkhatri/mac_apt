@@ -1078,24 +1078,34 @@ class MountedMacInfo(MacInfo):
         #log.debug("req={} final={}".format(path_in_image, full_path))
         return full_path
 
+    def _get_creation_time(self, local_path):
+        return os.stat(local_path).st_birthtime
+
     def GetFileMACTimes(self, file_path):
         file_path = self.BuildFullPath(file_path)
         times = { 'c_time':None, 'm_time':None, 'cr_time':None, 'a_time':None }
         try:
             times['c_time'] = None if self.is_windows else CommonFunctions.ReadUnixTime(os.path.getctime(file_path))
             times['m_time'] = CommonFunctions.ReadUnixTime(os.path.getmtime(file_path))
-            times['cr_time'] = CommonFunctions.ReadUnixTime(os.path.getctime(file_path)) if self.is_windows else None
+            times['cr_time'] = CommonFunctions.ReadUnixTime(os.path.getctime(file_path)) if self.is_windows \
+                                else CommonFunctions.ReadUnixTime(self._get_creation_time(file_path))
             times['a_time'] = CommonFunctions.ReadUnixTime(os.path.getatime(file_path))
         except OSError as ex:
             log.exception('Error trying to get MAC times')
         return times
 
+    def IsSymbolicLink(self, path):
+        try:
+            return os.path.islink(self.BuildFullPath(path))
+        except OSError as ex:
+            log.exception("Exception in IsSymbolicLink() for path : {} " + path)
+        return False
+
     def IsValidFilePath(self, path):
         try:
             return os.path.lexists(self.BuildFullPath(path)) 
         except OSError as ex:
-            log.error("Exception in IsValidFilePath() for path : {} " + path)
-            log.exception("Exception details")
+            log.exception("Exception in IsValidFilePath() for path : {} " + path)
         return False
 
     def IsValidFolderPath(self, path):
@@ -1180,8 +1190,8 @@ class MountedMacInfo(MacInfo):
         return None
 
     def ExtractFile(self, path_in_image, destination_path):
-        try:
-            source_file = self.OpenSmallFile(path_in_image)
+        source_file = self.OpenSmallFile(path_in_image)
+        if source_file:
             size = self.GetFileSize(path_in_image)
 
             BUFF_SIZE = 1024 * 1024
@@ -1199,9 +1209,6 @@ class MountedMacInfo(MacInfo):
                 log.exception ("Failed to create file for writing at " + destination_path)
                 return False 
             return True
-        except (IOError, OSError):
-            log.error("Failed to open/find file " + source_file) 
-            log.debug("Exception details:\n", exc_info=True)       
         return False
 
     def _GetUserAndGroupID(self, path):

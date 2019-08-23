@@ -100,7 +100,7 @@ def GetReadableSSID(ssid, wifi_plist_ver):
             ssid = ssid[10:]
         else:
             ssid = ssid[11:-1]
-            ssid = ssid.replace(" ", "")
+        ssid = ssid.replace(" ", "").replace("<", "").replace(">", "")
         ssid = unhexlify(ssid).decode('utf-8', 'backslashreplace')
     except (ValueError, IndexError) as e:
         log.error ('Error in GetReadableSSID() Details: ' + str(e))

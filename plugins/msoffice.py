@@ -227,14 +227,60 @@ def ProcessOfficeAppPlist(plist, office_items, app_name, user, source):
             elif item == 'SessionStartTime': info = 'Local time?'
             o_item = MSOfficeItem(app_name, None, item, item_val, info, user, source)
             office_items.append(o_item)
-    # TODO LastSaveFilePathBookmark
 
+    bookmark_data = plist.get('LastSaveFilePathBookmark', None)
+    if bookmark_data:
+        file_path = ''
+        file_creation_date = None
+        vol_path = ''
+
+        try:
+            bm = Bookmark.from_bytes(bookmark_data)
+            # Get full file path
+            vol_path = bm.tocs[0][1].get(BookmarkKey.VolumePath, '')
+            vol_creation_date = bm.tocs[0][1].get(BookmarkKey.VolumeCreationDate, '')
+            file_path = bm.tocs[0][1].get(BookmarkKey.Path, [])
+
+            file_path = '/' + '/'.join(file_path)
+            file_creation_date = bm.tocs[0][1].get(BookmarkKey.FileCreationDate, '')
+            if vol_path and (not file_path.startswith(vol_path)):
+                file_path += vol_path
+            
+            if user == '': # in artifact_only mode
+                try:
+                    user = bm.tocs[0][1].get(BookmarkKey.UserName, '')
+                    if user == 'unknown':
+                        user = ''
+                except (IndexError, ValueError):
+                    pass
+
+            o_item = MSOfficeItem(app_name, file_creation_date, 'LastSaveFilePathBookmark', file_path, 'Date is FileCreated', user, source)
+            office_items.append(o_item)
+        except (IndexError, ValueError):
+            log.exception('Error processing BookmarkData from {}'.format(source))
+            log.debug(bm)
+        
 def ProcessOfficeAppSecureBookmarksPlist(plist, office_items, app_name, user, source):
-    #TODO process bookmarks
+    '''Process com.microsoft.<APP>.securebookmarks.plist'''
     for k, v in plist.items():
-        bm = v.get('kBookmarkDataKey', None)
+        data = v.get('kBookmarkDataKey', None)
 
-        o_item = MSOfficeItem(app_name, None, 'SecureBookmark', k, '', user, source)
+        file_creation_date = None
+        try:
+            bm = Bookmark.from_bytes(data)
+            file_creation_date = bm.tocs[0][1].get(BookmarkKey.FileCreationDate, '')
+            if user == '': # in artifact_only mode
+                try:
+                    user = bm.tocs[0][1].get(BookmarkKey.UserName, '')
+                    if user == 'unknown':
+                        user = ''
+                except (IndexError, ValueError):
+                    pass
+        except (IndexError, ValueError):
+            log.exception('Error processing BookmarkData from {}'.format(source))
+            log.debug(bm)
+
+        o_item = MSOfficeItem(app_name, file_creation_date, 'SecureBookmark', k, 'Date is FileCreated', user, source)
         office_items.append(o_item)
 
 def ProcessOfficePlist(plist, office_items, user, source):

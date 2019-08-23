@@ -538,6 +538,12 @@ def ReadGlobalPrefPlist(plist, recent_items, source='', user=''):
     except KeyError: # Not found
         pass
 
+    for k, v in plist.items():
+        if isinstance(v, str) and v == '1' and not k.startswith('Apple'):
+            # k is a Volume name
+            ri = RecentItem(k, '', 'Mounted Volume/Device name', source, RecentType.VOLUME, user)
+            recent_items.append(ri)
+
 def ReadRecentPlist(plist, recent_items, source='', user=''):
     for item_type in plist:
         if  item_type == 'Hosts':

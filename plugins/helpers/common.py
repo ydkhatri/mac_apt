@@ -47,7 +47,7 @@ class CommonFunctions:
                 if mac_abs_time > 0xFFFFFFFF: # more than 32 bits, this should be nano-second resolution timestamp (seen only in HighSierra)
                     return datetime.datetime(2001, 1, 1) + datetime.timedelta(seconds=mac_abs_time/1000000000.)
                 return datetime.datetime(2001, 1, 1) + datetime.timedelta(seconds=mac_abs_time)
-            except (ValueError, OverflowError) as ex:
+            except (ValueError, OverflowError, TypeError) as ex:
                 log.error("ReadMacAbsoluteTime() Failed to convert timestamp from value " + str(mac_abs_time) + " Error was: " + str(ex))
         return ''
 
@@ -59,7 +59,7 @@ class CommonFunctions:
                 if isinstance(mac_hfs_time, str):
                     mac_hfs_time = float(mac_hfs_time)
                 return datetime.datetime(1904, 1, 1) + datetime.timedelta(seconds=mac_hfs_time)
-            except (ValueError, OverflowError) as ex:
+            except (ValueError, OverflowError, TypeError) as ex:
                 log.error("ReadMacHFSTime() Failed to convert timestamp from value " + str(mac_hfs_time) + " Error was: " + str(ex))
         return ''
 
@@ -71,7 +71,7 @@ class CommonFunctions:
                 if isinstance(mac_apfs_time, str):
                     mac_apfs_time = float(mac_apfs_time)
                 return datetime.datetime(1970, 1, 1) + datetime.timedelta(seconds=mac_apfs_time/1000000000.)
-            except (ValueError, OverflowError) as ex:
+            except (ValueError, OverflowError, TypeError) as ex:
                 log.error("ReadAPFSTime() Failed to convert timestamp from value " + str(mac_apfs_time) + " Error was: " + str(ex))
         return ''
 
@@ -83,7 +83,7 @@ class CommonFunctions:
                 if isinstance(unix_time, str):
                     unix_time = float(unix_time)
                 return datetime.datetime(1970, 1, 1) + datetime.timedelta(seconds=unix_time)
-            except (ValueError, OverflowError) as ex:
+            except (ValueError, OverflowError, TypeError) as ex:
                 log.error("ReadUnixTime() Failed to convert timestamp from value " + str(unix_time) + " Error was: " + str(ex))
         return ''
 
@@ -95,7 +95,7 @@ class CommonFunctions:
                 if isinstance(file_time, str):
                     file_time = float(file_time)
                 return datetime.datetime(1601, 1, 1) + datetime.timedelta(microseconds=file_time/10.)
-            except (ValueError, OverflowError) as ex:
+            except (ValueError, OverflowError, TypeError) as ex:
                 log.error("ReadWindowsFileTime() Failed to convert timestamp from value " + str(file_time) + " Error was: " + str(ex))
         return ''
 
@@ -107,6 +107,8 @@ class CommonFunctions:
         except ValueError: # Will go here if string is '' or contains non-digit characters
             if string == '' or string == None: pass
             else: log.exception('Could not convert string "{}" to int'.format(string))
+        except TypeError:
+            log.exception('Invalid type passed to IntFromStr()')
         return integer
 
     @staticmethod
