@@ -7,20 +7,21 @@
    
 '''
 
-import pytsk3
-import traceback
-import biplist
-import tempfile
-import sqlite3
-import os
-import stat
-import shutil
-import struct
-import random
-import string
-import time
-import logging
 import ast
+import biplist
+import logging
+import os
+import random
+import pytsk3
+import shutil
+import stat
+import string
+import struct
+import sqlite3
+import sys
+import tempfile
+import time
+import traceback
 from plugins.helpers.apfs_reader import *
 from plugins.helpers.hfs_alt import HFSVolume
 from plugins.helpers.common import *
@@ -1057,6 +1058,10 @@ class MountedMacInfo(MacInfo):
         self.osx_root_folder = root_folder_path
         # TODO: if os.name == 'nt' and len (root_folder_path) == 2 and root_folder_path[2] == ':': self.osx_root_folder += '\\'
         self.is_windows = (os.name == 'nt')
+        self.is_linux = (sys.platform == 'linux')
+        if self.is_linux:
+            log.warning('Since this is a linux (mounted) system, there is no way for python to extract created_date timestamps. '\
+                        'This is a limitation of Python. Created timestamps shows/seen will actually be same as Last_Modified timestamps.')
 
     def BuildFullPath(self, path_in_image):
         '''
@@ -1079,7 +1084,12 @@ class MountedMacInfo(MacInfo):
         return full_path
 
     def _get_creation_time(self, local_path):
-        return os.stat(local_path).st_birthtime
+        if self.is_windows:
+            CommonFunctions.ReadUnixTime(os.path.getctime(local_path))
+        elif self.is_linux:
+            return os.path.getmtime(local_path) # Since this is not possible to fetch in Linux (using python)!
+        else:
+            return os.stat(local_path).st_birthtime
 
     def GetFileMACTimes(self, file_path):
         file_path = self.BuildFullPath(file_path)
@@ -1087,8 +1097,7 @@ class MountedMacInfo(MacInfo):
         try:
             times['c_time'] = None if self.is_windows else CommonFunctions.ReadUnixTime(os.path.getctime(file_path))
             times['m_time'] = CommonFunctions.ReadUnixTime(os.path.getmtime(file_path))
-            times['cr_time'] = CommonFunctions.ReadUnixTime(os.path.getctime(file_path)) if self.is_windows \
-                                else CommonFunctions.ReadUnixTime(self._get_creation_time(file_path))
+            times['cr_time'] = self._get_creation_time(file_path)
             times['a_time'] = CommonFunctions.ReadUnixTime(os.path.getatime(file_path))
         except OSError as ex:
             log.exception('Error trying to get MAC times')
