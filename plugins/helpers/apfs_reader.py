@@ -84,7 +84,7 @@ class ApfsDbInfo:
 
     def CheckVerInfo(self):
         '''Returns true if info in db matches current version number'''
-        query = 'SELECT Version FROM {}'.format(self.ver_table_name)
+        query = 'SELECT Version FROM "{}"'.format(self.ver_table_name)
         success, cursor, error = self.db_writer.RunQuery(query)
         index = 0
         if success:
@@ -101,7 +101,7 @@ class ApfsDbInfo:
 
     def CheckVolInfo(self, volumes):
         '''Returns true if info in db matches volume objects'''
-        query = 'SELECT Name, UUID, Files, Folders, Created, Updated FROM {}'.format(self.vol_table_name)
+        query = 'SELECT Name, UUID, Files, Folders, Created, Updated FROM "{}"'.format(self.vol_table_name)
         success, cursor, error = self.db_writer.RunQuery(query)
         index = 0
         data_is_unaltered = True
@@ -219,13 +219,13 @@ class ApfsFileSystemParser:
     
     def create_indexes(self):
         '''Create indexes on cnid and path in database'''
-        index_queries = ["CREATE INDEX {0}_attribute_cnid ON {0}_Attributes (CNID)".format(self.name),
-                         "CREATE INDEX {0}_extent_cnid ON {0}_Extents (CNID)".format(self.name),
-                         "CREATE INDEX {0}_index_cnid ON {0}_IndexNodes (CNID)".format(self.name),
-                         "CREATE INDEX {0}_paths_path_cnid ON {0}_Paths (Path, CNID)".format(self.name),
-                         "CREATE INDEX {0}_inodes_cnid_parent_cnid ON {0}_Inodes (CNID, Parent_CNID)".format(self.name),
-                         "CREATE INDEX {0}_compressed_files_cnid ON {0}_Compressed_Files (CNID)".format(self.name),
-                         "CREATE INDEX {0}_dir_stats_cnid ON {0}_DirStats (CNID)".format(self.name)]
+        index_queries = ["CREATE INDEX \"{0}_attribute_cnid\" ON \"{0}_Attributes\" (CNID)".format(self.name),
+                         "CREATE INDEX \"{0}_extent_cnid\" ON \"{0}_Extents\" (CNID)".format(self.name),
+                         "CREATE INDEX \"{0}_index_cnid\" ON \"{0}_IndexNodes\" (CNID)".format(self.name),
+                         "CREATE INDEX \"{0}_paths_path_cnid\" ON \"{0}_Paths\" (Path, CNID)".format(self.name),
+                         "CREATE INDEX \"{0}_inodes_cnid_parent_cnid\" ON \"{0}_Inodes\" (CNID, Parent_CNID)".format(self.name),
+                         "CREATE INDEX \"{0}_compressed_files_cnid\" ON \"{0}_Compressed_Files\" (CNID)".format(self.name),
+                         "CREATE INDEX \"{0}_dir_stats_cnid\" ON \"{0}_DirStats\" (CNID)".format(self.name)]
         for query in index_queries:
             success, cursor, error = self.dbo.RunQuery(query, writing=True)
             if not success:
@@ -250,19 +250,19 @@ class ApfsFileSystemParser:
         # available for listing, without having to go and read an extent.
 
         #Copy all decmpfs-Type2 attributes to table, where no resource forks <-- Nothing to do, just copy
-        type2_no_rsrc_query = "INSERT INTO {0}_Compressed_Files select b.CNID, b.Data, "\
+        type2_no_rsrc_query = "INSERT INTO \"{0}_Compressed_Files\" select b.CNID, b.Data, "\
                 " b.logical_uncompressed_size, 0 as extent_cnid, 0 as fpmc_in_extent, 0 as Extent_Logical_Size"\
-                " from {0}_Attributes as b "\
-                " left join {0}_Attributes as a on (a.cnid = b.cnid and a.Name = 'com.apple.ResourceFork') "\
+                " from \"{0}_Attributes\" as b "\
+                " left join \"{0}_Attributes\" as a on (a.cnid = b.cnid and a.Name = 'com.apple.ResourceFork') "\
                 " where b.Name='com.apple.decmpfs' and (b.Flags & 2)=2 and a.cnid is null".format(self.name)
         if not self.run_query(type2_no_rsrc_query, True):
             return
 
         #Add all decmpfs-Type2 attributes where resource forks exist, rsrc's extent_cnid is used
-        type2_rsrc_query = "INSERT INTO {0}_Compressed_Files "\
+        type2_rsrc_query = "INSERT INTO \"{0}_Compressed_Files\" "\
                 "SELECT b.CNID, b.Data, b.logical_uncompressed_size, a.extent_cnid as extent_cnid, 0 as fpmc_in_extent, "\
-                " a.logical_uncompressed_size as Extent_Logical_Size FROM {0}_Attributes as b "\
-                " left join {0}_Attributes as a on (a.cnid = b.cnid and a.Name = 'com.apple.ResourceFork')"\
+                " a.logical_uncompressed_size as Extent_Logical_Size FROM \"{0}_Attributes\" as b "\
+                " left join \"{0}_Attributes\" as a on (a.cnid = b.cnid and a.Name = 'com.apple.ResourceFork')"\
                 " where b.Name='com.apple.decmpfs' and (b.Flags & 2)=2 and a.cnid is not null".format(self.name)
         if not self.run_query(type2_rsrc_query, True):
             return
@@ -273,10 +273,10 @@ class ApfsFileSystemParser:
         #                       0                           1                                   2
         type1_query = "select b.CNID, b.extent_cnid as decmpfs_ext_cnid,  b.logical_uncompressed_size, "\
                 "e.Block_Num as decmpfs_first_ext_Block_num, a.extent_cnid as rsrc_extent_cnid , er.Block_Num as rsrc_first_extent_Block_num, "\
-                " a.logical_uncompressed_size as Extent_Logical_Size from {0}_Attributes as b "\
-                " left join {0}_Attributes as a on (a.cnid = b.cnid and a.Name = 'com.apple.ResourceFork') "\
-                " left join {0}_Extents as e on e.cnid=b.extent_cnid "\
-                " left join {0}_Extents as er on er.cnid=a.extent_cnid "\
+                " a.logical_uncompressed_size as Extent_Logical_Size from \"{0}_Attributes\" as b "\
+                " left join \"{0}_Attributes\" as a on (a.cnid = b.cnid and a.Name = 'com.apple.ResourceFork') "\
+                " left join \"{0}_Extents\" as e on e.cnid=b.extent_cnid "\
+                " left join \"{0}_Extents\" as er on er.cnid=a.extent_cnid "\
                 " where b.Name='com.apple.decmpfs' and (b.Flags & 1)=1"\
                 " and (e.offset=0 or e.offset is null) and (er.offset = 0 or er.offset is null)".format(self.name)
         success, cursor, error = self.dbo.RunQuery(type1_query, writing=False)
@@ -329,21 +329,21 @@ class ApfsFileSystemParser:
 
     def create_other_tables_and_indexes(self):
         '''Populate paths table in db, create compressed_files table and create indexes for faster queries'''
-        insert_query = "INSERT INTO {0}_Paths SELECT * FROM " \
+        insert_query = "INSERT INTO \"{0}_Paths\" SELECT * FROM " \
                         "( WITH RECURSIVE " \
                         "  under_root(path,name,cnid) AS " \
                         "  (  VALUES('','root',2) " \
                         "    UNION ALL " \
-                        "    SELECT under_root.path || '/' || {0}_IndexNodes.name, " \
-                        "{0}_IndexNodes.name, {0}_IndexNodes.cnid " \
-                        "       FROM {0}_IndexNodes JOIN under_root ON " \
-                        "       {0}_IndexNodes.parent_cnid=under_root.cnid " \
+                        "    SELECT under_root.path || '/' || \"{0}_IndexNodes\".name, " \
+                        "\"{0}_IndexNodes\".name, \"{0}_IndexNodes\".cnid " \
+                        "       FROM \"{0}_IndexNodes\" JOIN under_root ON " \
+                        "       \"{0}_IndexNodes\".parent_cnid=under_root.cnid " \
                         "   ORDER BY 1 " \
                         ") SELECT CNID, Path FROM under_root);"
                         
         query = insert_query.format(self.name)
         self.run_query(query, True)
-        self.run_query("UPDATE {}_Paths SET path = '/' where cnid = 2;".format(self.name), True)
+        self.run_query("UPDATE \"{}_Paths\" SET path = '/' where cnid = 2;".format(self.name), True)
 
         self.populate_compressed_files_table()
         self.create_indexes()
@@ -747,14 +747,14 @@ class ApfsVolume:
         return False
 
         # if type == EntryType.FILES_AND_FOLDERS:
-        #     query = "SELECT CNID from {0}_Paths WHERE Path = '{1}'"
+        #     query = "SELECT CNID from \"{0}_Paths\" WHERE Path = '{1}'"
         # elif type == EntryType.FILES:
-        #     query = "SELECT p.CNID from {0}_Paths as p "\
-        #             " left join {0}_IndexNodes as i on i.CNID = p.CNID "\
+        #     query = "SELECT p.CNID from \"{0}_Paths\" as p "\
+        #             " left join \"{0}_IndexNodes\" as i on i.CNID = p.CNID "\
         #             " WHERE Path = '{1}' AND ItemType=8"
         # else: # folders
-        #     query = "SELECT p.CNID from {0}_Paths as p "\
-        #             " left join {0}_IndexNodes as i on i.CNID = p.CNID "\
+        #     query = "SELECT p.CNID from \"{0}\"_Paths as p "\
+        #             " left join \"{0}_IndexNodes\" as i on i.CNID = p.CNID "\
         #             " WHERE Path = '{1}' AND ItemType=4"
         # path = path.replace("'", "''") # if path contains single quote, replace with double to escape it!
         # success, cursor, error_message = self.dbo.RunQuery(query.format(self.name, path))
@@ -797,14 +797,14 @@ class ApfsVolume:
                 " d.ItemType, d.DateAdded, e.Offset as Extent_Offset, e.Size as Extent_Size, e.Block_Num as Extent_Block_Num, "\
                 " c.Uncompressed_size, c.Data, c.Extent_Logical_Size, "\
                 " ec.Offset as compressed_Extent_Offset, ec.Size as compressed_Extent_Size, ec.Block_Num as compressed_Extent_Block_Num "\
-                " from {0}_Paths as p "\
-                " left join {0}_Inodes as i on i.CNID = p.CNID "\
-                " left join {0}_IndexNodes as d on d.CNID = p.CNID "\
-                " left join {0}_Extents as e on e.CNID = i.Extent_CNID "\
-                " left join {0}_Compressed_Files as c on c.CNID = i.CNID "\
-                " left join {0}_Extents as ec on ec.CNID = c.Extent_CNID "\
-                " left join {0}_Attributes as a on a.CNID = p.CNID "\
-                " left join {0}_Extents as ex on ex.CNID = a.Extent_CNID "\
+                " from \"{0}_Paths\" as p "\
+                " left join \"{0}_Inodes\" as i on i.CNID = p.CNID "\
+                " left join \"{0}_IndexNodes\" as d on d.CNID = p.CNID "\
+                " left join \"{0}_Extents\" as e on e.CNID = i.Extent_CNID "\
+                " left join \"{0}_Compressed_Files\" as c on c.CNID = i.CNID "\
+                " left join \"{0}_Extents\" as ec on ec.CNID = c.Extent_CNID "\
+                " left join \"{0}_Attributes\" as a on a.CNID = p.CNID "\
+                " left join \"{0}_Extents\" as ex on ex.CNID = a.Extent_CNID "\
                 " {1} "\
                 " order by Extent_Offset, compressed_Extent_Offset, xName, xExOff"
         # This query gets file metadata as well as extents for file. If compressed, it gets compressed extents.
@@ -915,14 +915,14 @@ class ApfsVolume:
     def GetManyFileMetadataCountOnly(self, where_clause):
         '''Only returns a count of items. A where_clause specifies either cnid or path to find'''
         query = "SELECT count(DISTINCT p.cnid)"\
-                " from {0}_Paths as p "\
-                " left join {0}_Inodes as i on i.CNID = p.CNID "\
-                " left join {0}_IndexNodes as d on d.CNID = p.CNID "\
-                " left join {0}_Extents as e on e.CNID = i.Extent_CNID "\
-                " left join {0}_Compressed_Files as c on c.CNID = i.CNID "\
-                " left join {0}_Extents as ec on ec.CNID = c.Extent_CNID "\
-                " left join {0}_Attributes as a on a.CNID = p.CNID "\
-                " left join {0}_Extents as ex on ex.CNID = a.Extent_CNID "\
+                " from \"{0}_Paths\" as p "\
+                " left join \"{0}_Inodes\" as i on i.CNID = p.CNID "\
+                " left join \"{0}_IndexNodes\" as d on d.CNID = p.CNID "\
+                " left join \"{0}_Extents\" as e on e.CNID = i.Extent_CNID "\
+                " left join \"{0}_Compressed_Files\" as c on c.CNID = i.CNID "\
+                " left join \"{0}_Extents\" as ec on ec.CNID = c.Extent_CNID "\
+                " left join \"{0}_Attributes\" as a on a.CNID = p.CNID "\
+                " left join \"{0}_Extents\" as ex on ex.CNID = a.Extent_CNID "\
                 " {1} "
         success, cursor, error_message = self.dbo.RunQuery(query.format(self.name, where_clause))
         if success:
@@ -941,14 +941,14 @@ class ApfsVolume:
                 " d.ItemType, d.DateAdded, e.Offset as Extent_Offset, e.Size as Extent_Size, e.Block_Num as Extent_Block_Num, "\
                 " c.Uncompressed_size, c.Data, c.Extent_Logical_Size, "\
                 " ec.Offset as compressed_Extent_Offset, ec.Size as compressed_Extent_Size, ec.Block_Num as compressed_Extent_Block_Num "\
-                " from {0}_Paths as p "\
-                " left join {0}_Inodes as i on i.CNID = p.CNID "\
-                " left join {0}_IndexNodes as d on d.CNID = p.CNID "\
-                " left join {0}_Extents as e on e.CNID = i.Extent_CNID "\
-                " left join {0}_Compressed_Files as c on c.CNID = i.CNID "\
-                " left join {0}_Extents as ec on ec.CNID = c.Extent_CNID "\
-                " left join {0}_Attributes as a on a.CNID = p.CNID "\
-                " left join {0}_Extents as ex on ex.CNID = a.Extent_CNID "\
+                " from \"{0}_Paths\" as p "\
+                " left join \"{0}_Inodes\" as i on i.CNID = p.CNID "\
+                " left join \"{0}_IndexNodes\" as d on d.CNID = p.CNID "\
+                " left join \"{0}_Extents\" as e on e.CNID = i.Extent_CNID "\
+                " left join \"{0}_Compressed_Files\" as c on c.CNID = i.CNID "\
+                " left join \"{0}_Extents\" as ec on ec.CNID = c.Extent_CNID "\
+                " left join \"{0}_Attributes\" as a on a.CNID = p.CNID "\
+                " left join \"{0}_Extents\" as ex on ex.CNID = a.Extent_CNID "\
                 " {1} "\
                 " order by p.Path, p.CNID, Extent_Offset, compressed_Extent_Offset, xName, xExOff"
         # This query gets file metadata as well as extents for file. If compressed, it gets compressed extents.
