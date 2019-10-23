@@ -16,9 +16,10 @@ import textwrap
 log = logging.getLogger('MAIN.DISK_REPORT')
 
 class Vol_Info:
-    def __init__(self, name, size, file_sys_type, offset, has_os):
+    def __init__(self, name, size, used, file_sys_type, offset, has_os):
         self.name = name
         self.size_bytes = size
+        self.size_used = used
         self.file_system = file_sys_type
         self.offset = offset
         self.size_str = Disk_Info.GetSizeStr(size)
@@ -69,17 +70,18 @@ class Disk_Info:
 
         data_info = [ ('Type',DataType.TEXT),('Scheme_or_FS-Type',DataType.TEXT),('Name',DataType.TEXT),
                       ('Offset',DataType.INTEGER),('Size',DataType.TEXT), ('Size_in_bytes',DataType.INTEGER),
-                      ('macOS_Installed',DataType.TEXT) ]
-        info = [ ['Partition', x.file_system, x.name, x.offset, x.size_str, x.size_bytes, 
+                      ('Size_Used',DataType.TEXT),('macOS_Installed',DataType.TEXT) ]
+        info = [ ['Partition', x.file_system, x.name, x.offset, x.size_str, x.size_bytes, x.size_used,
                     '*' if x.has_os else ''] for x in self.volumes]
-        info.insert(0, ['Disk', str(self.mac_info.vol_info.info.vstype)[12:], '', 0, Disk_Info.GetSizeStr(self.total_disk_size_in_bytes), self.total_disk_size_in_bytes, ''])
+        info.insert(0, ['Disk', str(self.mac_info.vol_info.info.vstype)[12:], '', 0, Disk_Info.GetSizeStr(self.total_disk_size_in_bytes), self.total_disk_size_in_bytes, '', ''])
         WriteList("disk, partition & volume information", "Disk_Info", info, data_info, self.mac_info.output_params,'')
 
     def ReadVolumesFromPartTable(self):
         if self.apfs_container_only:
             size = self.mac_info.apfs_container_size
             for volume in self.mac_info.apfs_container.volumes:
-                vol = Vol_Info(volume.volume_name, size, 'APFS', 0, self.mac_info.osx_FS == volume)
+                used_space = '{:.2f} GB'.format(float(volume.container.block_size * volume.num_blocks_used / (1024*1024*1024.0)))
+                vol = Vol_Info(volume.volume_name, size, used_space, 'APFS', 0, self.mac_info.osx_FS == volume)
                 self.volumes.append(vol)
         else:
             for part in self.mac_info.vol_info:
@@ -88,26 +90,33 @@ class Disk_Info:
                     partition_size_in_sectors = part.len
                     file_system = 'Unknown'
                     part_is_apfs = False
+                    used_space = ''
                     try:
                         fs = pytsk3.FS_Info(self.img, offset=partition_start_offset)
                         fs_info = fs.info # TSK_FS_INFO
                         fs_type = str(fs_info.ftype)[12:]
                         if fs_type.find("_") > 0: fs_type = fs_type[0:fs_type.find("_")]
                         file_system = fs_type
+                        if file_system == 'HFS' and self.mac_info.osx_partition_start_offset == partition_start_offset: # For osx partition only
+                            hfs_info = self.mac_info.hfs_native.GetVolumeInfo()
+                            used_space = '{:.2f} GB'.format(float(hfs_info.block_size * (hfs_info.total_blocks - hfs_info.free_blocks) / (1024*1024*1024.0)))
                     except Exception as ex:
                         if self.mac_info.is_apfs and partition_start_offset == self.mac_info.osx_partition_start_offset:
                             part_is_apfs = True
                             for volume in self.mac_info.apfs_container.volumes:
+                                used_space = '{:.2f} GB'.format(float(volume.container.block_size * volume.num_blocks_used / (1024*1024*1024.0)))
                                 vol = Vol_Info(volume.volume_name, 
                                     partition_size_in_sectors * self.block_size, 
-                                    'APFS', 
+                                    used_space, 'APFS', 
                                     partition_start_offset,
                                     self.mac_info.osx_FS == volume)
                                 self.volumes.append(vol)
+                        elif part.desc.decode('utf-8').upper() in ("EFI SYSTEM PARTITION", "APPLE_PARTITION_MAP"):
+                            log.debug(" Skipping {}".format(part.desc.decode('utf-8')))
                         else:
                             log.debug(" Error: Failed to detect/parse file system!")
                     if not part_is_apfs:
                         vol = Vol_Info(part.desc.decode('utf-8'), 
-                                    partition_size_in_sectors * self.block_size, 
+                                    partition_size_in_sectors * self.block_size, used_space,
                                     file_system, partition_start_offset, self.mac_info.osx_partition_start_offset==partition_start_offset)
                         self.volumes.append(vol)

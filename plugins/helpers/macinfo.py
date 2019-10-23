@@ -77,6 +77,8 @@ class HfsVolumeInfo:
         self.num_files = 0
         self.num_folders = 0
         self.block_size = 0
+        self.total_blocks = 0
+        self.free_blocks = 0
         self.is_HFSX = False
 
 class NativeHfsParser:
@@ -112,6 +114,8 @@ class NativeHfsParser:
             hfs_info.date_last_checked = CommonFunctions.ReadMacHFSTime(header.checkedDate)
             hfs_info.num_files = header.fileCount
             hfs_info.num_folders = header.folderCount
+            hfs_info.total_blocks = header.totalBlocks
+            hfs_info.free_blocks = header.freeBlocks
             return hfs_info
         except ValueError as ex:
             log.exception("Failed to read HFS info")
