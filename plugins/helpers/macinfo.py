@@ -303,8 +303,8 @@ class MacInfo:
     def __init__(self, output_params):
         #self.Partitions = {}   # Dictionary of all partition objects returned from pytsk LATER! 
         self.pytsk_image = None
-        self.osx_FS = None     # Just the FileSystem object (fs) from OSX partition
-        self.osx_partition_start_offset = 0
+        self.osx_FS = None      # Just the FileSystem object (fs) from OSX partition
+        self.osx_partition_start_offset = 0 # Container offset if APFS
         self.vol_info = None # disk_volumes
         self.output_params = output_params
         self.osx_version = '0.0.0'
@@ -928,8 +928,22 @@ class ApfsMacInfo(MacInfo):
         self.apfs_container = None
         self.apfs_db = None
         self.apfs_db_path = ''
-        #self.apfs_osx_volume = self.osx_FS
-        #self.apfs_container_offset = self.osx_partition_start_offset
+        self.apfs_sys_volume = None  # New in 10.15, a System read-only partition
+        self.apfs_data_volume = None # New in 10.15, a separate Data partition
+
+    def UseCombinedVolume(self):
+        self.osx_FS = ApfsSysDataLinkedVolume(self.apfs_sys_volume, self.apfs_data_volume)
+
+    def CreateCombinedVolume(self):
+        '''Returns True/False depending on whether system & data volumes could be combined successfully'''
+        try:
+            self.osx_FS = ApfsSysDataLinkedVolume(self.apfs_sys_volume, self.apfs_data_volume)
+            apfs_parser = ApfsFileSystemParser(self.osx_FS, self.apfs_db)
+            return apfs_parser.create_linked_volume_tables(self.apfs_sys_volume, self.apfs_data_volume, self.osx_FS.firmlinks_paths)
+        except (ValueError, TypeError) as ex:
+            log.exception('')
+        log.error('Failed to create combined System + Data volume')
+        return False        
 
     def ReadApfsVolumes(self):
         '''Read volume information into an sqlite db'''

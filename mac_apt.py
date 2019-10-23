@@ -205,6 +205,15 @@ def FindOsxPartitionInApfsContainer(img, vol_info, container_size, container_sta
     mac_info.is_apfs = True
     mac_info.osx_partition_start_offset = container_start_offset # apfs container offset
     mac_info.apfs_container = ApfsContainer(img, container_size, container_start_offset)
+    # Check if this is 10.15 style System + Data volume?
+    for vol in mac_info.apfs_container.volumes:
+        if vol.is_encrypted: continue
+        if vol.role == vol.container.apfs.VolumeRoleType.system.value:
+            log.debug("{} is SYSTEM volume type".format(vol.volume_name))
+            mac_info.apfs_sys_volume = vol
+        elif vol.role == vol.container.apfs.VolumeRoleType.data.value:
+            log.debug("{} is DATA volume type".format(vol.volume_name))
+            mac_info.apfs_data_volume = vol
     try:
         # start db
         use_existing_db = False
@@ -217,6 +226,10 @@ def FindOsxPartitionInApfsContainer(img, vol_info, container_size, container_sta
                 # all good, db is up to date, use it
                 use_existing_db = True
                 mac_info.apfs_db = existing_db
+                if mac_info.apfs_sys_volume:
+                    mac_info.apfs_data_volume.dbo = mac_info.apfs_db
+                    mac_info.apfs_sys_volume.dbo = mac_info.apfs_db
+                    mac_info.UseCombinedVolume()
                 log.info('Found an existing APFS_Volumes.db in the output folder, looks good, will not create a new one!')
             else:
                 # db does not seem up to date, create a new one and read info
@@ -232,23 +245,34 @@ def FindOsxPartitionInApfsContainer(img, vol_info, container_size, container_sta
                 mac_info.ReadApfsVolumes()
                 apfs_db_info = ApfsDbInfo(mac_info.apfs_db)
                 apfs_db_info.WriteVolInfo(mac_info.apfs_container.volumes)
+                if mac_info.apfs_sys_volume:
+                    mac_info.apfs_data_volume.dbo = mac_info.apfs_db
+                    mac_info.apfs_sys_volume.dbo = mac_info.apfs_db
+                    if not mac_info.CreateCombinedVolume():
+                        return False
                 apfs_db_info.WriteVersionInfo()
             except:
                 log.exception('Error while reading APFS volumes')
                 return False
         mac_info.output_params.apfs_db_path = apfs_sqlite_path
-        # Now search for osx partition in volumes
-        for vol in mac_info.apfs_container.volumes:
-            if vol.num_blocks_used * vol.container.block_size < 10000000000: # < 10 GB, cannot be a macOS installation volume
-                continue
-            if vol.is_encrypted: continue
-            mac_info.osx_FS = vol
-            vol.dbo = mac_info.apfs_db
-            if FindOsxFiles(mac_info):
-                return True
+
+        if mac_info.apfs_sys_volume: # catalina or above
+            if mac_info.apfs_data_volume == None:
+                log.error('Found system volume, but no Data volume!')
+                return False
+            return FindOsxFiles(mac_info)
+        else:
+            # Search for osx partition in volumes
+            for vol in mac_info.apfs_container.volumes:
+                if vol.num_blocks_used * vol.container.block_size < 3000000000: # < 3 GB, cannot be a macOS root volume
+                    continue
+                if vol.is_encrypted: continue
+                mac_info.osx_FS = vol
+                vol.dbo = mac_info.apfs_db
+                if FindOsxFiles(mac_info):
+                    return True
         # Did not find macOS installation
         mac_info.osx_FS = None
-
     except Exception as ex:
         log.info('Sqlite db could not be created at : ' + apfs_sqlite_path)
         log.exception('Exception occurred when trying to create APFS_Volumes Sqlite db')
