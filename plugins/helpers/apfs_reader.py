@@ -61,13 +61,14 @@ class ApfsDbInfo:
 
     def __init__(self, db_writer):
         self.db_writer = db_writer # SqliteWriter object
-        self.version = 2 # This will change if db structure changes in future
+        self.version = 3 # This will change if db structure changes in future
         self.ver_table_name = 'Version_Info'
         self.vol_table_name = 'Volumes_Info'
         self.version_info = collections.OrderedDict([('Version',DataType.INTEGER)])
         self.volume_info = collections.OrderedDict([('Name',DataType.TEXT),('UUID',DataType.TEXT),
                                                     ('Files',DataType.INTEGER),('Folders',DataType.INTEGER),
-                                                    ('Created',DataType.INTEGER),('Updated',DataType.INTEGER)])
+                                                    ('Created',DataType.INTEGER),('Updated',DataType.INTEGER),
+                                                    ('Role',DataType.INTEGER)])
 
     def WriteVersionInfo(self):
         self.db_writer.CreateTable(self.version_info, self.ver_table_name)
@@ -79,12 +80,12 @@ class ApfsDbInfo:
         self.db_writer.CreateTable(self.volume_info, self.vol_table_name)
         data = []
         for vol in volumes:
-            data.append([vol.volume_name, vol.uuid, vol.num_files, vol.num_folders, vol.time_created, vol.time_updated])
+            data.append([vol.volume_name, vol.uuid, vol.num_files, vol.num_folders, vol.time_created, vol.time_updated, vol.role])
         self.db_writer.WriteRows(data, self.vol_table_name)
 
     def CheckVerInfo(self):
         '''Returns true if info in db matches current version number'''
-        query = 'SELECT Version FROM {}'.format(self.ver_table_name)
+        query = 'SELECT Version FROM "{}"'.format(self.ver_table_name)
         success, cursor, error = self.db_writer.RunQuery(query)
         index = 0
         if success:
@@ -101,7 +102,7 @@ class ApfsDbInfo:
 
     def CheckVolInfo(self, volumes):
         '''Returns true if info in db matches volume objects'''
-        query = 'SELECT Name, UUID, Files, Folders, Created, Updated FROM {}'.format(self.vol_table_name)
+        query = 'SELECT Name, UUID, Files, Folders, Created, Updated FROM "{}"'.format(self.vol_table_name)
         success, cursor, error = self.db_writer.RunQuery(query)
         index = 0
         data_is_unaltered = True
@@ -174,6 +175,30 @@ class ApfsFileSystemParser:
 
         self.debug_stats = {}
 
+    def create_linked_volume_tables(self, sys_vol, data_vol, firmlink_paths):
+        if not self.run_query('PRAGMA case_sensitive_like = true', False): return False
+        paths = ['"' + x + '"' for x in firmlink_paths]
+        get_firmlink_cnids_query = ' SELECT GROUP_CONCAT(CNID) FROM {}_Paths '\
+                        ' WHERE PATH IN ({});'.format(sys_vol.name, ",".join(paths))
+        
+        success, cursor, error = self.dbo.RunQuery(get_firmlink_cnids_query, writing=False)
+        if success:
+            for row in cursor:
+                cnids = '1,2,3,' + row[0]
+                break
+        else:
+            log.error('Failed to get CNIDs for firmlinks. Error was : ' + error)
+            return False
+        self.create_tables()
+        view_query = 'INSERT INTO "{4}_{0}" '\
+                    'select * from "{1}_{0}" UNION ALL '\
+                    'select * from "{2}_{0}" WHERE cnid not in ({3})'
+        for table_type in ['Hardlinks','Extents','Attributes','Inodes','IndexNodes','DirStats','Compressed_Files','Paths']:
+            query = view_query.format(table_type, data_vol.name, sys_vol.name, cnids, self.name)
+            if not self.run_query(query, True): return False
+        self.create_indexes()
+        return True
+
     def AddToStats(self, entry_type):
         item_count = self.debug_stats.get(entry_type, 0)
         item_count += 1
@@ -219,13 +244,13 @@ class ApfsFileSystemParser:
     
     def create_indexes(self):
         '''Create indexes on cnid and path in database'''
-        index_queries = ["CREATE INDEX {0}_attribute_cnid ON {0}_Attributes (CNID)".format(self.name),
-                         "CREATE INDEX {0}_extent_cnid ON {0}_Extents (CNID)".format(self.name),
-                         "CREATE INDEX {0}_index_cnid ON {0}_IndexNodes (CNID)".format(self.name),
-                         "CREATE INDEX {0}_paths_path_cnid ON {0}_Paths (Path, CNID)".format(self.name),
-                         "CREATE INDEX {0}_inodes_cnid_parent_cnid ON {0}_Inodes (CNID, Parent_CNID)".format(self.name),
-                         "CREATE INDEX {0}_compressed_files_cnid ON {0}_Compressed_Files (CNID)".format(self.name),
-                         "CREATE INDEX {0}_dir_stats_cnid ON {0}_DirStats (CNID)".format(self.name)]
+        index_queries = ["CREATE INDEX \"{0}_attribute_cnid\" ON \"{0}_Attributes\" (CNID)".format(self.name),
+                         "CREATE INDEX \"{0}_extent_cnid\" ON \"{0}_Extents\" (CNID)".format(self.name),
+                         "CREATE INDEX \"{0}_index_cnid\" ON \"{0}_IndexNodes\" (CNID)".format(self.name),
+                         "CREATE INDEX \"{0}_paths_path_cnid\" ON \"{0}_Paths\" (Path, CNID)".format(self.name),
+                         "CREATE INDEX \"{0}_inodes_cnid_parent_cnid\" ON \"{0}_Inodes\" (CNID, Parent_CNID)".format(self.name),
+                         "CREATE INDEX \"{0}_compressed_files_cnid\" ON \"{0}_Compressed_Files\" (CNID)".format(self.name),
+                         "CREATE INDEX \"{0}_dir_stats_cnid\" ON \"{0}_DirStats\" (CNID)".format(self.name)]
         for query in index_queries:
             success, cursor, error = self.dbo.RunQuery(query, writing=True)
             if not success:
@@ -250,19 +275,19 @@ class ApfsFileSystemParser:
         # available for listing, without having to go and read an extent.
 
         #Copy all decmpfs-Type2 attributes to table, where no resource forks <-- Nothing to do, just copy
-        type2_no_rsrc_query = "INSERT INTO {0}_Compressed_Files select b.CNID, b.Data, "\
+        type2_no_rsrc_query = "INSERT INTO \"{0}_Compressed_Files\" select b.CNID, b.Data, "\
                 " b.logical_uncompressed_size, 0 as extent_cnid, 0 as fpmc_in_extent, 0 as Extent_Logical_Size"\
-                " from {0}_Attributes as b "\
-                " left join {0}_Attributes as a on (a.cnid = b.cnid and a.Name = 'com.apple.ResourceFork') "\
+                " from \"{0}_Attributes\" as b "\
+                " left join \"{0}_Attributes\" as a on (a.cnid = b.cnid and a.Name = 'com.apple.ResourceFork') "\
                 " where b.Name='com.apple.decmpfs' and (b.Flags & 2)=2 and a.cnid is null".format(self.name)
         if not self.run_query(type2_no_rsrc_query, True):
             return
 
         #Add all decmpfs-Type2 attributes where resource forks exist, rsrc's extent_cnid is used
-        type2_rsrc_query = "INSERT INTO {0}_Compressed_Files "\
+        type2_rsrc_query = "INSERT INTO \"{0}_Compressed_Files\" "\
                 "SELECT b.CNID, b.Data, b.logical_uncompressed_size, a.extent_cnid as extent_cnid, 0 as fpmc_in_extent, "\
-                " a.logical_uncompressed_size as Extent_Logical_Size FROM {0}_Attributes as b "\
-                " left join {0}_Attributes as a on (a.cnid = b.cnid and a.Name = 'com.apple.ResourceFork')"\
+                " a.logical_uncompressed_size as Extent_Logical_Size FROM \"{0}_Attributes\" as b "\
+                " left join \"{0}_Attributes\" as a on (a.cnid = b.cnid and a.Name = 'com.apple.ResourceFork')"\
                 " where b.Name='com.apple.decmpfs' and (b.Flags & 2)=2 and a.cnid is not null".format(self.name)
         if not self.run_query(type2_rsrc_query, True):
             return
@@ -273,10 +298,10 @@ class ApfsFileSystemParser:
         #                       0                           1                                   2
         type1_query = "select b.CNID, b.extent_cnid as decmpfs_ext_cnid,  b.logical_uncompressed_size, "\
                 "e.Block_Num as decmpfs_first_ext_Block_num, a.extent_cnid as rsrc_extent_cnid , er.Block_Num as rsrc_first_extent_Block_num, "\
-                " a.logical_uncompressed_size as Extent_Logical_Size from {0}_Attributes as b "\
-                " left join {0}_Attributes as a on (a.cnid = b.cnid and a.Name = 'com.apple.ResourceFork') "\
-                " left join {0}_Extents as e on e.cnid=b.extent_cnid "\
-                " left join {0}_Extents as er on er.cnid=a.extent_cnid "\
+                " a.logical_uncompressed_size as Extent_Logical_Size from \"{0}_Attributes\" as b "\
+                " left join \"{0}_Attributes\" as a on (a.cnid = b.cnid and a.Name = 'com.apple.ResourceFork') "\
+                " left join \"{0}_Extents\" as e on e.cnid=b.extent_cnid "\
+                " left join \"{0}_Extents\" as er on er.cnid=a.extent_cnid "\
                 " where b.Name='com.apple.decmpfs' and (b.Flags & 1)=1"\
                 " and (e.offset=0 or e.offset is null) and (er.offset = 0 or er.offset is null)".format(self.name)
         success, cursor, error = self.dbo.RunQuery(type1_query, writing=False)
@@ -329,21 +354,21 @@ class ApfsFileSystemParser:
 
     def create_other_tables_and_indexes(self):
         '''Populate paths table in db, create compressed_files table and create indexes for faster queries'''
-        insert_query = "INSERT INTO {0}_Paths SELECT * FROM " \
+        insert_query = "INSERT INTO \"{0}_Paths\" SELECT * FROM " \
                         "( WITH RECURSIVE " \
                         "  under_root(path,name,cnid) AS " \
                         "  (  VALUES('','root',2) " \
                         "    UNION ALL " \
-                        "    SELECT under_root.path || '/' || {0}_IndexNodes.name, " \
-                        "{0}_IndexNodes.name, {0}_IndexNodes.cnid " \
-                        "       FROM {0}_IndexNodes JOIN under_root ON " \
-                        "       {0}_IndexNodes.parent_cnid=under_root.cnid " \
+                        "    SELECT under_root.path || '/' || \"{0}_IndexNodes\".name, " \
+                        "\"{0}_IndexNodes\".name, \"{0}_IndexNodes\".cnid " \
+                        "       FROM \"{0}_IndexNodes\" JOIN under_root ON " \
+                        "       \"{0}_IndexNodes\".parent_cnid=under_root.cnid " \
                         "   ORDER BY 1 " \
                         ") SELECT CNID, Path FROM under_root);"
                         
         query = insert_query.format(self.name)
         self.run_query(query, True)
-        self.run_query("UPDATE {}_Paths SET path = '/' where cnid = 2;".format(self.name), True)
+        self.run_query("UPDATE \"{}_Paths\" SET path = '/' where cnid = 2;".format(self.name), True)
 
         self.populate_compressed_files_table()
         self.create_indexes()
@@ -525,6 +550,7 @@ class ApfsVolume:
         self.time_created = None
         self.time_updated = None
         self.uuid = ''
+        self.role = 0
         self.files_meta_cache = DataCache()
         #
         # SqliteWriter object to read from sqlite. 
@@ -551,6 +577,8 @@ class ApfsVolume:
         self.uuid = self.ReadUUID(super_block.body.volume_uuid)
         self.is_case_sensitive = (super_block.body.incompatible_features & 0x8 != 0)
         self.is_encrypted = (super_block.body.fs_flags & 0x1 != 1)
+        self.role = super_block.body.apfs_role
+        self.linked_data_uuid = self.ReadUUID(super_block.body.data_uuid)
 
         #log.debug("%s (volume, Mapping-omap: %d, Rootdir-Block_ID: %d)" % (
         #    super_block.body.volume_name, self.omap_oid, self.root_dir_block_id))
@@ -674,6 +702,7 @@ class ApfsVolume:
             log.debug('File size > 200 MB')
         return apfs_file
 
+    """ unused function
     def OpenSmallFile(self, path, apfs_file_meta=None):
         '''Open small files (<200MB), returns open file handle'''
         log.debug("Trying to open file : " + path)
@@ -693,7 +722,8 @@ class ApfsVolume:
             return f
         except MemoryError:
             log.exception("Failed to open file {}".format(path))
-        return None
+        return None 
+    """
 
     def CopyOutFile(self, path, destination_path):
         '''Copy out file to disk'''
@@ -746,23 +776,6 @@ class ApfsVolume:
             return apfs_file_meta.item_type in (4, 8, 10) # folder, file, symlink
         return False
 
-        # if type == EntryType.FILES_AND_FOLDERS:
-        #     query = "SELECT CNID from {0}_Paths WHERE Path = '{1}'"
-        # elif type == EntryType.FILES:
-        #     query = "SELECT p.CNID from {0}_Paths as p "\
-        #             " left join {0}_IndexNodes as i on i.CNID = p.CNID "\
-        #             " WHERE Path = '{1}' AND ItemType=8"
-        # else: # folders
-        #     query = "SELECT p.CNID from {0}_Paths as p "\
-        #             " left join {0}_IndexNodes as i on i.CNID = p.CNID "\
-        #             " WHERE Path = '{1}' AND ItemType=4"
-        # path = path.replace("'", "''") # if path contains single quote, replace with double to escape it!
-        # success, cursor, error_message = self.dbo.RunQuery(query.format(self.name, path))
-        # if success:
-        #     for row in cursor:
-        #         return True
-        # return False
-
     def GetFileMetadataByCnid(self, cnid):
         '''Returns ApfsFileMeta object from database given path and db handle'''
         cnid = int(cnid)
@@ -797,14 +810,14 @@ class ApfsVolume:
                 " d.ItemType, d.DateAdded, e.Offset as Extent_Offset, e.Size as Extent_Size, e.Block_Num as Extent_Block_Num, "\
                 " c.Uncompressed_size, c.Data, c.Extent_Logical_Size, "\
                 " ec.Offset as compressed_Extent_Offset, ec.Size as compressed_Extent_Size, ec.Block_Num as compressed_Extent_Block_Num "\
-                " from {0}_Paths as p "\
-                " left join {0}_Inodes as i on i.CNID = p.CNID "\
-                " left join {0}_IndexNodes as d on d.CNID = p.CNID "\
-                " left join {0}_Extents as e on e.CNID = i.Extent_CNID "\
-                " left join {0}_Compressed_Files as c on c.CNID = i.CNID "\
-                " left join {0}_Extents as ec on ec.CNID = c.Extent_CNID "\
-                " left join {0}_Attributes as a on a.CNID = p.CNID "\
-                " left join {0}_Extents as ex on ex.CNID = a.Extent_CNID "\
+                " from \"{0}_Paths\" as p "\
+                " left join \"{0}_Inodes\" as i on i.CNID = p.CNID "\
+                " left join \"{0}_IndexNodes\" as d on d.CNID = p.CNID "\
+                " left join \"{0}_Extents\" as e on e.CNID = i.Extent_CNID "\
+                " left join \"{0}_Compressed_Files\" as c on c.CNID = i.CNID "\
+                " left join \"{0}_Extents\" as ec on ec.CNID = c.Extent_CNID "\
+                " left join \"{0}_Attributes\" as a on a.CNID = p.CNID "\
+                " left join \"{0}_Extents\" as ex on ex.CNID = a.Extent_CNID "\
                 " {1} "\
                 " order by Extent_Offset, compressed_Extent_Offset, xName, xExOff"
         # This query gets file metadata as well as extents for file. If compressed, it gets compressed extents.
@@ -884,7 +897,7 @@ class ApfsVolume:
         return None
 
     def GetManyFileMetadataByCnids(self, cnids):
-        '''Returns ApfsFileMeta object from database given path and db handle'''
+        '''Returns ApfsFileMeta object from database given a list of cnids'''
         # for cnid in cnids:
         #     if cnid <= 0:
         #         continue # skip that
@@ -898,7 +911,7 @@ class ApfsVolume:
             pass
 
     def GetManyFileMetadataByPaths(self, paths):
-        '''Returns ApfsFileMeta object from database given path and db handle'''   
+        '''Returns ApfsFileMeta object from database given a list of paths'''   
         for path in paths:
             if not path.startswith('/'): 
                 path = '/' + path
@@ -915,14 +928,14 @@ class ApfsVolume:
     def GetManyFileMetadataCountOnly(self, where_clause):
         '''Only returns a count of items. A where_clause specifies either cnid or path to find'''
         query = "SELECT count(DISTINCT p.cnid)"\
-                " from {0}_Paths as p "\
-                " left join {0}_Inodes as i on i.CNID = p.CNID "\
-                " left join {0}_IndexNodes as d on d.CNID = p.CNID "\
-                " left join {0}_Extents as e on e.CNID = i.Extent_CNID "\
-                " left join {0}_Compressed_Files as c on c.CNID = i.CNID "\
-                " left join {0}_Extents as ec on ec.CNID = c.Extent_CNID "\
-                " left join {0}_Attributes as a on a.CNID = p.CNID "\
-                " left join {0}_Extents as ex on ex.CNID = a.Extent_CNID "\
+                " from \"{0}_Paths\" as p "\
+                " left join \"{0}_Inodes\" as i on i.CNID = p.CNID "\
+                " left join \"{0}_IndexNodes\" as d on d.CNID = p.CNID "\
+                " left join \"{0}_Extents\" as e on e.CNID = i.Extent_CNID "\
+                " left join \"{0}_Compressed_Files\" as c on c.CNID = i.CNID "\
+                " left join \"{0}_Extents\" as ec on ec.CNID = c.Extent_CNID "\
+                " left join \"{0}_Attributes\" as a on a.CNID = p.CNID "\
+                " left join \"{0}_Extents\" as ex on ex.CNID = a.Extent_CNID "\
                 " {1} "
         success, cursor, error_message = self.dbo.RunQuery(query.format(self.name, where_clause))
         if success:
@@ -941,14 +954,14 @@ class ApfsVolume:
                 " d.ItemType, d.DateAdded, e.Offset as Extent_Offset, e.Size as Extent_Size, e.Block_Num as Extent_Block_Num, "\
                 " c.Uncompressed_size, c.Data, c.Extent_Logical_Size, "\
                 " ec.Offset as compressed_Extent_Offset, ec.Size as compressed_Extent_Size, ec.Block_Num as compressed_Extent_Block_Num "\
-                " from {0}_Paths as p "\
-                " left join {0}_Inodes as i on i.CNID = p.CNID "\
-                " left join {0}_IndexNodes as d on d.CNID = p.CNID "\
-                " left join {0}_Extents as e on e.CNID = i.Extent_CNID "\
-                " left join {0}_Compressed_Files as c on c.CNID = i.CNID "\
-                " left join {0}_Extents as ec on ec.CNID = c.Extent_CNID "\
-                " left join {0}_Attributes as a on a.CNID = p.CNID "\
-                " left join {0}_Extents as ex on ex.CNID = a.Extent_CNID "\
+                " from \"{0}_Paths\" as p "\
+                " left join \"{0}_Inodes\" as i on i.CNID = p.CNID "\
+                " left join \"{0}_IndexNodes\" as d on d.CNID = p.CNID "\
+                " left join \"{0}_Extents\" as e on e.CNID = i.Extent_CNID "\
+                " left join \"{0}_Compressed_Files\" as c on c.CNID = i.CNID "\
+                " left join \"{0}_Extents\" as ec on ec.CNID = c.Extent_CNID "\
+                " left join \"{0}_Attributes\" as a on a.CNID = p.CNID "\
+                " left join \"{0}_Extents\" as ex on ex.CNID = a.Extent_CNID "\
                 " {1} "\
                 " order by p.Path, p.CNID, Extent_Offset, compressed_Extent_Offset, xName, xExOff"
         # This query gets file metadata as well as extents for file. If compressed, it gets compressed extents.
@@ -1069,6 +1082,47 @@ class ApfsVolume:
                                 'i_time':meta_item.date_added }
             items.append(item) 
         return items
+
+class ApfsSysDataLinkedVolume(ApfsVolume):
+    def __init__(self, sys_vol, data_vol):
+        ApfsVolume.__init__(self, sys_vol.container, 'Combined')
+        self.sys_vol = sys_vol
+        self.data_vol = data_vol
+        self.firmlinks_paths = []
+        self.firmlinks = {}
+        self.num_blocks_used = sys_vol.num_blocks_used + data_vol.num_blocks_used
+        self.num_files = sys_vol.num_files + data_vol.num_files
+        self.num_folders = sys_vol.num_folders + data_vol.num_folders
+        self.num_symlinks = sys_vol.num_symlinks + data_vol.num_symlinks
+        self.num_snapshots = data_vol.num_snapshots
+        self.time_created = data_vol.time_created
+        self.time_updated = data_vol.time_updated
+        self.dbo = sys_vol.dbo
+        self._ParseFirmlinks()
+
+    def _ParseFirmlinks(self):
+        '''Read the firmlink path mappings between System & Data volumes'''
+        firmlink_file_path = '/usr/share/firmlinks'
+        if self.sys_vol.DoesFileExist(firmlink_file_path):
+            try:
+                f = self.sys_vol.open(firmlink_file_path)
+                data = [x.decode('utf8') for x in f.read().split(b'\n')]
+                for item in data:
+                    if item:
+                        source, dest = item.split('\t')
+                        self.firmlinks[source] = dest
+                        self.firmlinks_paths.append(source)
+                        if source[1:] != dest:
+                            log.warning("Firmlink not handled : Source='{}' Dest='{}'".format(source, dest))
+                # add one for /System/Volumes/Data  /
+                #self.firmlinks['/System/Volumes/Data'] = ''
+                #self.firmlinks_paths.append('/System/Volumes/Data')
+                f.close()
+            except (OSError, ValueError, TypeError) as ex:
+                log.exception('Failed to open/parse firmlink file')
+                raise ex
+        else:
+            log.error('firmlinks file is missing! Cannot proceed!')
 
 class ApfsContainer:
 

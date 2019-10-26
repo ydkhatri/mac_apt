@@ -160,6 +160,18 @@ class Apfs(KaitaiStruct):
         deleted = 1
         reverted = 2
 
+    class VolumeRoleType(Enum):
+        none = 0
+        system = 1
+        user = 2
+        recovery = 4
+        vm = 8
+        preboot = 0x10
+        installer = 0x20
+        data = 0x40
+        baseband = 0x80
+        reserved = 0x200
+
     def __init__(self, _io, _parent=None, _root=None):
         self._io = _io
         self._parent = _parent
@@ -223,8 +235,17 @@ class Apfs(KaitaiStruct):
             self.created_by = (KaitaiStream.bytes_terminate(self._io.read_bytes(32), 0, False)).decode("UTF-8")
             self.time_created = self._io.read_s8le()
             self.unknown_312 = self._io.read_bytes(392)
-            self.volume_name = (self._io.read_bytes_term(0, False, True, True)).decode("UTF-8")
-
+            self.volume_name = self._io.read_bytes(256).decode("UTF-8").rstrip('\0')
+            self.next_doc_id = self._io.read_u4le()
+            self.apfs_role = self._io.read_u2le() #self._root.VolumeRoleType(self._io.read_u2le())
+            self.reserved = self._io.read_u2le()
+            self.apfs_root_to_xid = self._io.read_s8le()
+            self.apfs_er_state_oid = self._io.read_s8le()
+            self.unknown1 = self._io.read_s4le()
+            self.unknown2 = self._io.read_s4le()
+            self.unknown3 = self._io.read_s8le()
+            self.unknown4 = self._io.read_s8le()
+            self.data_uuid = self._io.read_bytes(16) # In both System & Data vol, Data's uuid is seen
 
     class FileExtentKey(KaitaiStruct):
         __slots__ = ['_io', '_parent', '_root', 'offset']

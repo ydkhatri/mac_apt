@@ -77,6 +77,8 @@ class HfsVolumeInfo:
         self.num_files = 0
         self.num_folders = 0
         self.block_size = 0
+        self.total_blocks = 0
+        self.free_blocks = 0
         self.is_HFSX = False
 
 class NativeHfsParser:
@@ -112,6 +114,8 @@ class NativeHfsParser:
             hfs_info.date_last_checked = CommonFunctions.ReadMacHFSTime(header.checkedDate)
             hfs_info.num_files = header.fileCount
             hfs_info.num_folders = header.folderCount
+            hfs_info.total_blocks = header.totalBlocks
+            hfs_info.free_blocks = header.freeBlocks
             return hfs_info
         except ValueError as ex:
             log.exception("Failed to read HFS info")
@@ -303,8 +307,8 @@ class MacInfo:
     def __init__(self, output_params):
         #self.Partitions = {}   # Dictionary of all partition objects returned from pytsk LATER! 
         self.pytsk_image = None
-        self.osx_FS = None     # Just the FileSystem object (fs) from OSX partition
-        self.osx_partition_start_offset = 0
+        self.osx_FS = None      # Just the FileSystem object (fs) from OSX partition
+        self.osx_partition_start_offset = 0 # Container offset if APFS
         self.vol_info = None # disk_volumes
         self.output_params = output_params
         self.osx_version = '0.0.0'
@@ -900,6 +904,7 @@ class MacInfo:
                         elif self.osx_version.startswith('10.12'): self.osx_friendly_name = 'Sierra'
                         elif self.osx_version.startswith('10.13'): self.osx_friendly_name = 'High Sierra'
                         elif self.osx_version.startswith('10.14'): self.osx_friendly_name = 'Mojave'
+                        elif self.osx_version.startswith('10.15'): self.osx_friendly_name = 'Catalina'
                         elif self.osx_version.startswith('10.0'): self.osx_friendly_name = 'Cheetah'
                         elif self.osx_version.startswith('10.1'): self.osx_friendly_name = 'Puma'
                         elif self.osx_version.startswith('10.2'): self.osx_friendly_name = 'Jaguar'
@@ -927,8 +932,22 @@ class ApfsMacInfo(MacInfo):
         self.apfs_container = None
         self.apfs_db = None
         self.apfs_db_path = ''
-        #self.apfs_osx_volume = self.osx_FS
-        #self.apfs_container_offset = self.osx_partition_start_offset
+        self.apfs_sys_volume = None  # New in 10.15, a System read-only partition
+        self.apfs_data_volume = None # New in 10.15, a separate Data partition
+
+    def UseCombinedVolume(self):
+        self.osx_FS = ApfsSysDataLinkedVolume(self.apfs_sys_volume, self.apfs_data_volume)
+
+    def CreateCombinedVolume(self):
+        '''Returns True/False depending on whether system & data volumes could be combined successfully'''
+        try:
+            self.osx_FS = ApfsSysDataLinkedVolume(self.apfs_sys_volume, self.apfs_data_volume)
+            apfs_parser = ApfsFileSystemParser(self.osx_FS, self.apfs_db)
+            return apfs_parser.create_linked_volume_tables(self.apfs_sys_volume, self.apfs_data_volume, self.osx_FS.firmlinks_paths)
+        except (ValueError, TypeError) as ex:
+            log.exception('')
+        log.error('Failed to create combined System + Data volume')
+        return False        
 
     def ReadApfsVolumes(self):
         '''Read volume information into an sqlite db'''
