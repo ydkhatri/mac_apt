@@ -108,7 +108,4 @@ ENV/
 
 # mypy
 .mypy_cache/
-lzfse.pyd
-pytsk3.pyd
-pyewf.pyd
-pyvmdk.pyd
+
