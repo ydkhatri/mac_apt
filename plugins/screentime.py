@@ -47,8 +47,8 @@ class ScreenTime:
         self.source = source
 
 def PrintAll(screen_time_data, output_params, source_path):
-    screen_time_info = [ ('Application',DataType.TEXT),('Total_Time',DataType.TEXT),('Start_Date',DataType.DATE),
-                       ('End_Date',DataType.DATE),('Notification_Count',DataType.INTEGER), ('Pickup_Count',DataType.INTEGER),
+    screen_time_info = [ ('Application',DataType.TEXT),('Total_Time',DataType.TEXT),('Start_Date',DataType.TEXT),
+                       ('End_Date',DataType.TEXT),('Notification_Count',DataType.INTEGER), ('Pickup_Count',DataType.INTEGER),
                        ('Pickups_Without_Usage',DataType.INTEGER),('Device_Name',DataType.TEXT),('Apple_ID',DataType.TEXT),
                        ('Full_Name', DataType.TEXT),
                        ('Family_Member_Type', DataType.TEXT),('Source',DataType.TEXT)
@@ -88,26 +88,52 @@ def OpenDb(inputPath):
     return None
 
 
+
+
+def findDb(mac_info):
+    users_dir = mac_info.ListItemsInFolder('/private/var/folders', EntryType.FOLDERS)
+    # In /private/var/folders/  --> Look for --> xx/yyyyyy/C/com.apple.sandbox/sandbox-cache.db
+    for unknown1 in users_dir:
+        unknown1_name = unknown1['name']
+        unknown1_dir = mac_info.ListItemsInFolder('/private/var/folders/' + unknown1_name, EntryType.FOLDERS)
+        for unknown2 in unknown1_dir:
+            unknown2_name = unknown2['name']
+            found_home = False
+            found_user = False
+            home = ''
+            # This is yyyyyy folder
+            path_to_screentime_db = '/private/var/folders/' + unknown1_name + '/' + unknown2_name + '/0/com.apple.ScreenTimeAgent/Store/RMAdminStore-Local.sqlite'
+            if mac_info.IsValidFilePath(path_to_screentime_db) and mac_info.GetFileSize(
+                    path_to_screentime_db):  # This does not always exist or it may be zero in size!
+                return path_to_screentime_db
+            else:
+                log.error("Screen Time database not found")
+
+
+
+
+
+
 def ReadScreenTime(db, screen_time_arr, source):
     try:
-        query = "SELECT" \
-        "IFNULL(zut.ZBUNDLEIDENTIFIER, zut.ZDOMAIN) as app," \
-        "time(zut.ZTOTALTIMEINSECONDS, 'unixepoch') as total_time," \
-        "datetime(zub.ZSTARTDATE + 978307200, 'unixepoch')  as start_date," \
-        "datetime(zub.ZLASTEVENTDATE + 978307200, 'unixepoch')  as end_date," \
-        "zuci.ZNUMBEROFNOTIFICATIONS as num_notifics," \
-        "zuci.ZNUMBEROFPICKUPS as num_pickups," \
-        "zub.ZNUMBEROFPICKUPSWITHOUTAPPLICATIONUSAGE as num_pickups_no_app," \
-        "zcd.ZNAME as device_name, zcu.ZAPPLEID as apple_id," \
-        "zcu.ZGIVENNAME || " " || zcu.ZFAMILYNAME as full_name," \
-        "zcu.ZFAMILYMEMBERTYPE as family_type" \
-        "FROM ZUSAGETIMEDITEM as zut" \
-        "LEFT JOIN ZUSAGECATEGORY as zuc on zuc.Z_PK = zut.ZCATEGORY" \
-        "LEFT JOIN ZUSAGEBLOCK as zub on zub.Z_PK = zuc.ZBLOCK" \
-        "LEFT JOIN ZUSAGE as zu on zu.Z_PK = zub.ZUSAGE" \
-        "LEFT JOIN ZCOREDEVICE as zcd on zcd.Z_PK = zu.ZDEVICE" \
-        "LEFT JOIN ZCOREUSER as zcu on zcu.Z_PK = zu.ZUSER" \
-        "LEFT JOIN ZUSAGECOUNTEDITEM as zuci on zuci.ZBLOCK = zuc.ZBLOCK AND zuci.ZBUNDLEIDENTIFIER = zut.ZBUNDLEIDENTIFIER" \
+        query = "SELECT " \
+        "IFNULL(zut.ZBUNDLEIDENTIFIER, zut.ZDOMAIN) as app, " \
+        "time(zut.ZTOTALTIMEINSECONDS, 'unixepoch') as total_time, " \
+        "datetime(zub.ZSTARTDATE + 978307200, 'unixepoch')  as start_date, " \
+        "datetime(zub.ZLASTEVENTDATE + 978307200, 'unixepoch')  as end_date, " \
+        "zuci.ZNUMBEROFNOTIFICATIONS as num_notifics, " \
+        "zuci.ZNUMBEROFPICKUPS as num_pickups, " \
+        "zub.ZNUMBEROFPICKUPSWITHOUTAPPLICATIONUSAGE as num_pickups_no_app, " \
+        "zcd.ZNAME as device_name, zcu.ZAPPLEID as apple_id, " \
+        "zcu.ZGIVENNAME || \" \" || zcu.ZFAMILYNAME as full_name, " \
+        "zcu.ZFAMILYMEMBERTYPE as family_type " \
+        "FROM ZUSAGETIMEDITEM as zut " \
+        "LEFT JOIN ZUSAGECATEGORY as zuc on zuc.Z_PK = zut.ZCATEGORY " \
+        "LEFT JOIN ZUSAGEBLOCK as zub on zub.Z_PK = zuc.ZBLOCK " \
+        "LEFT JOIN ZUSAGE as zu on zu.Z_PK = zub.ZUSAGE " \
+        "LEFT JOIN ZCOREDEVICE as zcd on zcd.Z_PK = zu.ZDEVICE " \
+        "LEFT JOIN ZCOREUSER as zcu on zcu.Z_PK = zu.ZUSER " \
+        "LEFT JOIN ZUSAGECOUNTEDITEM as zuci on zuci.ZBLOCK = zuc.ZBLOCK AND zuci.ZBUNDLEIDENTIFIER = zut.ZBUNDLEIDENTIFIER " \
         "ORDER BY zub.ZSTARTDATE;"
 
 
@@ -116,8 +142,20 @@ def ReadScreenTime(db, screen_time_arr, source):
         db.row_factory = sqlite3.Row
         cursor = db.execute(query)
         for row in cursor:
-            sc = ScreenTime(row['app'], row['total_time'], row['start_date'], row['end_date'], row['num_notifics'],
-                            row['num_pickups'], row['num_pickups_no_app'], row['device_name'],
+            if row['num_notifics'] is None:
+                num_notifics = 0
+            else:
+                num_notifics = row['num_notifics']
+            if row['num_pickups'] is None:
+                num_pickups = 0
+            else:
+                num_pickups = row['num_pickups']
+            if row['num_pickups_no_app'] is None:
+                num_pickups_no_app = 0
+            else:
+                num_pickups_no_app = row['num_pickups_no_app']
+            sc = ScreenTime(row['app'], row['total_time'], row['start_date'], row['end_date'], num_notifics,
+                            num_pickups, num_pickups_no_app, row['device_name'],
                             row['apple_id'], row['full_name'], row['family_type'], source)
             screen_time_arr.append(sc)
     except sqlite3.Error:
@@ -133,13 +171,13 @@ def ProcessSCDbFromPath(mac_info, screen_time_arr, source_path):
 
 def Plugin_Start(mac_info):
     '''Main Entry point function for plugin'''
-    screentime_db_path = '/private/var/folders/6l/gvwcluywvchewfkdhgqwevfuw_bvefvweufnweofnwef/0/com.apple.ScreenTimeAgent'
-    #if mac_info.
+    path_to_screentime_db = findDb(mac_info)
     screen_time_arr = []
 
-    ProcessSCDbFromPath(mac_info, screen_time_arr, screentime_db_path)
+    ProcessSCDbFromPath(mac_info, screen_time_arr, path_to_screentime_db)
 
     if screen_time_arr:
+        log.info("Screen Time data found!")
         PrintAll(screen_time_arr, mac_info.output_params, '')
     else:
         log.info("No Screen Time artifacts found.")
@@ -152,7 +190,7 @@ def Plugin_Start_Standalone(input_files_list, output_params):
         db = OpenDb(input_path)
         if db != None:
             filename = os.path.basename(input_path)
-            ReadScreenTime(db, screen_time_arr, input_path, "")
+            ReadScreenTime(db, screen_time_arr, input_path)
         if screen_time_arr:
             PrintAll(screen_time_arr, output_params, '')
         else:

@@ -108,3 +108,12 @@ ENV/
 
 # mypy
 .mypy_cache/
+Libraries_For_Windows/64bit_py37/lzfse.pyd
+Libraries_For_Windows/64bit_py37/lzfse.pyd
+Libraries_For_Windows/64bit_py37/pyewf.pyd
+Libraries_For_Windows/64bit_py37/pytsk3.pyd
+Libraries_For_Windows/64bit_py37/pyvmdk.pyd
+lzfse.pyd
+pytsk3.pyd
+pyewf.pyd
+pyvmdk.pyd
