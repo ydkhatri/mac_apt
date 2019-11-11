@@ -20,6 +20,7 @@
 import argparse
 import logging
 import os
+import plugins.helpers.macinfo as macinfo
 import pyewf
 import pytsk3
 import pyvmdk
@@ -27,12 +28,12 @@ import sys
 import textwrap
 import time
 import traceback
-from uuid import UUID
-import plugins.helpers.macinfo as macinfo
 from plugins.helpers.apfs_reader import ApfsContainer, ApfsDbInfo
 from plugins.helpers.writer import *
 from plugins.helpers.disk_report import *
 from plugin import *
+from pyaff4 import container
+from uuid import UUID
 
 __VERSION = "0.4.1"
 __PROGRAMNAME = "macOS Artifact Parsing Tool"
@@ -49,7 +50,7 @@ def IsItemPresentInList(collection, item):
 
 def CheckInputType(input_type):
     input_type = input_type.upper()
-    return input_type in ['E01','DD','VMDK','MOUNTED']
+    return input_type in ['AFF4','E01','DD','VMDK','MOUNTED']
 
 ######### FOR HANDLING E01 file ###############
 class ewf_Img_Info(pytsk3.Img_Info):
@@ -67,7 +68,6 @@ class ewf_Img_Info(pytsk3.Img_Info):
 
   def get_size(self):
     return self._ewf_handle.get_media_size()
-
 
 def PrintAttributes(obj, useTypeName=False):
     for attr in dir(obj):
@@ -144,6 +144,31 @@ def GetImgInfoObjectForVMDK(path):
     img_info = vmdk_Img_Info(vmdk_handle)
     return img_info
 ####### End special handling for VMDK #########
+
+######### FOR HANDLING AFF4 file ###############
+class aff4_Img_Info(pytsk3.Img_Info):
+  def __init__(self, aff4_stream):
+    self._aff4_stream = aff4_stream
+    super(aff4_Img_Info, self).__init__(
+        url="", type=pytsk3.TSK_IMG_TYPE_EXTERNAL)
+
+  def close(self):
+    self._aff4_stream.Close()
+
+  def read(self, offset, size):
+    self._aff4_stream.SeekRead(offset)
+    return self._aff4_stream.Read(size)
+
+  def get_size(self):
+    return self._aff4_stream.Size()
+
+# Call this function instead of pytsk3.Img_Info() for AFF4 files
+def GetImgInfoObjectForAff4(path):
+    aff4_map_stream = container.Container.open(path)
+    img_info = aff4_Img_Info(aff4_map_stream)
+    return img_info
+
+####### End special handling for AFF4 #########
 
 def FindOsxFiles(mac_info):
     if mac_info.IsValidFilePath('/System/Library/CoreServices/SystemVersion.plist'):
@@ -343,14 +368,14 @@ for plugin in plugins:
 arg_parser = argparse.ArgumentParser(description='mac_apt is a framework to process forensic artifacts on a Mac OSX system\n'\
                                                  'You are running {} version {}'.format(__PROGRAMNAME, __VERSION),
                                     epilog=plugins_info, formatter_class=argparse.RawTextHelpFormatter)
-arg_parser.add_argument('input_type', help='Specify Input type as either E01, DD, VMDK or MOUNTED')
+arg_parser.add_argument('input_type', help='Specify Input type as either E01, DD, VMDK, AFF4 or MOUNTED')
 arg_parser.add_argument('input_path', help='Path to OSX image/volume')
 arg_parser.add_argument('-o', '--output_path', help='Path where output files will be created')
 arg_parser.add_argument('-x', '--xlsx', action="store_true", help='Save output in excel spreadsheet(s)')
 arg_parser.add_argument('-c', '--csv', action="store_true", help='Save output as CSV files (Default option if no output type selected)')
 arg_parser.add_argument('-s', '--sqlite', action="store_true", help='Save output in an sqlite database')
 arg_parser.add_argument('-l', '--log_level', help='Log levels: INFO, DEBUG, WARNING, ERROR, CRITICAL (Default is INFO)')#, choices=['INFO','DEBUG','WARNING','ERROR','CRITICAL'])
-arg_parser.add_argument('-u', '--use_tsk', action="store_true", help='Use sleuthkit instead of native HFS+ parser (This is slower!)')
+#arg_parser.add_argument('-u', '--use_tsk', action="store_true", help='Use sleuthkit instead of native HFS+ parser (This is slower!)')
 arg_parser.add_argument('plugin', nargs="+", help="Plugins to run (space separated). 'ALL' will process every available plugin")
 args = arg_parser.parse_args()
 
@@ -429,6 +454,9 @@ try:
     elif args.input_type.upper() == 'VMDK':
         img = GetImgInfoObjectForVMDK(args.input_path) # Use this function instead of pytsk3.Img_Info()
         mac_info = macinfo.MacInfo(output_params)
+    elif args.input_type.upper() == 'AFF4':
+        img = GetImgInfoObjectForAff4(args.input_path) # Use this function instead of pytsk3.Img_Info()
+        mac_info = macinfo.MacInfo(output_params)
     elif args.input_type.upper() == 'DD':
         img = pytsk3.Img_Info(args.input_path) # Works for split dd images too! Works for DMG too, if no compression/encryption is used!
         mac_info = macinfo.MacInfo(output_params)
@@ -444,7 +472,7 @@ except Exception as ex:
     Exit()
 
 if args.input_type.upper() != 'MOUNTED':
-    mac_info.use_native_hfs_parser = False if args.use_tsk else True
+    mac_info.use_native_hfs_parser = True #False if args.use_tsk else True
     try:
         mac_info.pytsk_image = img
         vol_info = pytsk3.Volume_Info(img)
