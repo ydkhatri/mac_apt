@@ -13,6 +13,7 @@ from uuid import UUID
 import biplist
 
 import plugins.helpers.UnifiedLog.data_format as data_format
+import plugins.helpers.UnifiedLog.dsc_file as dsc_file
 import plugins.helpers.UnifiedLog.logger as logger
 import plugins.helpers.UnifiedLog.resources as resources
 import plugins.helpers.UnifiedLog.uuidtext_file as uuidtext_file
@@ -391,7 +392,7 @@ class TraceV3(data_format.BinaryDataFormat):
     def CreateLossMsg(self, ts, start_ct, ct_base, buffer, buf_size):
         '''Creates and returns the message body for log type LOSS'''
         if buf_size < 20:
-            log.error('Buffer too small to hold loss data! size={}, expected 20'.format(buf_size))
+            logger.error('Buffer too small to hold loss data! size={}, expected 20'.format(buf_size))
             msg = 'loss: <error reading this data>'
         else:
             msg = 'lost {}{} unreliable messages from {} - {}  (exact start-approx. end)'
@@ -404,12 +405,12 @@ class TraceV3(data_format.BinaryDataFormat):
             elif sign == 4:
                 sign = ''
             else:
-                log.info('Unseen sign value of {}'.format(sign))
+                logger.info('Unseen sign value of {}'.format(sign))
                 sign = ''
             try:
                 msg = msg.format(sign, count, self._ReadAPFSTime(start_time), self._ReadAPFSTime(end_time))
             except ValueError:
-                log.exception('')
+                logger.exception('')
         return msg
 
     def ReadLogDataBuffer2(self, buffer, buf_size, strings_buffer):
@@ -521,7 +522,8 @@ class TraceV3(data_format.BinaryDataFormat):
         data_count = len(data)
         format_str_consumed = 0 # No. of bytes read
         last_hit_end = 0
-        for index, hit in enumerate(self.regex.finditer(format_str_for_regex)):
+        index = 0
+        for hit in self.regex.finditer(format_str_for_regex):
             #logger.debug('{} {} all={}  {}  {} {} {}'.format(hit.start(), hit.end(), hit.group(0), hit.group(1), hit.group(2), hit.group(3), hit.group(4)))
             hit_len = hit.end() - hit.start()
             last_hit_end = hit.end()
@@ -531,7 +533,7 @@ class TraceV3(data_format.BinaryDataFormat):
             if index >= data_count: # len(data):
                 msg += '<decode: missing data>' # Message provided by 'log' program for missing data
                 logger.error('missing data for log @ 0x{:X}'.format(log_file_pos))
-                continue
+                break
             data_item = data[index]
             # msg += data from this hit
             # data_item = [type, size, raw_data]
@@ -543,6 +545,23 @@ class TraceV3(data_format.BinaryDataFormat):
                 data_type = data_item[0]
                 data_size = data_item[1]
                 raw_data  = data_item[2]
+                if (specifier not in ('p', 'P', 's', 'S')) and (flags_width_precision.find('*') >= 0): # Width and/or precision is now a variable!
+                    logger.debug('Found * , data_type is {}, exp={} for log @ 0x{:X}'.format(data_type, flags_width_precision + specifier, log_file_pos))
+                    var_count = flags_width_precision.count('*')
+                    for i in range(0, var_count):
+                        if   data_size == 1: number = struct.unpack("<b", raw_data)[0]
+                        elif data_size == 4: number = struct.unpack("<i", raw_data)[0]
+                        elif data_size == 8: number = struct.unpack("<q", raw_data)[0]
+                        else: 
+                            logger.error('data_size is {} for log @ 0x{:X}'.format(data_size, log_file_pos))
+                        flags_width_precision = flags_width_precision.replace('*', str(number), 1)
+                        # fetch next item as data was consumed by width/precision
+                        index += 1
+                        data_item = data[index]
+                        data_type = data_item[0]
+                        data_size = data_item[1]
+                        raw_data  = data_item[2]
+
                 ## In below code , length_modifier has been removed from format string, let python string formatter handle rest
                 ## It has the same format, except for flags, where single-qoute is not supported in python.
                 if specifier in ('d', 'D', 'i', 'u', 'U', 'x', 'X', 'o', 'O'): # uint32 according to spec! but can be 4 or 8 bytes
@@ -600,17 +619,17 @@ class TraceV3(data_format.BinaryDataFormat):
                     if not custom_specifier:
                         msg += hit.group(0)
                         logger.info("Unknown data object with no custom specifier in log @ 0x{:X}".format(log_file_pos))
+                        index += 1
                         continue
                     if data_size == 0:
                         if data_type & 0x1:
                             msg += '<private>'
+                        index += 1
                         continue
 
                     if custom_specifier.find('uuid_t') > 0:
                         if data_size == 0: # size
-                            if data_type & 0x1:
-                                msg += '<private>'
-                            else: logger.error('unknown err, size=0, data_type=0x{:X} in log @ 0x{:X}'.format(data_type, log_file_pos))
+                            logger.error('unknown err, size=0, data_type=0x{:X} in log @ 0x{:X}'.format(data_type, log_file_pos))
                         else:
                             uuid = UUID(bytes=raw_data)
                             msg += str(uuid).upper()
@@ -681,6 +700,7 @@ class TraceV3(data_format.BinaryDataFormat):
             except:
                 logger.exception('exception for log @ 0x{:X}'.format(log_file_pos))
                 msg += "E-R-R-O-R"
+            index += 1
 
         if format_str_consumed < len_format_str:
             # copy remaining bytes from end of last hit to end of strings
@@ -1210,6 +1230,9 @@ class TraceV3(data_format.BinaryDataFormat):
             return False
         try:
             file_size = self.file.get_file_size()
+            if file_size < 16:
+                logger.info('File too small to be valid! File size = {}'.format(file_size))
+                return False
             chunk_header = f.read(16)
             tag, subtag, data_length = self.ParseChunkHeader(chunk_header, 0)
             if tag != 0x1000:
