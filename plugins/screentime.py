@@ -88,29 +88,22 @@ def OpenDb(inputPath):
     return None
 
 
-
-
 def findDb(mac_info):
-    users_dir = mac_info.ListItemsInFolder('/private/var/folders', EntryType.FOLDERS)
-    # In /private/var/folders/  --> Look for --> xx/yyyyyy/C/com.apple.sandbox/sandbox-cache.db
-    for unknown1 in users_dir:
-        unknown1_name = unknown1['name']
-        unknown1_dir = mac_info.ListItemsInFolder('/private/var/folders/' + unknown1_name, EntryType.FOLDERS)
-        for unknown2 in unknown1_dir:
-            unknown2_name = unknown2['name']
-            found_home = False
-            found_user = False
-            home = ''
-            # This is yyyyyy folder
-            path_to_screentime_db = '/private/var/folders/' + unknown1_name + '/' + unknown2_name + '/0/com.apple.ScreenTimeAgent/Store/RMAdminStore-Local.sqlite'
-            if mac_info.IsValidFilePath(path_to_screentime_db) and mac_info.GetFileSize(
-                    path_to_screentime_db):  # This does not always exist or it may be zero in size!
-                return path_to_screentime_db
-            else:
-                log.error("Screen Time database not found")
+    db_path_arr = []
+    for user in mac_info.users:
+        if not user.DARWIN_USER_DIR or not user.user_name:
+            continue  # TODO: revisit this later!
+        else:
 
+            darwin_user_folders = user.DARWIN_USER_DIR.split(',')
 
+            for darwin_user_dir in darwin_user_folders:
+                db_path = (darwin_user_dir + '/com.apple.ScreenTimeAgent/Store/RMAdminStore-Local.sqlite')
+                if not mac_info.IsValidFilePath(db_path): continue
+                else:
+                    db_path_arr.append(db_path)
 
+    return db_path_arr
 
 
 
@@ -141,6 +134,9 @@ def ReadScreenTime(db, screen_time_arr, source):
 
         db.row_factory = sqlite3.Row
         cursor = db.execute(query)
+        test_row = cursor.fetchone()
+        if test_row is None:
+            log.warning("SQL Query worked, but no results were found in database: " + str(source))
         for row in cursor:
             if row['num_notifics'] is None:
                 num_notifics = 0
@@ -174,7 +170,8 @@ def Plugin_Start(mac_info):
     path_to_screentime_db = findDb(mac_info)
     screen_time_arr = []
 
-    ProcessSCDbFromPath(mac_info, screen_time_arr, path_to_screentime_db)
+    for screentime_dbs in path_to_screentime_db:
+        ProcessSCDbFromPath(mac_info, screen_time_arr, screentime_dbs)
 
     if screen_time_arr:
         log.info("Screen Time data found!")
