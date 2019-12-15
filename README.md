@@ -42,6 +42,7 @@ PRINTJOBS | Parses CUPS spooled print jobs to get information about files/comman
 QUARANTINE | Reads the quarantine database and .LastGKReject file
 RECENTITEMS | Recently accessed Servers, Documents, Hosts, Volumes & Applications from .plist and .sfl files. Also gets recent searches and places for each user
 SAFARI | Internet history, downloaded file information, cookies and more from Safari caches
+SCREENTIME | Reads ScreenTime database for program and app usage
 SPOTLIGHT | Reads the spotlight index databases
 SPOTLIGHTSHORTCUTS | User typed data in the spotlight bar & targeted document/app
 UNIFIEDLOGS | Reads macOS unified logging logs from .tracev3 files
