@@ -8,8 +8,9 @@
 '''
 
 import pytsk3
-from plugins.helpers.writer import *
+from plugins.helpers.apfs_reader import ApfsSysDataLinkedVolume
 import plugins.helpers.macinfo as macinfo
+from plugins.helpers.writer import *
 import logging
 import textwrap
 
@@ -76,12 +77,23 @@ class Disk_Info:
         info.insert(0, ['Disk', str(self.mac_info.vol_info.info.vstype)[12:], '', 0, Disk_Info.GetSizeStr(self.total_disk_size_in_bytes), self.total_disk_size_in_bytes, '', ''])
         WriteList("disk, partition & volume information", "Disk_Info", info, data_info, self.mac_info.output_params,'')
 
+    def IsApfsBootVolume(self, volume):
+        '''Checks if this is the boot volume. For Catalina (10.15), it will return True for
+           both SYSTEM and DATA volumes
+        '''
+        if self.mac_info.macos_FS == volume:
+            return True
+        elif isinstance(self.mac_info.macos_FS, ApfsSysDataLinkedVolume):
+            if volume == self.mac_info.macos_FS.sys_vol or volume == self.mac_info.macos_FS.data_vol:
+                return True
+        return False
+
     def ReadVolumesFromPartTable(self):
         if self.apfs_container_only:
             size = self.mac_info.apfs_container_size
             for volume in self.mac_info.apfs_container.volumes:
                 used_space = '{:.2f} GB'.format(float(volume.container.block_size * volume.num_blocks_used / (1024*1024*1024.0)))
-                vol = Vol_Info(volume.volume_name, size, used_space, 'APFS', 0, self.mac_info.osx_FS == volume)
+                vol = Vol_Info(volume.volume_name, size, used_space, 'APFS', 0, self.IsApfsBootVolume(volume))
                 self.volumes.append(vol)
         else:
             for part in self.mac_info.vol_info:
@@ -97,7 +109,7 @@ class Disk_Info:
                         fs_type = str(fs_info.ftype)[12:]
                         if fs_type.find("_") > 0: fs_type = fs_type[0:fs_type.find("_")]
                         file_system = fs_type
-                        if file_system == 'HFS' and self.mac_info.osx_partition_start_offset == partition_start_offset: # For osx partition only
+                        if file_system == 'HFS' and self.mac_info.osx_partition_start_offset == partition_start_offset: # For macOS partition only
                             hfs_info = self.mac_info.hfs_native.GetVolumeInfo()
                             used_space = '{:.2f} GB'.format(float(hfs_info.block_size * (hfs_info.total_blocks - hfs_info.free_blocks) / (1024*1024*1024.0)))
                     except Exception as ex:
@@ -109,7 +121,7 @@ class Disk_Info:
                                     partition_size_in_sectors * self.block_size, 
                                     used_space, 'APFS', 
                                     partition_start_offset,
-                                    self.mac_info.osx_FS == volume)
+                                    self.IsApfsBootVolume(volume))
                                 self.volumes.append(vol)
                         elif part.desc.decode('utf-8').upper() in ("EFI SYSTEM PARTITION", "APPLE_PARTITION_MAP"):
                             log.debug(" Skipping {}".format(part.desc.decode('utf-8')))

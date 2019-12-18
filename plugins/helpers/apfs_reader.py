@@ -175,17 +175,30 @@ class ApfsFileSystemParser:
 
         self.debug_stats = {}
 
-    def create_linked_volume_tables(self, sys_vol, data_vol, firmlink_paths):
+    def create_linked_volume_tables(self, sys_vol, data_vol, firmlink_paths, firmlinks):
+        is_beta = False
+        for source, dest in firmlinks.items():
+            if source[1:] != dest: # perhaps Beta version of Catalina!
+                is_beta = True
+                raise ValueError('Is this macOS Catalina BETA (pre-release) version? '\
+                    'mac_apt does not have Firmlink support for this version as the '\
+                    'scheme is different, and inode numbers aren\'t unique between volumes.')
+        
         if not self.run_query('PRAGMA case_sensitive_like = true', False): return False
         paths = ['"' + x + '"' for x in firmlink_paths]
-        get_firmlink_cnids_query = ' SELECT GROUP_CONCAT(CNID) FROM {}_Paths '\
-                        ' WHERE PATH IN ({});'.format(sys_vol.name, ",".join(paths))
+        get_firmlink_cnids_query = ' SELECT p.CNID, Parent_CNID, p.Path FROM "{0}_Paths" p'\
+                        ' INNER JOIN "{0}_Inodes" i ON p.CNID=i.CNID'\
+                        ' WHERE PATH IN ({1});'.format(sys_vol.name, ",".join(paths))
         
         success, cursor, error = self.dbo.RunQuery(get_firmlink_cnids_query, writing=False)
+        sys_inode_paths_and_parents = {} # { inode : parent, inode2 : parent2, .. }
         if success:
+            cnids = '1,2,3'
             for row in cursor:
-                cnids = '1,2,3,' + row[0]
-                break
+                cnids += "," + str(row[0])
+                parent = str(row[1])
+                path = row[2]
+                sys_inode_paths_and_parents[path] = parent
         else:
             log.error('Failed to get CNIDs for firmlinks. Error was : ' + error)
             return False
@@ -196,6 +209,23 @@ class ApfsFileSystemParser:
         for table_type in ['Hardlinks','Extents','Attributes','Inodes','IndexNodes','DirStats','Compressed_Files','Paths']:
             query = view_query.format(table_type, data_vol.name, sys_vol.name, cnids, self.name)
             if not self.run_query(query, True): return False
+        # if is_beta:
+        #     # Just a dumb hack, remove all '/Device' from the start of all paths.
+        #     query = 'UPDATE "{0}_Paths" SET Path = substr(Path, 8) WHERE Path LIKE "/Device/%"'.format(self.name)
+        #     if not self.run_query(query, True): return False
+
+        query_inodes = 'UPDATE "{}_Inodes" SET Parent_CNID={} WHERE CNID IN '\
+                        '(SELECT CNID FROM "{}_Paths" WHERE PATH LIKE {}); '
+        query_indexes= 'UPDATE "{}_IndexNodes" SET Parent_CNID={} WHERE CNID IN '\
+                        '(SELECT CNID FROM "{}_Paths" WHERE PATH LIKE {}); '
+        query_hlinks = 'UPDATE "{}_Hardlinks" SET Parent_CNID={} WHERE CNID IN '\
+                        '(SELECT CNID FROM "{}_Paths" WHERE PATH LIKE {}); '
+        update_query = ''
+        for path, parent_cnid in sys_inode_paths_and_parents.items():
+            update_query += query_inodes.format(self.name, parent_cnid, data_vol.name, path)
+            update_query += query_indexes.format(self.name, parent_cnid, data_vol.name, path)
+            update_query += query_hlinks.format(self.name, parent_cnid, data_vol.name, path)
+
         self.create_indexes()
         return True
 
@@ -1113,7 +1143,11 @@ class ApfsSysDataLinkedVolume(ApfsVolume):
                         self.firmlinks[source] = dest
                         self.firmlinks_paths.append(source)
                         if source[1:] != dest:
-                            log.warning("Firmlink not handled : Source='{}' Dest='{}'".format(source, dest))
+                            # Maybe this is the Beta version of Catalina, try prefix 'Device'
+                            if dest.startswith('Device/'):
+                                self.firmlinks[source] = dest[7:]
+                            else:
+                                log.warning("Firmlink not handled : Source='{}' Dest='{}'".format(source, dest))
                 # add one for /System/Volumes/Data  /
                 #self.firmlinks['/System/Volumes/Data'] = ''
                 #self.firmlinks_paths.append('/System/Volumes/Data')

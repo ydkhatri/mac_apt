@@ -193,10 +193,10 @@ def IsOsxPartition(img, partition_start_offset, mac_info):
             log.info (" Skipping non-HFS partition")
             return False
 
-        # Found HFS partition, now look for osx files & folders
+        # Found HFS partition, now look for macOS files & folders
         try: 
             folders = fs.open_dir("/")
-            mac_info.osx_FS = fs
+            mac_info.macos_FS = fs
             mac_info.osx_partition_start_offset = partition_start_offset
             mac_info.hfs_native.Initialize(mac_info.pytsk_image, mac_info.osx_partition_start_offset)
             return FindOsxFiles(mac_info)
@@ -287,17 +287,17 @@ def FindOsxPartitionInApfsContainer(img, vol_info, container_size, container_sta
                 return False
             return FindOsxFiles(mac_info)
         else:
-            # Search for osx partition in volumes
+            # Search for macOS partition in volumes
             for vol in mac_info.apfs_container.volumes:
                 if vol.num_blocks_used * vol.container.block_size < 3000000000: # < 3 GB, cannot be a macOS root volume
                     continue
                 if vol.is_encrypted: continue
-                mac_info.osx_FS = vol
+                mac_info.macos_FS = vol
                 vol.dbo = mac_info.apfs_db
                 if FindOsxFiles(mac_info):
                     return True
         # Did not find macOS installation
-        mac_info.osx_FS = None
+        mac_info.macos_FS = None
     except Exception as ex:
         log.info('Sqlite db could not be created at : ' + apfs_sqlite_path)
         log.exception('Exception occurred when trying to create APFS_Volumes Sqlite db')

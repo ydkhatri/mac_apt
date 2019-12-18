@@ -28,7 +28,7 @@ __Plugin_Author = "Yogesh Khatri"
 __Plugin_Author_Email = "yogesh@swiftforensics.com"
 
 __Plugin_Standalone = True
-__Plugin_Standalone_Usage = 'Provide SystemVersion.plist to read osx version'
+__Plugin_Standalone_Usage = 'Provide SystemVersion.plist to read macOS version'
 
 log = logging.getLogger('MAIN.' + __Plugin_Name) # Do not rename or remove this ! This is the logger object
 
@@ -37,9 +37,9 @@ log = logging.getLogger('MAIN.' + __Plugin_Name) # Do not rename or remove this 
 def Plugin_Start(mac_info):
     '''Main Entry point function for plugin'''
 
-    # Lets print the osx name and version that the framework has already retrieved. (Utilizing MacInfo)
+    # Lets print the macOS name and version that the framework has already retrieved. (Utilizing MacInfo)
     log.info("Current OS is: " + os.name)
-    log.info("Mac version is : {}".format(mac_info.osx_version))
+    log.info("Mac version is : {}".format(mac_info.macos_version))
 
     # Now lets try to get it ourselves manually.
     file_path = '/System/Library/CoreServices/SystemVersion.plist'
@@ -66,12 +66,12 @@ def Process_File(mac_info, file_path):
     return version
 
 def GetMacOsVersion(plist):
-    ''' Gets osx version number from plist, input here is the plist itself.'''
+    ''' Gets macOS version number from plist, input here is the plist itself.'''
     try:
-        osx_version = plist['ProductVersion']
+        macos_version = plist['ProductVersion']
     except Exception:
         log.error("Error fetching ProductVersion from plist. Is it a valid xml plist?")
-    return osx_version
+    return macos_version
 
 
 def WriteMe(version, output_params, file_path):
@@ -80,7 +80,7 @@ def WriteMe(version, output_params, file_path):
     data = [version, major_ver] # Data as a list (or dictionary)
 
     ## The following demonstrates use of the writer class.
-    writer = DataWriter(output_params, 'OSX Info', col_info, file_path)
+    writer = DataWriter(output_params, 'macOS Info', col_info, file_path)
     try:
         writer.WriteRow(data)
     except:
@@ -100,11 +100,11 @@ def Plugin_Start_Standalone(input_files_list, output_params):
         if input_path.endswith('SystemVersion.plist'):
             success, plist, error = CommonFunctions.ReadPlist(input_path)
             if success:
-                osx_version = plist.get('ProductVersion', None)
-                if osx_version == None:
+                macos_version = plist.get('ProductVersion', None)
+                if macos_version == None:
                     log.error('Could not find ProductVersion in plist!')
                 else:
-                    WriteMe(osx_version, output_params, input_path)
+                    WriteMe(macos_version, output_params, input_path)
             else:
                 log.error('Input file "{}" is not a valid plist. Error opening file was: {}'.format(input_path, error))
 
