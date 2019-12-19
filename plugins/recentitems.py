@@ -465,7 +465,7 @@ def ReadFinderPlist(plist, recent_items, source, user=''):
                 data = folder.get('file-bookmark', None)
                 if data != None:
                     ri.ReadBookmark(data) 
-                else: # Perhaps its osx < 10.9
+                else: # Perhaps its macOS < 10.9
                     data = folder.get('file-data')
                     if data != None:
                         data = data.get('_CFURLAliasData', None)

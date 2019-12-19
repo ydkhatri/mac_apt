@@ -34,7 +34,7 @@ basic_data_info = [ ('INFO_TYPE',DataType.TEXT),('Name',DataType.TEXT),('Data',D
 
 def GetVolumeInfo(mac_info):
     '''Gets information for the volume where OSX/macOS is installed'''
-    vol = mac_info.osx_FS
+    vol = mac_info.macos_FS
     if vol == None: # For MOUNTED option, this is None
         return
     if mac_info.is_apfs:
@@ -232,7 +232,8 @@ def GetModelAndHostNameFromPreference(mac_info):
     return
 
 def GetOsxVersion(mac_info):
-    basic_data.append(['SYSTEM', 'OSX Version', mac_info.osx_version, mac_info.osx_friendly_name, '/System/Library/CoreServices/SystemVersion.plist'])
+    basic_data.append(['SYSTEM', 'macOS Version', mac_info.macos_version, mac_info.osx_friendly_name, '/System/Library/CoreServices/SystemVersion.plist'])
+    basic_data.append(['SYSTEM', 'macOS Build Version', mac_info.osx_build, mac_info.osx_friendly_name, '/System/Library/CoreServices/SystemVersion.plist'])
 
 def Plugin_Start(mac_info):
     '''Main Entry point function for plugin'''

@@ -307,11 +307,12 @@ class MacInfo:
     def __init__(self, output_params):
         #self.Partitions = {}   # Dictionary of all partition objects returned from pytsk LATER! 
         self.pytsk_image = None
-        self.osx_FS = None      # Just the FileSystem object (fs) from OSX partition
+        self.macos_FS = None      # Just the FileSystem object (fs) from OSX partition
         self.osx_partition_start_offset = 0 # Container offset if APFS
         self.vol_info = None # disk_volumes
         self.output_params = output_params
-        self.osx_version = '0.0.0'
+        self.macos_version = '0.0.0'
+        self.osx_build = ''
         self.osx_friendly_name = 'No name yet!'
         self.users = []
         self.hfs_native = NativeHfsParser()
@@ -329,7 +330,7 @@ class MacInfo:
 
         times = { 'c_time':None, 'm_time':None, 'cr_time':None, 'a_time':None }
         try:
-            tsk_file = self.osx_FS.open(file_path)
+            tsk_file = self.macos_FS.open(file_path)
             times['c_time'] = CommonFunctions.ReadUnixTime(tsk_file.info.meta.ctime)
             times['m_time'] = CommonFunctions.ReadUnixTime(tsk_file.info.meta.mtime)
             times['cr_time'] = CommonFunctions.ReadUnixTime(tsk_file.info.meta.crtime)
@@ -488,7 +489,7 @@ class MacInfo:
         if self.use_native_hfs_parser:
             return self.hfs_native.IsValidFilePath(path)
         try:
-            valid_file = self.osx_FS.open(path)
+            valid_file = self.macos_FS.open(path)
             return True
         except Exception:
             pass
@@ -499,7 +500,7 @@ class MacInfo:
         if self.use_native_hfs_parser:
             return self.hfs_native.IsValidFolderPath(path)
         try:
-            valid_folder = self.osx_FS.open_dir(path)
+            valid_folder = self.macos_FS.open_dir(path)
             return True
         except Exception:
             pass
@@ -510,7 +511,7 @@ class MacInfo:
         if self.use_native_hfs_parser:
             return self.hfs_native.GetFileSize(path)
         try:
-            valid_file = self.osx_FS.open(path) 
+            valid_file = self.macos_FS.open(path) 
             return valid_file.info.meta.size
         except Exception as ex:
             log.debug (" Unknown exception from GetFileSize() " + str(ex) + " Perhaps file does not exist " + path)
@@ -526,7 +527,7 @@ class MacInfo:
             return self.hfs_native.ListItemsInFolder(path, types_to_fetch, include_dates)
         items = [] # List of dictionaries
         try:
-            dir = self.osx_FS.open_dir(path)
+            dir = self.macos_FS.open_dir(path)
             for entry in dir:
                 name = self._GetName(entry)
                 if name == "": continue
@@ -559,7 +560,7 @@ class MacInfo:
             return self.hfs_native.OpenSmallFile(path)
         try:
             log.debug("Trying to open file : " + path)
-            tsk_file = self.osx_FS.open(path)
+            tsk_file = self.macos_FS.open(path)
             size = tsk_file.info.meta.size
             if size > 209715200:
                 raise ValueError('File size > 200 MB, use direct TSK file functions!')
@@ -599,7 +600,7 @@ class MacInfo:
         if self.use_native_hfs_parser:
             return self.hfs_native.ExtractFile(tsk_path, destination_path)
         try:
-            tsk_file = self.osx_FS.open(tsk_path)
+            tsk_file = self.macos_FS.open(tsk_path)
             size = tsk_file.info.meta.size
 
             BUFF_SIZE = 1024 * 1024
@@ -655,9 +656,9 @@ class MacInfo:
         return error
   
     def GetVersionDictionary(self):
-        '''Returns osx version as dictionary {major:10, minor:5 , micro:0}'''
+        '''Returns macOS version as dictionary {major:10, minor:5 , micro:0}'''
         version_dict = { 'major':0, 'minor':0, 'micro':0 }
-        info = self.osx_version.split(".")
+        info = self.macos_version.split(".")
         try:
             version_dict['major'] = int(info[0])
             try:
@@ -680,7 +681,7 @@ class MacInfo:
         '''
         success, uid, gid = False, 0, 0
         try:
-            path_dir = self.osx_FS.open_dir(path)
+            path_dir = self.macos_FS.open_dir(path)
             uid = str(path_dir.info.fs_file.meta.uid)
             gid = str(path_dir.info.fs_file.meta.gid)
             success = True
@@ -696,7 +697,7 @@ class MacInfo:
         '''
         success, uid, gid = False, 0, 0
         try:
-            path_file = self.osx_FS.open(path)
+            path_file = self.macos_FS.open(path)
             uid = str(path_file.info.meta.uid)
             gid = str(path_file.info.meta.gid)
             success = True
@@ -834,8 +835,8 @@ class MacInfo:
                                 target_user.real_name = self.GetArrayFirstElement(plist.get('realname', ''))
                                 target_user.pw_hint = self.GetArrayFirstElement(plist.get('hint', ''))
                                 target_user._source = user_plist_path
-                                osx_version = self.GetVersionDictionary()
-                                if osx_version['major'] == 10 and osx_version['minor'] <= 9: # Mavericks & earlier
+                                macos_version = self.GetVersionDictionary()
+                                if macos_version['major'] == 10 and macos_version['minor'] <= 9: # Mavericks & earlier
                                     password_policy_data = plist.get('passwordpolicyoptions', None)
                                     if password_policy_data == None:
                                         log.debug('Could not find passwordpolicyoptions for user {}'.format(target_user.user_name))
@@ -889,7 +890,7 @@ class MacInfo:
     def _GetSystemInfo(self):
         ''' Gets system version information'''
         try:
-            #plist_file = self.osx_FS.open('/System/Library/CoreServices/SystemVersion.plist')
+            #plist_file = self.macos_FS.open('/System/Library/CoreServices/SystemVersion.plist')
             #plist_string = plist_file.read_random(0, plist_file.info.meta.size) # This is a small file, so this is fine!
             #plist = biplist.readPlistFromString(plist_string)
             log.debug("Trying to get system version from /System/Library/CoreServices/SystemVersion.plist")
@@ -897,26 +898,27 @@ class MacInfo:
             if f != None:
                 try:
                     plist = biplist.readPlist(f)
-                    self.osx_version = plist.get('ProductVersion', '')
-                    if self.osx_version != '':
-                        if   self.osx_version.startswith('10.10'): self.osx_friendly_name = 'Yosemite'
-                        elif self.osx_version.startswith('10.11'): self.osx_friendly_name = 'El Capitan'
-                        elif self.osx_version.startswith('10.12'): self.osx_friendly_name = 'Sierra'
-                        elif self.osx_version.startswith('10.13'): self.osx_friendly_name = 'High Sierra'
-                        elif self.osx_version.startswith('10.14'): self.osx_friendly_name = 'Mojave'
-                        elif self.osx_version.startswith('10.15'): self.osx_friendly_name = 'Catalina'
-                        elif self.osx_version.startswith('10.0'): self.osx_friendly_name = 'Cheetah'
-                        elif self.osx_version.startswith('10.1'): self.osx_friendly_name = 'Puma'
-                        elif self.osx_version.startswith('10.2'): self.osx_friendly_name = 'Jaguar'
-                        elif self.osx_version.startswith('10.3'): self.osx_friendly_name = 'Panther'
-                        elif self.osx_version.startswith('10.4'): self.osx_friendly_name = 'Tiger'
-                        elif self.osx_version.startswith('10.5'): self.osx_friendly_name = 'Leopard'
-                        elif self.osx_version.startswith('10.6'): self.osx_friendly_name = 'Snow Leopard'
-                        elif self.osx_version.startswith('10.7'): self.osx_friendly_name = 'Lion'
-                        elif self.osx_version.startswith('10.8'): self.osx_friendly_name = 'Mountain Lion'
-                        elif self.osx_version.startswith('10.9'): self.osx_friendly_name = 'Mavericks'
+                    self.macos_version = plist.get('ProductVersion', '')
+                    self.osx_build = plist.get('ProductBuildVersion', '')
+                    if self.macos_version != '':
+                        if   self.macos_version.startswith('10.10'): self.osx_friendly_name = 'Yosemite'
+                        elif self.macos_version.startswith('10.11'): self.osx_friendly_name = 'El Capitan'
+                        elif self.macos_version.startswith('10.12'): self.osx_friendly_name = 'Sierra'
+                        elif self.macos_version.startswith('10.13'): self.osx_friendly_name = 'High Sierra'
+                        elif self.macos_version.startswith('10.14'): self.osx_friendly_name = 'Mojave'
+                        elif self.macos_version.startswith('10.15'): self.osx_friendly_name = 'Catalina'
+                        elif self.macos_version.startswith('10.0'): self.osx_friendly_name = 'Cheetah'
+                        elif self.macos_version.startswith('10.1'): self.osx_friendly_name = 'Puma'
+                        elif self.macos_version.startswith('10.2'): self.osx_friendly_name = 'Jaguar'
+                        elif self.macos_version.startswith('10.3'): self.osx_friendly_name = 'Panther'
+                        elif self.macos_version.startswith('10.4'): self.osx_friendly_name = 'Tiger'
+                        elif self.macos_version.startswith('10.5'): self.osx_friendly_name = 'Leopard'
+                        elif self.macos_version.startswith('10.6'): self.osx_friendly_name = 'Snow Leopard'
+                        elif self.macos_version.startswith('10.7'): self.osx_friendly_name = 'Lion'
+                        elif self.macos_version.startswith('10.8'): self.osx_friendly_name = 'Mountain Lion'
+                        elif self.macos_version.startswith('10.9'): self.osx_friendly_name = 'Mavericks'
                         else: self.osx_friendly_name = 'Unknown version!'
-                    log.info ('OSX version detected is: {} ({})'.format(self.osx_friendly_name, self.osx_version))
+                    log.info ('OSX version detected is: {} ({}) Build={}'.format(self.osx_friendly_name, self.macos_version, self.osx_build))
                     return True
                 except (InvalidPlistException, NotBinaryPlistException) as ex:
                     log.error ("Could not get ProductVersion from plist. Is it a valid xml plist? Error=" + str(ex))
@@ -936,14 +938,14 @@ class ApfsMacInfo(MacInfo):
         self.apfs_data_volume = None # New in 10.15, a separate Data partition
 
     def UseCombinedVolume(self):
-        self.osx_FS = ApfsSysDataLinkedVolume(self.apfs_sys_volume, self.apfs_data_volume)
+        self.macos_FS = ApfsSysDataLinkedVolume(self.apfs_sys_volume, self.apfs_data_volume)
 
     def CreateCombinedVolume(self):
         '''Returns True/False depending on whether system & data volumes could be combined successfully'''
         try:
-            self.osx_FS = ApfsSysDataLinkedVolume(self.apfs_sys_volume, self.apfs_data_volume)
-            apfs_parser = ApfsFileSystemParser(self.osx_FS, self.apfs_db)
-            return apfs_parser.create_linked_volume_tables(self.apfs_sys_volume, self.apfs_data_volume, self.osx_FS.firmlinks_paths)
+            self.macos_FS = ApfsSysDataLinkedVolume(self.apfs_sys_volume, self.apfs_data_volume)
+            apfs_parser = ApfsFileSystemParser(self.macos_FS, self.apfs_db)
+            return apfs_parser.create_linked_volume_tables(self.apfs_sys_volume, self.apfs_data_volume, self.macos_FS.firmlinks_paths, self.macos_FS.firmlinks)
         except (ValueError, TypeError) as ex:
             log.exception('')
         log.error('Failed to create combined System + Data volume')
@@ -961,7 +963,7 @@ class ApfsMacInfo(MacInfo):
         '''Gets MACB and the 5th Index timestamp too'''
         times = { 'c_time':None, 'm_time':None, 'cr_time':None, 'a_time':None, 'i_time':None }
         try:
-            apfs_file_meta = self.osx_FS.GetFileMetadataByPath(file_path)
+            apfs_file_meta = self.macos_FS.GetFileMetadataByPath(file_path)
             if apfs_file_meta:
                 times['c_time'] = apfs_file_meta.changed
                 times['m_time'] = apfs_file_meta.modified
@@ -975,25 +977,25 @@ class ApfsMacInfo(MacInfo):
         return times
 
     def IsSymbolicLink(self, path):
-        return self.osx_FS.IsSymbolicLink(path)
+        return self.macos_FS.IsSymbolicLink(path)
 
     def IsValidFilePath(self, path):
-        return self.osx_FS.DoesFileExist(path)
+        return self.macos_FS.DoesFileExist(path)
 
     def IsValidFolderPath(self, path):
-        return self.osx_FS.DoesFolderExist(path)
+        return self.macos_FS.DoesFolderExist(path)
 
     def GetExtendedAttribute(self, path, att_name):
-        return self.osx_FS.GetExtendedAttribute(path, att_name)
+        return self.macos_FS.GetExtendedAttribute(path, att_name)
 
     def GetExtendedAttributes(self, path):
         xattrs = {}
-        apfs_xattrs = self.osx_FS.GetExtendedAttributes(path)
+        apfs_xattrs = self.macos_FS.GetExtendedAttributes(path)
         return { att_name:att.data for att_name,att in apfs_xattrs.items() }
 
     def GetFileSize(self, full_path, error=None):
         try:
-            apfs_file_meta = self.osx_FS.GetFileMetadataByPath(full_path)
+            apfs_file_meta = self.macos_FS.GetFileMetadataByPath(full_path)
             if apfs_file_meta:
                 return apfs_file_meta.logical_size
         except Exception as ex:
@@ -1002,19 +1004,19 @@ class ApfsMacInfo(MacInfo):
 
     def OpenSmallFile(self, path):
         '''Open files less than 200 MB, returns open file handle'''
-        return self.osx_FS.open(path) #self.osx_FS.OpenSmallFile(path)
+        return self.macos_FS.open(path) #self.macos_FS.OpenSmallFile(path)
 
     def open(self, path):
         '''Open file and return a file-like object'''
-        return self.osx_FS.open(path)
+        return self.macos_FS.open(path)
 
     def ExtractFile(self, tsk_path, destination_path):
-        return self.osx_FS.CopyOutFile(tsk_path, destination_path)
+        return self.macos_FS.CopyOutFile(tsk_path, destination_path)
 
     def _GetSize(self, entry):
         '''For file entry, gets logical file size, or 0 if error'''
         try:
-            apfs_file_meta = self.osx_FS.GetFileMetadataByPath(path)
+            apfs_file_meta = self.macos_FS.GetFileMetadataByPath(path)
             if apfs_file_meta:
                 return apfs_file_meta.logical_size
         except:
@@ -1034,7 +1036,7 @@ class ApfsMacInfo(MacInfo):
             UID & GID are returned as strings
         '''
         success, uid, gid = False, 0, 0
-        apfs_file_meta = self.osx_FS.GetFileMetadataByPath(path)
+        apfs_file_meta = self.macos_FS.GetFileMetadataByPath(path)
         if apfs_file_meta:
             uid = str(apfs_file_meta.uid)
             gid = str(apfs_file_meta.gid)
@@ -1046,7 +1048,7 @@ class ApfsMacInfo(MacInfo):
     def ListItemsInFolder(self, path='/', types_to_fetch=EntryType.FILES_AND_FOLDERS, include_dates=False):
         '''Always returns dates ignoring the 'include_dates' parameter'''
         items = []
-        all_items = self.osx_FS.ListItemsInFolder(path)
+        all_items = self.macos_FS.ListItemsInFolder(path)
         if all_items:
             if types_to_fetch == EntryType.FILES_AND_FOLDERS:
                 items = [] #[dict(x) for x in all_items if x['type'] in ['File', 'Folder'] ]
