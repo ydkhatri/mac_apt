@@ -40,6 +40,7 @@ NOTES | Reads notes databases
 NOTIFICATIONS | Reads mac notification data for each user
 PRINTJOBS | Parses CUPS spooled print jobs to get information about files/commands sent to a printer
 QUARANTINE | Reads the quarantine database and .LastGKReject file
+QUICKLOOK | Reads the QuickLook index.sqlite and carves thumbnails from thumbnails.data
 RECENTITEMS | Recently accessed Servers, Documents, Hosts, Volumes & Applications from .plist and .sfl files. Also gets recent searches and places for each user
 SAFARI | Internet history, downloaded file information, cookies and more from Safari caches
 SCREENTIME | Reads ScreenTime database for program and app usage
