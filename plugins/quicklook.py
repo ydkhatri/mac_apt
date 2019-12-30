@@ -19,8 +19,8 @@ __Plugin_Name = "QUICKLOOK" # Cannot have spaces, and must be all caps!
 __Plugin_Friendly_Name = "QuickLook Thumbnail Cache"
 __Plugin_Version = "1.0"
 __Plugin_Description = "Parses QuickLook Thumbnail Cache data"
-__Plugin_Author = "Jack Farley"
-__Plugin_Author_Email = "jfarley248@gmail.com"
+__Plugin_Author = "Jack Farley - BlackStone Discovery"
+__Plugin_Author_Email = "jfarley@blackstonediscovery.com - jfarley248@gmail.com"
 
 __Plugin_Standalone = True
 __Plugin_Standalone_Usage = 'Provide QuickLook database found at:' \
@@ -40,7 +40,7 @@ http://www.easymetadata.com/2015/01/sqlite-analysing-the-quicklook-database-in-m
 
 class QuickLook:
     def __init__(self, folder, file_name, hit_count, last_hit_date, version, bits_per_pixel, bitmapdata_location,
-                 bitmapdata_length, width, height, fs_id, row_id, source):
+                 bitmapdata_length, width, height, fs_id, inode, row_id, source):
         self.folder = folder
         self.file_name= file_name
         self.hit_count = hit_count
@@ -52,6 +52,7 @@ class QuickLook:
         self.width = width
         self.height = height
         self.fs_id = fs_id
+        self.inode = inode
         self.row_id = row_id
         self.source = source
 
@@ -60,14 +61,14 @@ def PrintAll(quicklook_data, output_params, source_path):
     quicklook_info = [ ('Folder',DataType.TEXT),('File_Name',DataType.TEXT),('Hit_Count',DataType.TEXT),
                        ('Last_Hit_Date',DataType.TEXT), ('version',DataType.BLOB), ('Bits_per_Pixel',DataType.INTEGER), ('bitmap_data_location',DataType.INTEGER),
                        ('bitmap_data_length',DataType.INTEGER), ('Width',DataType.INTEGER), ('Height',DataType.INTEGER),
-                       ('fs_id',DataType.TEXT), ('row_id',DataType.INTEGER), ('Source',DataType.TEXT)
+                       ('fs_id',DataType.TEXT),('inode',DataType.INTEGER), ('row_id',DataType.TEXT), ('Source',DataType.TEXT)
                      ]
 
     quicklook_list = []
     for ql in quicklook_data:
         ql_items = [ql.folder, ql.file_name, ql.hit_count,
                       ql.last_hit_date, ql.version, ql.bits_per_pixel, ql.bitmapdata_location, ql.bitmapdata_length, ql.width,
-                      ql.height, ql.fs_id, ql.row_id, ql.source
+                      ql.height, ql.fs_id, ql.inode, ql.row_id, ql.source
                      ]
         quicklook_list.append(ql_items)
     WriteList("QuickLook Info", "QuickLook", quicklook_list, quicklook_info, output_params, source_path)
@@ -159,7 +160,9 @@ def carveThumbs(offset, length, thumbfile, thumbname, width, height, export):
             os.makedirs(export_folder)
 
         # Set up output file with png extension attached
-        export_file = os.path.join(export_folder, thumbname + ".png")
+        export_file = os.path.join(export_folder, thumbname + " - " + str(width) +  "x" + str(height) + ".png")
+
+        log.debug("Attempting to copy out thumbnail to file: " + export_file)
 
         img.save(export_file)
 
@@ -198,11 +201,12 @@ def parseDb(c, quicklook_array, source, path_to_thumbnails, export):
             width = item[9]
             height = item[10]
             fs_id = item[12]
+            inode = "N/A"
             row_id = item[0]
 
 
             ql = QuickLook(folder, file_name, hit_count, last_hit_date, version, bits_per_pixel, bitmapdata_location,
-                           bitmapdata_length, width, height, fs_id, row_id, source)
+                           bitmapdata_length, width, height, fs_id, inode, row_id, source)
             quicklook_array.append(ql)
 
             # Carve out thumbnails
@@ -213,74 +217,249 @@ def parseDb(c, quicklook_array, source, path_to_thumbnails, export):
         log.exception("Exception while executing query for QuickLook cache. Exception was: " + str(e))
 
 
+
+def findParents(c, CNID, full_path):
+    inode_query_unformat = """
+    SELECT Parent_CNID from Combined_Inodes where Combined_Inodes.CNID == {}
+    """
+    inode_query = inode_query_unformat.format(CNID)
+
+    name_query_unformat = """
+    SELECT Name from Combined_Inodes where Combined_Inodes.CNID == {}
+    """
+
+    if CNID == 2:
+        return
+
+
+    else:
+
+        c.execute(inode_query)
+        parent_CNID = c.fetchone()[0]
+
+        name_query = name_query_unformat.format(parent_CNID)
+        c.execute(name_query)
+
+        parent_folder = c.fetchone()[0]
+
+        full_path[0] =   parent_folder + "/" + full_path[0]
+
+        findParents(c, parent_CNID, full_path)
+
+def parseDbNewSinglePlug(c, quicklook_array, source, path_to_thumbnails, export):
+    """
+            :param c: Connection to index.sqlite
+            :param quicklook_array: Empty quicklook array to store QuickLook objects
+            :param source: The source file being used, the full path to the index.sqlite
+            :return: Nothing, fills the quicklook array
+        """
+
+
+    combined_query = """
+        SELECT * FROM thumbnails LEFT JOIN basic_files WHERE basic_files.fileId | -9223372036854775808 == thumbnails.file_id
+        """
+
+    c.execute(combined_query)
+    combined_files = c.fetchall()
+
+    # If the statement returned anything, lets parse it further
+    if combined_files:
+        unknown_count = 0
+        for entries in combined_files:
+                # Carve out thumbnails with no iNode
+                bitmapdata_location = entries[11]
+                bitmapdata_length = entries[12]
+                width = entries[5]
+                height = entries[6]
+                name = "Unknown" + str(unknown_count)
+                hit_count = entries[3]
+                last_hit_date = entries[4]
+                version = b""
+                bits_per_pixel = entries[8]
+                fs_id = "N/A"
+                inode = entries[20]
+                row_id = "N/A"
+                carveThumbs(bitmapdata_location, bitmapdata_length, path_to_thumbnails, name, width, height, export)
+                unknown_count += 1
+                ql = QuickLook("UNKNOWN", "UNKNOWN", hit_count, last_hit_date, version, bits_per_pixel,
+                               bitmapdata_location,
+                               bitmapdata_length, width, height, fs_id, inode, row_id, source)
+                quicklook_array.append(ql)
+
+
+
+
+def parseDbNew(c, quicklook_array, source, path_to_thumbnails, export):
+    """
+        :param c: Connection to index.sqlite
+        :param quicklook_array: Empty quicklook array to store QuickLook objects
+        :param source: The source file being used, the full path to the index.sqlite
+        :return: Nothing, fills the quicklook array
+    """
+
+    inode_query = """
+    SELECT Name from Combined_Inodes where Combined_Inodes.CNID == {}
+    """
+
+    combined_query = """
+    SELECT * FROM thumbnails LEFT JOIN basic_files WHERE basic_files.fileId | -9223372036854775808 == thumbnails.file_id
+    """
+
+
+    c.execute(combined_query)
+    combined_files = c.fetchall()
+
+    # If the statement returned anything, lets parse it further
+    if combined_files:
+
+       unknown_count = 0
+       for entries in combined_files:
+
+
+
+           if type(export) is not str:
+               # Format the inode_query for our specific iNode number so we can find the filename
+               apfs_query = inode_query.format(entries[20])
+
+               # Create cursor to the APFS db created by mac_apt
+               apfs_c = export.apfs_db.conn.cursor()
+
+               apfs_c.row_factory = sqlite3.Row
+               cursor = apfs_c.execute(apfs_query)
+               test_row = cursor.fetchone()
+               if test_row is None:
+                    log.warning("No file matches iNode: " + str(entries[20]) + "!!")
+                    log.warning("This file will be outputted as Unknown" + str(unknown_count))
+
+                    # Carve out thumbnails with no iNode
+                    bitmapdata_location = entries[11]
+                    bitmapdata_length = entries[12]
+                    width = entries[5]
+                    height = entries[6]
+                    name = "Unknown" + str(unknown_count)
+                    hit_count = entries[3]
+                    last_hit_date = entries[4]
+                    version = b""
+                    bits_per_pixel = entries[8]
+                    fs_id = "N/A"
+                    inode = entries[20]
+                    row_id = "N/A"
+                    log.debug("Carving an unknown thumbnail, this is unknown number: " + str(unknown_count))
+                    carveThumbs(bitmapdata_location, bitmapdata_length, path_to_thumbnails, name, width, height, export)
+                    unknown_count += 1
+                    ql = QuickLook("UNKNOWN", "UNKNOWN", hit_count, last_hit_date, version, bits_per_pixel,
+                                   bitmapdata_location,
+                                   bitmapdata_length, width, height, fs_id, inode, row_id, source)
+                    quicklook_array.append(ql)
+
+               else:
+                   for row in test_row:
+                       log.debug("File matching iNode: " + str(entries[20]) + " is: " + str(row))
+                       full_path = [""]
+                       findParents(apfs_c, entries[20], full_path)
+
+                       hit_count = entries[3]
+                       last_hit_date = entries[4]
+                       version = b""
+                       bits_per_pixel = entries[8]
+                       bitmapdata_location = entries[11]
+                       bitmapdata_length = entries[12]
+                       width = entries[5]
+                       height = entries[6]
+                       fs_id = "N/A"
+                       inode = entries[20]
+                       row_id = "N/A"
+
+                       ql = QuickLook(full_path[0], row, hit_count, last_hit_date, version, bits_per_pixel, bitmapdata_location,
+                                      bitmapdata_length, width, height, fs_id, inode, row_id, source)
+                       quicklook_array.append(ql)
+
+                       # Carve out thumbnails
+                       log.debug("Carving thumbnail: " + str(full_path[0]) + row + " from thumbnails.data file")
+                       carveThumbs(bitmapdata_location, bitmapdata_length, path_to_thumbnails, row, width, height, export)
+
+
 def findDb(mac_info):
+    log.debug("Finding QuickLook databases and caches now in user cache dirs")
+    db_path_arr = []
+    thumbnail_path_array = []
+    for user in mac_info.users:
+        if not user.DARWIN_USER_CACHE_DIR or not user.user_name:
+            continue  # TODO: revisit this later!
+        else:
 
-    users_dir = mac_info.ListItemsInFolder('/private/var/folders', EntryType.FOLDERS)
-    # In /private/var/folders/  --> Look for --> xx/yyyyyy/C/C/com.apple.QuickLook.thumbnailcache
-    for unknown1 in users_dir:
-        unknown1_name = unknown1['name']
-        unknown1_dir = mac_info.ListItemsInFolder('/private/var/folders/' + unknown1_name, EntryType.FOLDERS)
-        for unknown2 in unknown1_dir:
-            unknown2_name = unknown2['name']
-            found_home = False
-            found_user = False
-            home = ''
-            # This is yyyyyy folder
-            path_to_quicklook_db = '/private/var/folders/' + unknown1_name + '/' + unknown2_name + '/C/com.apple.QuickLook.thumbnailcache/index.sqlite'
-            path_to_thumbnails = '/private/var/folders/' + unknown1_name + '/' + unknown2_name + '/C/com.apple.QuickLook.thumbnailcache/thumbnails.data'
-            if mac_info.IsValidFilePath(path_to_quicklook_db) and mac_info.GetFileSize(path_to_quicklook_db) and mac_info.IsValidFilePath(path_to_thumbnails) and mac_info.GetFileSize(path_to_thumbnails):  # This does not always exist or it may be zero in size!
-                return path_to_quicklook_db, path_to_thumbnails
-            else:
-                log.error("Quicklook DB or Thumbnail database not found")
+            darwin_user_folders = user.DARWIN_USER_CACHE_DIR.split(',')
 
+            for darwin_user_cache_dir in darwin_user_folders:
+                db_path = (darwin_user_cache_dir + '/com.apple.QuickLook.thumbnailcache/index.sqlite')
+                thumbnail_path = (darwin_user_cache_dir + '/com.apple.QuickLook.thumbnailcache/thumbnails.data')
+                if not mac_info.IsValidFilePath(db_path):
+                    continue
+                else:
+                    log.debug("Found valid thumbnail database in darwin user cache dir: " + str(db_path))
+                    db_path_arr.append(db_path)
+                if not mac_info.IsValidFilePath(thumbnail_path):
+                    continue
+                else:
+                    log.debug("Found valid thumbnail data in darwin user cache dir: " + str(thumbnail_path))
+                    thumbnail_path_array.append(thumbnail_path)
 
+    return db_path_arr, thumbnail_path_array
 
 
 def Plugin_Start(mac_info):
     '''Main Entry point function for plugin'''
 
     # Check for Mac OS version because QuickLook changes structure in 10.15
-    os_minor_version = int(mac_info.osx_version[3:])
-    if os_minor_version <= 14:
+    if hasattr(mac_info, "macos_version"):
+        os_minor_version = int(mac_info.macos_version[3:])
+    else:
+        os_minor_version = int(mac_info.osx_version[3:])
 
-        # Array to store QuickLook objects
-        quicklook_array = []
+    # Array to store QuickLook objects
+    quicklook_array = []
 
-        # Finds QuickLook index.sqlite and the thumbnails.data
-        path_to_quicklook_db, path_to_thumbnails = findDb(mac_info)
+    # Finds QuickLook index.sqlite and the thumbnails.data
+    paths_to_quicklook_db, paths_to_thumbnails = findDb(mac_info)
 
-        # Export thumbnails.data file
-        mac_info.ExportFile(path_to_thumbnails, __Plugin_Name)
+    # Iterate through returned array of paths and pair each index.sqlite with their thumbnails.data
+    for quicklook_db_path, thumbnail_file in zip(paths_to_quicklook_db, paths_to_thumbnails):
+        log.info("QuickLook Cache data found!")
 
-        # If the index.sqlite exists, we then start parsing
-        if path_to_quicklook_db:
-            log.info("QuickLook Cache data found!")
-            mac_info.ExportFile(path_to_quicklook_db, __Plugin_Name)
+        # Export index.sqlite and thumbnails.data file
+        mac_info.ExportFile(quicklook_db_path, __Plugin_Name)
+        mac_info.ExportFile(thumbnail_file, __Plugin_Name)
 
-            # Opens index.sqlite
-            quicklook_db, quicklook_wrapper = OpenDbFromImage(mac_info, path_to_quicklook_db)
+        # Opens index.sqlite
+        quicklook_db, quicklook_wrapper = OpenDbFromImage(mac_info, quicklook_db_path)
 
-            c = quicklook_db.cursor()
+        c = quicklook_db.cursor()
 
+        # Change program flow based on Mac OS version
+        if os_minor_version <= 14:
             # Calls parseDB to execute SQL statement
-            parseDb(c, quicklook_array, path_to_quicklook_db, path_to_thumbnails, mac_info)
+            log.debug("QuickLook data from Mac OS below 10.15 found... Processing")
+            parseDb(c, quicklook_array, quicklook_db_path, thumbnail_file, mac_info)
+        else:
+            log.debug("QuickLook data from Mac OS 10.15 found... Processing")
+            parseDbNew(c, quicklook_array, quicklook_db_path, thumbnail_file, mac_info)
 
-            # Close the index.sqlite
-            quicklook_db.close()
 
-            # If the QuickLook array is not empty, we print the information out
-            if quicklook_array:
-                PrintAll(quicklook_array, mac_info.output_params, '')
+        # Close the index.sqlite
+        quicklook_db.close()
+
+        # If the QuickLook array is not empty, we print the information out
+        if quicklook_array:
+            PrintAll(quicklook_array, mac_info.output_params, '')
 
         else:
-            log.info("No Screen Time artifacts found.")
-
-    # Exit plugin due to unsupported Mac OS version
-    else:
-        log.warning("Parsing Quicklook Cache on Mac OS 10.15 & Higher is not yet supported")
+            log.info("No QuickLook artifacts found.")
 
 
 def Plugin_Start_Standalone(input_files_list, output_params):
+
+    query = "PRAGMA table_info('files');"
+
     log.info("Module Started as standalone")
 
     quicklook_db = os.path.join(input_files_list[0], "index.sqlite")
@@ -292,10 +471,18 @@ def Plugin_Start_Standalone(input_files_list, output_params):
 
         db = OpenDb(quicklook_db)
         c = db.cursor()
-        parseDb(c, quicklook_array, quicklook_db, thumbnails, output_params.output_path)
+        c.execute(query)
+        row = c.fetchone()
+        if row is not None:
+            log.debug("QuickLook data from Mac OS below 10.15 found... Processing")
+            parseDb(c, quicklook_array, quicklook_db, thumbnails, output_params.output_path)
+        else:
+            log.debug("QuickLook data from Mac OS 10.15 found... Processing")
+            parseDbNewSinglePlug(c, quicklook_array, quicklook_db, thumbnails, output_params.output_path)
         db.close()
 
         if quicklook_array:
+            log.info("QuickLook data processed. Printing out now")
             PrintAll(quicklook_array, output_params, '')
 
     else:
