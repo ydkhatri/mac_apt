@@ -25,6 +25,7 @@ import traceback
 from plugins.helpers.apfs_reader import *
 from plugins.helpers.hfs_alt import HFSVolume
 from plugins.helpers.common import *
+from plugins.helpers.statx import statx
 from plugins.helpers.structs import *
 
 log = logging.getLogger('MAIN.HELPERS.MACINFO')
@@ -1082,7 +1083,7 @@ class MountedMacInfo(MacInfo):
         self.is_linux = (sys.platform == 'linux')
         if self.is_linux:
             log.warning('Since this is a linux (mounted) system, there is no way for python to extract created_date timestamps. '\
-                        'This is a limitation of Python. Created timestamps shows/seen will actually be same as Last_Modified timestamps.')
+                        'This is a limitation of Python. Created timestamps shown/seen will actually be same as Last_Modified timestamps.')
 
     def BuildFullPath(self, path_in_image):
         '''
@@ -1108,9 +1109,16 @@ class MountedMacInfo(MacInfo):
         if self.is_windows:
             CommonFunctions.ReadUnixTime(os.path.getctime(local_path))
         elif self.is_linux:
-            return os.path.getmtime(local_path) # Since this is not possible to fetch in Linux (using python)!
+            try:
+                t = statx(local_path).get_btime() # New Linux kernel 4+ has this ability
+            except (OSError, ValueError) as ex:
+                t = 0 # Old linux kernel that does not support statx
+            if t != 0:
+                return CommonFunctions.ReadUnixTime(t)
+            else: # Either old linux or a version of FUSE that does not populates btime (current does not)!
+                return CommonFunctions.ReadUnixTime(os.path.getmtime(local_path)) # Since this is not possible to fetch in Linux (using python)!
         else:
-            return os.stat(local_path).st_birthtime
+            return CommonFunctions.ReadUnixTime(os.stat(local_path).st_birthtime)
 
     def GetFileMACTimes(self, file_path):
         file_path = self.BuildFullPath(file_path)
