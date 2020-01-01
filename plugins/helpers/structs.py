@@ -182,7 +182,7 @@ BTHeaderRec = "BTHeaderRec" / Struct(
 
 HFSUniStr255 = "HFSUniStr255" / Struct(
     "length" / Int16ub,
-    "unicode" / String(lambda ctx: ctx["length"] * 2, encoding="utf-16-be") # "unicode",
+    "unicode" / PascalString(lambda ctx: ctx["length"] * 2, encoding="utf-16-be") # "unicode",
 )
 
 HFSPlusAttrKey = "HFSPlusAttrKey" / Struct(
@@ -247,8 +247,8 @@ Rect = "Rect" / Struct(
 )
 
 FileInfo = "FileInfo" / Struct(
-    "fileType" / String(4), #Int32ub,
-    "fileCreator" / String(4), #Int32ub,
+    "fileType" / PaddedString(4, "utf-8"), #Int32ub,
+    "fileCreator" / PaddedString(4, "utf-8"), #Int32ub,
     "finderFlags" / Int16ub,
     Point,
     "reservedField" / Int16ub
