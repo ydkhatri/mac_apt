@@ -4,8 +4,9 @@
 * Yogesh Khatri (@swiftforensics) - Author & Maintainer of mac_apt framework and plugins
 * Zachary Burnham (@zmbf0r3ns1cs) - Wrote the install shell script for mac_apt on macOS and Linux
 * Adam Ferrante (@ferran7e) - Plugin Documentation on wiki and wrote DOCKITEMS & BLUETOOTH plugins
-* Jack Farley (@JackFarley248) - Wrote the IDEVICE_BACKUPS, IDEVICE_INFO, PRINTJOBS, IMESSAGE plugins
+* Jack Farley (@JackFarley248) - Wrote the IDEVICE_BACKUPS, IDEVICE_INFO, PRINTJOBS, IMESSAGE, SCREENTIME, QUICKLOOK plugins
 * Michael Geyer - Wrote the WIFI plugin
+* Brandon Mignini - Wrote the AUTOSTART plugin
 * Noah Sidall (@noah_sidd) - Wrote the INSTALLHISTORY plugin
 * Austin Truax - Wrote the proof of concept parsing wifi information from airport plist
 

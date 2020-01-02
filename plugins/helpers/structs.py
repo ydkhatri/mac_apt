@@ -121,7 +121,7 @@ HFSPlusForkData = "HFSPlusForkData" / Struct(
     "logicalSize" / Int64ub,
     "clumpSize" / Int32ub,
     "totalBlocks" / Int32ub,
-    Array(8, "HFSPlusExtentDescriptor" / HFSPlusExtentDescriptor)
+    "HFSPlusExtentDescriptor" / Array(8, HFSPlusExtentDescriptor)
 )
 
 HFSPlusVolumeHeader= "HFSPlusVolumeHeader" / Struct(
@@ -145,7 +145,7 @@ HFSPlusVolumeHeader= "HFSPlusVolumeHeader" / Struct(
     "nextCatalogID" / Int32ub,
     "writeCount" / Int32ub,
     "encodingsBitmap" / Int64ub,
-    Array(8, "finderInfo" / Int32ub),
+    "finderInfo" / Array(8, Int32ub),
     "allocationFile" / HFSPlusForkData,
     "extentsFile" / HFSPlusForkData,
     "catalogFile" / HFSPlusForkData,
@@ -177,12 +177,12 @@ BTHeaderRec = "BTHeaderRec" / Struct(
     "btreeType" / Int8ub,
     "keyCompareType" / Int8ub,
     "attributes" / Int32ub,
-    Array(16, "reserved3" / Int32ub)
+    "reserved3" / Array(16, Int32ub)
 )
 
 HFSUniStr255 = "HFSUniStr255" / Struct(
     "length" / Int16ub,
-    "unicode" / PascalString(lambda ctx: ctx["length"] * 2, encoding="utf-16-be") # "unicode",
+    "unicode" / PaddedString(lambda ctx: ctx["length"] * 2, encoding="utf-16-be") # "unicode",
 )
 
 HFSPlusAttrKey = "HFSPlusAttrKey" / Struct(
@@ -195,7 +195,7 @@ HFSPlusAttrKey = "HFSPlusAttrKey" / Struct(
 )
 
 HFSPlusAttrInlineData = "HFSPlusAttrInlineData" / Struct(
-    Array(2, "reserved" / Int32ub),
+    "reserved" / Array(2, Int32ub),
     "size" / Int32ub,
     "data" / Bytes(lambda ctx: ctx["size"])
 )
@@ -255,7 +255,7 @@ FileInfo = "FileInfo" / Struct(
 )
 
 ExtendedFileInfo = "ExtendedFileInfo" / Struct(
-    Array(2, "reserved1" / Int16sb),
+    "reserved1" / Array(2, Int16sb),
     "finderDateAdded" / Int32ub, # 4 bytes stores Finder.DateAdded as unix timestamp
     "extendedFinderFlags" / Int16ub,
     "reserved2" / Int16sb,
@@ -364,11 +364,11 @@ HFSPlusCmpfRsrcBlock = "HFSPlusCmpfRsrcBlock" / Struct(
 HFSPlusCmpfRsrcBlockHead = "HFSPlusCmpfRsrcBlockHead" / Struct(
     "dataSize" / Int32ub,
     "numBlocks" / Int32ul,
-    Array(lambda ctx:ctx["numBlocks"], HFSPlusCmpfRsrcBlock)
+    "HFSPlusCmpfRsrcBlockArray" / Array(lambda ctx:ctx["numBlocks"], HFSPlusCmpfRsrcBlock)
 )
 
 HFSPlusCmpfEnd = "HFSPlusCmpfEnd" / Struct(
-    Array(6, "pad" / Int32ub),
+    "pad" / Array(6, Int32ub),
     "unk1" / Int16ub,
     "unk2" / Int16ub,
     "unk3" / Int16ub,
@@ -384,10 +384,10 @@ Journal stuff
 """
 JournalInfoBlock = "JournalInfoBlock" / Struct(
     "flags" / Int32ub,
-    Array(8, "device_signature" / Int32ub),
+    "device_signature" / Array(8, Int32ub),
     "offset" / Int64ub,
     "size" / Int64ub,
-    Array(32, "reserved" / Int32ub)
+    "reserved" / Array(32, Int32ub)
 )
 
 journal_header = "journal_header" / Struct(
@@ -413,5 +413,5 @@ block_list_header = "block_list_header" / Struct(
     "bytes_used" / Int32ul,
     "checksum" / Int8sl,
     "pad" / Int32ub,
-    Array(lambda ctx:ctx["num_blocks"], block_info)
+    "block_info_array" / Array(lambda ctx:ctx["num_blocks"], block_info)
 )

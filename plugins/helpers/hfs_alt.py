@@ -201,7 +201,7 @@ class HFSCompressedResourceFork(HFSFile):
                 raise ValueError("Exception from lzfse_lzvn decompressor")
         else:
             base = self.header.headerSize + 4
-            for b in self.blocks.HFSPlusCmpfRsrcBlock:
+            for b in self.blocks.HFSPlusCmpfRsrcBlockArray:
                 decompressed = zlib.decompress(buff[base+b.offset:base+b.offset+b.size])
                 if output_file: output_file.write(decompressed)
                 else: r += decompressed
