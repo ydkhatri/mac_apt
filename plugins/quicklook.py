@@ -411,10 +411,8 @@ def Plugin_Start(mac_info):
     '''Main Entry point function for plugin'''
 
     # Check for Mac OS version because QuickLook changes structure in 10.15
-    if hasattr(mac_info, "macos_version"):
-        os_minor_version = int(mac_info.macos_version[3:])
-    else:
-        os_minor_version = int(mac_info.osx_version[3:])
+    ver_info = mac_info.GetVersionDictionary()
+    os_minor_version = ver_info['minor']
 
     # Array to store QuickLook objects
     quicklook_array = []

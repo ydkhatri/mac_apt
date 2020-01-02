@@ -65,7 +65,6 @@ def PrintAll(screen_time_data, output_params, source_path):
         screen_time_list.append(sc_items)
     WriteList("ScreenTime Info", "ScreenTime", screen_time_list, screen_time_info, output_params, source_path)
 
-
 def OpenDbFromImage(mac_info, inputPath):
     '''Returns tuple of (connection, wrapper_obj)'''
     try:
@@ -87,25 +86,19 @@ def OpenDb(inputPath):
         log.exception ("Failed to open database, is it a valid Screen Time DB?")
     return None
 
-
 def findDb(mac_info):
     db_path_arr = []
     for user in mac_info.users:
         if not user.DARWIN_USER_DIR or not user.user_name:
             continue  # TODO: revisit this later!
         else:
-
             darwin_user_folders = user.DARWIN_USER_DIR.split(',')
-
             for darwin_user_dir in darwin_user_folders:
                 db_path = (darwin_user_dir + '/com.apple.ScreenTimeAgent/Store/RMAdminStore-Local.sqlite')
                 if not mac_info.IsValidFilePath(db_path): continue
                 else:
                     db_path_arr.append(db_path)
-
     return db_path_arr
-
-
 
 def ReadScreenTime(db, screen_time_arr, source):
     try:
@@ -128,9 +121,6 @@ def ReadScreenTime(db, screen_time_arr, source):
         "LEFT JOIN ZCOREUSER as zcu on zcu.Z_PK = zu.ZUSER " \
         "LEFT JOIN ZUSAGECOUNTEDITEM as zuci on zuci.ZBLOCK = zuc.ZBLOCK AND zuci.ZBUNDLEIDENTIFIER = zut.ZBUNDLEIDENTIFIER " \
         "ORDER BY zub.ZSTARTDATE;"
-
-
-
 
         db.row_factory = sqlite3.Row
         cursor = db.execute(query)
@@ -163,7 +153,6 @@ def ProcessSCDbFromPath(mac_info, screen_time_arr, source_path):
     if db != None:
         ReadScreenTime(db, screen_time_arr, source_path)
         db.close()
-
 
 def Plugin_Start(mac_info):
     '''Main Entry point function for plugin'''

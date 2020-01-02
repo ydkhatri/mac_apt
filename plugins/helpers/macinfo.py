@@ -25,8 +25,10 @@ import traceback
 from plugins.helpers.apfs_reader import *
 from plugins.helpers.hfs_alt import HFSVolume
 from plugins.helpers.common import *
-from plugins.helpers.statx import statx
 from plugins.helpers.structs import *
+
+if sys.platform == 'linux':
+    from plugins.helpers.statx import statx
 
 log = logging.getLogger('MAIN.HELPERS.MACINFO')
 
