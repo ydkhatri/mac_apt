@@ -19,11 +19,11 @@ from plugins.helpers.writer import *
 __Plugin_Name = "SPOTLIGHT"
 __Plugin_Friendly_Name = "Spotlight"
 __Plugin_Version = "1.0"
-__Plugin_Description = "Reads spotlight indexes on volume"
+__Plugin_Description = "Reads spotlight indexes (user, volume, iOS)"
 __Plugin_Author = "Yogesh Khatri"
 __Plugin_Author_Email = "yogesh@swiftforensics.com"
 
-__Plugin_Standalone = True
+__Plugin_Modes = "IOS,MACOS,ARTIFACTONLY"
 __Plugin_ArtifactOnly_Usage = "This module reads spotlight's index database file found at: /.Spotlight-V100/Store-V2/<UUID>/store.db and also '.store.db' at the same location"
 
 log = logging.getLogger('MAIN.' + __Plugin_Name) # Do not rename or remove this ! This is the logger object
@@ -31,6 +31,7 @@ log = logging.getLogger('MAIN.' + __Plugin_Name) # Do not rename or remove this 
 #---- Do not change the variable names in above section ----#
 
 writer = None
+mac_info_obj = None
 spotlight_parser.log = logging.getLogger('MAIN.' + __Plugin_Name + '.SPOTLIGHT_PARSER')
     
 def ProcessStoreItem(item):
@@ -49,11 +50,7 @@ def ProcessStoreItem(item):
                     if type(v) == str:
                         if v.endswith('\x16\x02'):
                             v = v[:-2]
-                    if type(v) == str: v = v.decode('utf-8', 'backslashreplace')
                 else:
-                    #if type(v[0]) == str:
-                    #    v = ', '.join([x.decode('utf-8') for x in v]) # removes 'u' in string output
-                    #else:
                     v = ', '.join([str(x) for x in v])
             data_dict[k] = v
 
@@ -113,6 +110,35 @@ def EnableSqliteDb(output_path, out_params, file_name_prefix):
         log.exception('Exception occurred when trying to create Sqlite db')
     return False
 
+def GetFileData(path):
+    '''Get entire file data - ios Only'''
+    global mac_info_obj
+
+    data = b''
+    if mac_info_obj != None:
+        with mac_info_obj.OpenSmallFile(path) as f:
+            data = f.read()
+    else: # For single artifact mode
+        with open(path, 'rb') as f:
+            data = f.read()
+    return data
+
+def GetMapDataOffsetHeader(input_folder, id):
+    ''' Given an id X, this returns the data from 3 files, 
+        dbStr-X.map.data, dbStr-X.map.header, dbStr-X.map.offsets. It will
+        search for these files in the input_folder.
+        Returns tuple (data, offsets, header)
+    '''
+    data_path = os.path.join(input_folder, 'dbStr-{}.map.data'.format(id))
+    offsets_path = os.path.join(input_folder, 'dbStr-{}.map.offsets'.format(id))
+    header_path = os.path.join(input_folder, 'dbStr-{}.map.header'.format(id))
+
+    map_data = GetFileData(data_path)
+    offsets_data = GetFileData(offsets_path)
+    header_data = GetFileData(header_path)
+
+    return (map_data, offsets_data, header_data)
+
 def ProcessStoreDb(input_file_path, input_file, output_path, output_params, items_to_compare, file_name_prefix, limit_output_types=True, no_path_file=False):
     '''Main spotlight store.db processing function
        file_name_prefix is used to name the excel sheet or sqlite table, as well as prefix for name of paths_file.
@@ -135,7 +161,29 @@ def ProcessStoreDb(input_file_path, input_file, output_path, output_params, item
         with open(output_path_data, 'wb') as output_file:
             output_paths_file = None
             store = spotlight_parser.SpotlightStore(input_file)
-            store.ReadPageIndexesAndOtherDefinitions()
+            no_path_file = store.flags & 0x00010000 == 0x00010000
+            log.debug('This appears to be either an iOS spotlight db or a user spotlight db. no_path_file set to {}'.format(str(no_path_file)))
+            ##TODO - insert code here for ios
+            if store.index_blocktype_11 == 0: # The properties, categories and indexes must be stored in external files
+                input_folder = os.path.dirname(input_file_path)
+                try:
+                    prop_map_data, prop_map_offsets,prop_map_header = GetMapDataOffsetHeader(input_folder, 1)
+                    cat_map_data, cat_map_offsets, cat_map_header = GetMapDataOffsetHeader(input_folder, 2)
+                    idx_1_map_data, idx_1_map_offsets, idx_1_map_header = GetMapDataOffsetHeader(input_folder, 4)
+                    idx_2_map_data, idx_2_map_offsets, idx_2_map_header = GetMapDataOffsetHeader(input_folder, 5)
+
+                    store.ParsePropertiesFromFileData(prop_map_data, prop_map_offsets, prop_map_header)
+                    store.ParseCategoriesFromFileData(cat_map_data, cat_map_offsets, cat_map_header)
+                    store.ParseIndexesFromFileData(idx_1_map_data, idx_1_map_offsets, idx_1_map_header, store.indexes_1)
+                    store.ParseIndexesFromFileData(idx_2_map_data, idx_2_map_offsets, idx_2_map_header, store.indexes_2, has_extra_byte=True)
+
+                    store.ReadPageIndexesAndOtherDefinitions(True)
+                except:
+                    log.exception('Failed to find or process one or more dependency files. Cannot proceed!')
+                    return None
+            ##
+            else:
+                store.ReadPageIndexesAndOtherDefinitions()
             ## create db, write table with fields.
             out_params = CopyOutputParams(output_params)
             if limit_output_types and (store.block0.item_count > 500): # Large db, limit to sqlite output
@@ -284,6 +332,37 @@ def ReadVolumeConfigPlist(plist, output_params, file_path):
     else:
         log.info ("No spotlight stores defined in plist!")
 
+def ProcessStoreAndDotStore(mac_info, store_path_1, store_path_2, prefix):
+    items_1 = None
+    items_2 = None
+    if mac_info.IsValidFilePath(store_path_1):
+        mac_info.ExportFile(store_path_1, __Plugin_Name, prefix + '_', False)
+        log.info('Now processing file {} '.format(store_path_1))
+        # Process store.db here
+        input_file = mac_info.OpenSmallFile(store_path_1)
+        output_folder = os.path.join(mac_info.output_params.output_path, 'SPOTLIGHT_DATA', prefix)
+        if input_file != None:
+            table_name = prefix + '-store'
+            log.info("Spotlight data for user='{}' db='{}' will be saved with table/sheet name as {}".format(prefix, 'store.db', table_name))
+            items_1 = ProcessStoreDb(store_path_1, input_file, output_folder, mac_info.output_params, None, table_name, True, True)
+    
+    if mac_info.IsValidFilePath(store_path_2):
+        mac_info.ExportFile(store_path_2,  __Plugin_Name, prefix + '_', False)
+        log.info('Now processing file {}'.format(store_path_2))
+        # Process .store.db here
+        input_file = mac_info.OpenSmallFile(store_path_2)
+        output_folder = os.path.join(mac_info.output_params.output_path, 'SPOTLIGHT_DATA', prefix)
+        if input_file != None:
+            if items_1: 
+                log.info('Only newer items not found in store.db will be written out!')
+                DropReadme(output_folder, 'Items already present in store.db were ignored when processing the'\
+                                        '.store.db file. Only new or updated items are shown in the .store-DIFF* '\
+                                        'files. If you want the complete output, process the exported .store.db '\
+                                        'file with mac_apt_single_plugin.py and this plugin')
+            table_name = prefix + '-.store-DIFF'
+            log.info("Spotlight store for user='{}' db='{}' will be saved with table/sheet name as {}".format(prefix, '.store.db', table_name))
+            items_2 = ProcessStoreDb(store_path_2, input_file, output_folder, mac_info.output_params, items_1, table_name, True, True)
+
 def Process_User_DBs(mac_info):
     '''
     Process the databases located in /Users/<USER>/Library/Metadata/CoreSpotlight/index.spotlightV3/
@@ -300,40 +379,12 @@ def Process_User_DBs(mac_info):
         processed_paths.append(user.home_dir)
         store_path_1 = user_spotlight_store.format(user.home_dir)
         store_path_2 = user_spotlight_dot_store.format(user.home_dir)
-        items_1 = None
-        items_2 = None
-        if mac_info.IsValidFilePath(store_path_1):
-            mac_info.ExportFile(store_path_1, __Plugin_Name, user_name + '_', False)
-            log.info('Now processing file {} '.format(store_path_1))
-            # Process store.db here
-            input_file = mac_info.OpenSmallFile(store_path_1)
-            output_folder = os.path.join(mac_info.output_params.output_path, 'SPOTLIGHT_DATA', user_name)
-            if input_file != None:
-                table_name = user_name + '-store'
-                log.info("Spotlight data for user='{}' db='{}' will be saved with table/sheet name as {}".format(user_name, 'store.db', table_name))
-                items_1 = ProcessStoreDb(store_path_1, input_file, output_folder, mac_info.output_params, None, table_name, True, True)
-        
-        if mac_info.IsValidFilePath(store_path_2):
-            mac_info.ExportFile(store_path_2,  __Plugin_Name, user_name + '_', False)
-            log.info('Now processing file {}'.format(store_path_2))
-            # Process .store.db here
-            input_file = mac_info.OpenSmallFile(store_path_2)
-            output_folder = os.path.join(mac_info.output_params.output_path, 'SPOTLIGHT_DATA', user_name)
-            if input_file != None:
-                if items_1: 
-                    log.info('Only newer items not found in store.db will be written out!')
-                    DropReadme(output_folder, 'Items already present in store.db were ignored when processing the'\
-                                            '.store.db file. Only new or updated items are shown in the .store-DIFF* '\
-                                            'files. If you want the complete output, process the exported .store.db '\
-                                            'file with mac_apt_single_plugin.py and this plugin')
-                table_name = user_name + '-.store-DIFF'
-                log.info("Spotlight store for user='{}' db='{}' will be saved with table/sheet name as {}".format(user_name, '.store.db', table_name))
-                items_2 = ProcessStoreDb(store_path_2, input_file, output_folder, mac_info.output_params, items_1, table_name, True, True)
-
+        ProcessStoreAndDotStore(mac_info, store_path_1, store_path_2, user_name)
 
 def Plugin_Start(mac_info):
     '''Main Entry point function for plugin'''
-
+    global mac_info_obj
+    mac_info_obj = mac_info
     Process_User_DBs(mac_info) # Usually small , 10.13+ only
 
     spotlight_folder = '/.Spotlight-V100/Store-V2/'
@@ -397,6 +448,21 @@ def Plugin_Start_Standalone(input_files_list, output_params):
                 log.exception('Failed to open input file ' + input_path)
         else:
             log.info("Unknown file type: {}".format(os.path.basename()))
+
+def Plugin_Start_Ios(ios_info):
+    '''Entry point for ios_apt plugin'''
+    global mac_info_obj
+    mac_info_obj = ios_info
+    ios_spotlight_folders = [
+                            '/private/var/mobile/Library/Spotlight/CoreSpotlight/NSFileProtectionComplete/index.spotlightV2',
+                            '/private/var/mobile/Library/Spotlight/CoreSpotlight/NSFileProtectionCompleteUnlessOpen/index.spotlightV2',
+                            '/private/var/mobile/Library/Spotlight/CoreSpotlight/NSFileProtectionCompleteUntilFirstUserAuthentication/index.spotlightV2' 
+                            ]
+    for folder in ios_spotlight_folders:
+        store_path_1 = os.path.join(folder, 'store.db')
+        store_path_2 = os.path.join(folder, '.store.db')
+        prefix = folder.split('/')[-2]
+        ProcessStoreAndDotStore(ios_info, store_path_1, store_path_2, prefix)
 
 if __name__ == '__main__':
     print ("This plugin is a part of a framework and does not run independently on its own!")

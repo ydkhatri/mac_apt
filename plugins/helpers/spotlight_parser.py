@@ -191,8 +191,6 @@ class FileMetaDataListing:
                 if len(v) == 1:
                     v = v[0]
                 else:
-                    if type(v[0]) == bytes:
-                        print("Well")
                     if type(v[0]) != str:
                         v = ', '.join([str(x) for x in v])
                     else:

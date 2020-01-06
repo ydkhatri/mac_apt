@@ -108,5 +108,9 @@ def Plugin_Start_Standalone(input_files_list, output_params):
             else:
                 log.error('Input file "{}" is not a valid plist. Error opening file was: {}'.format(input_path, error))
 
+def Plugin_Start_Ios(ios_info):
+    '''Entry point for ios_apt plugin'''
+    pass
+
 if __name__ == '__main__':
     print ("This plugin is a part of a framework and does not run independently on its own!")
