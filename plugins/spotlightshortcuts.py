@@ -24,8 +24,8 @@ __Plugin_Description = "Gets user typed data in the spotlight bar, used to launc
 __Plugin_Author = "Yogesh Khatri"
 __Plugin_Author_Email = "yogesh@swiftforensics.com"
 
-__Plugin_Standalone = True
-__Plugin_Standalone_Usage = 'This module parses user searched data using the spotlight bar. Data is retreived from the plist file(s) found at: /Users/<User>/Library/Preferences/com.apple.spotlight.plist and /Users/<User>/Library/Application Support/com.apple.spotlight.Shortcuts'
+__Plugin_Modes = "MACOS,ARTIFACTONLY"
+__Plugin_ArtifactOnly_Usage = 'This module parses user searched data using the spotlight bar. Data is retreived from the plist file(s) found at: /Users/<User>/Library/Preferences/com.apple.spotlight.plist and /Users/<User>/Library/Application Support/com.apple.spotlight.Shortcuts'
 
 log = logging.getLogger('MAIN.' + __Plugin_Name) # Do not rename or remove this ! This is the logger object
 

@@ -31,8 +31,8 @@ __Plugin_Description = "Reads Notes databases"
 __Plugin_Author = "Yogesh Khatri"
 __Plugin_Author_Email = "yogesh@swiftforensics.com"
 
-__Plugin_Standalone = True
-__Plugin_Standalone_Usage = 'Provide one or more Notes sqlite databases as input to process. These are typically '\
+__Plugin_Modes = "MACOS,ARTIFACTONLY"
+__Plugin_ArtifactOnly_Usage = 'Provide one or more Notes sqlite databases as input to process. These are typically '\
                             'located at ~/Library/Containers/com.apple.Notes/Data/Library/Notes/  or '\
                             '~/Library/Group Containers/group.com.apple.notes/'
 

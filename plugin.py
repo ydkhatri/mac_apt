@@ -19,7 +19,12 @@ import pytsk3
 import pyvmdk
 import traceback
 
-def ImportPlugins(plugins, only_standalone=False):
+def ImportPlugins(plugins, mode):
+    ''' Imports plugins contained in the 'plugins' folder. 
+        Args: 
+            mode: One of 'IOS', 'MACOS' or 'ARTIFACTONLY'
+        Returns a list containing all plugin names that satisfy the mode
+    '''
     #print ("Trying to import plugins")
     plugin_path = os.path.join(os.path.dirname(os.path.realpath(sys.argv[0])), "plugins")
     sys.path.append(plugin_path)
@@ -32,7 +37,7 @@ def ImportPlugins(plugins, only_standalone=False):
                 try:
                     plugin = __import__(filename.replace(".py", ""))
                     #print ("Plugin name is ----> " + plugin.__Plugin_Name)
-                    if only_standalone and not getattr(plugin, '__Plugin_Standalone'): 
+                    if not IsPluginValidForMode(plugin, mode): 
                         continue
                     if IsValidPlugin(plugin):
                         plugins.append(plugin)
@@ -54,13 +59,20 @@ def ImportPlugins(plugins, only_standalone=False):
 def IsValidPlugin(plugin):
     '''Check to see if required plugin variables are present'''
     for attr in ['__Plugin_Name', '__Plugin_Friendly_Name', '__Plugin_Version', '__Plugin_Description', \
-                '__Plugin_Author', '__Plugin_Author_Email', '__Plugin_Standalone', '__Plugin_Standalone_Usage']:
+                '__Plugin_Author', '__Plugin_Author_Email', '__Plugin_Modes', '__Plugin_ArtifactOnly_Usage']:
         try:
             val = getattr(plugin, attr)
         except Exception:
             print("Required variable '" + attr + "' is missing, check plugin code!")
             return False
     return True
+
+def IsPluginValidForMode(plugin, mode):
+    '''Check to see if a plugin can run on specified mode (IOS, MACOS, ARTIFACTONLY)'''
+    if hasattr(plugin, '__Plugin_Modes'):
+        val = getattr(plugin, '__Plugin_Modes').upper().split(",")
+        return mode.upper() in val
+    return False
 
 def CheckUserEnteredPluginNames(plugins_to_run, plugins):
     '''Check user entered plugin names for invalid/missing ones '''

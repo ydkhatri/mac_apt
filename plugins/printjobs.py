@@ -27,8 +27,8 @@ __Plugin_Description = "Parses CUPS spooled print jobs to get information about 
 __Plugin_Author = "Jack Farley, Yogesh Khatri"
 __Plugin_Author_Email = "jack.farley@mymail.champlain.edu, yogesh@swiftforensics.com"
 
-__Plugin_Standalone = True
-__Plugin_Standalone_Usage = 'Parses print jobs from the provided folder. You must supply path to the /private/var/spool/cups folder'
+__Plugin_Modes = "MACOS,ARTIFACTONLY"
+__Plugin_ArtifactOnly_Usage = 'Parses print jobs from the provided folder. You must supply path to the /private/var/spool/cups folder'
 
 log = logging.getLogger('MAIN.' + __Plugin_Name) # Do not rename or remove this ! This is the logger object
 

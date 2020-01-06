@@ -13,15 +13,15 @@ import biplist
 from plugins.helpers.macinfo import *
 from plugins.helpers.writer import *
 
-__Plugin_Name = "INSTALLHISTORY" # Cannot have spaces, and must be all caps!
+__Plugin_Name = "INSTALLHISTORY"
 __Plugin_Friendly_Name = "Install History"
 __Plugin_Version = "1.0"
 __Plugin_Description = "Parses the InstallHistory.plist to get software installation history"
 __Plugin_Author = "Noah Siddall, Yogesh Khatri"
 __Plugin_Author_Email = "noah.sidall@mymail.champlain.edu, yogesh@swiftforensics.com"
 
-__Plugin_Standalone = True
-__Plugin_Standalone_Usage = "Provide path to InstallHistory.plist to process"
+__Plugin_Modes = "MACOS,ARTIFACTONLY"
+__Plugin_ArtifactOnly_Usage = "Provide path to InstallHistory.plist to process"
 
 log = logging.getLogger('MAIN.' + __Plugin_Name) # Do not rename or remove this ! This is the logger object
 

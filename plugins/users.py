@@ -12,15 +12,15 @@ import logging
 from plugins.helpers.macinfo import *
 from plugins.helpers.writer import *
 
-__Plugin_Name = "USERS" # Cannot have spaces, and must be all caps!
+__Plugin_Name = "USERS"
 __Plugin_Friendly_Name = "User Information"
 __Plugin_Version = "1.0"
 __Plugin_Description = "Gets local and domain user information like name, UID, UUID, GID, homedir & Darwin paths. Also extracts auto-login stored passwords and deleted user info"
 __Plugin_Author = "Yogesh Khatri"
 __Plugin_Author_Email = "yogesh@swiftforensics.com"
 
-__Plugin_Standalone = False
-__Plugin_Standalone_Usage = ""
+__Plugin_Modes = "MACOS"
+__Plugin_ArtifactOnly_Usage = ""
 
 log = logging.getLogger('MAIN.' + __Plugin_Name) # Do not rename or remove this ! This is the logger object
 

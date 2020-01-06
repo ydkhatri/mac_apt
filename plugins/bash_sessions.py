@@ -20,9 +20,8 @@ __Plugin_Version = "1.0"
 __Plugin_Description = "Reads bash (Terminal) sessions & history for every user"
 __Plugin_Author = "Yogesh Khatri"
 __Plugin_Author_Email = "yogesh@swiftforensics.com"
-
-__Plugin_Standalone = False
-__Plugin_Standalone_Usage = ""
+__Plugin_Modes = "MACOS"
+__Plugin_ArtifactOnly_Usage = ""
 
 log = logging.getLogger('MAIN.' + __Plugin_Name) # Do not rename or remove this ! This is the logger object
 

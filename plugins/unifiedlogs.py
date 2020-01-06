@@ -25,8 +25,8 @@ __Plugin_Description = "Reads macOS unified logging logs from .tracev3 files"
 __Plugin_Author = "Yogesh Khatri"
 __Plugin_Author_Email = "yogesh@swiftforensics.com"
 
-__Plugin_Standalone = False #True
-__Plugin_Standalone_Usage = 'Provide the ".logarchive" folder as input to process.'
+__Plugin_Modes = "MACOS"
+__Plugin_ArtifactOnly_Usage = 'Provide the ".logarchive" folder as input to process.'
 
 log = logging.getLogger('MAIN.' + __Plugin_Name) # Do not rename or remove this ! This is the logger object
 
@@ -217,13 +217,13 @@ def Plugin_Start(mac_info):
     version_info = mac_info.GetVersionDictionary()
     if version_info['major'] >= 10:
         if (version_info['minor'] < 12):
-            log.info('Unified Logging is not present in this version of macOS ({})'.format(mac_info.macos_version))
+            log.info('Unified Logging is not present in this version of macOS ({})'.format(mac_info.os_version))
             return
         elif (version_info['minor'] == 12) and (version_info['micro'] == 0):
             log.info('Unified Logging in macOS 10.12.0 is not yet supported!')
             return
     else:
-        log.info('Unified Logging is not present in this version of macOS ({})'.format(mac_info.macos_version))
+        log.info('Unified Logging is not present in this version of macOS ({})'.format(mac_info.os_version))
         return
 
     files_processed = 0

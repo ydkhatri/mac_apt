@@ -22,8 +22,8 @@ __Plugin_Description = "Parses QuickLook Thumbnail Cache data"
 __Plugin_Author = "Jack Farley - BlackStone Discovery"
 __Plugin_Author_Email = "jfarley@blackstonediscovery.com - jfarley248@gmail.com"
 
-__Plugin_Standalone = True
-__Plugin_Standalone_Usage = 'Provide QuickLook database found at:' \
+__Plugin_Modes = "MACOS,ARTIFACTONLY"
+__Plugin_ArtifactOnly_Usage = 'Provide QuickLook database found at:' \
                             '/private/var/folders/XX/XXXXXXXXXXXXXXXXXXX_XXXXXXXXX/' \
                             'C/com.apple.QuickLook.thumbnailcache/index.sqlite AS WELL AS: '\
                             '/private/var/folders/XX/XXXXXXXXXXXXXXXXXXX_XXXXXXXXX/thumbnails.data' \

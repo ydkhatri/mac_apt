@@ -314,9 +314,9 @@ class MacInfo:
         self.osx_partition_start_offset = 0 # Container offset if APFS
         self.vol_info = None # disk_volumes
         self.output_params = output_params
-        self.macos_version = '0.0.0'
-        self.osx_build = ''
-        self.osx_friendly_name = 'No name yet!'
+        self.os_version = '0.0.0'
+        self.os_build = ''
+        self.os_friendly_name = 'No name yet!'
         self.users = []
         self.hfs_native = NativeHfsParser()
         self.is_apfs = False
@@ -661,7 +661,7 @@ class MacInfo:
     def GetVersionDictionary(self):
         '''Returns macOS version as dictionary {major:10, minor:5 , micro:0}'''
         version_dict = { 'major':0, 'minor':0, 'micro':0 }
-        info = self.macos_version.split(".")
+        info = self.os_version.split(".")
         try:
             version_dict['major'] = int(info[0])
             try:
@@ -838,8 +838,8 @@ class MacInfo:
                                 target_user.real_name = self.GetArrayFirstElement(plist.get('realname', ''))
                                 target_user.pw_hint = self.GetArrayFirstElement(plist.get('hint', ''))
                                 target_user._source = user_plist_path
-                                macos_version = self.GetVersionDictionary()
-                                if macos_version['major'] == 10 and macos_version['minor'] <= 9: # Mavericks & earlier
+                                os_version = self.GetVersionDictionary()
+                                if os_version['major'] == 10 and os_version['minor'] <= 9: # Mavericks & earlier
                                     password_policy_data = plist.get('passwordpolicyoptions', None)
                                     if password_policy_data == None:
                                         log.debug('Could not find passwordpolicyoptions for user {}'.format(target_user.user_name))
@@ -901,27 +901,27 @@ class MacInfo:
             if f != None:
                 try:
                     plist = biplist.readPlist(f)
-                    self.macos_version = plist.get('ProductVersion', '')
-                    self.osx_build = plist.get('ProductBuildVersion', '')
-                    if self.macos_version != '':
-                        if   self.macos_version.startswith('10.10'): self.osx_friendly_name = 'Yosemite'
-                        elif self.macos_version.startswith('10.11'): self.osx_friendly_name = 'El Capitan'
-                        elif self.macos_version.startswith('10.12'): self.osx_friendly_name = 'Sierra'
-                        elif self.macos_version.startswith('10.13'): self.osx_friendly_name = 'High Sierra'
-                        elif self.macos_version.startswith('10.14'): self.osx_friendly_name = 'Mojave'
-                        elif self.macos_version.startswith('10.15'): self.osx_friendly_name = 'Catalina'
-                        elif self.macos_version.startswith('10.0'): self.osx_friendly_name = 'Cheetah'
-                        elif self.macos_version.startswith('10.1'): self.osx_friendly_name = 'Puma'
-                        elif self.macos_version.startswith('10.2'): self.osx_friendly_name = 'Jaguar'
-                        elif self.macos_version.startswith('10.3'): self.osx_friendly_name = 'Panther'
-                        elif self.macos_version.startswith('10.4'): self.osx_friendly_name = 'Tiger'
-                        elif self.macos_version.startswith('10.5'): self.osx_friendly_name = 'Leopard'
-                        elif self.macos_version.startswith('10.6'): self.osx_friendly_name = 'Snow Leopard'
-                        elif self.macos_version.startswith('10.7'): self.osx_friendly_name = 'Lion'
-                        elif self.macos_version.startswith('10.8'): self.osx_friendly_name = 'Mountain Lion'
-                        elif self.macos_version.startswith('10.9'): self.osx_friendly_name = 'Mavericks'
-                        else: self.osx_friendly_name = 'Unknown version!'
-                    log.info ('OSX version detected is: {} ({}) Build={}'.format(self.osx_friendly_name, self.macos_version, self.osx_build))
+                    self.os_version = plist.get('ProductVersion', '')
+                    self.os_build = plist.get('ProductBuildVersion', '')
+                    if self.os_version != '':
+                        if   self.os_version.startswith('10.10'): self.os_friendly_name = 'Yosemite'
+                        elif self.os_version.startswith('10.11'): self.os_friendly_name = 'El Capitan'
+                        elif self.os_version.startswith('10.12'): self.os_friendly_name = 'Sierra'
+                        elif self.os_version.startswith('10.13'): self.os_friendly_name = 'High Sierra'
+                        elif self.os_version.startswith('10.14'): self.os_friendly_name = 'Mojave'
+                        elif self.os_version.startswith('10.15'): self.os_friendly_name = 'Catalina'
+                        elif self.os_version.startswith('10.0'): self.os_friendly_name = 'Cheetah'
+                        elif self.os_version.startswith('10.1'): self.os_friendly_name = 'Puma'
+                        elif self.os_version.startswith('10.2'): self.os_friendly_name = 'Jaguar'
+                        elif self.os_version.startswith('10.3'): self.os_friendly_name = 'Panther'
+                        elif self.os_version.startswith('10.4'): self.os_friendly_name = 'Tiger'
+                        elif self.os_version.startswith('10.5'): self.os_friendly_name = 'Leopard'
+                        elif self.os_version.startswith('10.6'): self.os_friendly_name = 'Snow Leopard'
+                        elif self.os_version.startswith('10.7'): self.os_friendly_name = 'Lion'
+                        elif self.os_version.startswith('10.8'): self.os_friendly_name = 'Mountain Lion'
+                        elif self.os_version.startswith('10.9'): self.os_friendly_name = 'Mavericks'
+                        else: self.os_friendly_name = 'Unknown version!'
+                    log.info ('OSX version detected is: {} ({}) Build={}'.format(self.os_friendly_name, self.os_version, self.os_build))
                     return True
                 except (InvalidPlistException, NotBinaryPlistException) as ex:
                     log.error ("Could not get ProductVersion from plist. Is it a valid xml plist? Error=" + str(ex))
@@ -1389,6 +1389,47 @@ class MountedMacInfo(MacInfo):
                 except Exception as ex:
                     log.error ("Could not open plist " + plist_meta['name'] + " Exception: " + str(ex))
         #TODO: Domain user uid, gid?
+
+class MountedIosInfo(MountedMacInfo):
+    def __init__(self, root_folder_path, output_params):
+        MountedMacInfo.__init__(self, root_folder_path, output_params)
+    
+    def GetUserAndGroupIDForFile(self, path):
+        raise NotImplementedError()
+
+    def GetUserAndGroupIDForFolder(self, path):
+        return NotImplementedError()
+
+    def _GetUserAndGroupID(self, path):
+        return NotImplementedError()
+
+    def _GetDarwinFoldersInfo(self):
+        '''Gets DARWIN_*_DIR paths, these do not exist on IOS'''
+        return NotImplementedError()
+    
+    def _GetUserInfo(self):
+        return NotImplementedError()
+
+    def _GetSystemInfo(self):
+        ''' Gets system version information'''
+        try:
+            log.debug("Trying to get system version from /System/Library/CoreServices/SystemVersion.plist")
+            f = self.OpenSmallFile('/System/Library/CoreServices/SystemVersion.plist')
+            if f != None:
+                try:
+                    plist = biplist.readPlist(f)
+                    self.os_version = plist.get('ProductVersion', '')
+                    self.os_build = plist.get('ProductBuildVersion', '')
+                    self.os_friendly_name = plist.get('ProductName', '')
+                    log.info ('iOS version detected is: {} ({}) Build={}'.format(self.os_friendly_name, self.os_version, self.os_build))
+                    return True
+                except (InvalidPlistException, NotBinaryPlistException) as ex:
+                    log.error ("Could not get ProductVersion from plist. Is it a valid xml plist? Error=" + str(ex))
+            else:
+                log.error("Could not open plist to get system version info!")
+        except:
+            log.exception("Unknown error from _GetSystemInfo()")
+        return False
 
 class SqliteWrapper:
     '''

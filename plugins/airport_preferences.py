@@ -25,9 +25,8 @@ __Plugin_Version = "1.1"
 __Plugin_Description = "Gets wifi network information from the com.apple.airport.preferences.plist file"
 __Plugin_Author = "Michael Geyer, Yogesh Khatri"
 __Plugin_Author_Email = "michael.geyer@mymail.champlain.edu, yogesh@swiftforensics.com"
-
-__Plugin_Standalone = True
-__Plugin_Standalone_Usage = 'Provide the airport wifi plist file found at /Library/Preferences/SystemConfiguration/com.apple.airport.preferences.plist'
+__Plugin_Modes = "MACOS,ARTIFACTONLY"
+__Plugin_ArtifactOnly_Usage = 'Provide the airport wifi plist file found at /Library/Preferences/SystemConfiguration/com.apple.airport.preferences.plist'
 
 log = logging.getLogger('MAIN.' + __Plugin_Name) # Do not rename or remove this ! This is the logger object
 

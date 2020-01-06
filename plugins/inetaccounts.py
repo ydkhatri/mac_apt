@@ -7,7 +7,6 @@
    
 '''
 
-#from __future__ import unicode_literals
 import os
 import logging
 import struct
@@ -23,8 +22,8 @@ __Plugin_Description = "Reads configured internet account (iCloud, Google, Linke
 __Plugin_Author = "Yogesh Khatri"
 __Plugin_Author_Email = "yogesh@swiftforensics.com"
 
-__Plugin_Standalone = True
-__Plugin_Standalone_Usage = 'This module parses configured internet accounts such as iCloud, Google, Linkedin, facebook, Twitter used by Mail, Contacts, Calendar and other apps. Data is retreived from the database file found at: /Users/$USER/Library/Preferences/MobileMeAccounts.plist or since Mavericks: /Users/$USER/Library/Accounts/AccountsX.sqlite where X = 3 or 4\r\nPlease provide the plist file(s) or the sqlite database(s) to process'
+__Plugin_Modes = "MACOS,ARTIFACTONLY"
+__Plugin_ArtifactOnly_Usage = 'This module parses configured internet accounts such as iCloud, Google, Linkedin, facebook, Twitter used by Mail, Contacts, Calendar and other apps. Data is retreived from the database file found at: /Users/$USER/Library/Preferences/MobileMeAccounts.plist or since Mavericks: /Users/$USER/Library/Accounts/AccountsX.sqlite where X = 3 or 4\r\nPlease provide the plist file(s) or the sqlite database(s) to process'
 
 log = logging.getLogger('MAIN.' + __Plugin_Name) # Do not rename or remove this ! This is the logger object
 

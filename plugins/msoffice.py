@@ -25,8 +25,8 @@ __Plugin_Description = "Reads Word, Excel, Powerpoint and other office MRU/acces
 __Plugin_Author = "Yogesh Khatri"
 __Plugin_Author_Email = "yogesh@swiftforensics.com"
 
-__Plugin_Standalone = True
-__Plugin_Standalone_Usage = 'Provide any of the office plists from ~/Library/Preferences/com.microsoft.*.plist '\
+__Plugin_Modes = "MACOS,ARTIFACTONLY"
+__Plugin_ArtifactOnly_Usage = 'Provide any of the office plists from ~/Library/Preferences/com.microsoft.*.plist '\
                             ' '
 
 log = logging.getLogger('MAIN.' + __Plugin_Name) # Do not rename or remove this ! This is the logger object

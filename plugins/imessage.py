@@ -13,15 +13,15 @@ from plugins.helpers.common import *
 import logging
 import os
 
-__Plugin_Name = "IMESSAGE" # Cannot have spaces, and must be all caps!
+__Plugin_Name = "IMESSAGE"
 __Plugin_Friendly_Name = "iMessage Info"
 __Plugin_Version = "1.0"
 __Plugin_Description = "Parses iMessage conversations, exports messages and attachments"
 __Plugin_Author = "Jack Farley, Yogesh Khatri"
 __Plugin_Author_Email = "jack.farley@mymail.champlain.edu, yogesh@swiftforensics.com"
 
-__Plugin_Standalone = True
-__Plugin_Standalone_Usage = 'Provide one or more iMessage databases (chat.db) found at /Users/<USER>/Library/Messages/'
+__Plugin_Modes = "MACOS,ARTIFACTONLY"
+__Plugin_ArtifactOnly_Usage = 'Provide one or more iMessage databases (chat.db) found at /Users/<USER>/Library/Messages/'
 
 log = logging.getLogger('MAIN.' + __Plugin_Name) # Do not rename or remove this ! This is the logger object
 

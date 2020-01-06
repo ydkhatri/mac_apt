@@ -24,7 +24,7 @@ __Plugin_Author = "Yogesh Khatri"
 __Plugin_Author_Email = "yogesh@swiftforensics.com"
 
 __Plugin_Standalone = True
-__Plugin_Standalone_Usage = "This module reads spotlight's index database file found at: /.Spotlight-V100/Store-V2/<UUID>/store.db and also '.store.db' at the same location"
+__Plugin_ArtifactOnly_Usage = "This module reads spotlight's index database file found at: /.Spotlight-V100/Store-V2/<UUID>/store.db and also '.store.db' at the same location"
 
 log = logging.getLogger('MAIN.' + __Plugin_Name) # Do not rename or remove this ! This is the logger object
 
@@ -135,7 +135,7 @@ def ProcessStoreDb(input_file_path, input_file, output_path, output_params, item
         with open(output_path_data, 'wb') as output_file:
             output_paths_file = None
             store = spotlight_parser.SpotlightStore(input_file)
-            store.ReadBlocksInSeq()
+            store.ReadPageIndexesAndOtherDefinitions()
             ## create db, write table with fields.
             out_params = CopyOutputParams(output_params)
             if limit_output_types and (store.block0.item_count > 500): # Large db, limit to sqlite output

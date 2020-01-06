@@ -21,8 +21,8 @@ __Plugin_Description = "Reads Quarantine V2 databases, and GateKeeper .LastGKRej
 __Plugin_Author = "Yogesh Khatri"
 __Plugin_Author_Email = "yogesh@swiftforensics.com"
 
-__Plugin_Standalone = True
-__Plugin_Standalone_Usage = 'Provide one or more Quarantine sqlite databases as input to process. These are typically '\
+__Plugin_Modes = "MACOS,ARTIFACTONLY"
+__Plugin_ArtifactOnly_Usage = 'Provide one or more Quarantine sqlite databases as input to process. These are typically '\
                             'located at /Users/$USER/Library/Preferences/com.apple.LaunchServices.QuarantineEventsV2'
 
 log = logging.getLogger('MAIN.' + __Plugin_Name) # Do not rename or remove this ! This is the logger object

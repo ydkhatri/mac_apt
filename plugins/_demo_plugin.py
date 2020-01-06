@@ -27,8 +27,8 @@ __Plugin_Description = "Demonstrates logging, reading plist and writing out info
 __Plugin_Author = "Yogesh Khatri"
 __Plugin_Author_Email = "yogesh@swiftforensics.com"
 
-__Plugin_Standalone = True
-__Plugin_Standalone_Usage = 'Provide SystemVersion.plist to read macOS version'
+__Plugin_Modes = "MACOS,ARTIFACTONLY" # Valid values are 'MACOS', 'IOS, 'ARTIFACTONLY' 
+__Plugin_ArtifactOnly_Usage = 'Provide SystemVersion.plist to read macOS version'
 
 log = logging.getLogger('MAIN.' + __Plugin_Name) # Do not rename or remove this ! This is the logger object
 
@@ -39,7 +39,7 @@ def Plugin_Start(mac_info):
 
     # Lets print the macOS name and version that the framework has already retrieved. (Utilizing MacInfo)
     log.info("Current OS is: " + os.name)
-    log.info("Mac version is : {}".format(mac_info.macos_version))
+    log.info("Mac version is : {}".format(mac_info.os_version))
 
     # Now lets try to get it ourselves manually.
     file_path = '/System/Library/CoreServices/SystemVersion.plist'
@@ -68,10 +68,10 @@ def Process_File(mac_info, file_path):
 def GetMacOsVersion(plist):
     ''' Gets macOS version number from plist, input here is the plist itself.'''
     try:
-        macos_version = plist['ProductVersion']
+        os_version = plist['ProductVersion']
     except Exception:
         log.error("Error fetching ProductVersion from plist. Is it a valid xml plist?")
-    return macos_version
+    return os_version
 
 
 def WriteMe(version, output_params, file_path):
@@ -100,11 +100,11 @@ def Plugin_Start_Standalone(input_files_list, output_params):
         if input_path.endswith('SystemVersion.plist'):
             success, plist, error = CommonFunctions.ReadPlist(input_path)
             if success:
-                macos_version = plist.get('ProductVersion', None)
-                if macos_version == None:
+                os_version = plist.get('ProductVersion', None)
+                if os_version == None:
                     log.error('Could not find ProductVersion in plist!')
                 else:
-                    WriteMe(macos_version, output_params, input_path)
+                    WriteMe(os_version, output_params, input_path)
             else:
                 log.error('Input file "{}" is not a valid plist. Error opening file was: {}'.format(input_path, error))
 

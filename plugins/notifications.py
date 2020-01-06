@@ -26,8 +26,8 @@ __Plugin_Description = "Reads notification databases"
 __Plugin_Author = "Yogesh Khatri"
 __Plugin_Author_Email = "yogesh@swiftforensics.com"
 
-__Plugin_Standalone = True
-__Plugin_Standalone_Usage = '''This module parses the notification database for a user. 
+__Plugin_Modes = "MACOS,ARTIFACTONLY"
+__Plugin_ArtifactOnly_Usage = '''This module parses the notification database for a user. 
 
 For OSX Mavericks (and earlier), this is found at:
 /Users/<profile>/Library/Application Support/NotificationCenter/<UUID>.db

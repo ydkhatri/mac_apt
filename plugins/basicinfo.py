@@ -20,9 +20,8 @@ __Plugin_Version = "0.1"
 __Plugin_Description = "Gets basic machine and OS configuration like SN, timezone, computer name, last logged in user, FS info, etc.."
 __Plugin_Author = "Yogesh Khatri"
 __Plugin_Author_Email = "yogesh@swiftforensics.com"
-
-__Plugin_Standalone = False
-__Plugin_Standalone_Usage = ''
+__Plugin_Modes = "MACOS"
+__Plugin_ArtifactOnly_Usage = ''
 
 log = logging.getLogger('MAIN.' + __Plugin_Name) # Do not rename or remove this ! This is the logger object
 
@@ -232,8 +231,8 @@ def GetModelAndHostNameFromPreference(mac_info):
     return
 
 def GetOsxVersion(mac_info):
-    basic_data.append(['SYSTEM', 'macOS Version', mac_info.macos_version, mac_info.osx_friendly_name, '/System/Library/CoreServices/SystemVersion.plist'])
-    basic_data.append(['SYSTEM', 'macOS Build Version', mac_info.osx_build, mac_info.osx_friendly_name, '/System/Library/CoreServices/SystemVersion.plist'])
+    basic_data.append(['SYSTEM', 'macOS Version', mac_info.os_version, mac_info.os_friendly_name, '/System/Library/CoreServices/SystemVersion.plist'])
+    basic_data.append(['SYSTEM', 'macOS Build Version', mac_info.os_build, mac_info.os_friendly_name, '/System/Library/CoreServices/SystemVersion.plist'])
 
 def Plugin_Start(mac_info):
     '''Main Entry point function for plugin'''

@@ -30,50 +30,79 @@ import textwrap
 from plugin import *
 
 __VERSION = "0.4.1"
-__PROGRAMNAME = "macOS Artifact Parsing Tool - Artifact Only mode"
+__PROGRAMNAME = "iOS Artifact Parsing Tool"
 __EMAIL = "yogesh@swiftforensics.com"
+
+def IsItemPresentInList(collection, item):
+    try:
+        collection.index(item)
+        return True
+    except ValueError:
+        pass
+    return False
 
 def GetPlugin(name):
     for plugin in plugins:
         if plugin.__Plugin_Name == name: return plugin
     return None
 
+def FindIosFiles(ios_info):
+    if ios_info.IsValidFilePath('/System/Library/CoreServices/SystemVersion.plist'):
+        return ios_info._GetSystemInfo()
+    else:
+        log.error("Could not find iOS system version!")
+    return False
+
+def SetupExportLogger(output_params):
+    '''Creates the csv writer for logging files exported'''
+    output_params.export_path = os.path.join(output_params.output_path, "Export")
+    if not os.path.exists(output_params.export_path):
+        try:
+            os.makedirs(output_params.export_path)
+        except Exception as ex:
+            log.error("Exception while creating Export folder: " + output_params.export_path + "\n Is the location Writeable?" +
+                    "Is drive full? Perhaps the drive is disconnected? Exception Details: " + str(ex))
+            Exit()
+
+    output_params.export_log_csv = CsvWriter()
+    output_params.export_log_csv.CreateCsvFile(os.path.join(output_params.export_path, "Exported_Files_Log.csv"))
+    column_info = collections.OrderedDict([ ('SourcePath',DataType.TEXT), ('ExportPath',DataType.TEXT),
+                                            ('InodeModifiedTime',DataType.DATE),('ModifiedTime',DataType.DATE),
+                                            ('CreatedTime',DataType.DATE),('AccessedTime',DataType.DATE) ])
+    output_params.export_log_csv.WriteRow(column_info)
+
 ## Main program ##
 plugins = []
-plugin_count = ImportPlugins(plugins, 'ARTIFACTONLY')
+plugin_count = ImportPlugins(plugins, 'IOS')
 if plugin_count == 0:
     sys.exit ("No plugins could be added ! Exiting..")
 
-plugin_name_list = []
+plugin_name_list = ['ALL']
 plugins_info = "The following plugins are available:" 
 for plugin in plugins:
     plugins_info += "\n    {:<20}{}".format(plugin.__Plugin_Name, textwrap.fill(plugin.__Plugin_Description, subsequent_indent=' '*24, initial_indent=' '*24, width=80)[24:])
     plugin_name_list.append(plugin.__Plugin_Name)
 
-arg_parser = argparse.ArgumentParser(description='mac_apt is a framework to process forensic artifacts on a Mac OSX system\n'\
+arg_parser = argparse.ArgumentParser(description='ios_apt is a framework to process forensic artifacts on a mounted iOS physical image\n'\
                                                  'You are running {} version {}'.format(__PROGRAMNAME, __VERSION),
                                     epilog=plugins_info, formatter_class=argparse.RawTextHelpFormatter)
-arg_parser.add_argument('-i', '--input_path', nargs='+', help='Path to input file(s)') # Not optional !
+arg_parser.add_argument('-i', '--input_path', help='Path to root folder of ios image') # Not optional !
 arg_parser.add_argument('-o', '--output_path', help='Path where output files will be created') # Not optional !
 arg_parser.add_argument('-x', '--xlsx', action="store_true", help='Save output in excel spreadsheet(s)')
 arg_parser.add_argument('-c', '--csv', action="store_true", help='Save output as CSV files (Default option if no output type selected)')
 arg_parser.add_argument('-s', '--sqlite', action="store_true", help='Save output in an sqlite database')
 arg_parser.add_argument('-l', '--log_level', help='Log levels: INFO, DEBUG, WARNING, ERROR, CRITICAL (Default is INFO)')
-arg_parser.add_argument('plugin', help="Plugin to run")
-arg_parser.add_argument('--plugin_help', action="store_true", help="Plugin usage info")
+arg_parser.add_argument('plugin', nargs="+", help="Plugins to run (space separated). 'ALL' will process every available plugin")
 args = arg_parser.parse_args()
 
-plugin_to_run = args.plugin.upper()  # convert plugin name entered by user to uppercase
-if plugin_to_run in plugin_name_list:
-    plugin = GetPlugin(plugin_to_run)
-    if args.plugin_help:
-        # Display help for Module
-        print("\nHelp for Module {} ({})\n".format(plugin.__Plugin_Name, plugin.__Plugin_Friendly_Name))
-        print("-"*50 + "\n{}\n".format( textwrap.fill(plugin.__Plugin_ArtifactOnly_Usage, width=80, drop_whitespace=False)))
-        sys.exit()
-else:
-    sys.exit("Exiting -> Plugin '" + args.plugin + "' is not a valid plugin name.")
+plugins_to_run = [x.upper() for x in args.plugin]  # convert all plugin names entered by user to uppercase
+process_all = IsItemPresentInList(plugins_to_run, 'ALL')
+if not process_all:
+    #Check for invalid plugin names or ones not Found
+    if not CheckUserEnteredPluginNames(plugins_to_run, plugins):
+        sys.exit("Exiting -> Invalid plugin name entered.")
 
+# Check outputs, create output files
 if args.output_path:
     print ("Output path was : {}".format(args.output_path))
     if not CheckOutputPath(args.output_path):
@@ -81,15 +110,9 @@ if args.output_path:
 else:
     sys.exit("Exiting -> No output_path provided, the -o option is mandatory!")
 
-if args.input_path:
-    try:
-        for in_file in args.input_path:
-            if not os.path.exists(in_file):
-                sys.exit("Exiting -> Input path '{}' does not exist!".format(in_file))
-    except Exception as ex:
-        sys.exit("Exiting -> Error while checking input_path\n" + str(ex))
-else:
-    sys.exit("Exiting -> No input file provided, the -i option is mandatory. Please provide a file to process!")
+output_params = macinfo.OutputParams()
+output_params.output_path = args.output_path
+SetupExportLogger(output_params)
 
 if args.log_level:
     args.log_level = args.log_level.upper()
@@ -110,8 +133,16 @@ log.info("Dates and times are in UTC unless the specific artifact being parsed s
 log.debug(' '.join(sys.argv))
 LogLibraryVersions(log)
 
-output_params = macinfo.OutputParams()
-output_params.output_path = args.output_path
+if args.input_path:
+    if os.path.isdir(args.input_path):
+        ios_info = macinfo.MountedIosInfo(args.input_path, output_params)
+        if not FindIosFiles(ios_info):
+            sys.exit(":( Could not find an iOS installation on path provided. Make sure you provide the path to the root folder."
+                        " This folder should contain folders 'bin', 'System', 'private', 'Library' and others. ")
+    else:
+        sys.exit("Exiting -> Provided input path is not a folder! - " + args.input_path)
+else:
+    sys.exit("Exiting -> No input file provided, the -i option is mandatory. Please provide a file to process!")
 
 if args.xlsx: 
     try:
@@ -140,15 +171,15 @@ if args.csv or not (output_params.write_sql or output_params.write_xlsx):
 # Start processing plugin now!
 
 time_processing_started = time.time()
-log.info("-"*50)
-log.info("Running plugin " + plugin_to_run)
-log.info("-"*50)
-try:
-    plugin = GetPlugin(plugin_to_run)
-    plugin.Plugin_Start_Standalone(args.input_path, output_params)
-except Exception as ex:
-    log.exception ("An exception occurred while running plugin - " + plugin_to_run)
 
+for plugin in plugins:
+    if process_all or IsItemPresentInList(plugins_to_run, plugin.__Plugin_Name):
+        log.info("-"*50)
+        log.info("Running plugin " + plugin.__Plugin_Name)
+        try:
+            plugin.Plugin_Start_Ios(ios_info)
+        except Exception as ex:
+            log.exception ("An exception occurred while running plugin - {}".format(plugin.__Plugin_Name))
 log.info("-"*50)
 
 if args.xlsx:

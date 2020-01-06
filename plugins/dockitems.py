@@ -23,8 +23,8 @@ __Plugin_Description = "Reads the Dock plist for every user"
 __Plugin_Author = "Adam Ferrante"
 __Plugin_Author_Email = "adam@ferrante.io"
 
-__Plugin_Standalone = True
-__Plugin_Standalone_Usage = 'Provide the plist file located at /Users/<USER>/Library/Preferences/com.apple.dock.plist'
+__Plugin_Modes = "MACOS,ARTIFACTONLY"
+__Plugin_ArtifactOnly_Usage = 'Provide the plist file located at /Users/<USER>/Library/Preferences/com.apple.dock.plist'
 
 log = logging.getLogger('MAIN.' + __Plugin_Name) # Do not rename or remove this ! This is the logger object
 

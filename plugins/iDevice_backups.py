@@ -20,15 +20,15 @@ from biplist import *
 import logging
 import os
 
-__Plugin_Name = "IDEVICEBACKUPS" # Cannot have spaces, and must be all caps!
+__Plugin_Name = "IDEVICEBACKUPS"
 __Plugin_Friendly_Name = "iDevice Backup Info"
 __Plugin_Version = "1.0"
 __Plugin_Description = "Reads and exports iPhone/iPad backup databases"
 __Plugin_Author = "Jack Farley, Yogesh Khatri"
 __Plugin_Author_Email = "jack.farley@mymail.champlain.edu, yogesh@swiftforensics.com"
 
-__Plugin_Standalone = True
-__Plugin_Standalone_Usage = 'Reads iDevice backup databases found at /Users/<USER>/Library/Application Support/MobileSync/Backup. '\
+__Plugin_Modes = "MACOS,ARTIFACTONLY"
+__Plugin_ArtifactOnly_Usage = 'Reads iDevice backup databases found at /Users/<USER>/Library/Application Support/MobileSync/Backup. '\
                             'Provide the path to this folder as input for this plugin'
 
 log = logging.getLogger('MAIN.' + __Plugin_Name) # Do not rename or remove this ! This is the logger object

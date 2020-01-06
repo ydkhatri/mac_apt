@@ -17,15 +17,15 @@ import binascii
 import sys
 
 
-__Plugin_Name = "NETWORKING" # Cannot have spaces, and must be all caps!
+__Plugin_Name = "NETWORKING"
 __Plugin_Friendly_Name = "Networking"
 __Plugin_Version = "1.0"
 __Plugin_Description = 'Gets network related information - Interfaces, last IP addresses, MAC address, etc..'
 __Plugin_Author = "Yogesh Khatri"
 __Plugin_Author_Email = "yogesh@swiftforensics.com"
 
-__Plugin_Standalone = False
-__Plugin_Standalone_Usage = ''
+__Plugin_Modes = "MACOS"
+__Plugin_ArtifactOnly_Usage = ''
 
 log = logging.getLogger('MAIN.' + __Plugin_Name) # Do not rename or remove this ! This is the logger object
 

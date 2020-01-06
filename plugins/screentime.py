@@ -14,15 +14,15 @@ import os
 import sqlite3
 import logging
 
-__Plugin_Name = "SCREENTIME" # Cannot have spaces, and must be all caps!
+__Plugin_Name = "SCREENTIME"
 __Plugin_Friendly_Name = "Screen Time Data"
 __Plugin_Version = "1.0"
 __Plugin_Description = "Parses application Screen Time data"
 __Plugin_Author = "Jack Farley"
 __Plugin_Author_Email = "jfarley248@gmail.com"
 
-__Plugin_Standalone = True
-__Plugin_Standalone_Usage = 'Provide Screen Time database found at:' \
+__Plugin_Modes = "IOS,MACOS,ARTIFACTONLY"
+__Plugin_ArtifactOnly_Usage = 'Provide Screen Time database found at:' \
                             '/private/var/folders/XX/XXXXXXXXXXXXXXXXXXX_XXXXXXXXX/0/com.apple.ScreenTimeAgent/Store/'
 
 log = logging.getLogger('MAIN.' + __Plugin_Name) # Do not rename or remove this ! This is the logger object
@@ -181,6 +181,22 @@ def Plugin_Start_Standalone(input_files_list, output_params):
             PrintAll(screen_time_arr, output_params, '')
         else:
             log.info("No Screen Time artifacts found.")
+
+def Plugin_Start_Ios(ios_info):
+    '''Entry point for ios_apt plugin'''
+    paths_to_screentime_db = ["/private/var/mobile/Library/Application Support/com.apple.remotemanagementd/RMAdminStore-Local.sqlite",
+                              "/private/var/mobile/Library/Application Support/com.apple.remotemanagementd/RMAdminStore-Cloud.sqlite"]
+    screen_time_arr = []
+
+    for screentime_path in paths_to_screentime_db:
+        if ios_info.IsValidFilePath(screentime_path):
+            ProcessSCDbFromPath(ios_info, screen_time_arr, screentime_path)
+
+    if screen_time_arr:
+        log.info("Screen Time data found!")
+        PrintAll(screen_time_arr, ios_info.output_params, '')
+    else:
+        log.info("No Screen Time artifacts found.")
 
 if __name__ == '__main__':
     print ("This plugin is a part of a framework and does not run independently on its own!")

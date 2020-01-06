@@ -21,15 +21,15 @@ import logging
 import os
 from enum import Enum
 
-__Plugin_Name = "IDEVICEINFO" # Cannot have spaces, and must be all caps!
+__Plugin_Name = "IDEVICEINFO"
 __Plugin_Friendly_Name = "iDevice Info"
 __Plugin_Version = "1.0"
 __Plugin_Description = "Reads and exports connected iDevice details"
 __Plugin_Author = "Jack Farley"
 __Plugin_Author_Email = "jack.farley@mymail.champlain.edu"
 
-__Plugin_Standalone = True
-__Plugin_Standalone_Usage = 'Reads iDevice Info found at /Users/<USER>/Library/Preferences/com.apple.iPod.plist'\
+__Plugin_Modes = "MACOS,ARTIFACTONLY"
+__Plugin_ArtifactOnly_Usage = 'Reads iDevice Info found at /Users/<USER>/Library/Preferences/com.apple.iPod.plist'\
                             'Provide the path to this file as input for this plugin'
 
 log = logging.getLogger('MAIN.' + __Plugin_Name) # Do not rename or remove this ! This is the logger object

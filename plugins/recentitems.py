@@ -29,8 +29,8 @@ __Plugin_Description = "Gets recently accessed Servers, Documents, Hosts, Volume
 __Plugin_Author = "Yogesh Khatri"
 __Plugin_Author_Email = "yogesh@swiftforensics.com"
 
-__Plugin_Standalone = True
-__Plugin_Standalone_Usage = 'This module parses recently accessed information from plist and SFL files found under /Users/<USER>/Library/Preferences/ and /Users/<USER>/Library/Application Support/'
+__Plugin_Modes = "MACOS,ARTIFACTONLY"
+__Plugin_ArtifactOnly_Usage = 'This module parses recently accessed information from plist and SFL files found under /Users/<USER>/Library/Preferences/ and /Users/<USER>/Library/Application Support/'
 
 log = logging.getLogger('MAIN.' + __Plugin_Name) # Do not rename or remove this ! This is the logger object
 

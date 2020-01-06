@@ -355,7 +355,7 @@ def SetupExportLogger(output_params):
 
 plugins = []
 log = None
-plugin_count = ImportPlugins(plugins)
+plugin_count = ImportPlugins(plugins, 'MACOS')
 if plugin_count == 0:
     Exit ("No plugins could be added ! Exiting..")
 

@@ -20,8 +20,8 @@ __Plugin_Description = "Reads the NetUsage (network usage) database to get progr
 __Plugin_Author = "Yogesh Khatri"
 __Plugin_Author_Email = "yogesh@swiftforensics.com"
 
-__Plugin_Standalone = True
-__Plugin_Standalone_Usage = 'Provide one or more netusage sqlite databases as input to process. This is '\
+__Plugin_Modes = "MACOS,ARTIFACTONLY"
+__Plugin_ArtifactOnly_Usage = 'Provide one or more netusage sqlite databases as input to process. This is '\
                             'located at /private/var/networkd/netusage.sqlite'
 
 log = logging.getLogger('MAIN.' + __Plugin_Name) # Do not rename or remove this ! This is the logger object
