@@ -20,7 +20,7 @@ __Plugin_Version = "0.1"
 __Plugin_Description = "Gets basic machine and OS configuration like SN, timezone, computer name, last logged in user, FS info, etc.."
 __Plugin_Author = "Yogesh Khatri"
 __Plugin_Author_Email = "yogesh@swiftforensics.com"
-__Plugin_Modes = "MACOS"
+__Plugin_Modes = "MACOS,IOS"
 __Plugin_ArtifactOnly_Usage = ''
 
 log = logging.getLogger('MAIN.' + __Plugin_Name) # Do not rename or remove this ! This is the logger object
@@ -230,13 +230,13 @@ def GetModelAndHostNameFromPreference(mac_info):
         log.error('Failed to read plist ' + preference_plist_path + " Error was : " + error_message)    
     return
 
-def GetOsxVersion(mac_info):
+def GetMacOSVersion(mac_info):
     basic_data.append(['SYSTEM', 'macOS Version', mac_info.os_version, mac_info.os_friendly_name, '/System/Library/CoreServices/SystemVersion.plist'])
     basic_data.append(['SYSTEM', 'macOS Build Version', mac_info.os_build, mac_info.os_friendly_name, '/System/Library/CoreServices/SystemVersion.plist'])
 
 def Plugin_Start(mac_info):
     '''Main Entry point function for plugin'''
-    GetOsxVersion(mac_info)
+    GetMacOSVersion(mac_info)
     GetMacSerialNum(mac_info)
     GetModelAndHostNameFromPreference(mac_info)
     GetTimezone(mac_info)
@@ -247,6 +247,18 @@ def Plugin_Start(mac_info):
 def Plugin_Start_Standalone(input_files_list, output_params):
     log.info("This plugin cannot be run as standalone")
 
+#IOS
+def GetIOSVersion(ios_info):
+    basic_data.append(['SYSTEM', 'iOS Version', mac_info.os_version, mac_info.os_friendly_name, '/System/Library/CoreServices/SystemVersion.plist'])
+    basic_data.append(['SYSTEM', 'iOS Build Version', mac_info.os_build, mac_info.os_friendly_name, '/System/Library/CoreServices/SystemVersion.plist'])
+
+def Plugin_Start_Ios(ios_info):
+    '''Entry point for ios_apt plugin'''
+    GetIOSVersion(ios_info)
+    #TODO
+    # Get Model, ComputerName, Hostname from /private/var/preferences/SystemConfiguration/preferences.plist
+    
+    WriteList("basic device info", "Basic_Info", basic_data, basic_data_info, ios_info.output_params)
 
 if __name__ == '__main__':
     print ("This plugin is a part of a framework and does not run independently on its own!")
