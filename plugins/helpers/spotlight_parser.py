@@ -41,7 +41,7 @@
 #                store.db file. 
 #
 # Usage        : spotlight_parser.py [-p OUTPUT_PREFIX] <path_to_database>  <output_folder>
-#                Example:  python.exe spotlight_parser.py c:\store  c:\store_output
+#                Example:  python.exe spotlight_parser.py c:\store.db  c:\store_output
 #
 # Ack          : M Bartle for most of the python3 porting
 #
@@ -67,7 +67,7 @@ try:
 except ImportError:
     print("lzfse not found. Won't decompress lzfse/lzvn streams")
 
-__VERSION__ = '0.9'
+__VERSION__ = '0.9.1'
 
 log = logging.getLogger('SPOTLIGHT_PARSER')
 
@@ -274,19 +274,21 @@ class FileMetaDataListing:
                 elif value_type == 6: 
                     value = self.ReadVarSizeNum()[0] 
                 elif value_type == 7:
-                    if prop_type == 0x42: #66 com_apple_mail_gmailLabels, com_microsoft_outlook_categories
-                        #unknown encoding (varint) type!
-                        value = self.ReadSingleByte()
-                        if value == 0x08:   # Read 1 more byte
-                            value += (self.ReadSingleByte() << 8)
-                        elif value == 0x10: # Read 2 more bytes
-                            value += (self.ReadSingleByte() << 8) + (self.ReadSingleByte() << 16)
-                        elif value == 0x18: # Read 3 more bytes
-                            value += (self.ReadSingleByte() << 8) + (self.ReadSingleByte() << 16) + (self.ReadSingleByte() << 24)
-                        else:
-                            log.info('Unknown value {} found for value_type 7, prop_type 0x42, prop_name {}'.format(value, prop_name))
+                    #log.debug("Found value_type 7, prop_type=0x{:X} prop={} @ {}, pos 0x{:X}".format(prop_type, prop_name, filepos, self.pos))
+                    if prop_type & 2 == 2: #  == 0x0A:
+                        number = self.ReadVarSizeNum()[0]
+                        num_values = number >> 3
+                        value = [self.ReadVarSizeNum()[0] for x in range(num_values)]
+                        discarded_bits = number & 0x07
+                        if discarded_bits != 0:
+                            log.info('Discarded bits value was 0x{:X}'.format(discarded_bits))
                     else:
+                        # 0x48 (_kMDItemDataOwnerType, _ICItemSearchResultType, kMDItemRankingHint, FPCapabilities)
+                        # 0x4C (_kMDItemStorageSize, _kMDItemApplicationImporterVersion)
+                        # 0x0a (_kMDItemOutgoingCounts, _kMDItemIncomingCounts) firstbyte = 0x20 , then 4 bytes
                         value = self.ReadVarSizeNum()[0]
+                    #if prop_type == 0x48: # Can perhaps be resolved to a category? Need to check.
+                    #    print("") 
                 elif value_type == 8 and prop_name != 'kMDStoreAccumulatedSizes':
                     if prop_type & 2 == 2:
                         num_values = (self.ReadVarSizeNum()[0])
@@ -525,7 +527,19 @@ class SpotlightStore:
 
     def ReadUint64(self, data):
         return struct.unpack("<Q", data)[0]
-    
+
+    @staticmethod
+    def ReadIndexVarSizeNum(data):
+        '''Returns num and bytes_read'''
+        byte = struct.unpack("B", data[0:1])[0]
+        num_bytes_read = 1
+        ret = byte & 0x7F # remove top bit
+        while (byte & 0x80) == 0x80: # highest bit set, need to read one more
+            byte = struct.unpack("B", data[num_bytes_read:num_bytes_read + 1])[0]
+            ret |= (byte & 0x7F) << (7 * num_bytes_read)
+            num_bytes_read += 1
+        return ret, num_bytes_read
+
     @staticmethod
     def ReadVarSizeNum(data):
         '''Returns num and bytes_read'''
@@ -657,10 +671,15 @@ class SpotlightStore:
         pos = 0
         for index, offset in offsets:
             pos = offset
-            entry_size, bytes_moved = SpotlightStore.ReadVarSizeNum(data_content[pos:])
+            entry_size, bytes_moved = SpotlightStore.ReadIndexVarSizeNum(data_content[pos:])
             pos += bytes_moved
             index_size, bytes_moved = SpotlightStore.ReadVarSizeNum(data_content[pos:])
             pos += bytes_moved
+            if entry_size - index_size > 2:
+                log.debug("ReadIndexVarSizeNum() read the number incorrectly?") 
+            #else:
+            #    log.debug("index={}, offset={}, entry_size=0x{:X}, index_size=0x{:X}".format(index, offset, entry_size, index_size))
+
             if has_extra_byte:
                 pos += 1
 
@@ -1004,20 +1023,22 @@ def ProcessStoreDb(input_file_path, output_path, file_name_prefix='store'):
 if __name__ == "__main__":
     import argparse
 
-    description = "This script will process individual Spotlight database files. These files "\
-                  "are found under the volume at location '/.Spotlight-V100/Store-V2/<UUID>' "\
-                  "where <UUID> represents a store id. In that folder you should find files "\
-                  "named 'store' and '.store' which are the Spotlight databases. Provide these "\
-                  "as input to this script. \n\n"\
-                  "iOS Spotlight databases are found at location "\
-                  "/private/var/mobile/Library/Spotlight/CoreSpotlight/***/index.spotlightV2 where "\
-                  "*** is one of NSFileProtectionComplete, NSFileProtectionCompleteUnlessOpen or "\
-                  "NSFileProtectionCompleteUntilFirstUserAuthentication.\n"\
-                  "For iOS databases, you will need to have the files that begin with 'dbStr' in "\
-                  "the same folder as store.db. These files will be present in the same folder as store.db "\
-                  "and are specific to that instance of store.db. Send bugs/comments to yogesh@swiftforensics.com "
+    description = "This script will process individual Spotlight database files.\n"\
+                    "These files are found under the volume at location \n "\
+                    "'/.Spotlight-V100/Store-V2/<UUID>' where <UUID> represents a store id.\n"\
+                    "In that folder you should find files named 'store' and '.store' which\n"\
+                    "are the Spotlight databases. Provide these as input to this script. \n\n"\
+                    "iOS Spotlight databases (store.db and .store.db) are found at locations:\n"\
+                    "/private/var/mobile/Library/Spotlight/CoreSpotlight/***/index.spotlightV2\n"\
+                    "where *** is one of NSFileProtectionComplete, NSFileProtectionCompleteUnlessOpen\n"\
+                    "or NSFileProtectionCompleteUntilFirstUserAuthentication folders.\n\n"\
+                    "For iOS databases, you will need to have the files that begin with 'dbStr'\n"\
+                    "in the same folder as store.db. These files will natively be found in the\n"\
+                    "same folder as store.db and are specific to that instance of store.db.\n\n"\
+                    "Example:  python.exe spotlight_parser.py c:\store.db  c:\store_output\n\n"\
+                    "Send bugs/comments to yogesh@swiftforensics.com "
 
-    arg_parser = argparse.ArgumentParser(description='Spotlight Parser version {} - {}'.format(__VERSION__, description))
+    arg_parser = argparse.ArgumentParser(description='Spotlight Parser version {} - {}'.format(__VERSION__, description), formatter_class=argparse.RawTextHelpFormatter)
     arg_parser.add_argument('input_path', help="Path to 'store' or '.store' file (the Spotlight db)")
     arg_parser.add_argument('output_folder', help='Path to output folder')
     arg_parser.add_argument('-p', '--output_prefix', help='Prefix for output file names')
