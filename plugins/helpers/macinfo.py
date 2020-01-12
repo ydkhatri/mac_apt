@@ -397,8 +397,8 @@ class MacInfo:
            If 'overwrite' is set to True, it will not check for existing files. The
            default behaviour is to check and rename the newly exported file if there
            is a name collision.
-           If this is an sqlite db, the -shm and -wal files will also be exported.
-           The check for -shm and -wal can be skipped if  check_for_sqlite_files=False
+           If this is an sqlite db, the -journal and -wal files will also be exported.
+           The check for -journal and -wal can be skipped if  check_for_sqlite_files=False
            It is much faster to skip the check if not needed.
            The Function returns False if it fails to export the file.
         '''
@@ -419,13 +419,13 @@ class MacInfo:
             file_path = os.path.join(export_path, out_filename)
         else:
             file_path = CommonFunctions.GetNextAvailableFileName(os.path.join(export_path, out_filename))
-        shm_file_path = file_path + "-shm" # For sqlite db
+        shm_file_path = file_path + "-journal" # For sqlite db
         wal_file_path = file_path + "-wal" # For sqlite db
 
         if self._ExtractFile(artifact_path, file_path):
             if check_for_sqlite_files:
-                if self.IsValidFilePath(artifact_path + "-shm"):
-                    self._ExtractFile(artifact_path + "-shm", shm_file_path)
+                if self.IsValidFilePath(artifact_path + "-journal"):
+                    self._ExtractFile(artifact_path + "-journal", shm_file_path)
                 if self.IsValidFilePath(artifact_path + "-wal"):
                     self._ExtractFile(artifact_path + "-wal", wal_file_path)
             return True
@@ -1488,7 +1488,7 @@ class SqliteWrapper:
             def hooked(path):
                 # Get 'database' variable
                 self.db_file_path = path
-                self.shm_file_path = path + "-shm"
+                self.shm_file_path = path + "-journal"
                 self.wal_file_path = path + "-wal"
                 if self._ExtractFiles():
                     log.debug('Trying to extract and read db: ' + path)
