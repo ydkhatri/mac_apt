@@ -1,34 +1,41 @@
 '''
-   Copyright (c) 2020 Yogesh Khatri 
+   Copyright (c) 2020 Yogesh Khatri
 
    This file is part of mac_apt (macOS Artifact Parsing Tool).
    Usage or distribution of this software/code is subject to the 
    terms of the MIT License.
    
-   ios_apt.py
-   ------------------------
-   This is the ios artifact parser tool.
-
+   mac_apt_mounted_sys_data.py
+   ----------
+   This is a special version of the mac_apt.py script which is 
+   specifically created for processing macOS 10.15 (Catalina) or
+   above images in MOUNTED mode. Here you will have two seperate
+   volumes mounted for SYSTEM and DATA. Provide both to this 
+   script.
+   
    For usage information, run: 
-     python ios_apt.py -h
-  
+     python mac_apt_mounted_sys_data.py -h
+
    NOTE: This currently works only on Python3.7 or higher.
+   
 '''
 
-import sys
-import os
 import argparse
-import traceback
-import plugins.helpers.macinfo as macinfo
-from plugins.helpers.writer import *
 import logging
-import time
+import os
+import plugins.helpers.macinfo as macinfo
+import sys
 import textwrap
+import time
+import traceback
+from plugins.helpers.writer import *
+from plugins.helpers.disk_report import *
 from plugin import *
 
 __VERSION = "0.4.1"
-__PROGRAMNAME = "iOS Artifact Parsing Tool"
+__PROGRAMNAME = "macOS Artifact Parsing Tool - SYS DATA Mounted mode"
 __EMAIL = "yogesh@swiftforensics.com"
+
 
 def IsItemPresentInList(collection, item):
     try:
@@ -38,17 +45,26 @@ def IsItemPresentInList(collection, item):
         pass
     return False
 
-def GetPlugin(name):
-    for plugin in plugins:
-        if plugin.__Plugin_Name == name: return plugin
-    return None
-
-def FindIosFiles(ios_info):
-    if ios_info.IsValidFilePath('/System/Library/CoreServices/SystemVersion.plist'):
-        return ios_info._GetSystemInfo()
+def FindOsxFiles(mac_info):
+    if mac_info.IsValidFilePath('/System/Library/CoreServices/SystemVersion.plist'):
+        if mac_info.IsValidFilePath("/System/Library/Kernels/kernel") or \
+            mac_info.IsValidFilePath( "/mach_kernel"):
+            log.info ("Found valid OSX/macOS kernel")
+        else:
+            log.info ("Could not find OSX/macOS kernel!")# On partial/corrupted images, this may not be found
+        mac_info._GetSystemInfo()
+        mac_info._GetUserInfo()
+        return True
     else:
-        log.error("Could not find iOS system version!")
+        log.info ("Could not find OSX/macOS installation!")
     return False
+
+def Exit(message=''):
+    if log and (len(message) > 0):
+        log.info(message)
+        sys.exit()
+    else:
+        sys.exit(message)
 
 def SetupExportLogger(output_params):
     '''Creates the csv writer for logging files exported'''
@@ -69,52 +85,43 @@ def SetupExportLogger(output_params):
     output_params.export_log_csv.WriteRow(column_info)
 
 ## Main program ##
+
 plugins = []
-plugin_count = ImportPlugins(plugins, 'IOS')
+log = None
+plugin_count = ImportPlugins(plugins, 'MACOS')
 if plugin_count == 0:
-    sys.exit ("No plugins could be added ! Exiting..")
+    Exit ("No plugins could be added ! Exiting..")
 
 plugin_name_list = ['ALL']
-plugins_info = "The following plugins are available:" 
+plugins_info = "The following plugins are available:\n" + " "*4 + "ALL" + " "*17 + "Processes all plugins" 
 for plugin in plugins:
     plugins_info += "\n    {:<20}{}".format(plugin.__Plugin_Name, textwrap.fill(plugin.__Plugin_Description, subsequent_indent=' '*24, initial_indent=' '*24, width=80)[24:])
     plugin_name_list.append(plugin.__Plugin_Name)
 
-arg_parser = argparse.ArgumentParser(description='ios_apt is a framework to process forensic artifacts on a mounted iOS physical image\n'\
+arg_parser = argparse.ArgumentParser(description='mac_apt is a framework to process forensic artifacts on a Mac OSX system\n'\
                                                  'You are running {} version {}'.format(__PROGRAMNAME, __VERSION),
                                     epilog=plugins_info, formatter_class=argparse.RawTextHelpFormatter)
-arg_parser.add_argument('-i', '--input_path', help='Path to root folder of ios image') # Not optional !
-arg_parser.add_argument('-o', '--output_path', help='Path where output files will be created') # Not optional !
+arg_parser.add_argument('input_sys_path', help='Path to mounted SYSTEM image/volume')
+arg_parser.add_argument('input_data_path', help='Path to mounted DATA image/volume')
+arg_parser.add_argument('-o', '--output_path', help='Path where output files will be created')
 arg_parser.add_argument('-x', '--xlsx', action="store_true", help='Save output in excel spreadsheet(s)')
 arg_parser.add_argument('-c', '--csv', action="store_true", help='Save output as CSV files (Default option if no output type selected)')
 arg_parser.add_argument('-s', '--sqlite', action="store_true", help='Save output in an sqlite database')
-arg_parser.add_argument('-l', '--log_level', help='Log levels: INFO, DEBUG, WARNING, ERROR, CRITICAL (Default is INFO)')
+arg_parser.add_argument('-l', '--log_level', help='Log levels: INFO, DEBUG, WARNING, ERROR, CRITICAL (Default is INFO)')#, choices=['INFO','DEBUG','WARNING','ERROR','CRITICAL'])
 arg_parser.add_argument('plugin', nargs="+", help="Plugins to run (space separated). 'ALL' will process every available plugin")
 args = arg_parser.parse_args()
 
-plugins_to_run = [x.upper() for x in args.plugin]  # convert all plugin names entered by user to uppercase
-process_all = IsItemPresentInList(plugins_to_run, 'ALL')
-if not process_all:
-    #Check for invalid plugin names or ones not Found
-    if not CheckUserEnteredPluginNames(plugins_to_run, plugins):
-        sys.exit("Exiting -> Invalid plugin name entered.")
-
-# Check outputs, create output files
 if args.output_path:
     print ("Output path was : {}".format(args.output_path))
     if not CheckOutputPath(args.output_path):
-        sys.exit("Exiting -> Output path not valid!")
+        Exit()
 else:
-    sys.exit("Exiting -> No output_path provided, the -o option is mandatory!")
-
-output_params = macinfo.OutputParams()
-output_params.output_path = args.output_path
-SetupExportLogger(output_params)
+    args.output_path = '.' # output to same folder as script.
 
 if args.log_level:
     args.log_level = args.log_level.upper()
     if not args.log_level in ['INFO','DEBUG','WARNING','ERROR','CRITICAL']: # TODO: change to just [info, debug, error]
-        sys.exit("Exiting -> Invalid input type for log level. Valid values are INFO, DEBUG, WARNING, ERROR, CRITICAL")
+        Exit("Invalid input type for log level. Valid values are INFO, DEBUG, WARNING, ERROR, CRITICAL")
     else:
         if args.log_level == "INFO": args.log_level = logging.INFO
         elif args.log_level == "DEBUG": args.log_level = logging.DEBUG
@@ -128,24 +135,29 @@ log.setLevel(args.log_level)
 log.info("Started {}, version {}".format(__PROGRAMNAME, __VERSION))
 log.info("Dates and times are in UTC unless the specific artifact being parsed saves it as local time!")
 log.debug(' '.join(sys.argv))
-LogLibraryVersions(log)
+#LogLibraryVersions(log)
 
-if args.input_path:
-    if os.path.isdir(args.input_path):
-        ios_info = macinfo.MountedIosInfo(args.input_path, output_params)
-        if not FindIosFiles(ios_info):
-            sys.exit(":( Could not find an iOS installation on path provided. Make sure you provide the path to the root folder."
-                        " This folder should contain folders 'bin', 'System', 'private', 'Library' and others. ")
-    else:
-        sys.exit("Exiting -> Provided input path is not a folder! - " + args.input_path)
-else:
-    sys.exit("Exiting -> No input file provided, the -i option is mandatory. Please provide a file to process!")
+# Check inputs
+if not os.path.isdir(args.input_sys_path):
+    Exit('Exiting -> Invalid SYSTEM volume path entered -  {}'.format(args.input_sys_path))
+if not os.path.isdir(args.input_data_path):
+    Exit('Exiting -> Invalid DATA volume path entered -  {}'.format(args.input_data_path))
 
+plugins_to_run = [x.upper() for x in args.plugin]  # convert all plugin names entered by user to uppercase
+process_all = IsItemPresentInList(plugins_to_run, 'ALL')
+if not process_all:
+    #Check for invalid plugin names or ones not Found
+    if not CheckUserEnteredPluginNames(plugins_to_run, plugins):
+        Exit("Exiting -> Invalid plugin name entered.")
+
+# Check outputs, create output files
+output_params = macinfo.OutputParams()
+output_params.output_path = args.output_path
+SetupExportLogger(output_params)
 if args.xlsx: 
     try:
         xlsx_path = os.path.join(output_params.output_path, "mac_apt.xlsx")
         output_params.xlsx_writer = ExcelWriter()
-        log.debug("Trying to create xlsx file @ " + xlsx_path)
         output_params.xlsx_writer.CreateXlsxFile(xlsx_path)
         output_params.write_xlsx = True
     except Exception as ex:
@@ -154,33 +166,48 @@ if args.xlsx:
 
 if args.sqlite: 
     try:
-        log.debug("Trying to create db @ " + os.path.join(output_params.output_path, "mac_apt.db"))
-        output_params.output_db_path = SqliteWriter.CreateSqliteDb(os.path.join(output_params.output_path, "mac_apt.db"))
+        sqlite_path = os.path.join(output_params.output_path, "mac_apt.db")
+        output_params.output_db_path = SqliteWriter.CreateSqliteDb(sqlite_path)
         output_params.write_sql = True
     except Exception as ex:
-        log.exception('Exception occurred when tried to create Sqlite db')
-        sys.exit('Exiting -> Cannot create sqlite db!')
-
+        log.info('Sqlite db could not be created at : ' + sqlite_path)
+        log.exception('Exception occurred when trying to create Sqlite db')
+    
 if args.csv or not (output_params.write_sql or output_params.write_xlsx):
     output_params.write_csv  = True
 
-# At this point, all looks good, lets process the input file
-# Start processing plugin now!
-
+# At this point, all looks good, lets mount the image
+found_osx = False
+mac_info = None
 time_processing_started = time.time()
+try:
+    log.info("Opened images ")
+    mac_info = macinfo.MountedMacInfoSeperateSysData(args.input_sys_path, args.input_data_path, output_params)
+    found_osx = FindOsxFiles(mac_info)
+except Exception as ex:
+    log.exception("Failed to browse image. Error Details are: " + str(ex))
+    Exit()
 
-for plugin in plugins:
-    if process_all or IsItemPresentInList(plugins_to_run, plugin.__Plugin_Name):
-        log.info("-"*50)
-        log.info("Running plugin " + plugin.__Plugin_Name)
-        try:
-            plugin.Plugin_Start_Ios(ios_info)
-        except Exception as ex:
-            log.exception ("An exception occurred while running plugin - {}".format(plugin.__Plugin_Name))
+# Start processing plugins now!
+if found_osx:
+    for plugin in plugins:
+        if process_all or IsItemPresentInList(plugins_to_run, plugin.__Plugin_Name):
+            log.info("-"*50)
+            log.info("Running plugin " + plugin.__Plugin_Name)
+            try:
+                plugin.Plugin_Start(mac_info)
+            except Exception as ex:
+                log.exception ("An exception occurred while running plugin - {}".format(plugin.__Plugin_Name))
+else:
+    log.warning (":( Could not find a partition having a macOS installation on it")
+
 log.info("-"*50)
 
+# Final cleanup
 if args.xlsx:
     output_params.xlsx_writer.CommitAndCloseFile()
+if mac_info.is_apfs and mac_info.apfs_db != None:
+    mac_info.apfs_db.CloseDb()
 
 time_processing_ended = time.time()
 run_time = time_processing_ended - time_processing_started

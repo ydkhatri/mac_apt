@@ -1419,6 +1419,92 @@ class MountedMacInfo(MacInfo):
                     log.error ("Could not open plist " + plist_meta['name'] + " Exception: " + str(ex))
         #TODO: Domain user uid, gid?
 
+class MountedMacInfoSeperateSysData(MountedMacInfo):
+    '''Same as MountedMacInfo, but takes into account two volumes (SYS, DATA) mounted separately'''
+
+    def __init__(self, sys_root_folder_path, data_root_folder_path, output_params):
+        MountedMacInfo.__init__(self, sys_root_folder_path, output_params)
+        self.sys_volume_folder = sys_root_folder_path  # New in 10.15, a System read-only partition
+        self.data_volume_folder = data_root_folder_path # New in 10.15, a separate Data partition
+        self.firmlinks = {}
+        self.firmlinks_paths =[]
+        self.max_firmlink_depth = 0
+        self._ParseFirmlinks()
+
+    def _ParseFirmlinks(self):
+        '''Read the firmlink path mappings between System & Data volumes'''
+        firmlink_file_path = '/usr/share/firmlinks'
+        try:
+            mounted_path = super().BuildFullPath(firmlink_file_path)
+            log.debug("Trying to open file : " + mounted_path)
+            f = open(mounted_path, 'rb')
+        except (IOError, OSError) as ex:
+            log.exception("Error opening file : " + mounted_path)
+            raise ValueError('Fatal : Could not find/read Firmlinks file in System volume!')
+
+        data = [x.decode('utf8') for x in f.read().split(b'\n')]
+        for item in data:
+            if item:
+                source, dest = item.split('\t')
+                self.firmlinks[source] = dest
+                self.firmlinks_paths.append(source)
+                depth = len(source[1:].split('/'))
+                if depth > self.max_firmlink_depth: self.max_firmlink_depth = depth
+                if source[1:] != dest:
+                    # Maybe this is the Beta version of Catalina, try prefix 'Device'
+                    if dest.startswith('Device/'):
+                        self.firmlinks[source] = dest[7:]
+                    else:
+                        log.warning("Firmlink not handled : Source='{}' Dest='{}'".format(source, dest))
+        #add one for /System/Volumes/Data  /
+        self.firmlinks['/System/Volumes/Data'] = ''
+        self.firmlinks_paths.append('/System/Volumes/Data')
+        f.close()
+
+    def BuildFullPath(self, path_in_image):
+        '''
+        Takes path inside image as input and returns the full path on current volume
+        Eg: Image mounted at D:\Images\mac_osx\  Path=\etc\hosts  Return= D:\Images\mac_osx\etc\hosts
+        Takes into account firmlinks and accordingly switches to SYS or DATA volume.
+        '''
+        if path_in_image == '/': return self.sys_volume_folder
+
+        if path_in_image[-1] == '/': path_in_image = path_in_image[:-1] # remove trailing /
+        
+        path_parts = path_in_image[1:].split('/')
+        path = ''
+        vol_folder = self.sys_volume_folder
+        for index, folder_name in enumerate(path_parts):
+            log.debug("index={}, folder_name={}".format(index, folder_name))
+            if index >= self.max_firmlink_depth: 
+                break
+            else:
+                log.debug("Searched for {}".format('/' + '/'.join(path_parts[:index + 1])))
+                dest = self.firmlinks.get('/' + '/'.join(path_parts[:index + 1]), None)
+                if dest != None:
+                    log.debug("FOUND**********")
+                    found_in_firmlink = True
+                    vol_folder = self.data_volume_folder
+                    path = dest
+                    if index + 1 < len(path_parts):
+                        rest_of_path = '/'.join(path_parts[index + 1:])
+                        path += '/' + rest_of_path
+                    elif path == '':
+                        path = '/'
+
+        full_path = ''
+        if path == '': path = path_in_image
+        if path.startswith('/'): path = path[1:] # Remove leading /
+        if self.is_windows:
+            path = path.replace('/', '\\')
+        try:
+            full_path = os.path.join(vol_folder, path)
+        except Exception:
+            log.error("Exception in BuildFullPath(), path was " + path_in_image)
+            log.exception("Exception details")
+        log.debug("req={} final={}".format(path_in_image, full_path))
+        return full_path
+
 class MountedIosInfo(MountedMacInfo):
     def __init__(self, root_folder_path, output_params):
         MountedMacInfo.__init__(self, root_folder_path, output_params)
