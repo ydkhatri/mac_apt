@@ -22,6 +22,7 @@ import sys
 import tempfile
 import time
 import traceback
+from io import BytesIO
 from plugins.helpers.apfs_reader import *
 from plugins.helpers.deserializer import process_nsa_plist
 from plugins.helpers.hfs_alt import HFSVolume
@@ -458,19 +459,30 @@ class MacInfo:
                 try:
                     log.debug("Trying to read plist file : " + path)
                     plist = biplist.readPlist(f)
-                    return (True, plist, '')
+                    if deserialize:
+                        try:
+                            f.seek(0)
+                            plist = self.DeserializeNsKeyedPlist(f)
+                            f.close()
+                            return (True, plist, '')
+                        except:
+                            f.close()
+                            error = 'Could not read deserialized plist: ' + path + " Error was : " + str(ex)  
+                    else:
+                        f.close()
+                        return (True, plist, '')
                 except biplist.InvalidPlistException as ex:
                     try:
                         # Perhaps this is manually edited or incorrectly formatted by a non-Apple utility  
                         # that has left whitespaces at the start of file before <?xml tag
+                        # This is assuming XML format!
                         f.seek(0)
                         data = f.read().decode('utf8')
+                        f.close()
                         data = data.lstrip(" \r\n\t").encode('utf8', 'backslashreplace')
                         if deserialize:
                             try:
-                                temp_file = tempfile.SpooledTemporaryFile(max_size=209715200) # max 200MB
-                                temp_file.write(data)
-                                temp_file.seek(0)
+                                temp_file = BytesIO(data)
                                 plist = self.DeserializeNsKeyedPlist(temp_file)
                                 temp_file.close()
                                 return (True, plist, '')
