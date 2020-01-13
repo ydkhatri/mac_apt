@@ -23,6 +23,9 @@ LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND
 ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
 SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
+Some modifications have been made to fix errors.- Yogesh Khatri
+
 """
 
 import sys
@@ -58,6 +61,20 @@ class BplistUID:
 
     def __str__(self):
         return self.__repr__()
+
+def __decode_multibyte_int_val(b):
+    if len(b) == 1:
+        fmt = ">B"
+    elif len(b) == 2:
+        fmt = ">H"
+    elif len(b) == 4:
+        fmt = ">I"
+    elif len(b) == 8:
+        fmt = ">q" # Always Signed?
+    else:
+        raise BplistError("Cannot decode multibyte int of length {0}".format(len(b)))
+
+    return struct.unpack(fmt, b)[0]
 
 def __decode_multibyte_int(b, signed=True):
     if len(b) == 1:
@@ -115,7 +132,7 @@ def __decode_object(f, offset, collection_offset_size, offset_table):
     elif type_byte & 0xF0 == 0x10: # Int    0001 xxxx
         int_length = 2 ** (type_byte & 0x0F)
         int_bytes = f.read(int_length)
-        return __decode_multibyte_int(int_bytes)
+        return __decode_multibyte_int_val(int_bytes)
     elif type_byte & 0xF0 == 0x20: # Float   0010 nnnn
         float_length = 2 ** (type_byte & 0x0F)
         float_bytes = f.read(float_length)
@@ -374,27 +391,27 @@ def deserialise_NsKeyedArchiver(obj, parse_whole_structure=False):
 def is_nsmutabledictionary(obj):
     if not isinstance(obj, dict):
         return False
-    if "$class" not in list(obj.keys()):
+    if "$class" not in obj.keys():
         return False
     if obj["$class"].get("$classname") not in ("NSMutableDictionary", "NSDictionary"):
         return False
-    if "NS.keys" not in list(obj.keys()):
+    if "NS.keys" not in obj.keys():
         return False
-    if "NS.objects" not in list(obj.keys()):
+    if "NS.objects" not in obj.keys():
         return False
 
     return True
-
+    
 def convert_NSMutableDictionary(obj):
     """Converts a NSKeyedArchiver serialised NSMutableDictionary into
        a straight dictionary (rather than two lists as it is serialised
        as)"""
-
+    
     # The dictionary is serialised as two lists (one for keys and one
     # for values) which obviously removes all convenience afforded by
-    # dictionaries. This function converts this structure to an
+    # dictionaries. This function converts this structure to an 
     # actual dictionary so that values can be accessed by key.
-
+    
     if not is_nsmutabledictionary(obj):
         raise ValueError("obj does not have the correct structure for a NSDictionary/NSMutableDictionary serialised to a NSKeyedArchiver")
     keys = obj["NS.keys"]
@@ -410,21 +427,24 @@ def convert_NSMutableDictionary(obj):
 
     result = {}
     for i,k in enumerate(keys):
-        if k in result:
-            raise ValueError("The 'NS.keys' list contains duplicate entries")
-        result[k] = vals[i]
-
+        try:
+            if k in result:
+                raise ValueError("The 'NS.keys' list contains duplicate entries")
+            result[k] = vals[i]
+        except (ValueError, TypeError) as ex:
+            # Sometimes k is a dict, just silently ignore the TypeError about not being able to hash..
+            print (ex)
     return result
 
 # NSArray convenience functions
 def is_nsarray(obj):
     if not isinstance(obj, dict):
         return False
-    if "$class" not in list(obj.keys()):
+    if "$class" not in obj.keys():
         return False
     if obj["$class"].get("$classname") not in ("NSArray", "NSMutableArray"):
         return False
-    if "NS.objects" not in list(obj.keys()):
+    if "NS.objects" not in obj.keys():
         return False
 
     return True
@@ -439,11 +459,11 @@ def convert_NSArray(obj):
 def is_isnsset(obj):
     if not isinstance(obj, dict):
         return False
-    if "$class" not in list(obj.keys()):
+    if "$class" not in obj.keys():
         return False
     if obj["$class"].get("$classname") not in ("NSSet", "NSMutableSet"):
         return False
-    if "NS.objects" not in list(obj.keys()):
+    if "NS.objects" not in obj.keys():
         return False
 
     return True
@@ -458,11 +478,11 @@ def convert_NSSet(obj):
 def is_nsstring(obj):
     if not isinstance(obj, dict):
         return False
-    if "$class" not in list(obj.keys()):
+    if "$class" not in obj.keys():
         return False
     if obj["$class"].get("$classname") not in ("NSString", "NSMutableString"):
         return False
-    if "NS.string" not in list(obj.keys()):
+    if "NS.string" not in obj.keys():
         return False
     return True
 
@@ -476,11 +496,11 @@ def convert_NSString(obj):
 def is_nsdate(obj):
     if not isinstance(obj, dict):
         return False
-    if "$class" not in list(obj.keys()):
+    if "$class" not in obj.keys():
         return False
     if obj["$class"].get("$classname") not in ("NSDate"):
         return False
-    if "NS.time" not in list(obj.keys()):
+    if "NS.time" not in obj.keys():
         return False
 
     return True

@@ -23,6 +23,7 @@ import tempfile
 import time
 import traceback
 from plugins.helpers.apfs_reader import *
+from plugins.helpers.deserializer import process_nsa_plist
 from plugins.helpers.hfs_alt import HFSVolume
 from plugins.helpers.common import *
 from plugins.helpers.structs import *
@@ -419,13 +420,13 @@ class MacInfo:
             file_path = os.path.join(export_path, out_filename)
         else:
             file_path = CommonFunctions.GetNextAvailableFileName(os.path.join(export_path, out_filename))
-        shm_file_path = file_path + "-journal" # For sqlite db
+        jrn_file_path = file_path + "-journal" # For sqlite db
         wal_file_path = file_path + "-wal" # For sqlite db
 
         if self._ExtractFile(artifact_path, file_path):
             if check_for_sqlite_files:
                 if self.IsValidFilePath(artifact_path + "-journal"):
-                    self._ExtractFile(artifact_path + "-journal", shm_file_path)
+                    self._ExtractFile(artifact_path + "-journal", jrn_file_path)
                 if self.IsValidFilePath(artifact_path + "-wal"):
                     self._ExtractFile(artifact_path + "-wal", wal_file_path)
             return True
@@ -442,7 +443,12 @@ class MacInfo:
             log.info("Failed to export '" + artifact_path + "' to '" + export_path + "'")
         return False
 
-    def ReadPlist(self, path):
+    def DeserializeNsKeyedPlist(self, plist_file):
+        '''Returns a deserialized version of an NSKeyedArchive plist'''
+        deserialised_plist = process_nsa_plist('', plist_file)
+        return deserialised_plist
+
+    def ReadPlist(self, path, deserialize=False):
         '''Safely open and read a plist; returns tuple (True/False, plist/None, "error_message")'''
         log.debug("Trying to open plist file : " + path)
         error = ''
@@ -460,8 +466,19 @@ class MacInfo:
                         f.seek(0)
                         data = f.read().decode('utf8')
                         data = data.lstrip(" \r\n\t").encode('utf8', 'backslashreplace')
-                        plist = biplist.readPlistFromString(data)
-                        return (True, plist, '')
+                        if deserialize:
+                            try:
+                                temp_file = tempfile.SpooledTemporaryFile(max_size=209715200) # max 200MB
+                                temp_file.write(data)
+                                temp_file.seek(0)
+                                plist = self.DeserializeNsKeyedPlist(temp_file)
+                                temp_file.close()
+                                return (True, plist, '')
+                            except:
+                                error = 'Could not read deserialized plist: ' + path + " Error was : " + str(ex)
+                        else:
+                            plist = biplist.readPlistFromString(data)                        
+                            return (True, plist, '')
                     except biplist.InvalidPlistException as ex:
                         error = 'Could not read plist: ' + path + " Error was : " + str(ex)
                 except IOError as ex:
@@ -1452,10 +1469,10 @@ class SqliteWrapper:
         self.mac_info = mac_info
         self.sqlite3 = sqlite3
         self.db_file_path = ''
-        self.shm_file_path = ''
+        self.jrn_file_path = ''
         self.wal_file_path = ''
         self.db_file_path_temp = ''
-        self.shm_file_path_temp = ''
+        self.jrn_file_path_temp = ''
         self.wal_file_path_temp = ''
         self.db_temp_file = None
         self.shm_temp_file = None
@@ -1473,12 +1490,12 @@ class SqliteWrapper:
 
         # extract each file to temp folder
         self.db_file_path_temp = os.path.join(self.folder_temp_path, os.path.basename(self.db_file_path))
-        self.shm_file_path_temp = os.path.join(self.folder_temp_path, os.path.basename(self.shm_file_path))
+        self.jrn_file_path_temp = os.path.join(self.folder_temp_path, os.path.basename(self.jrn_file_path))
         self.wal_file_path_temp = os.path.join(self.folder_temp_path, os.path.basename(self.wal_file_path))
 
         self.db_temp_file = self.mac_info.ExtractFile(self.db_file_path, self.db_file_path_temp)
-        if self.mac_info.IsValidFilePath(self.shm_file_path):
-            self.shm_temp_file = self.mac_info.ExtractFile(self.shm_file_path, self.shm_file_path_temp)
+        if self.mac_info.IsValidFilePath(self.jrn_file_path):
+            self.shm_temp_file = self.mac_info.ExtractFile(self.jrn_file_path, self.jrn_file_path_temp)
         if self.mac_info.IsValidFilePath(self.wal_file_path):
             self.wal_temp_file = self.mac_info.ExtractFile(self.wal_file_path, self.wal_file_path_temp)
         return True
@@ -1488,7 +1505,7 @@ class SqliteWrapper:
             def hooked(path):
                 # Get 'database' variable
                 self.db_file_path = path
-                self.shm_file_path = path + "-journal"
+                self.jrn_file_path = path + "-journal"
                 self.wal_file_path = path + "-wal"
                 if self._ExtractFiles():
                     log.debug('Trying to extract and read db: ' + path)
