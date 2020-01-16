@@ -55,7 +55,7 @@ WIFI | Gets wifi network information
 * More documentation
 
 For installation (to run from code) see https://github.com/ydkhatri/mac_apt/wiki/Installation-for-Python3.7  
-Other information/documentation, see https://github.com/ydkhatri/mac_apt/wiki
+**Please read the documentation here:** https://github.com/ydkhatri/mac_apt/wiki
 
 To download, proceed here - https://github.com/ydkhatri/mac_apt/releases
 
