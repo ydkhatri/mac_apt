@@ -109,11 +109,11 @@ class Disk_Info:
                         fs_type = str(fs_info.ftype)[12:]
                         if fs_type.find("_") > 0: fs_type = fs_type[0:fs_type.find("_")]
                         file_system = fs_type
-                        if file_system == 'HFS' and self.mac_info.osx_partition_start_offset == partition_start_offset: # For macOS partition only
+                        if file_system == 'HFS' and self.mac_info.macos_partition_start_offset == partition_start_offset: # For macOS partition only
                             hfs_info = self.mac_info.hfs_native.GetVolumeInfo()
                             used_space = '{:.2f} GB'.format(float(hfs_info.block_size * (hfs_info.total_blocks - hfs_info.free_blocks) / (1024*1024*1024.0)))
                     except Exception as ex:
-                        if self.mac_info.is_apfs and partition_start_offset == self.mac_info.osx_partition_start_offset:
+                        if self.mac_info.is_apfs and partition_start_offset == self.mac_info.macos_partition_start_offset:
                             part_is_apfs = True
                             for volume in self.mac_info.apfs_container.volumes:
                                 used_space = '{:.2f} GB'.format(float(volume.container.block_size * volume.num_blocks_used / (1024*1024*1024.0)))
@@ -130,5 +130,5 @@ class Disk_Info:
                     if not part_is_apfs:
                         vol = Vol_Info(part.desc.decode('utf-8'), 
                                     partition_size_in_sectors * self.block_size, used_space,
-                                    file_system, partition_start_offset, self.mac_info.osx_partition_start_offset==partition_start_offset)
+                                    file_system, partition_start_offset, self.mac_info.macos_partition_start_offset==partition_start_offset)
                         self.volumes.append(vol)

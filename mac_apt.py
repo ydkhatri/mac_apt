@@ -170,7 +170,7 @@ def GetImgInfoObjectForAff4(path):
 
 ####### End special handling for AFF4 #########
 
-def FindOsxFiles(mac_info):
+def FindMacOsFiles(mac_info):
     if mac_info.IsValidFilePath('/System/Library/CoreServices/SystemVersion.plist'):
         if mac_info.IsValidFilePath("/System/Library/Kernels/kernel") or \
             mac_info.IsValidFilePath( "/mach_kernel"):
@@ -184,7 +184,7 @@ def FindOsxFiles(mac_info):
         log.info ("Could not find OSX/macOS installation!")
     return False
 
-def IsOsxPartition(img, partition_start_offset, mac_info):
+def IsMacOsPartition(img, partition_start_offset, mac_info):
     '''Determines if the partition contains OSX installation'''
     try:
         fs = pytsk3.FS_Info(img, offset=partition_start_offset)    
@@ -197,9 +197,9 @@ def IsOsxPartition(img, partition_start_offset, mac_info):
         try: 
             folders = fs.open_dir("/")
             mac_info.macos_FS = fs
-            mac_info.osx_partition_start_offset = partition_start_offset
-            mac_info.hfs_native.Initialize(mac_info.pytsk_image, mac_info.osx_partition_start_offset)
-            return FindOsxFiles(mac_info)
+            mac_info.macos_partition_start_offset = partition_start_offset
+            mac_info.hfs_native.Initialize(mac_info.pytsk_image, mac_info.macos_partition_start_offset)
+            return FindMacOsFiles(mac_info)
         except Exception:
             log.error ("Could not open / (root folder on partition)")
             log.debug ("Exception info", exc_info=True)
@@ -222,13 +222,13 @@ def GetApfsContainerUuid(img, container_start_offset):
     uuid = UUID(bytes=uuid_bytes)
     return uuid
 
-def FindOsxPartitionInApfsContainer(img, vol_info, container_size, container_start_offset, container_uuid):
+def FindMacOsPartitionInApfsContainer(img, vol_info, container_size, container_start_offset, container_uuid):
     global mac_info
     mac_info = macinfo.ApfsMacInfo(mac_info.output_params)
     mac_info.pytsk_image = img   # Must be populated
     mac_info.vol_info = vol_info # Must be populated
     mac_info.is_apfs = True
-    mac_info.osx_partition_start_offset = container_start_offset # apfs container offset
+    mac_info.macos_partition_start_offset = container_start_offset # apfs container offset
     mac_info.apfs_container = ApfsContainer(img, container_size, container_start_offset)
     # Check if this is 10.15 style System + Data volume?
     for vol in mac_info.apfs_container.volumes:
@@ -285,7 +285,7 @@ def FindOsxPartitionInApfsContainer(img, vol_info, container_size, container_sta
             if mac_info.apfs_data_volume == None:
                 log.error('Found system volume, but no Data volume!')
                 return False
-            return FindOsxFiles(mac_info)
+            return FindMacOsFiles(mac_info)
         else:
             # Search for macOS partition in volumes
             for vol in mac_info.apfs_container.volumes:
@@ -294,7 +294,7 @@ def FindOsxPartitionInApfsContainer(img, vol_info, container_size, container_sta
                 if vol.is_encrypted: continue
                 mac_info.macos_FS = vol
                 vol.dbo = mac_info.apfs_db
-                if FindOsxFiles(mac_info):
+                if FindMacOsFiles(mac_info):
                     return True
         # Did not find macOS installation
         mac_info.macos_FS = None
@@ -303,7 +303,7 @@ def FindOsxPartitionInApfsContainer(img, vol_info, container_size, container_sta
         log.exception('Exception occurred when trying to create APFS_Volumes Sqlite db')
     return False
 
-def FindOsxPartition(img, vol_info, vs_info):
+def FindMacOsPartition(img, vol_info, vs_info):
     for part in vol_info:
         if (int(part.flags) & pytsk3.TSK_VS_PART_FLAG_ALLOC):
             partition_start_offset = vs_info.block_size * part.start
@@ -319,9 +319,9 @@ def FindOsxPartition(img, vol_info, vs_info):
             if IsApfsContainer(img, partition_start_offset):
                 uuid = GetApfsContainerUuid(img, partition_start_offset)
                 log.info('Found an APFS container with uuid: {}'.format(str(uuid).upper()))
-                return FindOsxPartitionInApfsContainer(img, vol_info, vs_info.block_size * part.len, partition_start_offset, uuid)
+                return FindMacOsPartitionInApfsContainer(img, vol_info, vs_info.block_size * part.len, partition_start_offset, uuid)
 
-            elif IsOsxPartition(img, partition_start_offset, mac_info): # Assumes there is only one single OSX installation partition
+            elif IsMacOsPartition(img, partition_start_offset, mac_info): # Assumes there is only one single OSX installation partition
                 return True
                 
     return False
@@ -444,7 +444,7 @@ if args.csv or not (output_params.write_sql or output_params.write_xlsx):
 
 # At this point, all looks good, lets mount the image
 img = None
-found_osx = False
+found_macos = False
 mac_info = None
 time_processing_started = time.time()
 try:
@@ -463,7 +463,7 @@ try:
     elif args.input_type.upper() == 'MOUNTED':
         if os.path.isdir(args.input_path):
             mac_info = macinfo.MountedMacInfo(args.input_path, output_params)
-            found_osx = FindOsxFiles(mac_info)
+            found_macos = FindMacOsFiles(mac_info)
         else:
             Exit("Exiting -> Cannot browse mounted image at " + args.input_path)
     log.info("Opened image " + args.input_path)
@@ -478,7 +478,7 @@ if args.input_type.upper() != 'MOUNTED':
         vol_info = pytsk3.Volume_Info(img)
         vs_info = vol_info.info # TSK_VS_INFO object
         mac_info.vol_info = vol_info
-        found_osx = FindOsxPartition(img, vol_info, vs_info)
+        found_macos = FindMacOsPartition(img, vol_info, vs_info)
         Disk_Info(mac_info, args.input_path).Write()
     except Exception as ex:
         if str(ex).find("Cannot determine partition type") > 0 :
@@ -486,18 +486,18 @@ if args.input_type.upper() != 'MOUNTED':
             if IsApfsContainer(img, 0):
                 uuid = GetApfsContainerUuid(img, 0)
                 log.info('Found an APFS container with uuid: {}'.format(str(uuid).upper()))
-                found_osx = FindOsxPartitionInApfsContainer(img, None, img.get_size(), 0, uuid)
+                found_macos = FindMacOsPartitionInApfsContainer(img, None, img.get_size(), 0, uuid)
             else:
-                found_osx = IsOsxPartition(img, 0, mac_info)
+                found_macos = IsMacOsPartition(img, 0, mac_info)
         else:
             log.error("Unknown error while trying to determine partition")
             log.exception("Exception")
 
 # Start processing plugins now!
-if found_osx:
+if found_macos:
     #print ("Found the partition having OSX on it!")
     if not mac_info.is_apfs:
-        mac_info.hfs_native.Initialize(mac_info.pytsk_image, mac_info.osx_partition_start_offset)
+        mac_info.hfs_native.Initialize(mac_info.pytsk_image, mac_info.macos_partition_start_offset)
     for plugin in plugins:
         if process_all or IsItemPresentInList(plugins_to_run, plugin.__Plugin_Name):
             log.info("-"*50)

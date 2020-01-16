@@ -45,7 +45,7 @@ def IsItemPresentInList(collection, item):
         pass
     return False
 
-def FindOsxFiles(mac_info):
+def FindMacOsFiles(mac_info):
     if mac_info.IsValidFilePath('/System/Library/CoreServices/SystemVersion.plist'):
         if mac_info.IsValidFilePath("/System/Library/Kernels/kernel") or \
             mac_info.IsValidFilePath( "/mach_kernel"):
@@ -177,19 +177,19 @@ if args.csv or not (output_params.write_sql or output_params.write_xlsx):
     output_params.write_csv  = True
 
 # At this point, all looks good, lets mount the image
-found_osx = False
+found_macos = False
 mac_info = None
 time_processing_started = time.time()
 try:
     log.info("Opened images ")
     mac_info = macinfo.MountedMacInfoSeperateSysData(args.input_sys_path, args.input_data_path, output_params)
-    found_osx = FindOsxFiles(mac_info)
+    found_macos = FindMacOsFiles(mac_info)
 except Exception as ex:
     log.exception("Failed to browse image. Error Details are: " + str(ex))
     Exit()
 
 # Start processing plugins now!
-if found_osx:
+if found_macos:
     for plugin in plugins:
         if process_all or IsItemPresentInList(plugins_to_run, plugin.__Plugin_Name):
             log.info("-"*50)

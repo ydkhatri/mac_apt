@@ -89,7 +89,7 @@ def WriteMe(version, output_params, file_path):
         writer.FinishWrites()
 
     # Alternately, you could do it in one line as shown below:
-    WriteList('OSX version info', 'OSX Info', [data], col_info, output_params, file_path)
+    WriteList('MacOS version info', 'macOS Info', [data], col_info, output_params, file_path)
 
 def Plugin_Start_Standalone(input_files_list, output_params):
     '''Main entry point function when used on single artifacts (mac_apt_singleplugin), not on a full disk image'''

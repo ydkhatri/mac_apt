@@ -313,7 +313,7 @@ class MacInfo:
         #self.Partitions = {}   # Dictionary of all partition objects returned from pytsk LATER! 
         self.pytsk_image = None
         self.macos_FS = None      # Just the FileSystem object (fs) from OSX partition
-        self.osx_partition_start_offset = 0 # Container offset if APFS
+        self.macos_partition_start_offset = 0 # Container offset if APFS
         self.vol_info = None # disk_volumes
         self.output_params = output_params
         self.os_version = '0.0.0'
@@ -618,7 +618,7 @@ class MacInfo:
                 log.debug("Trying to open with Native HFS parser")
                 try:
                     if not self.hfs_native.initialized:
-                        self.hfs_native.Initialize(self.pytsk_image, self.osx_partition_start_offset)
+                        self.hfs_native.Initialize(self.pytsk_image, self.macos_partition_start_offset)
                     return self.hfs_native.OpenSmallFile(path)
                 except (IOError, OSError, ValueError):
                     log.error("Failed to open file: " + path)
@@ -656,7 +656,7 @@ class MacInfo:
                                     f.close()
                                     os.remove(destination_path)
                                     if not self.hfs_native.initialized:
-                                        self.hfs_native.Initialize(self.pytsk_image, self.osx_partition_start_offset)
+                                        self.hfs_native.Initialize(self.pytsk_image, self.macos_partition_start_offset)
                                     return self.hfs_native.ExtractFile(tsk_path,destination_path)
                                 except Exception as ex2:
                                     log.error("Failed to export file: " + tsk_path)
@@ -950,7 +950,7 @@ class MacInfo:
                         elif self.os_version.startswith('10.8'): self.os_friendly_name = 'Mountain Lion'
                         elif self.os_version.startswith('10.9'): self.os_friendly_name = 'Mavericks'
                         else: self.os_friendly_name = 'Unknown version!'
-                    log.info ('OSX version detected is: {} ({}) Build={}'.format(self.os_friendly_name, self.os_version, self.os_build))
+                    log.info ('macOS version detected is: {} ({}) Build={}'.format(self.os_friendly_name, self.os_version, self.os_build))
                     return True
                 except (InvalidPlistException, NotBinaryPlistException) as ex:
                     log.error ("Could not get ProductVersion from plist. Is it a valid xml plist? Error=" + str(ex))
@@ -1108,8 +1108,8 @@ class ApfsMacInfo(MacInfo):
 class MountedMacInfo(MacInfo):
     def __init__(self, root_folder_path, output_params):
         MacInfo.__init__(self, output_params)
-        self.osx_root_folder = root_folder_path
-        # TODO: if os.name == 'nt' and len (root_folder_path) == 2 and root_folder_path[2] == ':': self.osx_root_folder += '\\'
+        self.macos_root_folder = root_folder_path
+        # TODO: if os.name == 'nt' and len (root_folder_path) == 2 and root_folder_path[2] == ':': self.macos_root_folder += '\\'
         self.is_windows = (os.name == 'nt')
         self.is_linux = (sys.platform == 'linux')
         if self.is_linux:
@@ -1129,7 +1129,7 @@ class MountedMacInfo(MacInfo):
         if self.is_windows:
             path = path.replace('/', '\\')
         try:
-            full_path = os.path.join(self.osx_root_folder, path)
+            full_path = os.path.join(self.macos_root_folder, path)
         except Exception:
             log.error("Exception in BuildFullPath(), path was " + path_in_image)
             log.exception("Exception details")
