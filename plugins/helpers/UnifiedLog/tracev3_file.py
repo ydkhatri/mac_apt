@@ -492,6 +492,30 @@ class TraceV3(data_format.BinaryDataFormat):
                 break
             pos += item_size
             items_read += 1
+        # Below code is unused for now. Skipping reading the backtrace
+        # if has_context_data: # there will be context data next, then the data
+        #     ctx_unk1, ctx_unk2, ctx_unk3, ctx_unique_uuid_count, ctx_total_count = struct.unpack('<BBBBH', buffer[pos:pos+6])
+        #     pos += 6
+        #     uuids = []
+        #     offsets = []
+        #     context_data = [] # [ (uuid, offset), (..), ..]
+        #     for x in range(ctx_unique_uuid_count):
+        #         uuid = binascii.hexlify(buffer[pos:pos+16]).upper()
+        #         #uuid = buffer[pos:pos+16].hex().upper() # for py 3
+        #         uuids.append(uuid)
+        #         pos += 16
+        #     for x in range(ctx_total_count):
+        #         off = struct.unpack('<I', buffer[pos:pos+4])[0]
+        #         offsets.append(off)
+        #         pos += 4
+        #     for x in range(ctx_total_count):
+        #         uuid_index = struct.unpack('<B', buffer[pos:pos+1])[0]
+        #         if uuid_index >= ctx_unique_uuid_count:
+        #             log.error('something went wrong')
+        #             break
+        #         pos += 1
+        #         context_data.append( (uuids[uuid_index], offsets[x]) )
+                
         pos_debug = pos
         if data_descriptors:
             for desc in data_descriptors:
@@ -610,7 +634,7 @@ class TraceV3(data_format.BinaryDataFormat):
                     else:
                         try:
                             chars = raw_data.decode('utf8').rstrip('\x00') # , 'backslashreplace'
-                        except Exception as ex:
+                        except UnicodeDecodeError as ex:
                             logger.error('Error decoding utf8 in log @ 0x{:X}, data was "{}", error was {}'.format(log_file_pos, raw_data.hex(), str(ex)))
                             chars = ''
                         chars = ('%'+ (flags_width_precision if flags_width_precision.find('*')==-1 else '')  + "s") % chars # Python does not like '%.*s'
