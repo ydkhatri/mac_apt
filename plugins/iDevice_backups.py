@@ -91,7 +91,10 @@ def BackupFinder(mac_info, source, user):
         log.info(str(len(backup_folders)) + " iDevice Backups Found for user " + user)
         for folder in backup_folders:
             full_folder_path = source + '/' + folder['name']
-            paths.append(full_folder_path)
+            # Check for empty folders, sometimes they are empty!
+            backup_folder_files = mac_info.ListItemsInFolder(full_folder_path, EntryType.FOLDERS, False)
+            if len(backup_folder_files) > 0:
+                paths.append(full_folder_path)
     return paths
 
 def ReadBackups(mac_info, export_folder_path, info_plist_path, status_plist_path, manifest_plist_path, user, backups, source):
@@ -218,25 +221,33 @@ def Plugin_Start(mac_info):
                     manifest_plist_path = folder + '/Manifest.plist'
                     manifest_db_path1 = folder + '/Manifest.mbdb'
                     manifest_db_path2 = folder + '/Manifest.db'   # ios 9 and above
+                    has_info_plist = False
+                    has_status_plist = False
+                    has_manifest_plist = False
                     export_folder_path = os.path.join(__Plugin_Name, user_name + "_" + os.path.basename(folder)) # Should create folder EXPORT/IDEVICEBACKUPS/user_BackupUUID/
                     if mac_info.IsValidFilePath(info_plist_path):
+                        has_info_plist = True
                         mac_info.ExportFile(info_plist_path, export_folder_path, '', False)
                     else:
                         log.error("Failed to find Info.plist in {}".format(folder))
                     if mac_info.IsValidFilePath(status_plist_path):
+                        has_status_plist = True
                         mac_info.ExportFile(status_plist_path, export_folder_path, '', False)
                     else:
                         log.error("Failed to find Status.plist in {}".format(folder))
                     if mac_info.IsValidFilePath(manifest_plist_path):
+                        has_manifest_plist = True
                         mac_info.ExportFile(manifest_plist_path, export_folder_path, '', False)
                     else:
                         log.error("Failed to find Manifest.plist in {}".format(folder))
                     if mac_info.IsValidFilePath(manifest_db_path1):
+                        has_manifest_plist = True
                         mac_info.ExportFile(manifest_db_path1, export_folder_path, '', False)
                     elif mac_info.IsValidFilePath(manifest_db_path2):
+                        has_manifest_plist = True
                         mac_info.ExportFile(manifest_db_path2, export_folder_path, '', False)
-
-                    ReadBackups(mac_info, export_folder_path, info_plist_path, status_plist_path, manifest_plist_path, user.user_name, backups, folder)
+                    if has_manifest_plist and has_info_plist:
+                        ReadBackups(mac_info, export_folder_path, info_plist_path, status_plist_path, manifest_plist_path, user.user_name, backups, folder)
     if backups:
         PrintAll(mac_info.output_params, '', backups)
     else:
