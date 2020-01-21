@@ -9,6 +9,7 @@
 
 import logging
 import os
+import posixpath
 from plistutils.alias import AliasParser
 from plugins.helpers.macinfo import *
 from plugins.helpers.writer import *
@@ -130,7 +131,11 @@ def process_dir(mac_info, path, persistent_programs, method, user_name, uid):
             if mac_info.IsSymbolicLink(full_path):
                 target_path = mac_info.ReadSymLinkTargetPath(full_path)
                 log.debug('SYMLINK {} <==> {}'.format(full_path, target_path))
-                full_path = target_path
+                if target_path.startswith('../') or target_path.startswith('./'):
+                    full_path = mac_info.GetAbsolutePath(posixpath.split(full_path)[0], target_path)
+                else:
+                    full_path = target_path
+
             mac_info.ExportFile(full_path, __Plugin_Name, user_name + "_", False)
 
             if method == 'Daemon' or method == 'Agents':
@@ -291,25 +296,33 @@ def Plugin_Start(mac_info):
 
     # user overrides
     user_override_folder = '/private/var/db/launchd.db'
-    folder_list = mac_info.ListItemsInFolder(user_override_folder, EntryType.FOLDERS, False)
-    if len(folder_list):
-        for folder in folder_list:
-            full_name = folder['name']
-            if len(full_name) > 26 and full_name.startswith('com.apple.launchd.peruser.'):
-                number_str = full_name[26:]
-                uid = CommonFunctions.IntFromStr(number_str, error_val=None)
-                if uid != None:
-                    user_name = uid
-                    for user in mac_info.users:
-                        if user.UID == uid:
-                            user_name = user.user_name
-                            break
-                    override_plist_path = '/private/var/db/launchd.db/com.apple.launchd.peruser.{}/overrides.plist'.format(user.UID)
-                    if mac_info.IsValidFilePath(override_plist_path) and mac_info.GetFileSize(override_plist_path):
-                        process_overrides(mac_info, override_plist_path, user_name, uid, persistent_programs)
-                else:
-                    log.error("Failed to get uid from filename {}".format(full_name))
-
+    if mac_info.IsValidFilePath(user_override_folder):
+        folder_list = mac_info.ListItemsInFolder(user_override_folder, EntryType.FOLDERS, False)
+        if len(folder_list):
+            for folder in folder_list:
+                full_name = folder['name']
+                if len(full_name) > 26 and full_name.startswith('com.apple.launchd.peruser.'):
+                    uid_str = full_name[26:]
+                    uid = CommonFunctions.IntFromStr(uid_str, error_val=None)
+                    if uid != None:
+                        if uid > 0x7fffffff: # convert to its signed version
+                            uid = uid - 4294967296 # 4294967294 becomes -2
+                        uid_str = str(uid)
+                        user_name = ''
+                        for user in mac_info.users:
+                            if user.UID == uid_str:
+                                user_name = user.user_name
+                                break
+                        if user_name != '':
+                            override_plist_path = '/private/var/db/launchd.db/com.apple.launchd.peruser.{}/overrides.plist'.format(user.UID)
+                            if mac_info.IsValidFilePath(override_plist_path) and mac_info.GetFileSize(override_plist_path):
+                                process_overrides(mac_info, override_plist_path, user_name, uid, persistent_programs)
+                        else:
+                            log.error("Failed to get username for UID={}. This was found in filename {}".format(uid, full_name))
+                    else:
+                        log.error("Failed to get uid from filename {}".format(full_name))
+    else:
+        log.info('User overrides not present as folder {} not present'.format(user_override_folder))
     # user apps/windows to restart after logon/restart
     ### process user dirs ###
     ProcessLoginRestartApps(mac_info, persistent_programs)

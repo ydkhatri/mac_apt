@@ -325,6 +325,49 @@ class MacInfo:
         self.use_native_hfs_parser = True
 
     # Public functions, plugins can use these
+    def GetAbsolutePath(self, current_abs_path, dest_rel_path):
+        '''Returns the absolute (full) path to a destination file/folder given the
+            current location (path) and a relative path to the destination. This is
+            for relative paths that start with . or ..  '''
+        # This is for linux paths only
+        if dest_rel_path in ('', '/'): 
+            return current_abs_path
+        # Strip / at start and end of dest
+        dest_rel_path = dest_rel_path.rstrip('/').lstrip('/')
+
+        if current_abs_path[-1] != '/':
+            current_abs_path += '/'
+        
+        curr_paths = current_abs_path.rstrip('/').lstrip('/').split('/')
+        if len(curr_paths) == 1 and curr_paths[0] == '':
+            curr_paths = []
+        rel_paths = dest_rel_path.split('/')
+
+        curr_path_index = len(curr_paths)
+        for x in rel_paths:
+            if x == '.':
+                pass
+            elif x == '..':
+                if curr_path_index == 0:
+                    raise ValueError('Relative path tried to go above root !')
+                else:
+                    curr_path_index -= 1
+                    curr_paths.pop()
+            elif x == '':
+                raise ValueError("Relative path had // , can't parse")
+            else:
+                curr_paths.append(x)
+                curr_path_index += 1
+
+        final_path = ''
+        for index, x in enumerate(curr_paths):
+            final_path += '/' + x
+            if index == curr_path_index:
+                break
+        if final_path == '':
+            final_path = '/'
+        return final_path
+
     def GetFileMACTimes(self, file_path):
         '''
            Returns dictionary {c_time, m_time, cr_time, a_time} 
