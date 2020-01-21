@@ -17,6 +17,7 @@ import sys
 import pyewf
 import pytsk3
 import pyvmdk
+import pyaff4
 import traceback
 
 def ImportPlugins(plugins, mode):
@@ -134,6 +135,7 @@ def CreateLogger(log_file_path, log_file_level=logging.DEBUG, log_console_level=
 
 def LogLibraryVersions(log):
     '''Log the versions of libraries used'''
-    log.info('Pytsk version = {}'.format(pytsk3.get_version()))
-    log.info('Pyewf version = {}'.format(pyewf.get_version()))
-    log.info('Pyvmdk version= {}'.format(pyvmdk.get_version()))
+    log.info('Pytsk version  = {}'.format(pytsk3.get_version()))
+    log.info('Pyewf version  = {}'.format(pyewf.get_version()))
+    log.info('Pyvmdk version = {}'.format(pyvmdk.get_version()))
+    log.info('PyAFF4 version = {}'.format(pyaff4._version.raw_versions()['version']))
