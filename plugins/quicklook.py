@@ -61,7 +61,7 @@ def PrintAll(quicklook_data, output_params, source_path):
     quicklook_info = [ ('Folder',DataType.TEXT),('File_Name',DataType.TEXT),('Hit_Count',DataType.TEXT),
                        ('Last_Hit_Date',DataType.TEXT), ('version',DataType.BLOB), ('Bits_per_Pixel',DataType.INTEGER), ('bitmap_data_location',DataType.INTEGER),
                        ('bitmap_data_length',DataType.INTEGER), ('Width',DataType.INTEGER), ('Height',DataType.INTEGER),
-                       ('fs_id',DataType.TEXT),('inode',DataType.INTEGER), ('row_id',DataType.TEXT), ('Source',DataType.TEXT)
+                       ('fs_id',DataType.TEXT),('inode',DataType.TEXT), ('row_id',DataType.TEXT), ('Source',DataType.TEXT)
                      ]
 
     quicklook_list = []
