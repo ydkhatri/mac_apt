@@ -78,7 +78,10 @@ def Get_Column_Info(store):
         # prop = [name, prop_type, value_type]
         if prop[0] in ('_kMDXXXX___DUMMY', 'kMDStoreAccumulatedSizes') : continue # skip this
         if prop[2] in [0, 2, 6, 7]:
-            val_type = DataType.INTEGER
+            if prop[1] & 2 == 2: # Multiple items
+                val_type = DataType.TEXT
+            else:
+                val_type = DataType.INTEGER
         else:
             val_type = DataType.TEXT
         data_info.append((prop[0], val_type))
