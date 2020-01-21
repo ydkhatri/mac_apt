@@ -149,7 +149,7 @@ def ParseClassOfDevice(cod_number):
                 minors.append('Scanner')
             if minor_number & (1 << 5):
                 minors.append('Printer')
-            if len(minors > 0):
+            if len(minors) > 0:
                 minors = ', '.join(minors)
 
         # wearable
