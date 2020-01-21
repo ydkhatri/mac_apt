@@ -247,17 +247,77 @@ def Plugin_Start(mac_info):
 def Plugin_Start_Standalone(input_files_list, output_params):
     log.info("This plugin cannot be run as standalone")
 
-#IOS
+'''IOS
+===========================================
+'''
+#Get IOS Version
 def GetIOSVersion(ios_info):
-    basic_data.append(['SYSTEM', 'iOS Version', mac_info.os_version, mac_info.os_friendly_name, '/System/Library/CoreServices/SystemVersion.plist'])
-    basic_data.append(['SYSTEM', 'iOS Build Version', mac_info.os_build, mac_info.os_friendly_name, '/System/Library/CoreServices/SystemVersion.plist'])
+    basic_data.append(['SYSTEM', 'iOS Version', ios_info.os_version, ios_info.os_friendly_name, '/System/Library/CoreServices/SystemVersion.plist'])
+    basic_data.append(['SYSTEM', 'iOS Build Version', ios_info.os_build, ios_info.os_friendly_name, '/System/Library/CoreServices/SystemVersion.plist'])
 
+#I don't know what the preferences.plist looks like, what key values it actually has
+#Get Model.... may need to be revised
+def GetIOSModel(ios_info):
+      #basic_data.append(['SYSTEM', 'iOS Model', ios_info.os_version, '', '/private/var/preferences/SystemConfiguration/preferences.plist'])
+      #('INFO_TYPE'),('Name'),('Data'),('Description'),('Source') 
+      preference_plist_path = '/private/var/preferences/SystemConfiguration/preferences.plist'
+      ios_info.ExportFile(preference_plist_path, __Plugin_Name, '', False)
+      success, plist, error_message = ios_info.ReadPlist(preference_plist_path)
+      if success:
+         try:
+            model = plist['Model']
+            basic_data.append(['HARDWARE', 'Model', model, 'Hardware Model', preference_plist_path])
+            except KeyError: pass
+      else:
+         log.error('Failed to read plist ' + preference_plist_path + " Error was : " + error_message)    
+      return
+  
+#Get Computer Name.... may need to be revised
+def GetIOSComputerName(ios_info):
+    preference_plist_path = '/private/var/preferences/SystemConfiguration/preferences.plist'
+    ios_info.ExportFile(preference_plist_path, __Plugin_Name, '', False)
+    success, plist, error_message = ios_info.ReadPlist(preference_plist_path)
+    if success:
+        try:
+            computername = plist['System']['System']['ComputerName']
+            basic_data.append(['SYSTEM', 'ComputerName', computername, '', preference_plist_path])
+        except KeyError: log.info('/System/System/ComputerName not found in ' + preference_plist_path)
+    else:
+        log.error('Failed to read plist ' + preference_plist_path + " Error was : " + error_message)    
+    return
+
+# Get Host Name.... may need to be revised
+def GetIOSHostName(ios_info):
+    preference_plist_path = '/private/var/preferences/SystemConfiguration/preferences.plist'
+    ios_info.ExportFile(preference_plist_path, __Plugin_Name, '', False)
+    success, plist, error_message = ios_info.ReadPlist(preference_plist_path)
+    if success:
+        try: 
+            hostname = plist['System']['System']['HostName']
+            basic_data.append(['SYSTEM', 'iOS HostName', hostname, 'iOS Host Name', preference_plist_path])
+        except KeyError: log.info('/System/System/HostName not found in ' + preference_plist_path)
+        try:
+            other_host_names = plist['System']['Network']['HostNames']
+            for k,v in list(other_host_names.items()):
+                basic_data.append(['SYSTEM', k, v, '', preference_plist_path])
+        except KeyError: log.info('/System/Network/HostNames not found in ' + preference_plist_path)
+    else:
+        log.error('Failed to read plist ' + preference_plist_path + " Error was : " + error_message)    
+    return
+
+
+      
 def Plugin_Start_Ios(ios_info):
     '''Entry point for ios_apt plugin'''
     GetIOSVersion(ios_info)
     #TODO
     # Get Model, ComputerName, Hostname from /private/var/preferences/SystemConfiguration/preferences.plist
-    
+   
+    GetIOSModel(ios_info)
+    GetIOSComputerName(ios_info)
+    GetIOSHostName(ios_info)
+      
+      
     WriteList("basic device info", "Basic_Info", basic_data, basic_data_info, ios_info.output_params)
 
 if __name__ == '__main__':
