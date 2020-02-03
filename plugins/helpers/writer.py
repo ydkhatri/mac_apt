@@ -41,6 +41,10 @@ class DataWriter:
         column_info is an 'ordered' dictionary that defines output column names and types
          # column_info must be an OrderedDict type or a list of tuples (see below).
         column_info = [ ('Name1', DataType.TEXT), ('Name2', DataType.BLOB), ..]
+        New: It is now possible to send special DB keywords for the create statement by passing it as a tuple
+        into the DataType field. Tuple must be in form (DataType.xx, "KEYWORD"). See example below-
+        column_info = [ ('Name1', DataType.TEXT), ('ID', (DataType.INTEGER, "PRIMARY KEY AUTOINCREMENT") ), ..]
+        CAUTION: If using AUTOINCREMENT, don't pass that in the writer data to write list!
         name is suggested name for either table name and/or file name
         artifact_source is the source of an artifact (full path to source_files)
         If artifact_source is included, it will be put into a separate table in sqlite. 
@@ -73,6 +77,13 @@ class DataWriter:
             self.xlsx_writer = output_params.xlsx_writer
 
         self.column_info = collections.OrderedDict(column_info)
+        self.column_info_extra_keywords = {} #key=index, value=keyword
+        i = 0
+        for k, v in self.column_info.items():
+            if isinstance(v, tuple) or isinstance(v, list):
+                column_info[k] = v[0]
+                self.column_info_extra_keywords[i] = v[1]
+            i += 1
         self.cols_with_blobs = None # [ ('Col_Name1', Index1), ('Col_Name2', Index2)  ] # Name not needed TODO: REMOVE name
         self.IdentifyColumnsWithBlobs()
         self.num_columns = len(self.column_info)
@@ -93,7 +104,7 @@ class DataWriter:
         if self.csv:
             self.csv_writer.WriteRow(self.column_info)
         if self.sql:
-            self.sql_writer.CreateTable(self.column_info, self.name)
+            self.sql_writer.CreateTable(self.column_info, self.name, self.column_info_extra_keywords)
         if self.xlsx:
             self.xlsx_writer.CreateSheet(self.name)
             self.xlsx_writer.AddHeaders(self.column_info)
@@ -265,12 +276,43 @@ class SqliteWriter:
 
         return success, cursor, error_message
 
-    def CreateTable(self, column_info, table_name):
+    def _CraftCreateStatement(self, table_name, column_info_extra_keywords):
+        '''
+           Generate a query statement
+           - column_info_extra_keywords is a dictionary key=column number, value=string
+        '''
+        i = 0
+        query = 'CREATE TABLE "' + self.table_name + '" ('
+        for k,v in self.column_info.items():
+            query += '"{}" {}'.format(k,v.name if v != DataType.DATE else 'TEXT')
+            if column_info_extra_keywords:
+                extra_keyword = column_info_extra_keywords.get(i, '')
+                query += ' ' + extra_keyword
+            query += ','
+            i += 1
+        if query[-1] == ',':
+            query = query[:-1]
+        query += ')'
+        return query
+
+    def _CraftExecuteManyQuery(self, table_name, column_info, column_info_extra_keywords):
+        executemany_query = 'INSERT INTO "' + table_name + '" VALUES (?' + ',?'*(len(column_info) - 1) + ')'
+        return executemany_query
+
+    def CreateTable(self, column_info, table_name, column_info_extra_keywords=None):
         '''
            Creates table with given name, if table exists, 
            a new name is selected (name_xx)
            - 'column_info' must be OrderedDict
         '''
+        if column_info_extra_keywords == None:
+            column_info_extra_keywords = {}
+            i = 0
+            for k, v in column_info.items():
+                if isinstance(v, tuple) or isinstance(v, list):
+                    column_info[k] = v[0]
+                    column_info_extra_keywords[i] = v[1]
+                i += 1
         cursor = None
         query = ''
         try:
@@ -278,11 +320,10 @@ class SqliteWriter:
             self.column_info = column_info
             #self.CleanColumnInfo(column_info)
             cursor = self.conn.cursor()
-            query = 'CREATE TABLE "' + self.table_name + '" (' + \
-                    ','.join(['"{}" {}'.format(k,v.name if v != DataType.DATE else 'TEXT') for (k,v) in self.column_info.items() ]) + ')'
+            query = self._CraftCreateStatement(table_name, column_info_extra_keywords)
             cursor.execute(query)
             self.conn.commit()
-            self.executemany_query = 'INSERT INTO "' + table_name + '" VALUES (?' + ',?'*(len(self.column_info) - 1) + ')'
+            self.executemany_query = self._CraftExecuteManyQuery(table_name, column_info, column_info_extra_keywords)
         except sqlite3.Error as ex:
             if  str(ex).find('table "{}" already exists'.format(table_name)) >= 0:
                 log.info(str(ex))
@@ -290,11 +331,10 @@ class SqliteWriter:
                 log.info('Changing tablename to {}'.format(self.table_name))
                 try:
                     cursor = self.conn.cursor()
-                    query = 'CREATE TABLE "' + self.table_name + '" (' + \
-                            ','.join(['"{}" {}'.format(k,v.name if v != DataType.DATE else 'TEXT') for (k,v) in self.column_info.items() ]) + ')'
+                    query = self._CraftCreateStatement(self.table_name, column_info_extra_keywords)
                     cursor.execute(query)
                     self.conn.commit()
-                    self.executemany_query = 'INSERT INTO "' + self.table_name + '" VALUES (?' + ',?'*(len(self.column_info) - 1) + ')'
+                    self.executemany_query = self._CraftExecuteManyQuery(self.table_name, column_info, column_info_extra_keywords)
                     return
                 except sqlite3.Error as ex:
                     log.error(str(ex))
@@ -335,7 +375,7 @@ class SqliteWriter:
             self.conn.commit()
         except sqlite3.Error as ex:
             log.error(str(ex))
-            log.exception("error writing to table " + self.table_name)
+            log.exception("error writing to table " + table_name if table_name else self.table_name)
             #raise ex
 
     def CloseDb(self):
@@ -534,7 +574,7 @@ class ExcelWriter:
         except xlsxwriter.exceptions.XlsxWriterException as ex:
             log.exception('Error trying to add sheet for overflow data (>1 million rows)')
         try:
-            row_str = map(str, row)
+            row_str = tuple(map(str, row))
             for item in row_str:
                 try:
                     if item == '' or row[column_index] == None: pass

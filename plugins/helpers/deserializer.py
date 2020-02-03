@@ -33,7 +33,7 @@
 # Note: This will not work with python 2.xx
 
 import biplist
-import plugins.helpers.ccl_bplist
+import plugins.helpers.ccl_bplist as ccl_bplist
 import io
 import os
 import plistlib
