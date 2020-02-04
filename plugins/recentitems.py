@@ -56,6 +56,7 @@ class RecentType(IntEnum):
     SEARCH = 6 # For SGTRecentFileSearches
     VOLUME = 7 # For FXDesktopVolumePositions & systemitems.volumeslist
     BULKRENAME = 8 # For finder
+    SSH_KNOWNHOST = 9 # For machines in ~/.ssh/known_hosts
 
     def __str__(self):
         return self.name # This returns 'UNKNOWN' instead of 'RecentType.UNKNOWN'
@@ -384,6 +385,14 @@ def ParseRecentFile(input_file):
                 ReadRecentPlist(plist, recent_items, input_file)
         except (OSError, InvalidPlistException):
             log.exception ("Could not open plist {}".format(input_file))
+    elif basename == 'known_hosts':
+        try:
+            with open(input_file, 'rb') as f:
+                data = f.read()
+                last_mod_date = os.path.getmtime(input_file)
+                ReadKnownHosts(data, input_file, '', recent_items, CommonFunctions.ReadUnixTime(last_mod_date))
+        except (IOError, OSError, ValueError) as ex:
+            log.exception('Failed to open/read file: {}'.format(input_file))
     else:
         log.info ('Unknown file: {} '.format(basename))
     
@@ -701,6 +710,27 @@ def ProcessSinglePlist(mac_info, source_path, user, recent_items):
     else:
         log.info('Failed to open plist: {}'.format(source_path))
 
+def ProcessSshKnownHostsFile(mac_info, source_path, user_name, recent_items, last_mod_date):
+    '''Process known_hosts file found in ~/.ssh/known_hosts'''
+    mac_info.ExportFile(source_path, __Plugin_Name, user_name + "_", False)
+    f = mac_info.OpenSmallFile(source_path)
+    if f:
+        data = f.read()
+        f.close()
+        ReadKnownHosts(data, source_path, user_name, recent_items, last_mod_date)
+
+def ReadKnownHosts(data, source_path, user_name, recent_items, last_mod_date):
+    lines = data.split(b'\r')
+    for line in lines:
+        try:
+            host = line.split(b' ')[0]
+            if host:
+                host = host.decode('utf8')
+                ri = RecentItem(host, '', 'File Last Modified on {}'.format(str(last_mod_date)), source_path, RecentType.SSH_KNOWNHOST, user_name)
+                recent_items.append(ri)
+        except:
+            pass
+
 def ProcessPreferencesFolder(mac_info, recent_items):
     '''Process .plist files in Preferences folder'''
     user_path = '{}/Library/Preferences'
@@ -728,6 +758,7 @@ def Plugin_Start(mac_info):
     user_global_pref_plist_path = '{}/Library/Preferences/.GlobalPreferences.plist'
     user_finder_plist_path = '{}/Library/Preferences/com.apple.finder.plist'
     user_sidebarlists_plist_path = '{}/Library/Preferences/com.apple.sidebarlists.plist'
+    user_ssh_known_hosts_path = '{}/.ssh/known_hosts'
     processed_paths = []
     for user in mac_info.users:
         user_name = user.user_name
@@ -753,6 +784,11 @@ def Plugin_Start(mac_info):
         source_path = user_sidebarlists_plist_path.format(user.home_dir)
         if mac_info.IsValidFilePath(source_path):
             ProcessSinglePlist(mac_info, source_path, user_name, recent_items)
+        # Process ssh known_hosts
+        source_path = user_ssh_known_hosts_path.format(user.home_dir)
+        if mac_info.IsValidFilePath(source_path):
+            last_mod_date = mac_info.GetFileMACTimes(source_path)['m_time']
+            ProcessSshKnownHostsFile(mac_info, source_path, user_name, recent_items, last_mod_date)
 
     ProcessPreferencesFolder(mac_info, recent_items)
     ProcessSFL(mac_info, recent_items) # Elcapitan & higher (mostly)
