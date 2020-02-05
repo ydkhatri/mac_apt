@@ -213,11 +213,24 @@ class ApfsFileSystemParser:
             log.error('Failed to get CNIDs for firmlinks. Error was : ' + error)
             return False
         self.create_tables()
+        hardlinks_columns = ','.join([x for x in self.hardlink_info][:-1])
+        extents_columns = ','.join([x for x in self.extent_info][:-1])
+        attributes_columns = ','.join([x for x in self.attr_info][:-1])
+        inodes_columns = ','.join([x for x in self.inode_info][:-1])
+        dir_entries_columns = ','.join([x for x in self.dir_info][:-1])
+        dir_stats_columns = ','.join([x for x in self.dir_stats_info][:-1])
+        compressed_files_columns = ','.join([x for x in self.compressed_info][:-1])
+        paths_columns = ','.join([x for x in self.paths_info])
+
         view_query = 'INSERT INTO "{4}_{0}" '\
+                    'select {5} FROM ('\
                     'select * from "{1}_{0}" UNION ALL '\
-                    'select * from "{2}_{0}" WHERE cnid not in ({3})'
-        for table_type in ['Hardlinks','Extents','Attributes','Inodes','DirEntries','DirStats','Compressed_Files','Paths']:
-            query = view_query.format(table_type, data_vol.name, sys_vol.name, cnids, self.name)
+                    'select * from "{2}_{0}" WHERE cnid not in ({3}) )'
+        for table_type, columns in collections.OrderedDict([('Hardlinks', hardlinks_columns + ',NULL'),('Extents', extents_columns + ',NULL'),
+                ('Attributes', attributes_columns + ',NULL'), ('Inodes', inodes_columns + ',NULL'), ('DirEntries', dir_entries_columns + ',NULL'),
+                ('DirStats', dir_stats_columns + ',NULL'), ('Compressed_Files', compressed_files_columns + ',NULL'), 
+                ('Paths', paths_columns)]).items():
+            query = view_query.format(table_type, data_vol.name, sys_vol.name, cnids, self.name, columns)
             if not self.run_query(query, True): return False
         # if is_beta:
         #     # Just a dumb hack, remove all '/Device' from the start of all paths.
@@ -303,6 +316,9 @@ class ApfsFileSystemParser:
         if not success:
             log.error('Error executing query : Query was {}, Error was {}'.format(query, error))
             return False
+        if query.find('DELETE') >= 0:
+            rows_deleted = cursor.rowcount
+            log.debug('{} rows deleted'.format(rows_deleted))
         return True
 
     def populate_compressed_files_table(self):
