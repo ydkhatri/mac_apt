@@ -160,6 +160,13 @@ def ProcessBashSessionsForUser(mac_info, bash_sessions, source_folder, user_name
     else:
         log.info('No files found under {}, bash sessions may have been manually deleted!'.format(source_folder))
 
+def ReadHistoryFile(mac_info, history_path, history_type_str, bash_sessions, user_name):
+    mac_info.ExportFile(history_path , __Plugin_Name, user_name + "_", False)
+    content = ReadFile(mac_info, history_path)
+    session = BashSession(user_name, history_path, history_type_str)
+    bash_sessions.append(session)
+    session.all_content = ''.join(content)
+
 def Plugin_Start(mac_info):
     '''Main Entry point function for plugin'''
     history_path = '{}/.bash_sessions'
@@ -175,14 +182,14 @@ def Plugin_Start(mac_info):
         if mac_info.IsValidFolderPath(source_folder):
             ProcessBashSessionsForUser(mac_info, bash_sessions, source_folder, user_name)
         
-        #Export .bash_history file
+        #Export .bash_history or .zsh_history file
         bash_history_path = user.home_dir + ('/.sh_history' if user_name == 'root' else '/.bash_history')
+        zsh_history_path = user.home_dir + '/.zsh_history'
         if mac_info.IsValidFilePath(bash_history_path):
-            mac_info.ExportFile(bash_history_path , __Plugin_Name, user_name + "_", False)
-            content = ReadFile(mac_info, bash_history_path)
-            session = BashSession(user_name, bash_history_path, 'BASH_HISTORY')
-            bash_sessions.append(session)
-            session.all_content = ''.join(content)
+            ReadHistoryFile(mac_info, bash_history_path, 'BASH_HISTORY', bash_sessions, user_name)
+        if mac_info.IsValidFilePath(zsh_history_path):
+            ReadHistoryFile(mac_info, zsh_history_path, 'ZSH_HISTORY', bash_sessions, user_name)
+
     if len(bash_sessions) > 0:
         PrintAll(bash_sessions, mac_info.output_params, '')
     else:
