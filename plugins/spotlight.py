@@ -119,8 +119,11 @@ def GetFileData(path):
 
     data = b''
     if mac_info_obj != None:
-        with mac_info_obj.OpenSmallFile(path) as f:
+        f = mac_info_obj.OpenSmallFile(path)
+        if f:
             data = f.read()
+        else:
+            log.error("Failed to open file {}".format(path))
     else: # For single artifact mode
         with open(path, 'rb') as f:
             data = f.read()
@@ -132,10 +135,14 @@ def GetMapDataOffsetHeader(input_folder, id):
         search for these files in the input_folder.
         Returns tuple (data, offsets, header)
     '''
-    data_path = os.path.join(input_folder, 'dbStr-{}.map.data'.format(id))
-    offsets_path = os.path.join(input_folder, 'dbStr-{}.map.offsets'.format(id))
-    header_path = os.path.join(input_folder, 'dbStr-{}.map.header'.format(id))
-
+    if mac_info_obj == None: # single artifact mode
+        data_path = os.path.join(input_folder, 'dbStr-{}.map.data'.format(id))
+        offsets_path = os.path.join(input_folder, 'dbStr-{}.map.offsets'.format(id))
+        header_path = os.path.join(input_folder, 'dbStr-{}.map.header'.format(id))
+    else:
+        data_path = input_folder + '/dbStr-{}.map.data'.format(id)
+        offsets_path = input_folder + '/dbStr-{}.map.offsets'.format(id)
+        header_path =  input_folder + '/dbStr-{}.map.header'.format(id)
     map_data = GetFileData(data_path)
     offsets_data = GetFileData(offsets_path)
     header_data = GetFileData(header_path)
@@ -384,16 +391,14 @@ def Process_User_DBs(mac_info):
         store_path_2 = user_spotlight_dot_store.format(user.home_dir)
         ProcessStoreAndDotStore(mac_info, store_path_1, store_path_2, user_name)
 
-def Plugin_Start(mac_info):
-    '''Main Entry point function for plugin'''
-    global mac_info_obj
-    mac_info_obj = mac_info
-    Process_User_DBs(mac_info) # Usually small , 10.13+ only
-
-    spotlight_folder = '/.Spotlight-V100/Store-V2/'
-    vol_config_plist_path = '/.Spotlight-V100/VolumeConfiguration.plist'
+def ProcessVolumeStore(mac_info, spotlight_base_path, export_prefix=''):
+    '''
+    Process the main Spotlight-V100 database usually found on the volume's root.
+    '''
+    spotlight_folder = spotlight_base_path + '/Store-V2/'
+    vol_config_plist_path = spotlight_base_path + '/VolumeConfiguration.plist'
     if mac_info.IsValidFilePath(vol_config_plist_path):
-        mac_info.ExportFile(vol_config_plist_path, __Plugin_Name, '', False)
+        mac_info.ExportFile(vol_config_plist_path, __Plugin_Name, export_prefix, False)
         ReadVolumeConfigPlistFromImage(mac_info, vol_config_plist_path)
     folders = mac_info.ListItemsInFolder(spotlight_folder, EntryType.FOLDERS)
     index = 0
@@ -412,7 +417,7 @@ def Plugin_Start(mac_info):
             input_file = mac_info.OpenSmallFile(store_path_1)
             output_folder = os.path.join(mac_info.output_params.output_path, 'SPOTLIGHT_DATA', uuid)
             if input_file != None:
-                table_name = str(index) + '-store'
+                table_name = ((export_prefix + '_') if export_prefix else '') + str(index) + '-store'
                 log.info("Spotlight data for uuid='{}' db='{}' will be saved with table/sheet name as {}".format(uuid, 'store.db', table_name))
                 items_1 = ProcessStoreDb(store_path_1, input_file, output_folder, mac_info.output_params, None, table_name, True, False)
         else:
@@ -431,11 +436,25 @@ def Plugin_Start(mac_info):
                                             '.store.db file. Only new or updated items are shown in the .store-DIFF* '\
                                             'files. If you want the complete output, process the exported .store.db '\
                                             'file with mac_apt_single_plugin.py and this plugin')
-                table_name = str(index) + '-.store-DIFF'
+                table_name = ((export_prefix + '_') if export_prefix else '') + str(index) + '-.store-DIFF'
                 log.info("Spotlight store for uuid='{}' db='{}' will be saved with table/sheet name as {}".format(uuid, '.store.db', table_name))
                 items_2 = ProcessStoreDb(store_path_2, input_file, output_folder, mac_info.output_params, items_1, table_name, True, False)
         else:
             log.debug('File not found: {}'.format(store_path_2))
+
+
+def Plugin_Start(mac_info):
+    '''Main Entry point function for plugin'''
+    global mac_info_obj
+    mac_info_obj = mac_info
+    Process_User_DBs(mac_info) # Usually small , 10.13+ only
+    spotlight_base_path = '/.Spotlight-V100'
+    if mac_info.IsValidFolderPath(spotlight_base_path):
+        ProcessVolumeStore(mac_info, spotlight_base_path)
+    # For catalina's read-only volume
+    spotlight_base_path = '/private/var/db/Spotlight-V100/BootVolume'
+    if mac_info.IsValidFolderPath(spotlight_base_path):
+        ProcessVolumeStore(mac_info, spotlight_base_path, 'BootVolume')
 
 def Plugin_Start_Standalone(input_files_list, output_params):
     log.info("Module Started as standalone")
