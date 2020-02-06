@@ -54,6 +54,7 @@ WIFI | Gets wifi network information
 ### Coming soon..
 * More plugins
 * More documentation
+* APFS Encryption support
 
 For installation (to run from code) see https://github.com/ydkhatri/mac_apt/wiki/Installation-for-Python3.7  
 **Please read the documentation here:** https://github.com/ydkhatri/mac_apt/wiki
