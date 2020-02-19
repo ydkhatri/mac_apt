@@ -46,6 +46,7 @@ class OutputParams:
         self.xlsx_writer = None
         self.output_db_path = ''
         self.export_path = '' # For artifact source files
+        self.export_path_rel = '' # Relative export path
         self.export_log_csv = None
         self.timezone = TimeZoneType.UTC
 
@@ -323,6 +324,9 @@ class MacInfo:
         self.hfs_native = NativeHfsParser()
         self.is_apfs = False
         self.use_native_hfs_parser = True
+        # runtime platform 
+        self.is_windows = (os.name == 'nt')
+        self.is_linux = (sys.platform == 'linux')
 
     # Public functions, plugins can use these
     def GetAbsolutePath(self, current_abs_path, dest_rel_path):
@@ -481,7 +485,10 @@ class MacInfo:
         if self.ExtractFile(artifact_path, export_path):
             if not mac_times:
                 mac_times = self.GetFileMACTimes(artifact_path)
-            self.output_params.export_log_csv.WriteRow([artifact_path, export_path, mac_times['c_time'], mac_times['m_time'], mac_times['cr_time'], mac_times['a_time']])
+            export_path_rel = os.path.relpath(export_path, start=self.output_params.export_path)
+            if self.is_windows:
+                export_path_rel = export_path_rel.replace('\\', '/')
+            self.output_params.export_log_csv.WriteRow([artifact_path, export_path_rel, mac_times['c_time'], mac_times['m_time'], mac_times['cr_time'], mac_times['a_time']])
             return True
         else:
             log.info("Failed to export '" + artifact_path + "' to '" + export_path + "'")
@@ -1153,8 +1160,6 @@ class MountedMacInfo(MacInfo):
         MacInfo.__init__(self, output_params)
         self.macos_root_folder = root_folder_path
         # TODO: if os.name == 'nt' and len (root_folder_path) == 2 and root_folder_path[2] == ':': self.macos_root_folder += '\\'
-        self.is_windows = (os.name == 'nt')
-        self.is_linux = (sys.platform == 'linux')
         if self.is_linux:
             log.warning('Since this is a linux (mounted) system, there is no way for python to extract created_date timestamps. '\
                         'This is a limitation of Python. Created timestamps shown/seen will actually be same as Last_Modified timestamps.')
