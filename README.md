@@ -46,6 +46,7 @@ SAFARI | Internet history, downloaded file information, cookies and more from Sa
 SCREENTIME | Reads ScreenTime database for program and app usage
 SPOTLIGHT | Reads the spotlight index databases
 SPOTLIGHTSHORTCUTS | User typed data in the spotlight bar & targeted document/app
+TERMINALSTATE | Reads Terminal saved state files which includes full text content of terminal windows
 UNIFIEDLOGS | Reads macOS unified logging logs from .tracev3 files
 USERS | Local & Domain user information - name, UID, UUID, GID, account creation & password set dates, pass hints, homedir & Darwin paths
 WIFI | Gets wifi network information
@@ -53,6 +54,7 @@ WIFI | Gets wifi network information
 ### Coming soon..
 * More plugins
 * More documentation
+* APFS Encryption support
 
 For installation (to run from code) see https://github.com/ydkhatri/mac_apt/wiki/Installation-for-Python3.7  
 **Please read the documentation here:** https://github.com/ydkhatri/mac_apt/wiki
