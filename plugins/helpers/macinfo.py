@@ -464,11 +464,11 @@ class MacInfo:
             file_path = os.path.join(export_path, out_filename)
         else:
             file_path = CommonFunctions.GetNextAvailableFileName(os.path.join(export_path, out_filename))
-        jrn_file_path = file_path + "-journal" # For sqlite db
-        wal_file_path = file_path + "-wal" # For sqlite db
 
         if self._ExtractFile(artifact_path, file_path):
             if check_for_sqlite_files:
+                jrn_file_path = file_path + "-journal"
+                wal_file_path = file_path + "-wal"
                 if self.IsValidFilePath(artifact_path + "-journal"):
                     self._ExtractFile(artifact_path + "-journal", jrn_file_path)
                 if self.IsValidFilePath(artifact_path + "-wal"):
