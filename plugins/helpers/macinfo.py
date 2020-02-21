@@ -1035,8 +1035,14 @@ class ApfsMacInfo(MacInfo):
 
     def ReadApfsVolumes(self):
         '''Read volume information into an sqlite db'''
+        # Process Preboot volume first
+        apfs_parser = ApfsFileSystemParser(self.apfs_container.preboot_volume, self.apfs_db)
+        apfs_parser.read_volume_records()
+        # Process other volumes now
         for vol in self.apfs_container.volumes:
-            if vol.is_encrypted: 
+            if vol == self.apfs_container.preboot_volume:
+                continue
+            elif vol.is_encrypted:
                 continue
             apfs_parser = ApfsFileSystemParser(vol, self.apfs_db)
             apfs_parser.read_volume_records()

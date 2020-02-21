@@ -61,12 +61,13 @@ class ApfsDbInfo:
 
     def __init__(self, db_writer):
         self.db_writer = db_writer # SqliteWriter object
-        self.version = 4 # This will change if db structure changes in future
+        self.version = 5 # This will change if db structure changes in future
         self.ver_table_name = 'Version_Info'
         self.vol_table_name = 'Volumes_Info'
         self.version_info = collections.OrderedDict([('Version',DataType.INTEGER)])
         self.volume_info = collections.OrderedDict([('Name',DataType.TEXT),('UUID',DataType.TEXT),
                                                     ('Files',DataType.INTEGER),('Folders',DataType.INTEGER),
+                                                    ('Snapshots',DataType.INTEGER),
                                                     ('Created',DataType.INTEGER),('Updated',DataType.INTEGER),
                                                     ('Role',DataType.INTEGER)])
 
@@ -80,7 +81,8 @@ class ApfsDbInfo:
         self.db_writer.CreateTable(self.volume_info, self.vol_table_name)
         data = []
         for vol in volumes:
-            data.append([vol.volume_name, vol.uuid, vol.num_files, vol.num_folders, vol.time_created, vol.time_updated, vol.role])
+            data.append([vol.volume_name, vol.uuid, vol.num_files, vol.num_folders, vol.num_snapshots, 
+                        vol.time_created, vol.time_updated, vol.role])
         self.db_writer.WriteRows(data, self.vol_table_name)
 
     def CheckVerInfo(self):
@@ -102,7 +104,7 @@ class ApfsDbInfo:
 
     def CheckVolInfo(self, volumes):
         '''Returns true if info in db matches volume objects'''
-        query = 'SELECT Name, UUID, Files, Folders, Created, Updated FROM "{}"'.format(self.vol_table_name)
+        query = 'SELECT Name, UUID, Files, Folders, Snapshots, Created, Updated, Role FROM "{}"'.format(self.vol_table_name)
         success, cursor, error = self.db_writer.RunQuery(query)
         index = 0
         data_is_unaltered = True
@@ -112,8 +114,10 @@ class ApfsDbInfo:
                     row[1] != volumes[index].uuid or \
                     row[2] != volumes[index].num_files or \
                     row[3] != volumes[index].num_folders or \
-                    row[4] != volumes[index].time_created or \
-                    row[5] != volumes[index].time_updated :
+                    row[4] != volumes[index].num_snapshots or \
+                    row[5] != volumes[index].time_created or \
+                    row[6] != volumes[index].time_updated or \
+                    row[7] != volumes[index].role :
                         data_is_unaltered = False
                         log.info('DB volume info does not match file info! Checked {}'.format(volumes[index].name))
                         break
@@ -842,7 +846,6 @@ class ApfsVolume:
         if apfs_file_meta:
             return apfs_file_meta.item_type in (8, 10) # will also return true for symlink which may point to folder!
         return False
-        #return self.DoesPathExist(path, EntryType.FILES)
 
     def DoesFolderExist(self, path):
         '''Returns True if folder exists'''
@@ -850,7 +853,6 @@ class ApfsVolume:
         if apfs_file_meta:
             return apfs_file_meta.item_type in (4, 10) # will also return true for symlink which may point to file!
         return False
-        #return self.DoesPathExist(path, EntryType.FOLDERS)        
 
     def DoesPathExist(self, path, type=EntryType.FILES_AND_FOLDERS):
         '''Returns True if path exists'''
@@ -1223,6 +1225,7 @@ class ApfsContainer:
         self.apfs_container_offset = offset
         self.apfs_container_size = apfs_container_size
         self.volumes = []
+        self.preboot_volume = None
         self.position = 0 # For self.seek()
 
         try:
@@ -1283,6 +1286,8 @@ class ApfsContainer:
             volume = ApfsVolume(self, 'Vol_' + str(index))
             volume.read_volume_info(volume_block_num)
             self.volumes.append(volume)
+            if volume.role == 16: # Preboot
+                self.preboot_volume = volume
             index += 1
 
     def close(self):
