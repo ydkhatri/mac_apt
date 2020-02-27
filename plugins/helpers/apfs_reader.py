@@ -1162,7 +1162,12 @@ class ApfsVolume:
             path = path[:-1]
         items = [] # List of dictionaries
 
-        for meta_item in self.GetManyFileMetadata("where path like '{}/%' and path NOT like '{}/%/%'".format(path, path)):
+        if path == '/':
+            where_clause = "where path like '/%' and path NOT like '/%/%' and path NOT like '/' "
+        else:
+            where_clause = "where path like '{}/%' and path NOT like '{}/%/%'".format(path, path)
+
+        for meta_item in self.GetManyFileMetadata(where_clause):
             item = { 'name':meta_item.name, 'size':meta_item.logical_size, 
                     'type':ApfsFileMeta.ItemTypeString(meta_item.item_type) }
             item['dates'] = { 'c_time':meta_item.changed,

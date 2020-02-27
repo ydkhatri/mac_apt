@@ -1040,11 +1040,15 @@ class ApfsMacInfo(MacInfo):
         if preboot_vol:
             apfs_parser = ApfsFileSystemParser(preboot_vol, self.apfs_db)
             apfs_parser.read_volume_records()
+            preboot_vol.dbo = self.apfs_db
         # Process other volumes now
         for vol in self.apfs_container.volumes:
+            vol.dbo = self.apfs_db
             if vol == preboot_vol:
                 continue
             elif vol.is_encrypted:
+                # x = preboot_vol.ListItemsInFolder('/')
+                # log.debug(str(x))
                 continue
             apfs_parser = ApfsFileSystemParser(vol, self.apfs_db)
             apfs_parser.read_volume_records()
