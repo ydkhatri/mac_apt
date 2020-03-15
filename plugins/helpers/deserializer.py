@@ -33,12 +33,15 @@
 # Note: This will not work with python 2.xx
 
 import biplist
+import logging
 import plugins.helpers.ccl_bplist as ccl_bplist
 import io
 import os
 import plistlib
 import sys
 import traceback
+
+log = logging.getLogger('MAIN.HELPERS.DESERIALIZER')
 
 def recurseCreatePlist(plist, root, object_table):
     if isinstance(root, dict):
@@ -68,7 +71,7 @@ def recurseCreatePlist(plist, root, object_table):
             # is most likely going to be a string. This has to be done, else writing a plist back will fail.
             if v == None:
                 v = ''
-                print('Changing NULL to empty string for key={}'.format(key))
+                log.debug('Changing NULL to empty string for key={}'.format(key))
             plist[key] = v
     else: # must be list
         for value in root:
@@ -95,7 +98,7 @@ def recurseCreatePlist(plist, root, object_table):
             # is most likely going to be a string. This has to be done, else writing a plist back will fail.
             if v == None:
                 v = ''
-                print('Changing NULL to empty string for key={}'.format(key))
+                log.debug('Changing NULL to empty string for key={}'.format(key))
             plist.append(v)
 
 def getRootElementNames(f):
@@ -110,9 +113,9 @@ def getRootElementNames(f):
         if top_element:
             roots = [ x for x in top_element.keys() ]
         else:
-            print('$top element not found! Not an NSKeyedArchive?')
+            log.error('$top element not found! Not an NSKeyedArchive?')
     except biplist.InvalidPlistException:
-        print('Had an exception (error) trying to read plist using biplist')
+        log.error('Had an exception (error) trying to read plist using biplist')
         traceback.print_exc()
     return roots
 
@@ -128,7 +131,7 @@ def extract_nsa_plist(f):
             f.close()
             f = io.BytesIO(data)
     except biplist.InvalidPlistException:
-        print('Had an exception (error) trying to read plist using biplist')
+        log.exception('Had an exception (error) trying to read plist using biplist')
     f.seek(0)
     return f
 
@@ -168,8 +171,8 @@ def process_nsa_plist(input_path, f):
                 top_level.append(plist)
 
     except Exception as ex:
-        print('Had an exception (error)')
-        traceback.print_exc()
+        log.exception('Had an exception (error)')
+        #traceback.print_exc()
 
     return top_level
 
