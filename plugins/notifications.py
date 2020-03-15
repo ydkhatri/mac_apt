@@ -48,7 +48,7 @@ notifications = []
 data_info = [('User', DataType.TEXT),('Date', DataType.DATE),('Shown', DataType.INTEGER), \
             ('Bundle', DataType.TEXT),('AppPath', DataType.TEXT),('UUID', DataType.TEXT), \
             ('Title', DataType.TEXT),('SubTitle', DataType.TEXT),('Message', DataType.TEXT), \
-            ('SourceFilePath', DataType.TEXT)]
+            ('Source', DataType.TEXT)]
 
 def RemoveTabsNewLines(str):
     return str.replace("\t", " ").replace("\r", " ").replace("\n", "")
