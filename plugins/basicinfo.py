@@ -231,8 +231,10 @@ def GetModelAndHostNameFromPreference(mac_info):
     return
 
 def GetMacOSVersion(mac_info):
-    basic_data.append(['SYSTEM', 'macOS Version', mac_info.os_version, mac_info.os_friendly_name, '/System/Library/CoreServices/SystemVersion.plist'])
-    basic_data.append(['SYSTEM', 'macOS Build Version', mac_info.os_build, mac_info.os_friendly_name, '/System/Library/CoreServices/SystemVersion.plist'])
+    sys_ver_plist_path = '/System/Library/CoreServices/SystemVersion.plist'
+    basic_data.append(['SYSTEM', 'macOS Version', mac_info.os_version, mac_info.os_friendly_name, sys_ver_plist_path])
+    basic_data.append(['SYSTEM', 'macOS Build Version', mac_info.os_build, mac_info.os_friendly_name, sys_ver_plist_path])
+    mac_info.ExportFile(sys_ver_plist_path, __Plugin_Name, "", False)
 
 def Plugin_Start(mac_info):
     '''Main Entry point function for plugin'''
