@@ -21,6 +21,7 @@ mac_apt is a DFIR tool to process Mac computer full disk images (**or _live_ mac
 
 Available Plugins (artifacts parsed) | Description 
 ------------------ | ---------------
+APPLIST | Reads apps & printers installed and/or available for each user from appList.dat
 AUTOSTART | Retrieves programs, daemons, services set to start at boot/login
 BASHSESSIONS | Reads bash (Terminal) sessions & history for every user
 BASICINFO | Basic machine & OS configuration like SN, timezone, computer name, last logged in user, HFS info
