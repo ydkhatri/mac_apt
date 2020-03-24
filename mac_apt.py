@@ -380,11 +380,12 @@ arg_parser.add_argument('plugin', nargs="+", help="Plugins to run (space separat
 args = arg_parser.parse_args()
 
 if args.output_path:
+    args.output_path = os.path.abspath(args.output_path)
     print ("Output path was : {}".format(args.output_path))
     if not CheckOutputPath(args.output_path):
         Exit()
 else:
-    args.output_path = '.' # output to same folder as script.
+    args.output_path = os.path.abspath('.') # output to same folder as script.
 
 if args.log_level:
     args.log_level = args.log_level.upper()

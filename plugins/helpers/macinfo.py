@@ -46,6 +46,7 @@ class OutputParams:
         self.xlsx_writer = None
         self.output_db_path = ''
         self.export_path = '' # For artifact source files
+        self.export_path_rel = '' # Relative export path
         self.export_log_csv = None
         self.timezone = TimeZoneType.UTC
 
@@ -323,6 +324,9 @@ class MacInfo:
         self.hfs_native = NativeHfsParser()
         self.is_apfs = False
         self.use_native_hfs_parser = True
+        # runtime platform 
+        self.is_windows = (os.name == 'nt')
+        self.is_linux = (sys.platform == 'linux')
 
     # Public functions, plugins can use these
     def GetAbsolutePath(self, current_abs_path, dest_rel_path):
@@ -464,11 +468,11 @@ class MacInfo:
             file_path = os.path.join(export_path, out_filename)
         else:
             file_path = CommonFunctions.GetNextAvailableFileName(os.path.join(export_path, out_filename))
-        jrn_file_path = file_path + "-journal" # For sqlite db
-        wal_file_path = file_path + "-wal" # For sqlite db
 
         if self._ExtractFile(artifact_path, file_path):
             if check_for_sqlite_files:
+                jrn_file_path = file_path + "-journal"
+                wal_file_path = file_path + "-wal"
                 if self.IsValidFilePath(artifact_path + "-journal"):
                     self._ExtractFile(artifact_path + "-journal", jrn_file_path)
                 if self.IsValidFilePath(artifact_path + "-wal"):
@@ -481,7 +485,10 @@ class MacInfo:
         if self.ExtractFile(artifact_path, export_path):
             if not mac_times:
                 mac_times = self.GetFileMACTimes(artifact_path)
-            self.output_params.export_log_csv.WriteRow([artifact_path, export_path, mac_times['c_time'], mac_times['m_time'], mac_times['cr_time'], mac_times['a_time']])
+            export_path_rel = os.path.relpath(export_path, start=self.output_params.export_path)
+            if self.is_windows:
+                export_path_rel = export_path_rel.replace('\\', '/')
+            self.output_params.export_log_csv.WriteRow([artifact_path, export_path_rel, mac_times['c_time'], mac_times['m_time'], mac_times['cr_time'], mac_times['a_time']])
             return True
         else:
             log.info("Failed to export '" + artifact_path + "' to '" + export_path + "'")
@@ -1028,8 +1035,20 @@ class ApfsMacInfo(MacInfo):
 
     def ReadApfsVolumes(self):
         '''Read volume information into an sqlite db'''
+        # Process Preboot volume first
+        preboot_vol = self.apfs_container.preboot_volume
+        if preboot_vol:
+            apfs_parser = ApfsFileSystemParser(preboot_vol, self.apfs_db)
+            apfs_parser.read_volume_records()
+            preboot_vol.dbo = self.apfs_db
+        # Process other volumes now
         for vol in self.apfs_container.volumes:
-            if vol.is_encrypted: 
+            vol.dbo = self.apfs_db
+            if vol == preboot_vol:
+                continue
+            elif vol.is_encrypted:
+                # x = preboot_vol.ListItemsInFolder('/')
+                # log.debug(str(x))
                 continue
             apfs_parser = ApfsFileSystemParser(vol, self.apfs_db)
             apfs_parser.read_volume_records()
@@ -1153,8 +1172,6 @@ class MountedMacInfo(MacInfo):
         MacInfo.__init__(self, output_params)
         self.macos_root_folder = root_folder_path
         # TODO: if os.name == 'nt' and len (root_folder_path) == 2 and root_folder_path[2] == ':': self.macos_root_folder += '\\'
-        self.is_windows = (os.name == 'nt')
-        self.is_linux = (sys.platform == 'linux')
         if self.is_linux:
             log.warning('Since this is a linux (mounted) system, there is no way for python to extract created_date timestamps. '\
                         'This is a limitation of Python. Created timestamps shown/seen will actually be same as Last_Modified timestamps.')

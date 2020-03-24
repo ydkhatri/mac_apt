@@ -446,12 +446,11 @@ def Plugin_Start(mac_info):
         # Close the index.sqlite
         quicklook_db.close()
 
-        # If the QuickLook array is not empty, we print the information out
-        if quicklook_array:
-            PrintAll(quicklook_array, mac_info.output_params, '')
-
-        else:
-            log.info("No QuickLook artifacts found.")
+    # If the QuickLook array is not empty, we print the information out
+    if quicklook_array:
+        PrintAll(quicklook_array, mac_info.output_params, '')
+    else:
+        log.info("No QuickLook artifacts found.")
 
 
 def Plugin_Start_Standalone(input_files_list, output_params):
@@ -478,15 +477,13 @@ def Plugin_Start_Standalone(input_files_list, output_params):
             log.debug("QuickLook data from Mac OS 10.15 found... Processing")
             parseDbNewSinglePlug(c, quicklook_array, quicklook_db, thumbnails, output_params.output_path)
         db.close()
-
-        if quicklook_array:
-            log.info("QuickLook data processed. Printing out now")
-            PrintAll(quicklook_array, output_params, '')
-
     else:
         log.error("index.sqlite or thumbnails.data not found in input directory.\n"
                   "Remember to use a folder containing the index.sqlite AND the thumbnails.data as your input!")
-
+                  
+    if quicklook_array:
+        log.info("QuickLook data processed. Printing out now")
+        PrintAll(quicklook_array, output_params, '')
 
 
 if __name__ == '__main__':
