@@ -77,8 +77,12 @@ def Plugin_Start(mac_info):
     shortcuts = []
     user_plist_rel_path = '{}/Library/Preferences/com.apple.spotlight.plist' # Mavericks (10.9) or older
     version = mac_info.GetVersionDictionary()
-    if version['major'] == 10 and version['minor'] >= 10:
-        user_plist_rel_path = '{}/Library/Application Support/com.apple.spotlight.Shortcuts'
+    if version['major'] == 10:
+        if version['minor'] >= 10 and version['minor'] < 15:
+            user_plist_rel_path = '{}/Library/Application Support/com.apple.spotlight.Shortcuts'
+        elif version['minor'] >= 15:
+            user_plist_rel_path = '{}/Library/Application Support/com.apple.spotlight/com.apple.spotlight.Shortcuts'
+    
     processed_paths = set()
     for user in mac_info.users:
         user_name = user.user_name
