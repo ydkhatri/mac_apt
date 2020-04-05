@@ -486,7 +486,16 @@ class Apfs(KaitaiStruct):
             self.blocked_out_block_count = self._io.read_u8le()
             self.evict_mapping_tree_oid = self._io.read_u8le()
             self.flags = self._io.read_u8le()
-
+            self.efi_jumpstart = self._io.read_u8le()
+            self.fusion_uuid = self._io.read_bytes(16)
+            self.keylocker_paddr = self._io.read_u8le()
+            self.keylocker_block_count = self._io.read_s8le()
+            self.ephemeral_info = self._io.read_u8le() * 4
+            self.test_oid = self._io.read_u8le()
+            self.fusion_mt_oid = self._io.read_u8le()
+            self.fusion_wbc_oid = self._io.read_u8le()
+            self.fusion_wbc_paddr = self._io.read_u8le()
+            self.fusion_wbc_count = self._io.read_u8le()
 
     class DrecHashedRecord(KaitaiStruct):
         __slots__ = ['_io', '_parent', '_root', 'node_id', 'date_added', 'type_item', 'xfields']
