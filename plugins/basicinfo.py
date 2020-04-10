@@ -121,14 +121,17 @@ def GetMacSerialNum(mac_info):
     found_SN, serial_num = ReadSerialFromDb(mac_info, sn_source1)
     if found_SN:
         basic_data.append(['HARDWARE', 'Mac Serial Number', serial_num, 'Hardware Serial Number', sn_source1])
+        mac_info.ExportFile(sn_source1, __Plugin_Name, '')
     else:
         found_SN, serial_num = ReadSerialFromDb(mac_info, sn_source2)
         if found_SN:
             basic_data.append(['HARDWARE', 'Mac Serial Number', serial_num,'Hardware Serial Number', sn_source2])
+            mac_info.ExportFile(sn_source2, __Plugin_Name, '')
         else:
             found_SN, serial_num = ReadSerialFromDb(mac_info, sn_source3)
             if found_SN:
                 basic_data.append(['HARDWARE', 'Mac Serial Number', serial_num,'Hardware Serial Number', sn_source3])
+                mac_info.ExportFile(sn_source3, __Plugin_Name, '')
 
 # Sources - /private/etc/localtime and /Library/Preferences/.GlobalPreferences.plist 
 def GetTimezone(mac_info):
