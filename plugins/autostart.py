@@ -93,15 +93,18 @@ def process_kernel_extensions(mac_info, path, persistent_programs):
             full_path = path + '/' + full_name
             
             name = os.path.splitext(full_name)[0] # removes extension (.kext or .plugin or .bundle usually)
+            valid_source = full_path
             info_plist_path = full_path + '/Contents/Info.plist'
             if mac_info.IsValidFilePath(info_plist_path):
+                valid_source = info_plist_path
+                mac_info.ExportFile(info_plist_path, __Plugin_Name, "", False)
                 success, plist, error = mac_info.ReadPlist(info_plist_path)
                 if success:
                     name = plist.get('CFBundleName', name)
                     name = name.lstrip('"').rstrip('"')
                 else:
                     log.error("Problem reading plist for {} - ".format(info_plist_path, error))
-            program = PersistentProgram(full_path, name, full_name, 'Kernel Extension', 'root', 0, '', '')
+            program = PersistentProgram(valid_source, name, full_name, 'Kernel Extension', 'root', 0, '', '')
             persistent_programs.append(program)
     else:
         log.info('No kernel extensions found under {}'.format(path))
