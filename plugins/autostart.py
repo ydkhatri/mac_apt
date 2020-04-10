@@ -178,6 +178,7 @@ def get_run_when(plist, method):
     
 def process_file(mac_info, file_path, persistent_programs, file_name):
     full_path = file_path + '/' + file_name
+    mac_info.ExportFile(full_path, __Plugin_Name, '', False)
     program = PersistentProgram(full_path, file_name, file_name, "Launch Script", 'root', 0, '', '')
     persistent_programs.append(program)
 
