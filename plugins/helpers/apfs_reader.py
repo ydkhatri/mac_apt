@@ -17,6 +17,7 @@ import tempfile
 from uuid import UUID
 from plugins.helpers.writer import DataType
 from plugins.helpers.common import *
+from CryptoPlus.Cipher import python_AES
 
 import zlib
 
@@ -131,11 +132,12 @@ class ApfsFileSystemParser:
     '''
     Reads and parses the file system, writes output to a database.
     '''
-    def __init__(self, apfs_volume, db_writer):
+    def __init__(self, apfs_volume, db_writer, encryption_key = None):
         self.name = apfs_volume.name
         self.volume = apfs_volume
         self.container = apfs_volume.container
         self.dbo = db_writer
+        self.encryption_key = encryption_key
 
         self.num_records_read_total = 0
         self.num_records_read_batch = 0
@@ -399,15 +401,16 @@ class ApfsFileSystemParser:
         '''
         self.create_tables()
 
+
         root_block = self.container.read_block(self.volume.root_block_num)
         self.read_entries(self.volume.root_block_num, root_block)
 
         # write remaining records to db
         if self.num_records_read_batch > 0:
             self.num_records_read_batch = 0
-            
+
             self.write_records()
-            self.clear_records() # Clear the data once written   
+            self.clear_records() # Clear the data once written
 
         self.create_other_tables_and_indexes()
         self.PrintStats()
@@ -537,8 +540,12 @@ class ApfsFileSystemParser:
                         log.exception('Exception trying to read block {}'.format(entry.data.pointer))
                 else:
                     try:
+
+                        if entry.data.flags & 4: # ENCRYPTED FLAG
+                            pass
                         newblock = self.container.read_block(entry.data.paddr.value)
                         self.read_entries(entry.data.paddr.value, newblock)
+
                         if entry.data.flags & 1: #OMAP_VAL_DELETED
                             log.warning("Block values are deleted? ,block={}".format(entry.data.paddr.value))
                     except (ValueError, EOFError, OSError):
@@ -684,11 +691,12 @@ class ApfsVolume:
             log.info("Volume appears to be ENCRYPTED. Encrypted volumes can't be processed directly.")
             log.info("See link below for instructions on processing Encrypted volumes")
             log.info("https://github.com/ydkhatri/mac_apt/wiki/Known-issues-and-Workarounds")
-            return
-        # get volume omap
-        vol_omap = self.container.read_block(self.omap_oid)
-        self.root_block_num = vol_omap.body.tree_oid
-        #log.debug ("root_block_num = {}".format(self.root_block_num))
+
+        else:
+            # get volume omap
+            vol_omap = self.container.read_block(self.omap_oid)
+            self.root_block_num = vol_omap.body.tree_oid
+            log.debug ("root_block_num = {}".format(self.root_block_num))
 
     def ReadUUID(self, uuid_bytes):
         '''Return a string from binary uuid blob'''
@@ -1323,13 +1331,47 @@ class ApfsContainer:
         self.seek(idx * self.block_size)
         return self.read(self.block_size)
 
-    def read_block(self, block_num):
+    def decrypt_keybag(self, wrapped_keybag, offset, uuid):
+        """
+        Decrypts the wrapped binary keybag that will be decrypted using the Container's UUID.
+        Uses the setKey function as the cipher
+        The UUID is set as both the first and second key in the cipher
+
+        param: wrapped_keybag: The wrapped binary keybag that will be decrypted using the Container's UUID
+        """
+
+        # Not 100% sure on why this is needd, but copied from APFS-fuse
+        cs_factor = self.block_size / 0x200
+        uno = int(offset * cs_factor)
+
+        # Creates the cipher using XTS and the container UUID as the first and second key
+        #self.log.debug("Setting the cipher using XTS with the UUID: " + str(uuid)
+        #               + " as the first AND second keys")
+        cipher = python_AES.new((uuid, uuid), python_AES.MODE_XTS)
+        tweak = struct.pack("<Q", uno)
+
+        # Decrypts the wrapped keybag and assigns it to plaintext to be returned for further processing
+        try:
+            #self.log.debug("Attempting to decrypt the keybag")
+            plaintext = cipher.decrypt(wrapped_keybag, tweak)
+            #self.log.debug("Successfully decrypted the keybag")
+            return plaintext
+        except Exception as ex:
+            #self.log.exception("Could not decrypt the keybag. Exception was: \n" + str(ex) + "\n")
+            x = 0
+
+    def read_block(self, block_num, key=None):
         """ Parse a singe block """
         data = self.get_block(block_num)
         if not data:
             return None
-        block = self.apfs.Block(KaitaiStream(BytesIO(data)), self.apfs, self.apfs)
-        return block
+        if key is not None:
+            decrypted_block = self.decrypt_keybag(data, self.position, key)
+            block = self.apfs.Block(KaitaiStream(BytesIO(decrypted_block)), self.apfs, self.apfs)
+            return block
+        if key is None:
+            block = self.apfs.Block(KaitaiStream(BytesIO(data)), self.apfs, self.apfs)
+            return block
     
     def fletcher64_verify_block_num(self, block_num):
         """Fletchers checksum verification for block, given block number"""
