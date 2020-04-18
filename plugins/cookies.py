@@ -122,7 +122,7 @@ def parse_cookie_file(cookie_file, cookies, user_name, file_path):
         log.error('Not the expected header for cookie file. Got {} instead of "cook"'.format(str(dat[0:4])))
 
 def parse_hsts_plist(plist, cookies, user_name, plist_path):
-    '''Parse plist and add items to app list'''
+    '''Parse plist and add items to cookies list'''
     hsts_store = plist.get('com.apple.CFNetwork.defaultStorageSession', None)
 
     for site, items in hsts_store.items():
@@ -156,24 +156,26 @@ def Plugin_Start(mac_info):
         if user.home_dir in processed_paths: continue # Avoid processing same folder twice (some users have same folder! (Eg: root & daemon))
         processed_paths.append(user.home_dir)
         source_path = cookies_folder_path.format(user.home_dir)
-
+        if not mac_info.IsValidFolderPath(folder_path):
+            continue
         files_list = mac_info.ListItemsInFolder(source_path, EntryType.FILES, False)
         if len(files_list):
             for file in files_list:
                 file_name = file['name']
                 full_path = source_path + '/' + file_name
                 extension = os.path.splitext(file_name)[1].lower()
-                if extension == 'plist':
+                if file_name == 'HSTS.plist':
+                    mac_info.ExportFile(full_path, __Plugin_Name, user_name + "_", False)
+                    plist = read_plist_from_image(mac_info, full_path)
+                    if plist:
+                        parse_hsts_plist(plist, cookies, user_name, full_path)
+                elif extension in ('.cookies', '.binarycookies'):
                     mac_info.ExportFile(full_path, __Plugin_Name, user_name + "_", False)
                     f = mac_info.OpenSmallFile(full_path)
                     if f != None:
                         parse_cookie_file(f, cookies, user_name, full_path)
                     else:
                         log.error('Could not open file {}'.format(full_path))
-                elif extension in ('.cookies', '.binarycookies'):
-                    mac_info.ExportFile(full_path, __Plugin_Name, user_name + "_", False)
-                    if read_plist_from_image(mac_info, plist_path):
-                        parse_hsts_plist(plist, cookies, user_name, full_path)
                 else:
                     log.debug(f'Found unknown file - {full_path}')
         #else:
