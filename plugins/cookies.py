@@ -78,6 +78,9 @@ def read_cstring(buffer):
         ret = ''
     return ret
 
+# BinaryCookie parsing based on Satishb's code from 
+# https://github.com/as0ler/BinaryCookieReader/blob/master/BinaryCookieReader.py
+
 def parse_cookie_file(cookie_file, cookies, user_name, file_path):
     '''Parse .binarycookies or .cookies file'''
     data = cookie_file.read()
