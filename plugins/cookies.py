@@ -159,7 +159,7 @@ def Plugin_Start(mac_info):
         if user.home_dir in processed_paths: continue # Avoid processing same folder twice (some users have same folder! (Eg: root & daemon))
         processed_paths.append(user.home_dir)
         source_path = cookies_folder_path.format(user.home_dir)
-        if not mac_info.IsValidFolderPath(folder_path):
+        if not mac_info.IsValidFolderPath(source_path):
             continue
         files_list = mac_info.ListItemsInFolder(source_path, EntryType.FILES, False)
         if len(files_list):
