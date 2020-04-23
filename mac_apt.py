@@ -35,7 +35,7 @@ from plugin import *
 from pyaff4 import container
 from uuid import UUID
 
-__VERSION = "0.4.1"
+__VERSION = "0.5"
 __PROGRAMNAME = "macOS Artifact Parsing Tool"
 __EMAIL = "yogesh@swiftforensics.com"
 

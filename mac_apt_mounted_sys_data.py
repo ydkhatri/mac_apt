@@ -32,7 +32,7 @@ from plugins.helpers.writer import *
 from plugins.helpers.disk_report import *
 from plugin import *
 
-__VERSION = "0.4.1"
+__VERSION = "0.5"
 __PROGRAMNAME = "macOS Artifact Parsing Tool - SYS DATA Mounted mode"
 __EMAIL = "yogesh@swiftforensics.com"
 
@@ -116,7 +116,7 @@ if args.output_path:
     if not CheckOutputPath(args.output_path):
         Exit()
 else:
-    args.output_path = '.' # output to same folder as script.
+    args.output_path = os.path.abspath('.') # output to same folder as script.
 
 if args.log_level:
     args.log_level = args.log_level.upper()
