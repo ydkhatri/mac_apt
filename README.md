@@ -16,8 +16,8 @@ mac_apt is a DFIR tool to process Mac computer full disk images (**or _live_ mac
 * Reads the Spotlight database and Unified Logging (tracev3) files
 
 #### Latest
-:heavy_check_mark: macOS Catalina (10.15) images can be parsed now
-:heavy_check_mark: macOS Catalina (10.15) separately mounted SYSTEM & DATA volumes now supported
+:heavy_check_mark: macOS Catalina (10.15) images can be parsed now.  
+:heavy_check_mark: macOS Catalina (10.15) separately mounted SYSTEM & DATA volumes now supported.  
 :heavy_check_mark: AFF4 images (_of unencrypted APFS volumes_) now supported
 
 Available Plugins (artifacts parsed) | Description 
