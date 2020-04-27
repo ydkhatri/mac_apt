@@ -1,4 +1,4 @@
-Updates in 20200424 (v0.5):
+Updates in 20200426 (v0.5):
 
 + New Plugins - SCREENTIME, QUICKLOOK, TERMINALSTATE, APPLIST, COOKIES
 + Compatibility with macOS 10.15 separate System & Data volumes
