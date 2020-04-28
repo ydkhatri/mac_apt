@@ -23,7 +23,8 @@ __Plugin_Author_Email = "yogesh@swiftforensics.com"
 
 __Plugin_Modes = "MACOS,ARTIFACTONLY"
 __Plugin_ArtifactOnly_Usage = 'Provide one or more Quarantine sqlite databases as input to process. These are typically '\
-                            'located at /Users/$USER/Library/Preferences/com.apple.LaunchServices.QuarantineEventsV2'
+                            'located at /Users/$USER/Library/Preferences/com.apple.LaunchServices.QuarantineEventsV2 '\
+                            'It will also process .LastGKReject'
 
 log = logging.getLogger('MAIN.' + __Plugin_Name) # Do not rename or remove this ! This is the logger object
 
@@ -224,6 +225,8 @@ def Plugin_Start_Standalone(input_files_list, output_params):
                 PrintAll(quarantined, output_params)
             else:
                 log.info('No quarantine events found in {}'.format(input_path))
+        else:
+            log.info(f'Not a QUARANTINE database file: {input_path}')
 
 if __name__ == '__main__':
     print ("This plugin is a part of a framework and does not run independently on its own!")
