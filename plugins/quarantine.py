@@ -211,16 +211,15 @@ def Plugin_Start_Standalone(input_files_list, output_params):
                 ReadLastGKRejectPlist(plist)
             except Exception as ex:
                 log.exception('Failed to read file: {}'.format(input_path))
-        elif input_path.endswith('.sqlite'):
+        elif input_path.endswith('QuarantineEventsV2'):
             quarantined = []
             db = OpenDb(input_path)
             if db != None:
                 filename = os.path.basename(input_path)
-                if filename.find('V2') > 0:
-                    ReadQuarantineDb(db, quarantined, input_path, '')
-                else:
-                    log.info('Unknown database type, not a recognized file name')
+                ReadQuarantineDb(db, quarantined, input_path, '')
                 db.close()
+            else:
+                log.error(f'Failed to open database {input_path}')
             if len(quarantined) > 0:
                 PrintAll(quarantined, output_params)
             else:
