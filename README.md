@@ -1,5 +1,7 @@
 # mac_apt
-macOS Artifact Parsing Tool
+macOS Artifact Parsing Tool   
+[![Latest version](https://img.shields.io/badge/version-v0.5-blue)](https://github.com/ydkhatri/mac_apt/releases/tag/v0.5-beta)
+[![status](https://img.shields.io/badge/status-beta-red)]()
 
 mac_apt is a DFIR tool to process Mac computer full disk images (**or _live_ machines**) and extract data/metadata useful for forensic investigation. It is a python based framework, which has plugins to process individual artifacts (such as Safari internet history, Network interfaces, Recently accessed files & volumes, ..)
 
@@ -65,4 +67,6 @@ For installation (to run from code) see https://github.com/ydkhatri/mac_apt/wiki
 To download, proceed here - https://github.com/ydkhatri/mac_apt/releases
 
 ## Bugs
-Feel free to send comments and feedback to yogesh AT swiftforensics DOT com, or open an [issue](https://github.com/ydkhatri/mac_apt/issues).
+Feel free to send comments and feedback to yogesh AT swiftforensics DOT com, or open an [issue](https://github.com/ydkhatri/mac_apt/issues).  
+
+[![Tweet](https://img.shields.io/twitter/url?style=social&url=https%3A%2F%2Ftwitter.com%2Fswiftforensics)](https://twitter.com/swiftforensics)
