@@ -537,10 +537,13 @@ class ApfsFileSystemParser:
                         log.exception('Exception trying to read block {}'.format(entry.data.pointer))
                 else:
                     try:
+                        if entry.data.flags & 4: # ENCRYPTED FLAG
+                            pass # Need to decrypt entry first!!
+                        if entry.data.flags & 1: #OMAP_VAL_DELETED
+                            log.debug("Encountered deleted branch in block={}, Skipping".format(entry.data.paddr.value))
+                            continue
                         newblock = self.container.read_block(entry.data.paddr.value)
                         self.read_entries(entry.data.paddr.value, newblock)
-                        if entry.data.flags & 1: #OMAP_VAL_DELETED
-                            log.warning("Block values are deleted? ,block={}".format(entry.data.paddr.value))
                     except (ValueError, EOFError, OSError):
                         log.exception('Exception trying to read block {}'.format(entry.data.paddr.value))
         elif block.header.subtype == 0:
