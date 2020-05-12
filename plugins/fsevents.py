@@ -288,7 +288,7 @@ def Plugin_Start_Standalone(input_files_list, output_params):
         if len(logs) > 0:
             PrintAll(logs, output_params)
             log.info("The source_date field on the fsevents are from the individual file modified date "\
-                     " (metadata not data)! This may have changed if you are not on a live or read-only image.")
+                     "(metadata not data)! This may have changed if you are not on a live or read-only image.")
         else:
             log.info('No fsevents found')
 
