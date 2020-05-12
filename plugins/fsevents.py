@@ -136,19 +136,14 @@ def ReadCString(buffer, buffer_size, start_pos):
     Reads null-terminated string starting at start_pos in buffer.
     Returns tuple (string, end_pos)
     '''
-    end_pos = start_pos
     string = ""
-    ch = ''
-    while end_pos < buffer_size:
-        ch = str(chr(buffer[end_pos]))
-
-        if ch == '\x00':
-            break
-        else:
-            end_pos += 1
-            string += ch
-    x = string
-    y = string.encode("utf-8", "backslashreplace")
+    end_pos = buffer[start_pos:].find(b'\0')
+    if end_pos == -1: # Null not found
+        end_pos = len(buffer)
+        string = buffer[start_pos:].decode("utf-8", "backslashreplace")
+    else:
+        string = buffer[start_pos:start_pos + end_pos].decode("utf-8", "backslashreplace")
+    end_pos += start_pos
 
     return string, end_pos + 1
 
