@@ -534,8 +534,8 @@ class Apfs(KaitaiStruct):
                     elif record.x_type == INO_EXT_TYPE_FINDER_INFO:  self.xfields[INO_EXT_TYPE_FINDER_INFO] = self._io.read_u4le()
                     elif record.x_type == INO_EXT_TYPE_FS_UUID:      self.xfields[INO_EXT_TYPE_FS_UUID] = self._io.read_bytes(16)
                     elif record.x_type == INO_EXT_TYPE_DIR_STATS_KEY:
-                        x_dir_stats_val = self._root.DirStatsRecord(self._io, self, self._root)
-                        self.xfields[INO_EXT_TYPE_DIR_STATS_KEY] = x_dir_stats_val
+                        x_dir_stats_key = self._io.read_u8le()
+                        self.xfields[INO_EXT_TYPE_DIR_STATS_KEY] = x_dir_stats_key
 
     class DirStatsRecord(KaitaiStruct):
         __slots__ = ['_io', '_parent', '_root', 'num_children', 'total_size', 'chained_key', 'gen_count']
@@ -947,8 +947,8 @@ class Apfs(KaitaiStruct):
                     elif record.x_type == INO_EXT_TYPE_FINDER_INFO:  self.xfields[INO_EXT_TYPE_FINDER_INFO] = self._io.read_u4le()
                     elif record.x_type == INO_EXT_TYPE_FS_UUID:      self.xfields[INO_EXT_TYPE_FS_UUID] = self._io.read_bytes(16)
                     elif record.x_type == INO_EXT_TYPE_DIR_STATS_KEY:
-                        x_dir_stats_val = self._root.DirStatsRecord(self._io, self, self._root)
-                        self.xfields[INO_EXT_TYPE_DIR_STATS_KEY] = x_dir_stats_val
+                        x_dir_stats_key = self._io.read_u8le()
+                        self.xfields[INO_EXT_TYPE_DIR_STATS_KEY] = x_dir_stats_key
                     #else:
                 # END ADDED
                 #self.unknown_remainder = self._io.read_bytes_full()

@@ -84,7 +84,7 @@ def GetUint64Value(value):
 
 def OpenDbFromImage(mac_info, inputPath, user):
     '''Returns tuple of (connection, wrapper_obj)'''
-    log.info ("Processing office registry entires for user '{}' from file {}".format(user, inputPath))
+    log.info ("Processing office registry entries for user '{}' from file {}".format(user, inputPath))
     try:
         sqlite = SqliteWrapper(mac_info)
         conn = sqlite.connect(inputPath)
