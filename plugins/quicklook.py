@@ -432,16 +432,15 @@ def Plugin_Start(mac_info):
         quicklook_db, quicklook_wrapper = OpenDbFromImage(mac_info, quicklook_db_path)
 
         c = quicklook_db.cursor()
-
-        # Change program flow based on Mac OS version
-        if os_minor_version <= 14:
-            # Calls parseDB to execute SQL statement
+        query = "PRAGMA table_info('files');"
+        c.execute(query)
+        row = c.fetchone()
+        if row is not None:
             log.debug("QuickLook data from Mac OS below 10.15 found... Processing")
             parseDb(c, quicklook_array, quicklook_db_path, thumbnail_file, mac_info)
         else:
             log.debug("QuickLook data from Mac OS 10.15 found... Processing")
             parseDbNew(c, quicklook_array, quicklook_db_path, thumbnail_file, mac_info)
-
 
         # Close the index.sqlite
         quicklook_db.close()

@@ -29,7 +29,7 @@ import time
 import textwrap
 from plugin import *
 
-__VERSION = "0.4.1"
+__VERSION = "0.5"
 __PROGRAMNAME = "macOS Artifact Parsing Tool - Artifact Only mode"
 __EMAIL = "yogesh@swiftforensics.com"
 
@@ -108,7 +108,7 @@ log.setLevel(args.log_level)
 log.info("Started {}, version {}".format(__PROGRAMNAME, __VERSION))
 log.info("Dates and times are in UTC unless the specific artifact being parsed saves it as local time!")
 log.debug(' '.join(sys.argv))
-LogLibraryVersions(log)
+#LogLibraryVersions(log)
 
 output_params = macinfo.OutputParams()
 output_params.output_path = args.output_path

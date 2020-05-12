@@ -31,7 +31,7 @@ log = logging.getLogger('MAIN.' + __Plugin_Name) # Do not rename or remove this 
 #---- Do not change the variable names in above section ----#
 
 class DockItem:
-    def __init__(self, file_label, parent_mod_date, file_mod_date, file_type, file_data, guid, user, source_path):
+    def __init__(self, file_label, parent_mod_date, file_mod_date, recent_used, file_type, file_data, guid, user, source_path):
         self.file_label = file_label
         if parent_mod_date and (parent_mod_date > 0xFFFFFFFF): # On High Sierra and above..
             parent_mod_date = parent_mod_date & 0xFFFFFFFF # Killing upper 32 bits!
@@ -42,6 +42,7 @@ class DockItem:
 
         self.parent_mod_date = CommonFunctions.ReadMacHFSTime(parent_mod_date)
         self.file_mod_date = CommonFunctions.ReadMacHFSTime(file_mod_date)
+        self.recent_used = recent_used
         self.file_type = file_type
         self.file_path = file_data
         self.guid = guid
@@ -51,6 +52,7 @@ class DockItem:
 def PrintAll(docks, output_params, input_path=''):
     dock_info = [   ('File Label',DataType.TEXT),
                     ('Parent Modified',DataType.TEXT),('File Modified',DataType.DATE),
+                    ('Recently Used',DataType.TEXT),
                     ('File Type',DataType.TEXT),('File Path',DataType.TEXT),
                     ('GUID',DataType.TEXT),
                     ('User',DataType.TEXT),('Source',DataType.TEXT)
@@ -61,7 +63,7 @@ def PrintAll(docks, output_params, input_path=''):
     dock_list_final = []
     for item in docks:
         single_dock_item = [item.file_label, item.parent_mod_date, item.file_mod_date, 
-                            item.file_type, item.file_path,
+                            item.recent_used, item.file_type, item.file_path, 
                             item.guid,
                             item.user, item.path
                             ]
@@ -98,6 +100,7 @@ def ParseDockItemsPlist(plist, docks, user_name, plist_path):
                         instance = DockItem(tile_data.get('file-label', ''),
                                             tile_data.get('parent-mod-date', None),
                                             tile_data.get('file-mod-date', None),
+                                            'Yes' if key=='recent-apps' else '',
                                             tile_data.get('file-type', ''),
                                             GetPath(tile_data.get('file-data', None)),
                                             item.get('GUID', ''),

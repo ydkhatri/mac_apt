@@ -1,3 +1,28 @@
+Updates in 20200426 (v0.5):
+
++ New Plugins - SCREENTIME, QUICKLOOK, TERMINALSTATE, APPLIST, COOKIES
++ Compatibility with macOS 10.15 separate System & Data volumes
++ Better disk space reporting for APFS & HFS
++ Added AFF4 support
++ FSEVENTS now works for iOS
++ BootVolume Spotlight parsing for Catalina
++ Add ssh known_hosts to RECENTITEMS
++ Add zsh history to bash session
++ Added column for recent_app in dockitems
+
+! Fixed ios Spotlight bug
+! Handling of * in format strings in UNIFIEDLOGS 
+
+Updates in 20190816 (v0.4.1):
+
++ RecentItems plugin now reads FileCreatedDates from APP.securebookmarks.plist
++ RecentItems plugin now gets Mounted dev/vol name from userglobalpref plist
++ RecentItems plugin now reads LastSaveFilePathBookmark
++ Better exception handling in some places
++ Now gracefully handles file open failure in MOUNTED mode (due to lacking permissions)
+
+! Fixed bugs in Plugins - Printjobs, iDeviceInfo, Wifi
+
 Updates in 20190720 (v0.4):
 
 + New plugins - FSEVENTS, SPOTLIGHT, MSOFICE, UNIFIEDLOGS, AUTOSTART, IDEVICEINFO
