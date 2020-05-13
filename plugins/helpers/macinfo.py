@@ -563,7 +563,7 @@ class MacInfo:
         if f:
             target_path = f.read()
             f.close()
-            return target_path.decode('utf8', 'backslashreplace')
+            return target_path.rstrip(b'\0').decode('utf8', 'backslashreplace')
         return ''
 
     def IsValidFilePath(self, path):
