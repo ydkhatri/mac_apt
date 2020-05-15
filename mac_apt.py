@@ -390,7 +390,7 @@ arg_parser.add_argument('-c', '--csv', action="store_true", help='Save output as
 #arg_parser.add_argument('-s', '--sqlite', action="store_true", help='Save output in an sqlite database')
 arg_parser.add_argument('-l', '--log_level', help='Log levels: INFO, DEBUG, WARNING, ERROR, CRITICAL (Default is INFO)')#, choices=['INFO','DEBUG','WARNING','ERROR','CRITICAL'])
 #arg_parser.add_argument('-u', '--use_tsk', action="store_true", help='Use sleuthkit instead of native HFS+ parser (This is slower!)')
-arg_parser.add_argument('plugin', nargs="+", help="Plugins to run (space separated). 'FAST' will run most plugins")
+arg_parser.add_argument('plugin', nargs="+", help="Plugins to run (space separated). FAST will run most plugins")
 args = arg_parser.parse_args()
 
 if args.output_path:
