@@ -102,8 +102,8 @@ for plugin in plugins:
 plugins_info += "\n    " + "-"*76 + "\n" +\
                  " "*4 + "FAST" + " "*16 + "Runs all plugins except SPOTLIGHT & UNIFIEDLOGS\n" + \
                  " "*4 + "ALL" + " "*17 + "Runs all plugins"
-arg_parser = argparse.ArgumentParser(description=f'mac_apt is a framework to process forensic artifacts on a Mac OSX system\n'\
-                                                 'You are running {__PROGRAMNAME} version {__VERSION}\n\n'\
+arg_parser = argparse.ArgumentParser(description='mac_apt is a framework to process forensic artifacts on a Mac OSX system\n'\
+                                                 f'You are running {__PROGRAMNAME} version {__VERSION}\n\n'\
                                                  'Note: The default output is now sqlite, no need to specify it now',
                                     epilog=plugins_info, formatter_class=argparse.RawTextHelpFormatter)
 arg_parser.add_argument('input_sys_path', help='Path to mounted SYSTEM image/volume')
@@ -117,6 +117,9 @@ arg_parser.add_argument('plugin', nargs="+", help="Plugins to run (space separat
 args = arg_parser.parse_args()
 
 if args.output_path:
+    if (os.name != 'nt'):
+        if args.output_path.startswith('~/') or args.output_path == '~': # for linux/mac, translate ~ to user profile folder
+            args.output_path = os.path.expanduser(args.output_path)
     print ("Output path was : {}".format(args.output_path))
     if not CheckOutputPath(args.output_path):
         Exit()
