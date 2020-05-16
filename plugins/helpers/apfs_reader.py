@@ -1616,7 +1616,10 @@ class ApfsFile():
 
     def read(self, size_to_read=None):
         self._check_closed()
-        avail_to_read = self.file_size - self._pointer
+        if self.meta.is_symlink:
+            avail_to_read = len(self.meta.attributes['com.apple.fs.symlink'].data) - self._pointer
+        else:
+            avail_to_read = self.file_size - self._pointer
         if avail_to_read <= 0: # at or beyond the end of file
             return b''
         if (size_to_read is None) or (size_to_read > avail_to_read):
@@ -1639,8 +1642,7 @@ class ApfsFile():
                     self._buffer = data
 
         if self.meta.is_symlink: # if symlink, return symlink  path as data
-            data += self.meta.attributes['com.apple.fs.symlink'].data[0:size_to_read]
-
+            data += self.meta.attributes['com.apple.fs.symlink'].data[self._pointer : self._pointer + size_to_read]
         else:
             new_data_fetched = self._GetSomeDataFromExtents(self.extents, self.meta.logical_size, self._pointer, size_to_read)
             new_data_len = len(new_data_fetched)

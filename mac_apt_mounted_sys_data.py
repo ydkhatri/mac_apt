@@ -32,7 +32,7 @@ from plugins.helpers.writer import *
 from plugins.helpers.disk_report import *
 from plugin import *
 
-__VERSION = "0.4.1"
+__VERSION = "0.5"
 __PROGRAMNAME = "macOS Artifact Parsing Tool - SYS DATA Mounted mode"
 __EMAIL = "yogesh@swiftforensics.com"
 
@@ -92,31 +92,39 @@ plugin_count = ImportPlugins(plugins, 'MACOS')
 if plugin_count == 0:
     Exit ("No plugins could be added ! Exiting..")
 
-plugin_name_list = ['ALL']
-plugins_info = "The following plugins are available:\n" + " "*4 + "ALL" + " "*17 + "Processes all plugins" 
+plugin_name_list = ['ALL', 'FAST']
+plugins_info = "The following plugins are available:"
+
 for plugin in plugins:
     plugins_info += "\n    {:<20}{}".format(plugin.__Plugin_Name, textwrap.fill(plugin.__Plugin_Description, subsequent_indent=' '*24, initial_indent=' '*24, width=80)[24:])
     plugin_name_list.append(plugin.__Plugin_Name)
 
+plugins_info += "\n    " + "-"*76 + "\n" +\
+                 " "*4 + "FAST" + " "*16 + "Runs all plugins except SPOTLIGHT & UNIFIEDLOGS\n" + \
+                 " "*4 + "ALL" + " "*17 + "Runs all plugins"
 arg_parser = argparse.ArgumentParser(description='mac_apt is a framework to process forensic artifacts on a Mac OSX system\n'\
-                                                 'You are running {} version {}'.format(__PROGRAMNAME, __VERSION),
+                                                 f'You are running {__PROGRAMNAME} version {__VERSION}\n\n'\
+                                                 'Note: The default output is now sqlite, no need to specify it now',
                                     epilog=plugins_info, formatter_class=argparse.RawTextHelpFormatter)
 arg_parser.add_argument('input_sys_path', help='Path to mounted SYSTEM image/volume')
 arg_parser.add_argument('input_data_path', help='Path to mounted DATA image/volume')
 arg_parser.add_argument('-o', '--output_path', help='Path where output files will be created')
-arg_parser.add_argument('-x', '--xlsx', action="store_true", help='Save output in excel spreadsheet(s)')
-arg_parser.add_argument('-c', '--csv', action="store_true", help='Save output as CSV files (Default option if no output type selected)')
-arg_parser.add_argument('-s', '--sqlite', action="store_true", help='Save output in an sqlite database')
+arg_parser.add_argument('-x', '--xlsx', action="store_true", help='Save output in Excel spreadsheet')
+arg_parser.add_argument('-c', '--csv', action="store_true", help='Save output as CSV files')
+#arg_parser.add_argument('-s', '--sqlite', action="store_true", help='Save output in an sqlite database')
 arg_parser.add_argument('-l', '--log_level', help='Log levels: INFO, DEBUG, WARNING, ERROR, CRITICAL (Default is INFO)')#, choices=['INFO','DEBUG','WARNING','ERROR','CRITICAL'])
-arg_parser.add_argument('plugin', nargs="+", help="Plugins to run (space separated). 'ALL' will process every available plugin")
+arg_parser.add_argument('plugin', nargs="+", help="Plugins to run (space separated). 'FAST' will run most plugins")
 args = arg_parser.parse_args()
 
 if args.output_path:
+    if (os.name != 'nt'):
+        if args.output_path.startswith('~/') or args.output_path == '~': # for linux/mac, translate ~ to user profile folder
+            args.output_path = os.path.expanduser(args.output_path)
     print ("Output path was : {}".format(args.output_path))
     if not CheckOutputPath(args.output_path):
         Exit()
 else:
-    args.output_path = '.' # output to same folder as script.
+    args.output_path = os.path.abspath('.') # output to same folder as script.
 
 if args.log_level:
     args.log_level = args.log_level.upper()
@@ -146,14 +154,31 @@ if not os.path.isdir(args.input_data_path):
 plugins_to_run = [x.upper() for x in args.plugin]  # convert all plugin names entered by user to uppercase
 process_all = IsItemPresentInList(plugins_to_run, 'ALL')
 if not process_all:
-    #Check for invalid plugin names or ones not Found
-    if not CheckUserEnteredPluginNames(plugins_to_run, plugins):
-        Exit("Exiting -> Invalid plugin name entered.")
+    if IsItemPresentInList(plugins_to_run, 'FAST'): # check for FAST
+        plugins_to_run = plugin_name_list
+        plugins_to_run.remove('ALL')
+        plugins_to_run.remove('FAST')
+        plugins_to_run.remove('SPOTLIGHT')
+        plugins_to_run.remove('UNIFIEDLOGS')
+    else:
+        #Check for invalid plugin names or ones not Found
+        if not CheckUserEnteredPluginNames(plugins_to_run, plugins):
+            Exit("Exiting -> Invalid plugin name entered.")
 
 # Check outputs, create output files
 output_params = macinfo.OutputParams()
 output_params.output_path = args.output_path
 SetupExportLogger(output_params)
+
+try:
+    sqlite_path = os.path.join(output_params.output_path, "mac_apt.db")
+    output_params.output_db_path = SqliteWriter.CreateSqliteDb(sqlite_path)
+    output_params.write_sql = True
+except Exception as ex:
+    log.info('Sqlite db could not be created at : ' + sqlite_path)
+    log.exception('Exception occurred when trying to create Sqlite db')
+    Exit()
+
 if args.xlsx: 
     try:
         xlsx_path = os.path.join(output_params.output_path, "mac_apt.xlsx")
@@ -163,17 +188,8 @@ if args.xlsx:
     except Exception as ex:
         log.info('XLSX file could not be created at : ' + xlsx_path)
         log.exception('Exception occurred when trying to create XLSX file')
-
-if args.sqlite: 
-    try:
-        sqlite_path = os.path.join(output_params.output_path, "mac_apt.db")
-        output_params.output_db_path = SqliteWriter.CreateSqliteDb(sqlite_path)
-        output_params.write_sql = True
-    except Exception as ex:
-        log.info('Sqlite db could not be created at : ' + sqlite_path)
-        log.exception('Exception occurred when trying to create Sqlite db')
     
-if args.csv or not (output_params.write_sql or output_params.write_xlsx):
+if args.csv:
     output_params.write_csv  = True
 
 # At this point, all looks good, lets mount the image

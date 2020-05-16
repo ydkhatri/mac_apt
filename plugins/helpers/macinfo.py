@@ -564,7 +564,7 @@ class MacInfo:
         if f:
             target_path = f.read()
             f.close()
-            return target_path.decode('utf8', 'backslashreplace')
+            return target_path.rstrip(b'\0').decode('utf8', 'backslashreplace')
         return ''
 
     def IsValidFilePath(self, path):
@@ -1063,6 +1063,7 @@ class ApfsMacInfo(MacInfo):
                     if preboot_vol.DoesFileExist(plist_path):
                         plist_raw_data = preboot_vol.open(plist_path).readAll()
                         plist_data = biplist.readPlistFromString(plist_raw_data)
+                        #PLACE PASSWORD VARIABLE HERE
                         decryption_key = decryptor.EncryptedVol(vol, plist_data, "salami999", log).decryption_key
                         if decryption_key is None:
                             log.error("No decryption key found")
@@ -1566,6 +1567,13 @@ class SqliteWrapper:
             self.wal_temp_file = self.mac_info.ExtractFile(self.wal_file_path, self.wal_file_path_temp)
         return True
 
+    def _is_valid_sqlite_file(self, path):
+        '''Checks file header for valid sqlite db'''
+        ret = False
+        with open (path, 'rb') as f:
+            if f.read(16) == b'SQLite format 3\0':
+                ret = True
+        return ret                                               
     def __getattr__(self, attr):
         if attr == 'connect': 
             def hooked(path):
@@ -1575,7 +1583,11 @@ class SqliteWrapper:
                 self.wal_file_path = path + "-wal"
                 if self._ExtractFiles():
                     log.debug('Trying to extract and read db: ' + path)
-                    result = self.sqlite3.connect(self.db_file_path_temp) # TODO -> Why are exceptions not being raised here when bad paths are sent?
+                    if self._is_valid_sqlite_file(self.db_file_path_temp):
+                        result = self.sqlite3.connect(self.db_file_path_temp) # TODO -> Why are exceptions not being raised here when bad paths are sent?
+                    else:
+                        log.error('File is not an SQLITE db or it is corrupted!')
+                        result = None
                 else:
                     result = None
                 return result

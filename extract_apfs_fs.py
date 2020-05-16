@@ -42,7 +42,7 @@ __EMAIL = "yogesh@swiftforensics.com"
 
 def CheckInputType(input_type):
     input_type = input_type.upper()
-    return input_type in ['AFF4','E01','DD','VMDK']
+    return input_type in ['AFF4','E01','DD','DMG','VMDK']
 
 ######### FOR HANDLING E01 file ###############
 class ewf_Img_Info(pytsk3.Img_Info):
@@ -177,8 +177,17 @@ def GetApfsContainerUuid(img, container_start_offset):
     uuid = UUID(bytes=uuid_bytes)
     return uuid
 
-def IsHFSPartition(img, partition_start_offset, mac_info):
-    '''Determines if the partition is HFS'''
+def IsHFSVolume(img, partition_start_offset):
+    '''Checks if this is an HFS volume'''
+    try:
+        if img.read(partition_start_offset + 0x400, 2) in (b'\x48\x58', b'\x48\x2B'):
+            return True
+    except:
+        raise ValueError('Cannot seek into image @ offset {}'.format(partition_start_offset + 0x400))
+    return False
+
+def IsHFSPartition(img, partition_start_offset):
+    '''Determines if the partition is HFS by mounting it'''
     try:
         fs = pytsk3.FS_Info(img, offset=partition_start_offset)    
         fs_info = fs.info # TSK_FS_INFO
@@ -273,7 +282,7 @@ def ParsePartitionTables(img, vol_info, vs_info):
                 log.info('Found an APFS container with uuid: {}'.format(str(uuid).upper()))
                 return ParseVolumesInApfsContainer(img, vol_info, vs_info.block_size * part.len, partition_start_offset, uuid)
 
-            elif IsHFSPartition(img, partition_start_offset, mac_info):
+            elif IsHFSVolume(img, partition_start_offset):
                 log.info('Found HFS partition, skipping..')
             else:
                 log.info("Found unknown partition, skipping..")
@@ -294,7 +303,7 @@ log = None
 arg_parser = argparse.ArgumentParser(description='extract_apfs_fs is a script to read APFS metadata from an image\n'\
                                                  'You are running {} version {}'.format(__PROGRAMNAME, __VERSION),
                                     epilog='', formatter_class=argparse.RawTextHelpFormatter)
-arg_parser.add_argument('input_type', help='Specify Input type as either E01, DD, VMDK, AFF4')
+arg_parser.add_argument('input_type', help='Specify Input type as either E01, DD, DMG, VMDK, AFF4')
 arg_parser.add_argument('input_path', help='Path to disk image/volume')
 arg_parser.add_argument('-o', '--output_path', help='Path where output files will be created')
 arg_parser.add_argument('-l', '--log_level', help='Log levels: INFO, DEBUG, WARNING, ERROR, CRITICAL (Default is INFO)')#, choices=['INFO','DEBUG','WARNING','ERROR','CRITICAL'])
@@ -343,7 +352,6 @@ except Exception as ex:
     log.info('XLSX file could not be created at : ' + xlsx_path)
     log.exception('Exception occurred when trying to create XLSX file')
 
- 
 try:
     sqlite_path = os.path.join(output_params.output_path, "disk_info.db")
     output_params.output_db_path = SqliteWriter.CreateSqliteDb(sqlite_path)
@@ -368,7 +376,7 @@ try:
     elif args.input_type.upper() == 'AFF4':
         img = GetImgInfoObjectForAff4(args.input_path) # Use this function instead of pytsk3.Img_Info()
         mac_info = macinfo.MacInfo(output_params)
-    elif args.input_type.upper() == 'DD':
+    elif args.input_type.upper() in ('DD', 'DMG'):
         img = pytsk3.Img_Info(args.input_path) # Works for split dd images too! Works for DMG too, if no compression/encryption is used!
         mac_info = macinfo.MacInfo(output_params)
 
@@ -379,25 +387,24 @@ except Exception as ex:
 
 
 mac_info.use_native_hfs_parser = True #False if args.use_tsk else True
-try:
-    mac_info.pytsk_image = img
-    vol_info = pytsk3.Volume_Info(img)
-    vs_info = vol_info.info # TSK_VS_INFO object
-    mac_info.vol_info = vol_info
-    ParsePartitionTables(img, vol_info, vs_info)
-    Disk_Info(mac_info, args.input_path).Write()
-except Exception as ex:
-    if str(ex).find("Cannot determine partition type") > 0 :
-        log.info(" Info: Probably not a disk image, trying to parse as a File system")
-        if IsApfsContainer(img, 0):
-            uuid = GetApfsContainerUuid(img, 0)
-            log.info('Found an APFS container with uuid: {}'.format(str(uuid).upper()))
-            ParseVolumesInApfsContainer(img, None, img.get_size(), 0, uuid)
-        elif IsHFSPartition(img, 0, mac_info):
-            log.info('Found an HFS partition, skipping it..')
-    else:
-        log.error("Unknown error while trying to determine partition")
-        log.exception("Exception")
+
+if IsApfsContainer(img, 0):
+    uuid = GetApfsContainerUuid(img, 0)
+    log.info('Found an APFS container with uuid: {}'.format(str(uuid).upper()))
+    ParseVolumesInApfsContainer(img, None, img.get_size(), 0, uuid)
+elif IsHFSVolume(img, 0):
+    log.info('Found an HFS partition, skipping it..')
+else: # perhaps this is a full disk image
+    try:
+        mac_info.pytsk_image = img
+        vol_info = pytsk3.Volume_Info(img)
+        vs_info = vol_info.info # TSK_VS_INFO object
+        mac_info.vol_info = vol_info
+        # Try as a partition/container first
+        ParsePartitionTables(img, vol_info, vs_info)
+        Disk_Info(mac_info, args.input_path).Write()
+    except Exception as ex:
+        log.exception("Error while trying to read partitions on disk")
 
 log.info("-"*50)
 

@@ -84,7 +84,7 @@ def GetUint64Value(value):
 
 def OpenDbFromImage(mac_info, inputPath, user):
     '''Returns tuple of (connection, wrapper_obj)'''
-    log.info ("Processing office registry entires for user '{}' from file {}".format(user, inputPath))
+    log.info ("Processing office registry entries for user '{}' from file {}".format(user, inputPath))
     try:
         sqlite = SqliteWrapper(mac_info)
         conn = sqlite.connect(inputPath)
@@ -374,6 +374,17 @@ def Plugin_Start(mac_info):
                 if folder['name'].endswith('.Office'):
                     reg_path = reg_path_partial + '/' + folder['name'] + '/MicrosoftRegistrationDB.reg'
                     if mac_info.IsValidFilePath(reg_path):
+                        if mac_info.IsSymbolicLink(reg_path): # sometimes this is a symlink
+                            target_path = mac_info.ReadSymLinkTargetPath(reg_path)
+                            log.debug('SYMLINK {} <==> {}'.format(reg_path, target_path))
+                            if target_path.startswith('../') or target_path.startswith('./'):
+                                reg_path = mac_info.GetAbsolutePath(posixpath.split(reg_path)[0], target_path)
+                            else:
+                                reg_path = target_path
+                            if not mac_info.IsValidFilePath(reg_path):
+                                log.error(f"symlink did not point to a valid file?? path={reg_path}")
+                                continue
+                        
                         mac_info.ExportFile(reg_path, __Plugin_Name, user_name, False)
                         conn, wrapper = OpenDbFromImage(mac_info, reg_path, user)
                         if conn:
