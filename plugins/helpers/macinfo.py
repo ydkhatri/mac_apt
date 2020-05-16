@@ -1074,6 +1074,123 @@ class ApfsMacInfo(MacInfo):
             else:
                 apfs_parser = ApfsFileSystemParser(vol, self.apfs_db)
                 apfs_parser.read_volume_records()
+    def GetFileMACTimes(self, file_path):
+        '''Gets MACB and the 5th Index timestamp too'''
+        times = { 'c_time':None, 'm_time':None, 'cr_time':None, 'a_time':None, 'i_time':None }
+        try:
+            apfs_file_meta = self.macos_FS.GetFileMetadataByPath(file_path)
+            if apfs_file_meta:
+                times['c_time'] = apfs_file_meta.changed
+                times['m_time'] = apfs_file_meta.modified
+                times['cr_time'] = apfs_file_meta.created
+                times['a_time'] = apfs_file_meta.accessed
+                times['i_time'] = apfs_file_meta.date_added
+                             
+                                                                          
+                                                                                                                                 
+                                                             
+            else:
+                log.debug('File not found in GetFileMACTimes() query!, path was ' + file_path)
+        except Exception as ex:
+            log.exception('Error trying to get MAC times')
+        return times
+
+    def IsSymbolicLink(self, path):
+        return self.macos_FS.IsSymbolicLink(path)
+
+    def IsValidFilePath(self, path):
+        return self.macos_FS.DoesFileExist(path)
+
+    def IsValidFolderPath(self, path):
+        return self.macos_FS.DoesFolderExist(path)
+
+    def GetExtendedAttribute(self, path, att_name):
+        return self.macos_FS.GetExtendedAttribute(path, att_name)
+
+    def GetExtendedAttributes(self, path):
+        xattrs = {}
+        apfs_xattrs = self.macos_FS.GetExtendedAttributes(path)
+        return { att_name:att.data for att_name,att in apfs_xattrs.items() }
+
+    def GetFileSize(self, full_path, error=None):
+        try:
+            apfs_file_meta = self.macos_FS.GetFileMetadataByPath(full_path)
+            if apfs_file_meta:
+                return apfs_file_meta.logical_size
+        except Exception as ex:
+            log.debug ("APFSMacInfo->Exception from GetFileSize() " + str(ex))
+        return error
+
+    def OpenSmallFile(self, path):
+        '''Open files less than 200 MB, returns open file handle'''
+        return self.macos_FS.open(path) #self.macos_FS.OpenSmallFile(path)
+
+    def open(self, path):
+        '''Open file and return a file-like object'''
+        return self.macos_FS.open(path)
+
+    def ExtractFile(self, tsk_path, destination_path):
+        return self.macos_FS.CopyOutFile(tsk_path, destination_path)
+
+    def _GetSize(self, entry):
+        '''For file entry, gets logical file size, or 0 if error'''
+        try:
+            apfs_file_meta = self.macos_FS.GetFileMetadataByPath(path)
+            if apfs_file_meta:
+                return apfs_file_meta.logical_size
+        except:
+            pass
+        return 0
+
+    def GetUserAndGroupIDForFile(self, path):
+        return self._GetUserAndGroupID(path)
+
+    def GetUserAndGroupIDForFolder(self, path):
+        return self._GetUserAndGroupID(path)
+
+    def _GetUserAndGroupID(self, path):
+        '''
+            Returns tuple (success, UID, GID) for file/folder identified by path
+            If failed to get values, success=False
+            UID & GID are returned as strings
+        '''
+        success, uid, gid = False, 0, 0
+        apfs_file_meta = self.macos_FS.GetFileMetadataByPath(path)
+        if apfs_file_meta:
+            uid = str(apfs_file_meta.uid)
+            gid = str(apfs_file_meta.gid)
+            success = True
+        else:
+            log.debug("Path not found in database (filesystem) : " + path)
+        return success, uid, gid
+
+    def ListItemsInFolder(self, path='/', types_to_fetch=EntryType.FILES_AND_FOLDERS, include_dates=False):
+        '''Always returns dates ignoring the 'include_dates' parameter'''
+        items = []
+        all_items = self.macos_FS.ListItemsInFolder(path)
+        if all_items:
+            if types_to_fetch == EntryType.FILES_AND_FOLDERS:
+                items = [] #[dict(x) for x in all_items if x['type'] in ['File', 'Folder'] ]
+                for x in all_items:
+                    if x['type'] == 'File':
+                        x['type'] = EntryType.FILES
+                        items.append(dict(x))
+                    elif x['type'] == 'Folder':
+                        x['type'] = EntryType.FOLDERS
+                        items.append(dict(x))
+
+            elif types_to_fetch == EntryType.FILES:
+                for x in all_items:
+                    if x['type'] == 'File':
+                        x['type'] = EntryType.FILES
+                        items.append(dict(x))
+            else: # Folders
+                for x in all_items:
+                    if x['type'] == 'Folder':
+                        x['type'] = EntryType.FOLDERS
+                        items.append(dict(x))
+        return items
+
 
 # TODO: Make this class more efficient, perhaps remove some extractions!
 class MountedMacInfo(MacInfo):
