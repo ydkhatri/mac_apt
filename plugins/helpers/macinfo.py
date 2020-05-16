@@ -28,6 +28,7 @@ from plugins.helpers.deserializer import process_nsa_plist
 from plugins.helpers.hfs_alt import HFSVolume
 from plugins.helpers.common import *
 from plugins.helpers.structs import *
+from plugins.helpers import decryptor
 
 if sys.platform == 'linux':
     from plugins.helpers.statx import statx
@@ -1035,6 +1036,7 @@ class ApfsMacInfo(MacInfo):
 
     def ReadApfsVolumes(self):
         '''Read volume information into an sqlite db'''
+        decryption_key = None
         # Process Preboot volume first
         preboot_vol = self.apfs_container.preboot_volume
         if preboot_vol:
@@ -1047,12 +1049,31 @@ class ApfsMacInfo(MacInfo):
             if vol == preboot_vol:
                 continue
             elif vol.is_encrypted:
-                # x = preboot_vol.ListItemsInFolder('/')
-                # log.debug(str(x))
-                continue
-            apfs_parser = ApfsFileSystemParser(vol, self.apfs_db)
-            apfs_parser.read_volume_records()
-
+                uuid_folders = []
+                preboot_dir = preboot_vol.ListItemsInFolder('/')
+                for items in preboot_dir:
+                    if len(items['name']) == 36: # UUID Named folder
+                        uuid_folders.append(items['name'])
+                if len(uuid_folders) > 1:
+                    log.warning("There are more than 1 UUID like folders:\n" + str(uuid_folders) + "\nThe volume cannot be unencrypted by this script. Please contact the developers")
+                elif len(uuid_folders) == 0:
+                    log.error("There are no UUID like folders in the Preboot volume! Decryption cannot continue")
+                else:
+                    plist_path = uuid_folders[0] +  "/var/db/CryptoUserInfo.plist"
+                    if preboot_vol.DoesFileExist(plist_path):
+                        plist_raw_data = preboot_vol.open(plist_path).readAll()
+                        plist_data = biplist.readPlistFromString(plist_raw_data)
+                        #PLACE PASSWORD VARIABLE HERE
+                        decryption_key = decryptor.EncryptedVol(vol, plist_data, "salami999", log).decryption_key
+                        if decryption_key is None:
+                            log.error("No decryption key found")
+                        else:
+                            log.debug("Starting decryption of filesystem")
+                            apfs_parser = ApfsFileSystemParser(vol, self.apfs_db, decryption_key)
+                            apfs_parser.read_volume_records()
+            else:
+                apfs_parser = ApfsFileSystemParser(vol, self.apfs_db)
+                apfs_parser.read_volume_records()
     def GetFileMACTimes(self, file_path):
         '''Gets MACB and the 5th Index timestamp too'''
         times = { 'c_time':None, 'm_time':None, 'cr_time':None, 'a_time':None, 'i_time':None }
@@ -1064,6 +1085,10 @@ class ApfsMacInfo(MacInfo):
                 times['cr_time'] = apfs_file_meta.created
                 times['a_time'] = apfs_file_meta.accessed
                 times['i_time'] = apfs_file_meta.date_added
+                             
+                                                                          
+                                                                                                                                 
+                                                             
             else:
                 log.debug('File not found in GetFileMACTimes() query!, path was ' + file_path)
         except Exception as ex:
@@ -1165,6 +1190,7 @@ class ApfsMacInfo(MacInfo):
                         x['type'] = EntryType.FOLDERS
                         items.append(dict(x))
         return items
+
 
 # TODO: Make this class more efficient, perhaps remove some extractions!
 class MountedMacInfo(MacInfo):
@@ -1664,8 +1690,7 @@ class SqliteWrapper:
         with open (path, 'rb') as f:
             if f.read(16) == b'SQLite format 3\0':
                 ret = True
-        return ret
-
+        return ret                                               
     def __getattr__(self, attr):
         if attr == 'connect': 
             def hooked(path):
