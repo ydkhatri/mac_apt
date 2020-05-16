@@ -476,8 +476,10 @@ class Apfs(KaitaiStruct):
             self.reaper_oid = self._io.read_u8le()
             self.test_type = self._io.read_u4le()
             self.num_volumesuperblock_ids = self._io.read_u4le()
-            self.volumesuperblock_ids = [None] * (self.num_volumesuperblock_ids)
-            for i in range(self.num_volumesuperblock_ids):
+            self.volumesuperblock_ids = [None] * (100)
+            #self.volumesuperblock_ids = [None] * (self.num_volumesuperblock_ids)
+            # for i in range(self.num_volumesuperblock_ids):
+            for i in range(100):
                 self.volumesuperblock_ids[i] = self._io.read_u8le()
             self.counters = [None] * 32
             for i in range(32):
@@ -486,16 +488,17 @@ class Apfs(KaitaiStruct):
             self.blocked_out_block_count = self._io.read_u8le()
             self.evict_mapping_tree_oid = self._io.read_u8le()
             self.flags = self._io.read_u8le()
-            self.efi_jumpstart = self._io.read_u8le()
-            self.fusion_uuid = self._io.read_bytes(16)
-            self.keylocker_paddr = self._io.read_u8le()
-            self.keylocker_block_count = self._io.read_s8le()
-            self.ephemeral_info = self._io.read_u8le() * 4
-            self.test_oid = self._io.read_u8le()
-            self.fusion_mt_oid = self._io.read_u8le()
-            self.fusion_wbc_oid = self._io.read_u8le()
-            self.fusion_wbc_paddr = self._io.read_u8le()
-            self.fusion_wbc_count = self._io.read_u8le()
+            self.efi_jumpstart = self._io.read_u8le() #Jack Farley
+            self.fusion_uuid = self._io.read_bytes(16) #Jack Farley
+            self.keylocker_paddr = self._io.read_u8le() #Jack Farley
+            self.keylocker_block_count = self._io.read_s8le() #Jack Farley
+            self.ephemeral_info = self._io.read_u8le() * 4 #Jack Farley
+            self.test_oid = self._io.read_u8le() #Jack Farley
+            self.fusion_mt_oid = self._io.read_u8le() #Jack Farley
+            self.fusion_wbc_oid = self._io.read_u8le() #Jack Farley
+            self.fusion_wbc_paddr = self._io.read_u8le() #Jack Farley
+            self.fusion_wbc_count = self._io.read_u8le() #Jack Farley
+
 
     class DrecHashedRecord(KaitaiStruct):
         __slots__ = ['_io', '_parent', '_root', 'node_id', 'date_added', 'type_item', 'xfields']
@@ -534,8 +537,8 @@ class Apfs(KaitaiStruct):
                     elif record.x_type == INO_EXT_TYPE_FINDER_INFO:  self.xfields[INO_EXT_TYPE_FINDER_INFO] = self._io.read_u4le()
                     elif record.x_type == INO_EXT_TYPE_FS_UUID:      self.xfields[INO_EXT_TYPE_FS_UUID] = self._io.read_bytes(16)
                     elif record.x_type == INO_EXT_TYPE_DIR_STATS_KEY:
-                        x_dir_stats_key = self._io.read_u8le()
-                        self.xfields[INO_EXT_TYPE_DIR_STATS_KEY] = x_dir_stats_key
+                        x_dir_stats_val = self._root.DirStatsRecord(self._io, self, self._root)
+                        self.xfields[INO_EXT_TYPE_DIR_STATS_KEY] = x_dir_stats_val
 
     class DirStatsRecord(KaitaiStruct):
         __slots__ = ['_io', '_parent', '_root', 'num_children', 'total_size', 'chained_key', 'gen_count']
@@ -947,8 +950,8 @@ class Apfs(KaitaiStruct):
                     elif record.x_type == INO_EXT_TYPE_FINDER_INFO:  self.xfields[INO_EXT_TYPE_FINDER_INFO] = self._io.read_u4le()
                     elif record.x_type == INO_EXT_TYPE_FS_UUID:      self.xfields[INO_EXT_TYPE_FS_UUID] = self._io.read_bytes(16)
                     elif record.x_type == INO_EXT_TYPE_DIR_STATS_KEY:
-                        x_dir_stats_key = self._io.read_u8le()
-                        self.xfields[INO_EXT_TYPE_DIR_STATS_KEY] = x_dir_stats_key
+                        x_dir_stats_val = self._root.DirStatsRecord(self._io, self, self._root)
+                        self.xfields[INO_EXT_TYPE_DIR_STATS_KEY] = x_dir_stats_val
                     #else:
                 # END ADDED
                 #self.unknown_remainder = self._io.read_bytes_full()

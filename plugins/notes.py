@@ -31,7 +31,7 @@ __Plugin_Description = "Reads Notes databases"
 __Plugin_Author = "Yogesh Khatri"
 __Plugin_Author_Email = "yogesh@swiftforensics.com"
 
-__Plugin_Modes = "MACOS,ARTIFACTONLY"
+__Plugin_Modes = "MACOS,ARTIFACTONLY,IOS"
 __Plugin_ArtifactOnly_Usage = 'Provide one or more Notes sqlite databases as input to process. These are typically '\
                             'located at ~/Library/Containers/com.apple.Notes/Data/Library/Notes/  or '\
                             '~/Library/Group Containers/group.com.apple.notes/'
@@ -404,6 +404,19 @@ def Plugin_Start_Standalone(input_files_list, output_params):
             PrintAll(notes, output_params)
         else:
             log.info('No notes found in {}'.format(input_path))
+
+
+def Plugin_Start_Ios(ios_info):
+    '''Main Entry point function for iOS plugin'''
+    log.info("Module Started as iOS plugin")
+    notes = []
+    notes_path = '/private/var/mobile/Containers/Shared/AppGroup/AD9A3236-70C6-4300-B3E4-8FD3793A2B3B/NoteStore.sqlite'
+    ProcessNotesDbFromPath(ios_info, notes, notes_path, "")
+    if len(notes) > 0:
+        PrintAll(notes, ios_info.output_params)
+    else:
+        log.info('No notes found')
+
 
 if __name__ == '__main__':
     print ("This plugin is a part of a framework and does not run independently on its own!")

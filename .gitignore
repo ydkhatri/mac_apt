@@ -10,7 +10,6 @@ mac_apt_compiled*
 mac_apt_artifact_only_compiled*
 mac_apt_vmdk*
 *$py.class
-kill_pycache.bat
 
 # C extensions
 *.so

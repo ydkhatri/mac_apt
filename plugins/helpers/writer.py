@@ -231,7 +231,6 @@ class SqliteWriter:
         self.filepath = filepath
         try:
             self.conn = sqlite3.connect(self.filepath)
-            self.conn.execute('PRAGMA SYNCHRONOUS=OFF;') # faster!
         except (OSError, sqlite3.Error) as ex:
             log.error('Failed to open/create sqlite db at path {}'.format(filepath))
             log.exception('Error details')

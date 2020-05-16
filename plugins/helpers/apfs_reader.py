@@ -17,6 +17,8 @@ import tempfile
 from uuid import UUID
 from plugins.helpers.writer import DataType
 from plugins.helpers.common import *
+from CryptoPlus.Cipher import python_AES
+
 
 import zlib
 
@@ -131,11 +133,12 @@ class ApfsFileSystemParser:
     '''
     Reads and parses the file system, writes output to a database.
     '''
-    def __init__(self, apfs_volume, db_writer):
+    def __init__(self, apfs_volume, db_writer, encryption_key = None):
         self.name = apfs_volume.name
         self.volume = apfs_volume
         self.container = apfs_volume.container
         self.dbo = db_writer
+        self.encryption_key = encryption_key
 
         self.num_records_read_total = 0
         self.num_records_read_batch = 0
@@ -387,7 +390,10 @@ class ApfsFileSystemParser:
                     # resource fork has data
                     to_write.append([row[0], row[1], decmpfs, uncompressed_size, row[5], 0, row[7], 0, None])
             if to_write:
-                self.dbo.WriteRows(to_write, self.name + '_Compressed_Files')      
+                try:
+                    self.dbo.WriteRows(to_write, self.name + '_Compressed_Files')
+                except Exception as ex:
+                    log.exception(str(to_write) + " Has cased an exception, the exception was: " + str(ex))
 
         else:
             log.error('Error executing query : Query was {}, Error was {}'.format(type1_query, error))
@@ -399,15 +405,16 @@ class ApfsFileSystemParser:
         '''
         self.create_tables()
 
+
         root_block = self.container.read_block(self.volume.root_block_num)
         self.read_entries(self.volume.root_block_num, root_block)
 
         # write remaining records to db
         if self.num_records_read_batch > 0:
             self.num_records_read_batch = 0
-            
+
             self.write_records()
-            self.clear_records() # Clear the data once written   
+            self.clear_records() # Clear the data once written
 
         self.create_other_tables_and_indexes()
         self.PrintStats()
@@ -531,19 +538,24 @@ class ApfsFileSystemParser:
                     #if type(entry.key) == apfs.Apfs.OmapKey:
                     try:
                         if not entry.data.pointer in self.blocks_read:
-                            newblock = self.container.read_block(entry.data.pointer)
+                            newblock = self.container.read_block(entry.data.pointer, None) # Pointers are not encrypted blocks??
                             self.read_entries(entry.data.pointer, newblock)
                     except (ValueError, EOFError, OSError):
                         log.exception('Exception trying to read block {}'.format(entry.data.pointer))
                 else:
                     try:
-                        if entry.data.flags & 4: # ENCRYPTED FLAG
-                            pass # Need to decrypt entry first!!
+
                         if entry.data.flags & 1: #OMAP_VAL_DELETED
-                            log.debug("Encountered deleted branch in block={}, Skipping".format(entry.data.paddr.value))
+                            log.warning("Block values are deleted? ,block={}".format(entry.data.paddr.value))
                             continue
-                        newblock = self.container.read_block(entry.data.paddr.value)
+
+                        if ( entry.data.flags & 4 ) == 4: # ENCRYPTED FLAG
+                            newblock = self.container.read_block(entry.data.paddr.value, self.encryption_key)
+                        else:
+                            newblock = self.container.read_block(entry.data.paddr.value)
                         self.read_entries(entry.data.paddr.value, newblock)
+
+
                     except (ValueError, EOFError, OSError):
                         log.exception('Exception trying to read block {}'.format(entry.data.paddr.value))
         elif block.header.subtype == 0:
@@ -687,11 +699,12 @@ class ApfsVolume:
             log.info("Volume appears to be ENCRYPTED. Encrypted volumes can't be processed directly.")
             log.info("See link below for instructions on processing Encrypted volumes")
             log.info("https://github.com/ydkhatri/mac_apt/wiki/Known-issues-and-Workarounds")
-            return
+
+
         # get volume omap
         vol_omap = self.container.read_block(self.omap_oid)
         self.root_block_num = vol_omap.body.tree_oid
-        #log.debug ("root_block_num = {}".format(self.root_block_num))
+        log.debug ("root_block_num = {}".format(self.root_block_num))
 
     def ReadUUID(self, uuid_bytes):
         '''Return a string from binary uuid blob'''
@@ -1326,13 +1339,48 @@ class ApfsContainer:
         self.seek(idx * self.block_size)
         return self.read(self.block_size)
 
-    def read_block(self, block_num):
+    def decrypt_keybag_here(self, encrypted_block, offset, block_id, key):
+        
+        # Not 100% sure on why this is needed, but copied from APFS-fuse
+        cs_factor = self.block_size / 0x200
+        uno = int(block_id * cs_factor)
+        size = self.block_size
+        key2 = key[0x10:]
+        cipher_1 = python_AES.new((key[0:0x10], key2), python_AES.MODE_XTS)
+        cipher_2 = python_AES.new((key, key2), python_AES.MODE_XTS)
+        if cipher_1 == cipher_2:
+            x =0
+        k = 0
+
+
+        #implement line 58 - 61 in APFS fuse AesXTS
+
+        decrypted_block = b""
+        while k < size:
+            tweak = struct.pack("<QQ", uno, 0)
+            page = cipher_1.decrypt(encrypted_block[k:k + 0x200], tweak)
+            decrypted_block += page
+            uno += 1
+            k += 0x200
+
+        return decrypted_block
+
+
+
+    def read_block(self, block_num, key=None):
         """ Parse a singe block """
         data = self.get_block(block_num)
+
         if not data:
             return None
-        block = self.apfs.Block(KaitaiStream(BytesIO(data)), self.apfs, self.apfs)
-        return block
+        if key is not None:
+            offset = (block_num * self.block_size)
+            decrypted_block = self.decrypt_keybag_here(data, offset, block_num, key)
+            block = self.apfs.Block(KaitaiStream(BytesIO(decrypted_block)), self.apfs, self.apfs)
+            return block
+        if key is None:
+            block = self.apfs.Block(KaitaiStream(BytesIO(data)), self.apfs, self.apfs)
+            return block
     
     def fletcher64_verify_block_num(self, block_num):
         """Fletchers checksum verification for block, given block number"""
@@ -1568,10 +1616,7 @@ class ApfsFile():
 
     def read(self, size_to_read=None):
         self._check_closed()
-        if self.meta.is_symlink:
-            avail_to_read = len(self.meta.attributes['com.apple.fs.symlink'].data) - self._pointer
-        else:
-            avail_to_read = self.file_size - self._pointer
+        avail_to_read = self.file_size - self._pointer
         if avail_to_read <= 0: # at or beyond the end of file
             return b''
         if (size_to_read is None) or (size_to_read > avail_to_read):
@@ -1594,7 +1639,7 @@ class ApfsFile():
                     self._buffer = data
 
         if self.meta.is_symlink: # if symlink, return symlink  path as data
-            data += self.meta.attributes['com.apple.fs.symlink'].data[self._pointer : self._pointer + size_to_read]
+            data += self.meta.attributes['com.apple.fs.symlink'].data[0:size_to_read]
 
         else:
             new_data_fetched = self._GetSomeDataFromExtents(self.extents, self.meta.logical_size, self._pointer, size_to_read)

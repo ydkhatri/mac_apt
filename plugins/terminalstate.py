@@ -16,7 +16,7 @@ import io
 import logging
 import os
 import struct
-from Crypto.Cipher import AES
+from Cryptodome.Cipher import AES
 from plugins.helpers.deserializer import process_nsa_plist
 from plugins.helpers.macinfo import *
 from plugins.helpers.writer import *
