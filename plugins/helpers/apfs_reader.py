@@ -17,7 +17,6 @@ import zlib
 from uuid import UUID
 from plugins.helpers.writer import DataType
 from plugins.helpers.common import *
-#from CryptoPlus.Cipher import python_AES
 from cryptography.hazmat.backends import default_backend
 from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
 
@@ -377,8 +376,6 @@ class ApfsFileSystemParser:
                 # Go to decmpfs_extent block and read uncompressed size
                 logical_size = row[3]
                 #decmpfs_ext_cnid = row[2]
-                ## self.container.seek(block_size * row[4])
-                ## decmpfs = self.container.read(logical_size)
                 decmpfs = self.volume.get_raw_decrypted_block(row[4], self.encryption_key, limit_size=512) # only read first 512 bytes of block
                 #magic, compression_type, uncompressed_size = struct.unpack('<IIQ', decmpfs[0:16])
                 uncompressed_size = struct.unpack('<Q', decmpfs[8:16])[0]
@@ -545,7 +542,7 @@ class ApfsFileSystemParser:
                     #if type(entry.key) == apfs.Apfs.OmapKey:
                     try:
                         if not entry.data.pointer in self.blocks_read:
-                            newblock = self.container.read_block(entry.data.pointer) # Pointers are not encrypted blocks??
+                            newblock = self.container.read_block(entry.data.pointer) # Pointers are not encrypted blocks
                             self.read_entries(entry.data.pointer, newblock)
                     except (ValueError, EOFError, OSError):
                         log.exception('Exception trying to read block {}'.format(entry.data.pointer))
@@ -669,7 +666,6 @@ class ApfsVolume:
         self.encryption_key = None
         self.apfs = apfs_container.apfs
         self.block_size = apfs_container.block_size
-        self.cipher = None
         self.cs_factor = self.block_size // 0x200
         #
         # SqliteWriter object to read from sqlite. 
@@ -677,9 +673,7 @@ class ApfsVolume:
         self.dbo = None 
 
     def SetupDecryption(self, key):
-        #self.cipher = python_AES.new((key[0:0x10], key[0x10:]), python_AES.MODE_XTS)
         self.algorithm_aes = algorithms.AES(key)
-        pass
 
     def get_raw_decrypted_block(self, block_num, key=None, limit_size=-1):
         """Returns raw block data (without parsing). If key is None, no decryption is performed.
@@ -702,7 +696,6 @@ class ApfsVolume:
             size = min(size, limit_size)
         while k < size:
             tweak = struct.pack("<QQ", uno, 0)
-            #page = self.cipher.decrypt(encrypted_block[k:k + 0x200], tweak)
             decryptor = Cipher(self.algorithm_aes, modes.XTS(tweak), backend=default_backend()).decryptor()
             decrypted_block += decryptor.update(encrypted_block[k:k + 0x200]) + decryptor.finalize()
             uno += 1
