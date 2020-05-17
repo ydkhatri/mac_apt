@@ -12,7 +12,6 @@
 
 
 '''
-from construct import *
 import struct
 from CryptoPlus.Cipher import python_AES
 from kaitaistruct import  KaitaiStruct, KaitaiStream, BytesIO
@@ -366,7 +365,7 @@ class EncryptedVol:
         uno = int(offset * cs_factor)
 
         # Creates the cipher using XTS and the container UUID as the first and second key
-        self.log.debug("Setting the cipher using XTS with the UUID: " + str(key)
+        self.log.debug("Setting the cipher using XTS with the UUID: " + str(key.hex().upper())
                        + " as the first AND second keys")
         cipher = self.setKey(key, key)
 
@@ -381,8 +380,8 @@ class EncryptedVol:
                 tweak = struct.pack("<Q", uno)
                 page = cipher.decrypt(wrapped_keybag[k:k+0x200], tweak)
                 complete_plaintext += page
-                uno+=1
-                k+=0x200
+                uno += 1
+                k += 0x200
 
             self.log.debug("Successfully decrypted the keybag")
             return complete_plaintext
@@ -458,7 +457,7 @@ class EncryptedVol:
             if self.preboot_plist[uuid]['UserType'] == 'OpenDirectory':
                 self.log.debug("Found Open Directory UUID from user: " + self.preboot_plist[uuid]['FullName'])
                 self.log.debug("User's Open Directory UUID is: " + uuid)
-                open_dir_uuids.append(uuid)
+                open_dir_uuids.append( (self.preboot_plist[uuid]['FullName'], uuid) )
         return open_dir_uuids
 
 
@@ -507,41 +506,41 @@ class EncryptedVol:
         """
 
 
-        user_uuid = self.get_open_dir_uuid()
-        if len(user_uuid) > 1:
-            self.log.warning("There is more than one User Open Directory UUID. Decryption cannot move forward")
-            return None
-        if len(user_uuid) == 0:
+        user_uuids = self.get_open_dir_uuid()
+        if len(user_uuids) > 1:
+            self.log.warning("There is more than one User Open Directory UUID. We will try for all users.")
+        if len(user_uuids) == 0:
             self.log.warning("There were no User Open Directory UUIDs found. Decryption cannot move forward")
+            return None
 
-        user_open_dir_uuid = user_uuid[0]
+        for user, open_dir_uuid in user_uuids:
+            self.log.info(f'Trying to decrypt kek for user {user}')
+            try:
+                volume_wrapped_kek, iterations, salt = find_volume_uuid_from_vol_keybag(parsed_volume_keybag, open_dir_uuid)
 
-        volume_wrapped_kek, iterations, salt = find_volume_uuid_from_vol_keybag(parsed_volume_keybag, user_open_dir_uuid)
+                """
+                Unwrap the KEK using the userʼs password, and then unwrap the VEK using the KEK, both according to the
+                algorithm described in RFC 3394.
 
-        """
-        Unwrap the KEK using the userʼs password, and then unwrap the VEK using the KEK, both according to the
-        algorithm described in RFC 3394.
+                THIS IS STEP 7 OF THE APFS ACCESSING ENCRYPTED OBJECTS DOCUMENTATION
+                """
 
-        THIS IS STEP 7 OF THE APFS ACCESSING ENCRYPTED OBJECTS DOCUMENTATION
-        """
+                int_iterations = int.from_bytes(iterations, byteorder='big')
+                user_password_key = hashlib.pbkdf2_hmac('sha256', self.password.encode(), salt, int_iterations, dklen=32)
 
-        int_iterations = int.from_bytes(iterations, byteorder='big')
-        user_password_key = hashlib.pbkdf2_hmac('sha256', self.password.encode(), salt, int_iterations, dklen=32)
+                unwrapped_volume_kek = unwrap(volume_wrapped_kek, user_password_key)
+                unwrapped_vek = unwrap(wrapped_volume_vek, unwrapped_volume_kek)
 
-        unwrapped_volume_kek = unwrap(volume_wrapped_kek, user_password_key)
+                # TESTING VALUES
+                salt_hex = salt.hex()
+                kek_wrpd = volume_wrapped_kek.hex()
+                kek = unwrapped_volume_kek.hex()
+                pw_key = user_password_key.hex()
+                wrapped_vek = wrapped_volume_vek.hex()
+                vek_unwrapped = unwrapped_vek.hex()
+                # TESTING VALUES
 
-        unwrapped_vek = unwrap(wrapped_volume_vek, unwrapped_volume_kek)
-
-
-        # TESTING VALUES
-        salt_hex = salt.hex()
-        kek_wrpd = volume_wrapped_kek.hex()
-        kek = unwrapped_volume_kek.hex()
-        pw_key = user_password_key.hex()
-        wrapped_vek = wrapped_volume_vek.hex()
-        vek_unwrapped = unwrapped_vek.hex()
-        # TESTING VALUES
-
-
-        self.decryption_key = unwrapped_vek
-
+                self.decryption_key = unwrapped_vek
+                return
+            except DecryptionError as ex:
+                self.log.debug(str(ex))

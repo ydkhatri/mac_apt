@@ -233,7 +233,7 @@ def GetApfsContainerUuid(img, container_start_offset):
 
 def FindMacOsPartitionInApfsContainer(img, vol_info, container_size, container_start_offset, container_uuid):
     global mac_info
-    mac_info = macinfo.ApfsMacInfo(mac_info.output_params)
+    mac_info = macinfo.ApfsMacInfo(mac_info.output_params, mac_info.password)
     mac_info.pytsk_image = img   # Must be populated
     mac_info.vol_info = vol_info # Must be populated
     mac_info.is_apfs = True
@@ -389,6 +389,7 @@ arg_parser.add_argument('-x', '--xlsx', action="store_true", help='Save output i
 arg_parser.add_argument('-c', '--csv', action="store_true", help='Save output as CSV files')
 #arg_parser.add_argument('-s', '--sqlite', action="store_true", help='Save output in an sqlite database')
 arg_parser.add_argument('-l', '--log_level', help='Log levels: INFO, DEBUG, WARNING, ERROR, CRITICAL (Default is INFO)')#, choices=['INFO','DEBUG','WARNING','ERROR','CRITICAL'])
+arg_parser.add_argument('-p', '--password', help='Password for any user (for decrypting encrypted volume)')
 #arg_parser.add_argument('-u', '--use_tsk', action="store_true", help='Use sleuthkit instead of native HFS+ parser (This is slower!)')
 arg_parser.add_argument('plugin', nargs="+", help="Plugins to run (space separated). FAST will run most plugins")
 args = arg_parser.parse_args()
@@ -497,6 +498,9 @@ try:
 except Exception as ex:
     log.error("Failed to load image. Error Details are: " + str(ex))
     Exit()
+
+if args.password:
+    mac_info.password = args.password
 
 if args.input_type.upper() != 'MOUNTED':
     mac_info.use_native_hfs_parser = True #False if args.use_tsk else True

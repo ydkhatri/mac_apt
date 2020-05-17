@@ -311,7 +311,7 @@ class NativeHfsParser:
 
 class MacInfo:
 
-    def __init__(self, output_params):
+    def __init__(self, output_params, password=''):
         #self.Partitions = {}   # Dictionary of all partition objects returned from pytsk LATER! 
         self.pytsk_image = None
         self.macos_FS = None      # Just the FileSystem object (fs) from OSX partition
@@ -328,6 +328,8 @@ class MacInfo:
         # runtime platform 
         self.is_windows = (os.name == 'nt')
         self.is_linux = (sys.platform == 'linux')
+        # for encrypted volumes
+        self.password = password
 
     # Public functions, plugins can use these
     def GetAbsolutePath(self, current_abs_path, dest_rel_path):
@@ -1012,8 +1014,8 @@ class MacInfo:
         return False
 
 class ApfsMacInfo(MacInfo):
-    def __init__(self, output_params):
-        MacInfo.__init__(self, output_params)
+    def __init__(self, output_params, password):
+        MacInfo.__init__(self, output_params, password)
         self.apfs_container = None
         self.apfs_db = None
         self.apfs_db_path = ''
@@ -1063,10 +1065,9 @@ class ApfsMacInfo(MacInfo):
                     if preboot_vol.DoesFileExist(plist_path):
                         plist_raw_data = preboot_vol.open(plist_path).readAll()
                         plist_data = biplist.readPlistFromString(plist_raw_data)
-                        #PLACE PASSWORD VARIABLE HERE
-                        decryption_key = decryptor.EncryptedVol(vol, plist_data, "salami999", log).decryption_key
+                        decryption_key = decryptor.EncryptedVol(vol, plist_data, self.password, log).decryption_key
                         if decryption_key is None:
-                            log.error("No decryption key found")
+                            log.error(f"No decryption key found. Did you enter the right password? Volume '{vol.volume_name}' cannot be decrypted!")
                         else:
                             log.debug("Starting decryption of filesystem")
                             apfs_parser = ApfsFileSystemParser(vol, self.apfs_db, decryption_key)
@@ -1074,6 +1075,7 @@ class ApfsMacInfo(MacInfo):
             else:
                 apfs_parser = ApfsFileSystemParser(vol, self.apfs_db)
                 apfs_parser.read_volume_records()
+
     def GetFileMACTimes(self, file_path):
         '''Gets MACB and the 5th Index timestamp too'''
         times = { 'c_time':None, 'm_time':None, 'cr_time':None, 'a_time':None, 'i_time':None }
