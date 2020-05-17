@@ -60,7 +60,7 @@ class ApfsDbInfo:
 
     def __init__(self, db_writer):
         self.db_writer = db_writer # SqliteWriter object
-        self.version = 5 # This will change if db structure changes in future
+        self.version = 6 # This will change if db structure changes in future
         self.ver_table_name = 'Version_Info'
         self.vol_table_name = 'Volumes_Info'
         self.version_info = collections.OrderedDict([('Version',DataType.INTEGER)])
@@ -68,7 +68,7 @@ class ApfsDbInfo:
                                                     ('Files',DataType.INTEGER),('Folders',DataType.INTEGER),
                                                     ('Snapshots',DataType.INTEGER),
                                                     ('Created',DataType.INTEGER),('Updated',DataType.INTEGER),
-                                                    ('Role',DataType.INTEGER)])
+                                                    ('Role',DataType.INTEGER),('VEK',DataType.BLOB)])
 
     def WriteVersionInfo(self):
         self.db_writer.CreateTable(self.version_info, self.ver_table_name)
@@ -81,7 +81,7 @@ class ApfsDbInfo:
         data = []
         for vol in volumes:
             data.append([vol.volume_name, vol.uuid, vol.num_files, vol.num_folders, vol.num_snapshots, 
-                        vol.time_created, vol.time_updated, vol.role])
+                        vol.time_created, vol.time_updated, vol.role, vol.encryption_key])
         self.db_writer.WriteRows(data, self.vol_table_name)
 
     def CheckVerInfo(self):
@@ -101,9 +101,9 @@ class ApfsDbInfo:
             log.error('Error querying volume info from db: ' + error)
         return False
 
-    def CheckVolInfo(self, volumes):
+    def CheckVolInfoAndGetVolEncKey(self, volumes):
         '''Returns true if info in db matches volume objects'''
-        query = 'SELECT Name, UUID, Files, Folders, Snapshots, Created, Updated, Role FROM "{}"'.format(self.vol_table_name)
+        query = 'SELECT Name, UUID, Files, Folders, Snapshots, Created, Updated, Role, VEK FROM "{}"'.format(self.vol_table_name)
         success, cursor, error = self.db_writer.RunQuery(query)
         index = 0
         data_is_unaltered = True
@@ -120,6 +120,9 @@ class ApfsDbInfo:
                         data_is_unaltered = False
                         log.info('DB volume info does not match file info! Checked {}'.format(volumes[index].name))
                         break
+                if row[8]:
+                    volumes[index].encryption_key = row[8]
+                    volumes[index].SetupDecryption(row[8])
                 index += 1
         else:
             log.error('Error querying volume info from db: ' + error)
@@ -1461,7 +1464,7 @@ class ApfsExtent:
             #container.seek(self.block_num * container.block_size)
             # return data in chunks of max_size
             if self.size <= max_size:
-                yield GetData(volume, encryption_key)
+                yield self.GetData(volume, encryption_key)
                 #yield container.read(self.size)
             else:
                 block_num = self.block_num

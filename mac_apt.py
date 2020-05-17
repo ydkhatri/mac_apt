@@ -241,7 +241,7 @@ def FindMacOsPartitionInApfsContainer(img, vol_info, container_size, container_s
     mac_info.apfs_container = ApfsContainer(img, container_size, container_start_offset)
     # Check if this is 10.15 style System + Data volume?
     for vol in mac_info.apfs_container.volumes:
-        if vol.is_encrypted: continue
+        #if vol.is_encrypted: continue
         if vol.role == vol.container.apfs.VolumeRoleType.system.value:
             log.debug("{} is SYSTEM volume type".format(vol.volume_name))
             mac_info.apfs_sys_volume = vol
@@ -256,7 +256,7 @@ def FindMacOsPartitionInApfsContainer(img, vol_info, container_size, container_s
             existing_db = SqliteWriter()     # open & check if it has the correct data
             existing_db.OpenSqliteDb(apfs_sqlite_path)
             apfs_db_info = ApfsDbInfo(existing_db)
-            if apfs_db_info.CheckVerInfo() and apfs_db_info.CheckVolInfo(mac_info.apfs_container.volumes):
+            if apfs_db_info.CheckVerInfo() and apfs_db_info.CheckVolInfoAndGetVolEncKey(mac_info.apfs_container.volumes):
                 # all good, db is up to date, use it
                 use_existing_db = True
                 mac_info.apfs_db = existing_db
@@ -300,7 +300,7 @@ def FindMacOsPartitionInApfsContainer(img, vol_info, container_size, container_s
             for vol in mac_info.apfs_container.volumes:
                 if vol.num_blocks_used * vol.container.block_size < 3000000000: # < 3 GB, cannot be a macOS root volume
                     continue
-                if vol.is_encrypted: continue
+                #if vol.is_encrypted: continue
                 mac_info.macos_FS = vol
                 vol.dbo = mac_info.apfs_db
                 if FindMacOsFiles(mac_info):
