@@ -483,6 +483,7 @@ class ApfsFileSystemParser:
                 return
             for _, entry in enumerate(block.body.entries):
                 if type(entry.data) == self.ptr_type: #apfs.Apfs.PointerRecord: 
+                    log.debug('Skipping pointer record..')
                     continue
                 entry_type = entry.key.type_entry
                 self.AddToStats(entry_type)
@@ -527,6 +528,8 @@ class ApfsFileSystemParser:
                     self.attr_records.append([xid, entry.key.obj_id, entry.key.content.name, rec.flags, data, logical_size, rsrc_extent_cnid, 0, None])
                 elif entry_type == 6: # dstream_id
                     pass # this just has refcnts
+                elif entry_type == 7: #crypto_state
+                    pass
                 elif entry_type == 0xc: # sibling_map
                     pass # TODO: Maybe process this later
                 elif entry_type >= 0xd:

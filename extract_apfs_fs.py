@@ -36,13 +36,13 @@ from plugin import *
 from pyaff4 import container
 from uuid import UUID
 
-__VERSION = "0.4.1"
+__VERSION = "0.5"
 __PROGRAMNAME = "APFS metadata extract Tool"
 __EMAIL = "yogesh@swiftforensics.com"
 
 def CheckInputType(input_type):
     input_type = input_type.upper()
-    return input_type in ['AFF4','E01','DD','DMG','VMDK']
+    return input_type in ['AFF4','E01','DD','DMG','VMDK','MOUNTED']
 
 ######### FOR HANDLING E01 file ###############
 class ewf_Img_Info(pytsk3.Img_Info):
@@ -198,7 +198,7 @@ def IsHFSPartition(img, partition_start_offset):
 
 def ParseVolumesInApfsContainer(img, vol_info, container_size, container_start_offset, container_uuid):
     global mac_info
-    mac_info = macinfo.ApfsMacInfo(mac_info.output_params)
+    mac_info = macinfo.ApfsMacInfo(mac_info.output_params, mac_info.password)
     mac_info.pytsk_image = img   # Must be populated
     mac_info.vol_info = vol_info # Must be populated
     mac_info.is_apfs = True
@@ -206,7 +206,7 @@ def ParseVolumesInApfsContainer(img, vol_info, container_size, container_start_o
     mac_info.apfs_container = ApfsContainer(img, container_size, container_start_offset)
     # Check if this is 10.15 style System + Data volume?
     for vol in mac_info.apfs_container.volumes:
-        if vol.is_encrypted: continue
+        #if vol.is_encrypted: continue
         if vol.role == vol.container.apfs.VolumeRoleType.system.value:
             log.debug("{} is SYSTEM volume type".format(vol.volume_name))
             mac_info.apfs_sys_volume = vol
@@ -307,14 +307,20 @@ arg_parser.add_argument('input_type', help='Specify Input type as either E01, DD
 arg_parser.add_argument('input_path', help='Path to disk image/volume')
 arg_parser.add_argument('-o', '--output_path', help='Path where output files will be created')
 arg_parser.add_argument('-l', '--log_level', help='Log levels: INFO, DEBUG, WARNING, ERROR, CRITICAL (Default is INFO)')#, choices=['INFO','DEBUG','WARNING','ERROR','CRITICAL'])
+arg_parser.add_argument('-p', '--password', help='Password for any user (for decrypting encrypted volume)')
 args = arg_parser.parse_args()
 
 if args.output_path:
+    if (os.name != 'nt'):
+        if args.output_path.startswith('~/') or args.output_path == '~': # for linux/mac, translate ~ to user profile folder
+            args.output_path = os.path.expanduser(args.output_path)
+
+    args.output_path = os.path.abspath(args.output_path)
     print ("Output path was : {}".format(args.output_path))
     if not CheckOutputPath(args.output_path):
         Exit()
 else:
-    args.output_path = '.' # output to same folder as script.
+    args.output_path = os.path.abspath('.') # output to same folder as script.
 
 if args.log_level:
     args.log_level = args.log_level.upper()
@@ -342,6 +348,14 @@ if not CheckInputType(args.input_type):
 # Check outputs, create output files
 output_params = macinfo.OutputParams()
 output_params.output_path = args.output_path
+try:
+    sqlite_path = os.path.join(output_params.output_path, "disk_info.db")
+    output_params.output_db_path = SqliteWriter.CreateSqliteDb(sqlite_path)
+    output_params.write_sql = True
+except Exception as ex:
+    log.info('Sqlite db could not be created at : ' + sqlite_path)
+    log.exception('Exception occurred when trying to create Sqlite db')
+    Exit()
 
 try:
     xlsx_path = os.path.join(output_params.output_path, "disk_info.xlsx")
@@ -352,14 +366,6 @@ except Exception as ex:
     log.info('XLSX file could not be created at : ' + xlsx_path)
     log.exception('Exception occurred when trying to create XLSX file')
 
-try:
-    sqlite_path = os.path.join(output_params.output_path, "disk_info.db")
-    output_params.output_db_path = SqliteWriter.CreateSqliteDb(sqlite_path)
-    output_params.write_sql = True
-except Exception as ex:
-    log.info('Sqlite db could not be created at : ' + sqlite_path)
-    log.exception('Exception occurred when trying to create Sqlite db')
-
 
 # At this point, all looks good, lets mount the image
 img = None
@@ -368,13 +374,13 @@ mac_info = None
 time_processing_started = time.time()
 try:
     if args.input_type.upper() == 'E01':
-        img = GetImgInfoObjectForE01(args.input_path) # Use this function instead of pytsk3.Img_Info()
+        img = GetImgInfoObjectForE01(args.input_path)
         mac_info = macinfo.MacInfo(output_params)
     elif args.input_type.upper() == 'VMDK':
-        img = GetImgInfoObjectForVMDK(args.input_path) # Use this function instead of pytsk3.Img_Info()
+        img = GetImgInfoObjectForVMDK(args.input_path)
         mac_info = macinfo.MacInfo(output_params)
     elif args.input_type.upper() == 'AFF4':
-        img = GetImgInfoObjectForAff4(args.input_path) # Use this function instead of pytsk3.Img_Info()
+        img = GetImgInfoObjectForAff4(args.input_path)
         mac_info = macinfo.MacInfo(output_params)
     elif args.input_type.upper() in ('DD', 'DMG'):
         img = pytsk3.Img_Info(args.input_path) # Works for split dd images too! Works for DMG too, if no compression/encryption is used!
@@ -385,7 +391,8 @@ except Exception as ex:
     log.error("Failed to load image. Error Details are: " + str(ex))
     Exit()
 
-
+if args.password:
+    mac_info.password = args.password
 mac_info.use_native_hfs_parser = True #False if args.use_tsk else True
 
 if IsApfsContainer(img, 0):
