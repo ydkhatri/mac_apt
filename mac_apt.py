@@ -503,6 +503,7 @@ if args.password:
     mac_info.password = args.password
 
 if args.input_type.upper() != 'MOUNTED':
+    mac_info.pytsk_image = img
     mac_info.use_native_hfs_parser = True #False if args.use_tsk else True
 
     if IsApfsContainer(img, 0):
@@ -513,7 +514,6 @@ if args.input_type.upper() != 'MOUNTED':
         found_macos = IsMacOsPartition(img, 0, mac_info)
     if not found_macos: # must be a full disk image
         try:
-            mac_info.pytsk_image = img
             vol_info = pytsk3.Volume_Info(img)
             vs_info = vol_info.info # TSK_VS_INFO object
             mac_info.vol_info = vol_info

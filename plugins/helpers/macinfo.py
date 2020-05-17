@@ -1070,7 +1070,8 @@ class ApfsMacInfo(MacInfo):
                             log.error(f"No decryption key found. Did you enter the right password? Volume '{vol.volume_name}' cannot be decrypted!")
                         else:
                             log.debug(f"Starting decryption of filesystem, VEK={decryption_key.hex().upper()}")
-                            apfs_parser = ApfsFileSystemParser(vol, self.apfs_db, decryption_key)
+                            vol.encryption_key = decryption_key
+                            apfs_parser = ApfsFileSystemParser(vol, self.apfs_db)
                             apfs_parser.read_volume_records()
             else:
                 apfs_parser = ApfsFileSystemParser(vol, self.apfs_db)

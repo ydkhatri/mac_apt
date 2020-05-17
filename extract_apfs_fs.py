@@ -395,6 +395,7 @@ if args.password:
     mac_info.password = args.password
 mac_info.use_native_hfs_parser = True #False if args.use_tsk else True
 
+mac_info.pytsk_image = img
 if IsApfsContainer(img, 0):
     uuid = GetApfsContainerUuid(img, 0)
     log.info('Found an APFS container with uuid: {}'.format(str(uuid).upper()))
@@ -403,7 +404,6 @@ elif IsHFSVolume(img, 0):
     log.info('Found an HFS partition, skipping it..')
 else: # perhaps this is a full disk image
     try:
-        mac_info.pytsk_image = img
         vol_info = pytsk3.Volume_Info(img)
         vs_info = vol_info.info # TSK_VS_INFO object
         mac_info.vol_info = vol_info
