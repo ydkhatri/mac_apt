@@ -750,10 +750,8 @@ class ApfsVolume:
         log.debug('  incompatible_features=0x{:X}, fs_flags=0x{:X}'.format(super_block.body.incompatible_features, super_block.body.fs_flags))
 
         if self.is_encrypted:
-            log.info("Volume appears to be ENCRYPTED. Encrypted volumes can't be processed directly.")
-            log.info("See link below for instructions on processing Encrypted volumes")
-            log.info("https://github.com/ydkhatri/mac_apt/wiki/Known-issues-and-Workarounds")
-
+            log.info("Volume appears to be ENCRYPTED. ")
+            #TODO - Detect hardware vs software encryption!
 
         # get volume omap
         vol_omap = self.container.read_block(self.omap_oid)

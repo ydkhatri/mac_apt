@@ -1051,6 +1051,10 @@ class ApfsMacInfo(MacInfo):
             if vol == preboot_vol:
                 continue
             elif vol.is_encrypted:
+                if self.password = '':
+                    log.error(f'Skipping vol {vol.volume_name}. The vol is ENCRYPTED and user did not specify a password to decrypt it!' +
+                                f' If you know the password, run mac_apt again with the -p option to decrypt this volume.')
+                    continue
                 uuid_folders = []
                 preboot_dir = preboot_vol.ListItemsInFolder('/')
                 for items in preboot_dir:
