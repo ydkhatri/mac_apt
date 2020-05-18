@@ -13,14 +13,11 @@
 
 '''
 import struct
-from CryptoPlus.Cipher import python_AES
 from kaitaistruct import  KaitaiStruct, KaitaiStream, BytesIO
 import hashlib
 from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
 from cryptography.hazmat.backends import default_backend
-import binascii
 from pskc.exceptions import DecryptionError
-
 
 
 
@@ -37,8 +34,8 @@ def _split(value):
     return value[:8], value[8:]
 
 
-RFC3394_IV = binascii.a2b_hex('a6a6a6a6a6a6a6a6')
-RFC5649_IV = binascii.a2b_hex('a65959a6')
+RFC3394_IV = bytes.fromhex('a6a6a6a6a6a6a6a6')
+RFC5649_IV = bytes.fromhex('a65959a6')
 
 def unwrap(ciphertext, key, iv=None, pad=None, algorithm=algorithms.AES):
     """Apply the AES key unwrap algorithm to the ciphertext.
@@ -310,47 +307,6 @@ class EncryptedVol:
         self.log.info("Starting decryption of Volume: " + self.ApfsVolume.volume_name)
         self.decrypter()
 
-    def setKey(self, key1, key2):
-        """
-        param: key1: The container UUID
-        param: key2: The container UUID
-        return: cipher: python_AES object with a mode of XTS
-        """
-
-        cipher = python_AES.new((key1, key2), python_AES.MODE_XTS)
-        return cipher
-
-
-    def unwrap_key(self, blob, key):
-        """
-        Decrypts the wrapped binary keybag that will be decrypted using the Container's UUID.
-        Uses the setKey function as the cipher
-        The UUID is set as both the first and second key in the cipher
-        param: wrapped_keybag: The wrapped binary keybag that will be decrypted using the Container's UUID
-        """
-
-        # Creates the cipher using XTS and the container UUID as the first and second key
-        self.log.debug("Setting the cipher using XTS with the key: " + str(key)
-                       + " as the first AND second keys")
-        cipher = self.setKey(key, key)
-
-        complete_plaintext = b""
-
-        # Decrypts the wrapped keybag and assigns it to plaintext to be returned for further processing
-        try:
-            self.log.debug("Attempting to decrypt the key")
-            k = 0
-            size = len(blob)
-            while k < size:
-                page = cipher.decrypt(blob)
-                complete_plaintext += page
-                k+=0x200
-
-            self.log.debug("Successfully decrypted the keybag")
-            return complete_plaintext
-        except Exception as ex:
-            self.log.exception("Could not decrypt the keybag. Exception was: \n" + str(ex) + "\n")
-
 
     def decrypt_keybag(self, wrapped_keybag, offset, key):
         """
@@ -361,25 +317,20 @@ class EncryptedVol:
         """
 
         # Not 100% sure on why this is needed, but copied from APFS-fuse
-        cs_factor = self.block_size / 0x200
-        uno = int(offset * cs_factor)
-
-        # Creates the cipher using XTS and the container UUID as the first and second key
-        self.log.debug("Setting the cipher using XTS with the UUID: " + str(key.hex().upper())
-                       + " as the first AND second keys")
-        cipher = self.setKey(key, key)
-
+        cs_factor = self.block_size // 0x200
+        uno = offset * cs_factor
         complete_plaintext = b""
 
-        # Decrypts the wrapped keybag and assigns it to plaintext to be returned for further processing
+        # Cipher is AES-XTS with the container UUID as the first and second key
+
         try:
             self.log.debug("Attempting to decrypt the keybag")
             k = 0
             size = len(wrapped_keybag)
             while k < size:
-                tweak = struct.pack("<Q", uno)
-                page = cipher.decrypt(wrapped_keybag[k:k+0x200], tweak)
-                complete_plaintext += page
+                tweak = struct.pack("<QQ", uno, 0)
+                decryptor = Cipher(algorithms.AES(key + key), modes.XTS(tweak), backend=default_backend()).decryptor()
+                complete_plaintext += decryptor.update(wrapped_keybag[k:k + 0x200]) + decryptor.finalize()
                 uno += 1
                 k += 0x200
 
@@ -387,6 +338,7 @@ class EncryptedVol:
             return complete_plaintext
         except Exception as ex:
             self.log.exception("Could not decrypt the keybag. Exception was: \n" + str(ex) + "\n")
+        return ''
 
     def get_wrapped_keybag(self, offset, block_count):
         """
@@ -436,9 +388,9 @@ class EncryptedVol:
                         self.log.debug("Found a UUID within the kl_entry with a Tag of two and a UUID that matches the "
                                        "Volume UUID we are trying to decrypt!")
                         return kl_entry.blob_header.bag_data
-                    #else:
-                    #    self.log.info("COULD NOT FIND MATCHING UUID. VOLUME CANNOT BE DECRYPTED!!")
-                    #    return None
+
+            self.log.error("COULD NOT FIND MATCHING UUID IN KEYBAG. VOLUME CANNOT BE DECRYPTED!!")
+            return None
 
         # Looks for a kl_entry within mk_locker with a KeyBag_Tag of 3 with a UUID that matches the Volume UUID
         if tag == 3:
@@ -510,11 +462,11 @@ class EncryptedVol:
         if len(user_uuids) > 1:
             self.log.warning("There is more than one User Open Directory UUID. We will try for all users.")
         if len(user_uuids) == 0:
-            self.log.warning("There were no User Open Directory UUIDs found. Decryption cannot move forward")
+            self.log.error("There were no User Open Directory UUIDs found. Decryption cannot move forward")
             return None
 
         for user, open_dir_uuid in user_uuids:
-            self.log.info(f'Trying to decrypt kek for user {user}')
+            self.log.info(f'Trying to decrypt encryption keys for user {user}')
             try:
                 volume_wrapped_kek, iterations, salt = find_volume_uuid_from_vol_keybag(parsed_volume_keybag, open_dir_uuid)
 
