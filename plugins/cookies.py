@@ -63,7 +63,7 @@ def PrintAll(cookies, output_params, input_path=''):
                             item.user, item.source_path ]
         cookies_list_final.append(single_cookie_item)
 
-    WriteList("cookies List", "cookies", cookies_list_final, cookies_info, output_params, input_path)
+    WriteList("Cookies List", "Cookies", cookies_list_final, cookies_info, output_params, input_path)
 
 def read_cstring(buffer):
     pos = buffer.find(b'\0')

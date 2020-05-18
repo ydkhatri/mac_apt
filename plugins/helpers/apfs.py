@@ -476,8 +476,8 @@ class Apfs(KaitaiStruct):
             self.reaper_oid = self._io.read_u8le()
             self.test_type = self._io.read_u4le()
             self.num_volumesuperblock_ids = self._io.read_u4le()
-            self.volumesuperblock_ids = [None] * (self.num_volumesuperblock_ids)
-            for i in range(self.num_volumesuperblock_ids):
+            self.volumesuperblock_ids = [None] * (100) # NX_MAX_FILE_SYSTEMS=100
+            for i in range(100):
                 self.volumesuperblock_ids[i] = self._io.read_u8le()
             self.counters = [None] * 32
             for i in range(32):

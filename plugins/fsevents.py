@@ -153,7 +153,7 @@ def ParseData(buffer, logs, source_date, source):
     buffer_size = len(buffer)
     if buffer_size < 12:
         log.error("Error, too small buffer (size={})".format(len(buffer)))
-        return
+        return 0
     
     header_sig, unknown, file_size = struct.unpack("<4sII", buffer[0:12])
     #Changed header_sig encoding so that it would actually match true against a string
@@ -161,8 +161,8 @@ def ParseData(buffer, logs, source_date, source):
     is_version_unknown = (not is_version2) and (str(header_sig, 'utf-8') != '1SLD')
 
     if is_version_unknown:
-        log.debug("Unsupported version, header = {}".format(str(header_sig)))
-        return
+        log.error("Unsupported version, header = {}".format(str(header_sig)))
+        return 0
     
     pos = 12
 
@@ -288,7 +288,7 @@ def Plugin_Start_Standalone(input_files_list, output_params):
         if len(logs) > 0:
             PrintAll(logs, output_params)
             log.info("The source_date field on the fsevents are from the individual file modified date "\
-                     " (metadata not data)! This may have changed if you are not on a live or read-only image.")
+                     "(metadata not data)! This may have changed if you are not on a live or read-only image.")
         else:
             log.info('No fsevents found')
 

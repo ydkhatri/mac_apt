@@ -36,13 +36,13 @@ from plugin import *
 from pyaff4 import container
 from uuid import UUID
 
-__VERSION = "0.4.1"
+__VERSION = "0.5"
 __PROGRAMNAME = "APFS metadata extract Tool"
 __EMAIL = "yogesh@swiftforensics.com"
 
 def CheckInputType(input_type):
     input_type = input_type.upper()
-    return input_type in ['AFF4','E01','DD','VMDK']
+    return input_type in ['AFF4','E01','DD','DMG','VMDK','MOUNTED']
 
 ######### FOR HANDLING E01 file ###############
 class ewf_Img_Info(pytsk3.Img_Info):
@@ -177,8 +177,17 @@ def GetApfsContainerUuid(img, container_start_offset):
     uuid = UUID(bytes=uuid_bytes)
     return uuid
 
-def IsHFSPartition(img, partition_start_offset, mac_info):
-    '''Determines if the partition is HFS'''
+def IsHFSVolume(img, partition_start_offset):
+    '''Checks if this is an HFS volume'''
+    try:
+        if img.read(partition_start_offset + 0x400, 2) in (b'\x48\x58', b'\x48\x2B'):
+            return True
+    except:
+        raise ValueError('Cannot seek into image @ offset {}'.format(partition_start_offset + 0x400))
+    return False
+
+def IsHFSPartition(img, partition_start_offset):
+    '''Determines if the partition is HFS by mounting it'''
     try:
         fs = pytsk3.FS_Info(img, offset=partition_start_offset)    
         fs_info = fs.info # TSK_FS_INFO
@@ -189,7 +198,7 @@ def IsHFSPartition(img, partition_start_offset, mac_info):
 
 def ParseVolumesInApfsContainer(img, vol_info, container_size, container_start_offset, container_uuid):
     global mac_info
-    mac_info = macinfo.ApfsMacInfo(mac_info.output_params)
+    mac_info = macinfo.ApfsMacInfo(mac_info.output_params, mac_info.password)
     mac_info.pytsk_image = img   # Must be populated
     mac_info.vol_info = vol_info # Must be populated
     mac_info.is_apfs = True
@@ -197,7 +206,7 @@ def ParseVolumesInApfsContainer(img, vol_info, container_size, container_start_o
     mac_info.apfs_container = ApfsContainer(img, container_size, container_start_offset)
     # Check if this is 10.15 style System + Data volume?
     for vol in mac_info.apfs_container.volumes:
-        if vol.is_encrypted: continue
+        #if vol.is_encrypted: continue
         if vol.role == vol.container.apfs.VolumeRoleType.system.value:
             log.debug("{} is SYSTEM volume type".format(vol.volume_name))
             mac_info.apfs_sys_volume = vol
@@ -212,7 +221,7 @@ def ParseVolumesInApfsContainer(img, vol_info, container_size, container_start_o
             existing_db = SqliteWriter()     # open & check if it has the correct data
             existing_db.OpenSqliteDb(apfs_sqlite_path)
             apfs_db_info = ApfsDbInfo(existing_db)
-            if apfs_db_info.CheckVerInfo() and apfs_db_info.CheckVolInfo(mac_info.apfs_container.volumes):
+            if apfs_db_info.CheckVerInfo() and apfs_db_info.CheckVolInfoAndGetVolEncKey(mac_info.apfs_container.volumes):
                 # all good, db is up to date, use it
                 use_existing_db = True
                 mac_info.apfs_db = existing_db
@@ -273,7 +282,7 @@ def ParsePartitionTables(img, vol_info, vs_info):
                 log.info('Found an APFS container with uuid: {}'.format(str(uuid).upper()))
                 return ParseVolumesInApfsContainer(img, vol_info, vs_info.block_size * part.len, partition_start_offset, uuid)
 
-            elif IsHFSPartition(img, partition_start_offset, mac_info):
+            elif IsHFSVolume(img, partition_start_offset):
                 log.info('Found HFS partition, skipping..')
             else:
                 log.info("Found unknown partition, skipping..")
@@ -294,18 +303,24 @@ log = None
 arg_parser = argparse.ArgumentParser(description='extract_apfs_fs is a script to read APFS metadata from an image\n'\
                                                  'You are running {} version {}'.format(__PROGRAMNAME, __VERSION),
                                     epilog='', formatter_class=argparse.RawTextHelpFormatter)
-arg_parser.add_argument('input_type', help='Specify Input type as either E01, DD, VMDK, AFF4')
+arg_parser.add_argument('input_type', help='Specify Input type as either E01, DD, DMG, VMDK, AFF4')
 arg_parser.add_argument('input_path', help='Path to disk image/volume')
 arg_parser.add_argument('-o', '--output_path', help='Path where output files will be created')
 arg_parser.add_argument('-l', '--log_level', help='Log levels: INFO, DEBUG, WARNING, ERROR, CRITICAL (Default is INFO)')#, choices=['INFO','DEBUG','WARNING','ERROR','CRITICAL'])
+arg_parser.add_argument('-p', '--password', help='Password for any user (for decrypting encrypted volume)')
 args = arg_parser.parse_args()
 
 if args.output_path:
+    if (os.name != 'nt'):
+        if args.output_path.startswith('~/') or args.output_path == '~': # for linux/mac, translate ~ to user profile folder
+            args.output_path = os.path.expanduser(args.output_path)
+
+    args.output_path = os.path.abspath(args.output_path)
     print ("Output path was : {}".format(args.output_path))
     if not CheckOutputPath(args.output_path):
         Exit()
 else:
-    args.output_path = '.' # output to same folder as script.
+    args.output_path = os.path.abspath('.') # output to same folder as script.
 
 if args.log_level:
     args.log_level = args.log_level.upper()
@@ -333,6 +348,14 @@ if not CheckInputType(args.input_type):
 # Check outputs, create output files
 output_params = macinfo.OutputParams()
 output_params.output_path = args.output_path
+try:
+    sqlite_path = os.path.join(output_params.output_path, "disk_info.db")
+    output_params.output_db_path = SqliteWriter.CreateSqliteDb(sqlite_path)
+    output_params.write_sql = True
+except Exception as ex:
+    log.info('Sqlite db could not be created at : ' + sqlite_path)
+    log.exception('Exception occurred when trying to create Sqlite db')
+    Exit()
 
 try:
     xlsx_path = os.path.join(output_params.output_path, "disk_info.xlsx")
@@ -343,15 +366,6 @@ except Exception as ex:
     log.info('XLSX file could not be created at : ' + xlsx_path)
     log.exception('Exception occurred when trying to create XLSX file')
 
- 
-try:
-    sqlite_path = os.path.join(output_params.output_path, "disk_info.db")
-    output_params.output_db_path = SqliteWriter.CreateSqliteDb(sqlite_path)
-    output_params.write_sql = True
-except Exception as ex:
-    log.info('Sqlite db could not be created at : ' + sqlite_path)
-    log.exception('Exception occurred when trying to create Sqlite db')
-
 
 # At this point, all looks good, lets mount the image
 img = None
@@ -360,15 +374,15 @@ mac_info = None
 time_processing_started = time.time()
 try:
     if args.input_type.upper() == 'E01':
-        img = GetImgInfoObjectForE01(args.input_path) # Use this function instead of pytsk3.Img_Info()
+        img = GetImgInfoObjectForE01(args.input_path)
         mac_info = macinfo.MacInfo(output_params)
     elif args.input_type.upper() == 'VMDK':
-        img = GetImgInfoObjectForVMDK(args.input_path) # Use this function instead of pytsk3.Img_Info()
+        img = GetImgInfoObjectForVMDK(args.input_path)
         mac_info = macinfo.MacInfo(output_params)
     elif args.input_type.upper() == 'AFF4':
-        img = GetImgInfoObjectForAff4(args.input_path) # Use this function instead of pytsk3.Img_Info()
+        img = GetImgInfoObjectForAff4(args.input_path)
         mac_info = macinfo.MacInfo(output_params)
-    elif args.input_type.upper() == 'DD':
+    elif args.input_type.upper() in ('DD', 'DMG'):
         img = pytsk3.Img_Info(args.input_path) # Works for split dd images too! Works for DMG too, if no compression/encryption is used!
         mac_info = macinfo.MacInfo(output_params)
 
@@ -377,27 +391,27 @@ except Exception as ex:
     log.error("Failed to load image. Error Details are: " + str(ex))
     Exit()
 
-
+if args.password:
+    mac_info.password = args.password
 mac_info.use_native_hfs_parser = True #False if args.use_tsk else True
-try:
-    mac_info.pytsk_image = img
-    vol_info = pytsk3.Volume_Info(img)
-    vs_info = vol_info.info # TSK_VS_INFO object
-    mac_info.vol_info = vol_info
-    ParsePartitionTables(img, vol_info, vs_info)
-    Disk_Info(mac_info, args.input_path).Write()
-except Exception as ex:
-    if str(ex).find("Cannot determine partition type") > 0 :
-        log.info(" Info: Probably not a disk image, trying to parse as a File system")
-        if IsApfsContainer(img, 0):
-            uuid = GetApfsContainerUuid(img, 0)
-            log.info('Found an APFS container with uuid: {}'.format(str(uuid).upper()))
-            ParseVolumesInApfsContainer(img, None, img.get_size(), 0, uuid)
-        elif IsHFSPartition(img, 0, mac_info):
-            log.info('Found an HFS partition, skipping it..')
-    else:
-        log.error("Unknown error while trying to determine partition")
-        log.exception("Exception")
+
+mac_info.pytsk_image = img
+if IsApfsContainer(img, 0):
+    uuid = GetApfsContainerUuid(img, 0)
+    log.info('Found an APFS container with uuid: {}'.format(str(uuid).upper()))
+    ParseVolumesInApfsContainer(img, None, img.get_size(), 0, uuid)
+elif IsHFSVolume(img, 0):
+    log.info('Found an HFS partition, skipping it..')
+else: # perhaps this is a full disk image
+    try:
+        vol_info = pytsk3.Volume_Info(img)
+        vs_info = vol_info.info # TSK_VS_INFO object
+        mac_info.vol_info = vol_info
+        # Try as a partition/container first
+        ParsePartitionTables(img, vol_info, vs_info)
+        Disk_Info(mac_info, args.input_path).Write()
+    except Exception as ex:
+        log.exception("Error while trying to read partitions on disk")
 
 log.info("-"*50)
 

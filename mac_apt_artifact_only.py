@@ -75,6 +75,9 @@ else:
     sys.exit("Exiting -> Plugin '" + args.plugin + "' is not a valid plugin name.")
 
 if args.output_path:
+    if (os.name != 'nt'):
+        if args.output_path.startswith('~/') or args.output_path == '~': # for linux/mac, translate ~ to user profile folder
+            args.output_path = os.path.expanduser(args.output_path)
     print ("Output path was : {}".format(args.output_path))
     if not CheckOutputPath(args.output_path):
         sys.exit("Exiting -> Output path not valid!")

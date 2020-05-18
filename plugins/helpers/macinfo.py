@@ -28,6 +28,7 @@ from plugins.helpers.deserializer import process_nsa_plist
 from plugins.helpers.hfs_alt import HFSVolume
 from plugins.helpers.common import *
 from plugins.helpers.structs import *
+from plugins.helpers import decryptor
 
 if sys.platform == 'linux':
     from plugins.helpers.statx import statx
@@ -310,7 +311,7 @@ class NativeHfsParser:
 
 class MacInfo:
 
-    def __init__(self, output_params):
+    def __init__(self, output_params, password=''):
         #self.Partitions = {}   # Dictionary of all partition objects returned from pytsk LATER! 
         self.pytsk_image = None
         self.macos_FS = None      # Just the FileSystem object (fs) from OSX partition
@@ -327,6 +328,8 @@ class MacInfo:
         # runtime platform 
         self.is_windows = (os.name == 'nt')
         self.is_linux = (sys.platform == 'linux')
+        # for encrypted volumes
+        self.password = password
 
     # Public functions, plugins can use these
     def GetAbsolutePath(self, current_abs_path, dest_rel_path):
@@ -563,7 +566,7 @@ class MacInfo:
         if f:
             target_path = f.read()
             f.close()
-            return target_path.decode('utf8', 'backslashreplace')
+            return target_path.rstrip(b'\0').decode('utf8', 'backslashreplace')
         return ''
 
     def IsValidFilePath(self, path):
@@ -1011,8 +1014,8 @@ class MacInfo:
         return False
 
 class ApfsMacInfo(MacInfo):
-    def __init__(self, output_params):
-        MacInfo.__init__(self, output_params)
+    def __init__(self, output_params, password):
+        MacInfo.__init__(self, output_params, password)
         self.apfs_container = None
         self.apfs_db = None
         self.apfs_db_path = ''
@@ -1035,6 +1038,7 @@ class ApfsMacInfo(MacInfo):
 
     def ReadApfsVolumes(self):
         '''Read volume information into an sqlite db'''
+        decryption_key = None
         # Process Preboot volume first
         preboot_vol = self.apfs_container.preboot_volume
         if preboot_vol:
@@ -1047,11 +1051,35 @@ class ApfsMacInfo(MacInfo):
             if vol == preboot_vol:
                 continue
             elif vol.is_encrypted:
-                # x = preboot_vol.ListItemsInFolder('/')
-                # log.debug(str(x))
-                continue
-            apfs_parser = ApfsFileSystemParser(vol, self.apfs_db)
-            apfs_parser.read_volume_records()
+                if self.password == '':
+                    log.error(f'Skipping vol {vol.volume_name}. The vol is ENCRYPTED and user did not specify a password to decrypt it!' +
+                                f' If you know the password, run mac_apt again with the -p option to decrypt this volume.')
+                    continue
+                uuid_folders = []
+                preboot_dir = preboot_vol.ListItemsInFolder('/')
+                for items in preboot_dir:
+                    if len(items['name']) == 36: # UUID Named folder
+                        uuid_folders.append(items['name'])
+                if len(uuid_folders) > 1:
+                    log.warning("There are more than 1 UUID like folders:\n" + str(uuid_folders) + "\nThe volume cannot be unencrypted by this script. Please contact the developers")
+                elif len(uuid_folders) == 0:
+                    log.error("There are no UUID like folders in the Preboot volume! Decryption cannot continue")
+                else:
+                    plist_path = uuid_folders[0] +  "/var/db/CryptoUserInfo.plist"
+                    if preboot_vol.DoesFileExist(plist_path):
+                        plist_raw_data = preboot_vol.open(plist_path).readAll()
+                        plist_data = biplist.readPlistFromString(plist_raw_data)
+                        decryption_key = decryptor.EncryptedVol(vol, plist_data, self.password, log).decryption_key
+                        if decryption_key is None:
+                            log.error(f"No decryption key found. Did you enter the right password? Volume '{vol.volume_name}' cannot be decrypted!")
+                        else:
+                            log.debug(f"Starting decryption of filesystem, VEK={decryption_key.hex().upper()}")
+                            vol.encryption_key = decryption_key
+                            apfs_parser = ApfsFileSystemParser(vol, self.apfs_db)
+                            apfs_parser.read_volume_records()
+            else:
+                apfs_parser = ApfsFileSystemParser(vol, self.apfs_db)
+                apfs_parser.read_volume_records()
 
     def GetFileMACTimes(self, file_path):
         '''Gets MACB and the 5th Index timestamp too'''
@@ -1064,6 +1092,10 @@ class ApfsMacInfo(MacInfo):
                 times['cr_time'] = apfs_file_meta.created
                 times['a_time'] = apfs_file_meta.accessed
                 times['i_time'] = apfs_file_meta.date_added
+                             
+                                                                          
+                                                                                                                                 
+                                                             
             else:
                 log.debug('File not found in GetFileMACTimes() query!, path was ' + file_path)
         except Exception as ex:
@@ -1165,6 +1197,7 @@ class ApfsMacInfo(MacInfo):
                         x['type'] = EntryType.FOLDERS
                         items.append(dict(x))
         return items
+
 
 # TODO: Make this class more efficient, perhaps remove some extractions!
 class MountedMacInfo(MacInfo):
@@ -1658,6 +1691,13 @@ class SqliteWrapper:
             self.wal_temp_file = self.mac_info.ExtractFile(self.wal_file_path, self.wal_file_path_temp)
         return True
 
+    def _is_valid_sqlite_file(self, path):
+        '''Checks file header for valid sqlite db'''
+        ret = False
+        with open (path, 'rb') as f:
+            if f.read(16) == b'SQLite format 3\0':
+                ret = True
+        return ret                                               
     def __getattr__(self, attr):
         if attr == 'connect': 
             def hooked(path):
@@ -1667,7 +1707,11 @@ class SqliteWrapper:
                 self.wal_file_path = path + "-wal"
                 if self._ExtractFiles():
                     log.debug('Trying to extract and read db: ' + path)
-                    result = self.sqlite3.connect(self.db_file_path_temp) # TODO -> Why are exceptions not being raised here when bad paths are sent?
+                    if self._is_valid_sqlite_file(self.db_file_path_temp):
+                        result = self.sqlite3.connect(self.db_file_path_temp) # TODO -> Why are exceptions not being raised here when bad paths are sent?
+                    else:
+                        log.error('File is not an SQLITE db or it is corrupted!')
+                        result = None
                 else:
                     result = None
                 return result

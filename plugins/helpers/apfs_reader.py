@@ -13,12 +13,12 @@ import collections
 import logging
 import lzfse
 import struct
-import tempfile
+import zlib
 from uuid import UUID
 from plugins.helpers.writer import DataType
 from plugins.helpers.common import *
-
-import zlib
+from cryptography.hazmat.backends import default_backend
+from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
 
 log = logging.getLogger('MAIN.HELPERS.APFS_READER')
 
@@ -61,7 +61,7 @@ class ApfsDbInfo:
 
     def __init__(self, db_writer):
         self.db_writer = db_writer # SqliteWriter object
-        self.version = 5 # This will change if db structure changes in future
+        self.version = 6 # This will change if db structure changes in future
         self.ver_table_name = 'Version_Info'
         self.vol_table_name = 'Volumes_Info'
         self.version_info = collections.OrderedDict([('Version',DataType.INTEGER)])
@@ -69,7 +69,7 @@ class ApfsDbInfo:
                                                     ('Files',DataType.INTEGER),('Folders',DataType.INTEGER),
                                                     ('Snapshots',DataType.INTEGER),
                                                     ('Created',DataType.INTEGER),('Updated',DataType.INTEGER),
-                                                    ('Role',DataType.INTEGER)])
+                                                    ('Role',DataType.INTEGER),('VEK',DataType.BLOB)])
 
     def WriteVersionInfo(self):
         self.db_writer.CreateTable(self.version_info, self.ver_table_name)
@@ -82,7 +82,7 @@ class ApfsDbInfo:
         data = []
         for vol in volumes:
             data.append([vol.volume_name, vol.uuid, vol.num_files, vol.num_folders, vol.num_snapshots, 
-                        vol.time_created, vol.time_updated, vol.role])
+                        vol.time_created, vol.time_updated, vol.role, vol.encryption_key])
         self.db_writer.WriteRows(data, self.vol_table_name)
 
     def CheckVerInfo(self):
@@ -102,9 +102,9 @@ class ApfsDbInfo:
             log.error('Error querying volume info from db: ' + error)
         return False
 
-    def CheckVolInfo(self, volumes):
+    def CheckVolInfoAndGetVolEncKey(self, volumes):
         '''Returns true if info in db matches volume objects'''
-        query = 'SELECT Name, UUID, Files, Folders, Snapshots, Created, Updated, Role FROM "{}"'.format(self.vol_table_name)
+        query = 'SELECT Name, UUID, Files, Folders, Snapshots, Created, Updated, Role, VEK FROM "{}"'.format(self.vol_table_name)
         success, cursor, error = self.db_writer.RunQuery(query)
         index = 0
         data_is_unaltered = True
@@ -121,6 +121,9 @@ class ApfsDbInfo:
                         data_is_unaltered = False
                         log.info('DB volume info does not match file info! Checked {}'.format(volumes[index].name))
                         break
+                if row[8]:
+                    volumes[index].encryption_key = row[8]
+                    volumes[index].SetupDecryption(row[8])
                 index += 1
         else:
             log.error('Error querying volume info from db: ' + error)
@@ -136,6 +139,7 @@ class ApfsFileSystemParser:
         self.volume = apfs_volume
         self.container = apfs_volume.container
         self.dbo = db_writer
+        self.encryption_key = apfs_volume.encryption_key
 
         self.num_records_read_total = 0
         self.num_records_read_batch = 0
@@ -372,8 +376,7 @@ class ApfsFileSystemParser:
                 # Go to decmpfs_extent block and read uncompressed size
                 logical_size = row[3]
                 #decmpfs_ext_cnid = row[2]
-                self.container.seek(block_size * row[4])
-                decmpfs = self.container.read(logical_size)
+                decmpfs = self.volume.get_raw_decrypted_block(row[4], self.encryption_key, limit_size=512) # only read first 512 bytes of block
                 #magic, compression_type, uncompressed_size = struct.unpack('<IIQ', decmpfs[0:16])
                 uncompressed_size = struct.unpack('<Q', decmpfs[8:16])[0]
                 #TODO: check magic if magic =='fpmc'
@@ -387,7 +390,10 @@ class ApfsFileSystemParser:
                     # resource fork has data
                     to_write.append([row[0], row[1], decmpfs, uncompressed_size, row[5], 0, row[7], 0, None])
             if to_write:
-                self.dbo.WriteRows(to_write, self.name + '_Compressed_Files')      
+                try:
+                    self.dbo.WriteRows(to_write, self.name + '_Compressed_Files')
+                except Exception as ex:
+                    log.exception(str(to_write) + " Has cased an exception, the exception was: " + str(ex))
 
         else:
             log.error('Error executing query : Query was {}, Error was {}'.format(type1_query, error))
@@ -398,6 +404,8 @@ class ApfsFileSystemParser:
             all information to a database.
         '''
         self.create_tables()
+        if self.encryption_key:
+            self.volume.SetupDecryption(self.encryption_key)
 
         root_block = self.container.read_block(self.volume.root_block_num)
         self.read_entries(self.volume.root_block_num, root_block)
@@ -405,9 +413,9 @@ class ApfsFileSystemParser:
         # write remaining records to db
         if self.num_records_read_batch > 0:
             self.num_records_read_batch = 0
-            
+
             self.write_records()
-            self.clear_records() # Clear the data once written   
+            self.clear_records() # Clear the data once written
 
         self.create_other_tables_and_indexes()
         self.PrintStats()
@@ -474,6 +482,7 @@ class ApfsFileSystemParser:
                 return
             for _, entry in enumerate(block.body.entries):
                 if type(entry.data) == self.ptr_type: #apfs.Apfs.PointerRecord: 
+                    log.debug('Skipping pointer record..')
                     continue
                 entry_type = entry.key.type_entry
                 self.AddToStats(entry_type)
@@ -518,6 +527,8 @@ class ApfsFileSystemParser:
                     self.attr_records.append([xid, entry.key.obj_id, entry.key.content.name, rec.flags, data, logical_size, rsrc_extent_cnid, 0, None])
                 elif entry_type == 6: # dstream_id
                     pass # this just has refcnts
+                elif entry_type == 7: #crypto_state
+                    pass
                 elif entry_type == 0xc: # sibling_map
                     pass # TODO: Maybe process this later
                 elif entry_type >= 0xd:
@@ -531,19 +542,24 @@ class ApfsFileSystemParser:
                     #if type(entry.key) == apfs.Apfs.OmapKey:
                     try:
                         if not entry.data.pointer in self.blocks_read:
-                            newblock = self.container.read_block(entry.data.pointer)
+                            newblock = self.container.read_block(entry.data.pointer) # Pointers are not encrypted blocks
                             self.read_entries(entry.data.pointer, newblock)
                     except (ValueError, EOFError, OSError):
                         log.exception('Exception trying to read block {}'.format(entry.data.pointer))
                 else:
                     try:
-                        if entry.data.flags & 4: # ENCRYPTED FLAG
-                            pass # Need to decrypt entry first!!
+
                         if entry.data.flags & 1: #OMAP_VAL_DELETED
-                            log.debug("Encountered deleted branch in block={}, Skipping".format(entry.data.paddr.value))
+                            log.warning("Block values are deleted? ,block={}".format(entry.data.paddr.value))
                             continue
-                        newblock = self.container.read_block(entry.data.paddr.value)
+
+                        if ( entry.data.flags & 4 ) == 4: # ENCRYPTED FLAG
+                            newblock = self.volume.read_vol_block(entry.data.paddr.value, self.encryption_key)
+                        else:
+                            newblock = self.volume.read_vol_block(entry.data.paddr.value)
                         self.read_entries(entry.data.paddr.value, newblock)
+
+
                     except (ValueError, EOFError, OSError):
                         log.exception('Exception trying to read block {}'.format(entry.data.paddr.value))
         elif block.header.subtype == 0:
@@ -604,8 +620,8 @@ class DataCache:
     #     return None  
 
 class ApfsExtendedAttribute:
-    def __init__(self, container, xName, xFlags, xData, xSize):
-        self._container = container
+    def __init__(self, volume, xName, xFlags, xData, xSize):
+        self._volume = volume
         self.extents = []
         self.name = xName
         self.flags = xFlags
@@ -621,7 +637,7 @@ class ApfsExtendedAttribute:
             if self.flags & 1: # extent based
                 # get data from extents
                 for extent in self.extents:
-                    self._real_data += extent.GetData(self._container)
+                    self._real_data += extent.GetData(self._volume)
             else: # embedded
                 self._real_data = self._data
             self._data_fetched = True
@@ -646,10 +662,60 @@ class ApfsVolume:
         self.uuid = ''
         self.role = 0
         self.files_meta_cache = DataCache()
+        # Encryption related
+        self.encryption_key = None
+        self.apfs = apfs_container.apfs
+        self.block_size = apfs_container.block_size
+        self.cs_factor = self.block_size // 0x200
         #
         # SqliteWriter object to read from sqlite. 
         # This must be populated manually before calling any file/folder/symlink related method!
         self.dbo = None 
+
+    def SetupDecryption(self, key):
+        self.algorithm_aes = algorithms.AES(key)
+
+    def get_raw_decrypted_block(self, block_num, key=None, limit_size=-1):
+        """Returns raw block data (without parsing). If key is None, no decryption is performed.
+           Use limit_size if you need less than one block of data. It's faster to decrypt less
+           data. Use it if you don't need the whole block.
+        """
+        data = self.container.get_block(block_num)
+        if key is not None:
+            decrypted_block = self.decrypt_vol_block(data, block_num, key, limit_size)
+            return decrypted_block
+        return data
+
+    def decrypt_vol_block(self, encrypted_block, block_id, key, limit_size=-1):
+        
+        uno = block_id * self.cs_factor
+        size = self.block_size
+        k = 0
+        decrypted_block = b""
+        if limit_size != -1:
+            size = min(size, limit_size)
+        while k < size:
+            tweak = struct.pack("<QQ", uno, 0)
+            decryptor = Cipher(self.algorithm_aes, modes.XTS(tweak), backend=default_backend()).decryptor()
+            decrypted_block += decryptor.update(encrypted_block[k:k + 0x200]) + decryptor.finalize()
+            uno += 1
+            k += 0x200
+        if limit_size != -1:
+            return decrypted_block[:size]
+        return decrypted_block
+
+    def read_vol_block(self, block_num, key=None):
+        """ Parse a single block """
+        data = self.container.get_block(block_num)
+
+        if not data:
+            return None
+        if key is None:
+            block = self.apfs.Block(KaitaiStream(BytesIO(data)), self.apfs, self.apfs)
+        else:
+            decrypted_block = self.decrypt_vol_block(data, block_num, key)
+            block = self.apfs.Block(KaitaiStream(BytesIO(decrypted_block)), self.apfs, self.apfs)
+        return block
 
     def read_volume_info(self, volume_super_block_num):
         """Read volume information"""
@@ -684,14 +750,13 @@ class ApfsVolume:
         log.debug('  incompatible_features=0x{:X}, fs_flags=0x{:X}'.format(super_block.body.incompatible_features, super_block.body.fs_flags))
 
         if self.is_encrypted:
-            log.info("Volume appears to be ENCRYPTED. Encrypted volumes can't be processed directly.")
-            log.info("See link below for instructions on processing Encrypted volumes")
-            log.info("https://github.com/ydkhatri/mac_apt/wiki/Known-issues-and-Workarounds")
-            return
+            log.info("Volume appears to be ENCRYPTED. ")
+            #TODO - Detect hardware vs software encryption!
+
         # get volume omap
         vol_omap = self.container.read_block(self.omap_oid)
         self.root_block_num = vol_omap.body.tree_oid
-        #log.debug ("root_block_num = {}".format(self.root_block_num))
+        log.debug ("root_block_num = {}".format(self.root_block_num))
 
     def ReadUUID(self, uuid_bytes):
         '''Return a string from binary uuid blob'''
@@ -744,9 +809,9 @@ class ApfsVolume:
             apfs_file_meta = self.GetApfsFileMeta(path)
         if apfs_file_meta:
             if apfs_file_meta.is_compressed:
-                return ApfsFileCompressed(apfs_file_meta, apfs_file_meta.logical_size, apfs_file_meta.extents, self.container)
+                return ApfsFileCompressed(apfs_file_meta, apfs_file_meta.logical_size, apfs_file_meta.extents, self)
             else:
-                return ApfsFile(apfs_file_meta, apfs_file_meta.logical_size, apfs_file_meta.extents, self.container)
+                return ApfsFile(apfs_file_meta, apfs_file_meta.logical_size, apfs_file_meta.extents, self)
         else:
             log.error("Failed to open file as no metadata was found for it. File path={}".format(path))
         return None
@@ -971,7 +1036,7 @@ class ApfsVolume:
                         elif apfs_file_meta.attributes.get(xName, None) != None: # check if existing
                             got_all_xattr = True # based on our query sorting, attributes will now be repeated, we got all of them, processing attribs can stop now
                         else: # new , read this
-                            att = ApfsExtendedAttribute(self.container, xName, row['xFlags'], row['xData'], row['xSize'])
+                            att = ApfsExtendedAttribute(self, xName, row['xFlags'], row['xData'], row['xSize'])
                             if row['xFlags'] & 1: #row['xExSize']:
                                 xattr_extent = ApfsExtent(row['xExOff'], row['xExSize'], row['xBlock_Num'])
                                 att.extents.append(xattr_extent)
@@ -1135,7 +1200,7 @@ class ApfsVolume:
                             elif apfs_file_meta.attributes.get(xName, None) != None: # check if existing
                                 got_all_xattr = True # based on our query sorting, attributes will now be repeated, we got all of them, processing attribs can stop now
                             else: # new , read this
-                                att = ApfsExtendedAttribute(self.container, xName, row['xFlags'], row['xData'], row['xSize'])
+                                att = ApfsExtendedAttribute(self, xName, row['xFlags'], row['xData'], row['xSize'])
                                 if row['xFlags'] & 1: #row['xExSize']:
                                     xattr_extent = ApfsExtent(row['xExOff'], row['xExSize'], row['xBlock_Num'])
                                     att.extents.append(xattr_extent)
@@ -1315,6 +1380,7 @@ class ApfsContainer:
         return self.position
 
     def read(self, size):
+        """Raw read function, will not return decrypted data in case of Encrypted blocks"""
         data = self.img.read(self.apfs_container_offset + self.position, size)
         #self.debug_last_block_read_pos = self.apfs_container_offset + self.position
         #log.debug("debug_last_block_read_pos={}".format(self.debug_last_block_read_pos))
@@ -1327,10 +1393,12 @@ class ApfsContainer:
         return self.read(self.block_size)
 
     def read_block(self, block_num):
-        """ Parse a singe block """
+        """ Parse a single block """
         data = self.get_block(block_num)
+
         if not data:
             return None
+
         block = self.apfs.Block(KaitaiStream(BytesIO(data)), self.apfs, self.apfs)
         return block
     
@@ -1377,32 +1445,52 @@ class ApfsExtent:
         self.size = size
         self.block_num = block_num
 
-    def GetData(self, container):
-        container.seek(self.block_num * container.block_size)
+    def GetData(self, volume):
         ## TODO: Create buffered read, in case of really large files!!
-        return container.read(self.size)
+        encryption_key = volume.encryption_key
+        num_full_blocks_needed = self.size // volume.block_size
+        partial_block_size = self.size % volume.block_size
+
+        data = b''
+        for b in range(num_full_blocks_needed):
+            data += volume.get_raw_decrypted_block(self.block_num + b, encryption_key)
+        if partial_block_size > 0:
+            data += volume.get_raw_decrypted_block(self.block_num + num_full_blocks_needed, encryption_key, partial_block_size)
+        return data
     
-    def GetSomeData(self, container, max_size=41943040): # max 40MB
+    def GetSomeData(self, volume, max_size=41943040): # max 40MB
+        encryption_key = volume.encryption_key
         try:
-            container.seek(self.block_num * container.block_size)
+            #container.seek(self.block_num * container.block_size)
             # return data in chunks of max_size
             if self.size <= max_size:
-                yield container.read(self.size)
+                yield self.GetData(volume)
+                #yield container.read(self.size)
             else:
-                num_full_pieces = self.size // max_size
-                for i in range(num_full_pieces):
-                    yield container.read(max_size)
-                if self.size % max_size:
-                    yield container.read(self.size % max_size)
+                block_num = self.block_num
+                num_full_blocks_needed = self.size // volume.block_size
+                partial_block_size = self.size % volume.block_size
+
+                data = b''
+                for b in range(num_full_blocks_needed):
+                    data += volume.get_raw_decrypted_block(block_num, encryption_key)
+                    block_num += 1
+                    if data >= max_size:
+                        yield data
+                        data = b''
+                if partial_block_size > 0:
+                    data += volume.get_raw_decrypted_block(block_num, encryption_key, partial_block_size)
+                    yield data
+
         except GeneratorExit:
             pass
 
 class ApfsFile():
-    def __init__(self, apfs_file_meta, logical_size, extents, apfs_container):
+    def __init__(self, apfs_file_meta, logical_size, extents, volume):
         self.meta = apfs_file_meta
         self.file_size = logical_size
         self.extents = extents
-        self.container = apfs_container
+        self.volume = volume
         self.closed = False
         self.mode = 'rb'
         self.name = apfs_file_meta.path
@@ -1421,7 +1509,7 @@ class ApfsFile():
                 # Not so uncommon in reality! For files that grow and shrink, APFS does not reclaim clusters immediately.
                 log.debug ("mismatch between logical size and extents!")
                 break
-            data = extent.GetData(self.container)
+            data = extent.GetData(self.volume)
             data_len = extent.size
             if data_len >= bytes_left:
                 content += data[:bytes_left]
@@ -1462,7 +1550,7 @@ class ApfsFile():
                 else:
                     # reached desired start offset
                     extent_slice_consumed = 0
-                    for data in extent.GetSomeData(self.container):
+                    for data in extent.GetSomeData(self.volume):
                         start_pos = offset - bytes_consumed - extent_slice_consumed
                         if start_pos >= len(data): # Case when extent slicing results in this, we only want let's say 3rd yield onwards!
                             extent_slice_consumed += len(data)
@@ -1595,7 +1683,6 @@ class ApfsFile():
 
         if self.meta.is_symlink: # if symlink, return symlink  path as data
             data += self.meta.attributes['com.apple.fs.symlink'].data[self._pointer : self._pointer + size_to_read]
-
         else:
             new_data_fetched = self._GetSomeDataFromExtents(self.extents, self.meta.logical_size, self._pointer, size_to_read)
             new_data_len = len(new_data_fetched)
@@ -1642,8 +1729,8 @@ class ZlibCompressionParams(object):
         self.chunk_info = [] # [ [chunk_offset, chunk_size, uncomp_offset_start, uncomp_offset_end], .. ] List of lists
 
 class ApfsFileCompressed(ApfsFile):
-    def __init__(self, apfs_file_meta, logical_size, extents, apfs_container):
-        super().__init__(apfs_file_meta, logical_size, extents, apfs_container)
+    def __init__(self, apfs_file_meta, logical_size, extents, volume):
+        super().__init__(apfs_file_meta, logical_size, extents, volume)
         self.data_is_inline = (self.meta.decmpfs == None) # header & data in extent, data is inline with header
         self.compressed_header = None
         self.magic = None
