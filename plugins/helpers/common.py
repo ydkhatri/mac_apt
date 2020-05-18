@@ -11,10 +11,10 @@ import biplist
 import datetime
 import logging
 import os
-import pytz
+#import pytz
 from enum import IntEnum
 from sqlite3 import Error as sqlite3Error
-from tzlocal import get_localzone
+#from tzlocal import get_localzone
 
 log = logging.getLogger('MAIN.HELPERS.COMMON')
 
@@ -30,12 +30,12 @@ class TimeZoneType(IntEnum):
 
 class CommonFunctions:
 
-    @staticmethod
-    def GetLocalTimeFromUtcDate(d_utc):
-        '''Returns a datetime object converted to local time'''
-        local_timezone = get_localzone()
-        #local_tz = get_localzone()
-        return d_utc.replace(tzinfo=pytz.utc).astimezone(local_timezone)
+    # @staticmethod
+    # def GetLocalTimeFromUtcDate(d_utc):
+    #     '''Returns a datetime object converted to local time'''
+    #     local_timezone = get_localzone()
+    #     #local_tz = get_localzone()
+    #     return d_utc.replace(tzinfo=pytz.utc).astimezone(local_timezone)
 
     @staticmethod
     def ReadMacAbsoluteTime(mac_abs_time): # Mac Absolute time is time epoch beginning 2001/1/1
