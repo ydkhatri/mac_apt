@@ -17,6 +17,7 @@ from kaitaistruct import  KaitaiStruct, KaitaiStream, BytesIO
 import hashlib
 from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
 from cryptography.hazmat.backends import default_backend
+from cryptography.exceptions import InternalError
 from pskc.exceptions import DecryptionError
 
 
@@ -328,8 +329,8 @@ class EncryptedVol:
 
             self.log.debug("Successfully decrypted the keybag")
             return complete_plaintext
-        except Exception as ex:
-            self.log.exception("Could not decrypt the keybag. Exception was: \n" + str(ex) + "\n")
+        except InternalError as ex:
+            self.log.exception("Could not decrypt the keybag.")
         return ''
 
     def get_wrapped_keybag(self, offset, block_count):

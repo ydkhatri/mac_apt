@@ -808,10 +808,13 @@ class ApfsVolume:
         if apfs_file_meta == None:
             apfs_file_meta = self.GetApfsFileMeta(path)
         if apfs_file_meta:
+            vol = self
+            if isinstance(self, ApfsSysDataLinkedVolume):
+                vol = self.GetUnderlyingVolume(apfs_file_meta.cnid)
             if apfs_file_meta.is_compressed:
-                return ApfsFileCompressed(apfs_file_meta, apfs_file_meta.logical_size, apfs_file_meta.extents, self)
+                return ApfsFileCompressed(apfs_file_meta, apfs_file_meta.logical_size, apfs_file_meta.extents, vol)
             else:
-                return ApfsFile(apfs_file_meta, apfs_file_meta.logical_size, apfs_file_meta.extents, self)
+                return ApfsFile(apfs_file_meta, apfs_file_meta.logical_size, apfs_file_meta.extents, vol)
         else:
             log.error("Failed to open file as no metadata was found for it. File path={}".format(path))
         return None
@@ -1036,7 +1039,10 @@ class ApfsVolume:
                         elif apfs_file_meta.attributes.get(xName, None) != None: # check if existing
                             got_all_xattr = True # based on our query sorting, attributes will now be repeated, we got all of them, processing attribs can stop now
                         else: # new , read this
-                            att = ApfsExtendedAttribute(self, xName, row['xFlags'], row['xData'], row['xSize'])
+                            vol = self
+                            if isinstance(self, ApfsSysDataLinkedVolume):
+                                vol = self.GetUnderlyingVolume(apfs_file_meta.cnid)
+                            att = ApfsExtendedAttribute(vol, xName, row['xFlags'], row['xData'], row['xSize'])
                             if row['xFlags'] & 1: #row['xExSize']:
                                 xattr_extent = ApfsExtent(row['xExOff'], row['xExSize'], row['xBlock_Num'])
                                 att.extents.append(xattr_extent)
@@ -1200,7 +1206,10 @@ class ApfsVolume:
                             elif apfs_file_meta.attributes.get(xName, None) != None: # check if existing
                                 got_all_xattr = True # based on our query sorting, attributes will now be repeated, we got all of them, processing attribs can stop now
                             else: # new , read this
-                                att = ApfsExtendedAttribute(self, xName, row['xFlags'], row['xData'], row['xSize'])
+                                vol = self
+                                if isinstance(self, ApfsSysDataLinkedVolume):
+                                    vol = self.GetUnderlyingVolume(apfs_file_meta.cnid)
+                                att = ApfsExtendedAttribute(vol, xName, row['xFlags'], row['xData'], row['xSize'])
                                 if row['xFlags'] & 1: #row['xExSize']:
                                     xattr_extent = ApfsExtent(row['xExOff'], row['xExSize'], row['xBlock_Num'])
                                     att.extents.append(xattr_extent)
@@ -1290,6 +1299,12 @@ class ApfsSysDataLinkedVolume(ApfsVolume):
                 raise ex
         else:
             log.error('firmlinks file is missing! Cannot proceed!')
+    
+    def GetUnderlyingVolume(self, file_id):
+        '''Return the volume object given file's inode number(file_id)'''
+        if (file_id & 0x0FFFFFFF00000000) == 0x0FFFFFFF00000000:
+            return self.sys_vol
+        return self.data_vol
 
 class ApfsContainer:
 
@@ -1339,6 +1354,9 @@ class ApfsContainer:
             log.info("Found newer xid={} @ block num {}".format(max_xid, base_cp_block_num + max_xid_cp_index))
             log.info("Using new XID now..")
             self.containersuperblock = checkpoint_blocks[max_xid_cp_index]
+
+        self.is_sw_encrypted = (self.containersuperblock.body.flags == apfs.NX_CRYPTO_SW) # True for encrypted APFS on non-T2 macs
+        log.debug(f'self.is_sw_encrypted = {self.is_sw_encrypted}')
 
         # get list of volume ids
         apfss = [x for x in self.containersuperblock.body.volumesuperblock_ids if x != 0 ] # removing the invalid ones
