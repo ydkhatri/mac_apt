@@ -62,6 +62,8 @@ XATTR_RESERVED_8 = 0x00000008
 # snapshot flags
 OMAP_SNAPSHOT_DELETED  = 0x00000001
 OMAP_SNAPSHOT_REVERTED = 0x00000002
+# software encyption in containersuperblock
+NX_CRYPTO_SW  = 4
 
 class Apfs(KaitaiStruct):
 
