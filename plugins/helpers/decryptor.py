@@ -471,9 +471,6 @@ class EncryptedVol:
         # Parses the unwrapped volume kb_locker object derived from the wrapped keybag into structures
         parsed_volume_keybag = parse_volume_keybag(unwrapped_volume_keybag)
 
-        with open("E:\\MA_Output\\volume_kb.bin", "wb") as x:
-            x.write(unwrapped_volume_keybag)
-
 
         """
         Find an entry in the volumeʼs keybag whose UUID matches the userʼs Open Directory UUID and whose tag is
