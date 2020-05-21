@@ -311,7 +311,7 @@ class NativeHfsParser:
 
 class MacInfo:
 
-    def __init__(self, output_params, password='', recovery_key=''):
+    def __init__(self, output_params, password=''):
         #self.Partitions = {}   # Dictionary of all partition objects returned from pytsk LATER! 
         self.pytsk_image = None
         self.macos_FS = None      # Just the FileSystem object (fs) from OSX partition
@@ -330,7 +330,6 @@ class MacInfo:
         self.is_linux = (sys.platform == 'linux')
         # for encrypted volumes
         self.password = password
-        self.recovery_key = recovery_key
 
     # Public functions, plugins can use these
     def GetAbsolutePath(self, current_abs_path, dest_rel_path):
@@ -1015,8 +1014,8 @@ class MacInfo:
         return False
 
 class ApfsMacInfo(MacInfo):
-    def __init__(self, output_params, password, recovery_key):
-        MacInfo.__init__(self, output_params, password, recovery_key)
+    def __init__(self, output_params, password):
+        MacInfo.__init__(self, output_params, password)
         self.apfs_container = None
         self.apfs_db = None
         self.apfs_db_path = ''
@@ -1051,14 +1050,11 @@ class ApfsMacInfo(MacInfo):
             vol.dbo = self.apfs_db
             if vol == preboot_vol:
                 continue
-            elif vol.is_encrypted:
-                if self.password == '' and self.recovery_key == '':
+            elif vol.is_encrypted and self.apfs_container.is_sw_encrypted: # For hardware encryption(T2), do nothing, it should have been acquired as decrypted..
+                if self.password == '':
                     log.error(f'Skipping vol {vol.volume_name}. The vol is ENCRYPTED and user did not specify a password to decrypt it!' +
                                 f' If you know the password, run mac_apt again with the -p option to decrypt this volume.')
                     continue
-
-                if self.password != '' and self.recovery_key != '':
-                    log.info("You entered a password and a personal recovery key. You only needed to enter one. We will use the password")
 
                 uuid_folders = []
                 preboot_dir = preboot_vol.ListItemsInFolder('/')
@@ -1074,7 +1070,7 @@ class ApfsMacInfo(MacInfo):
                     if preboot_vol.DoesFileExist(plist_path):
                         plist_raw_data = preboot_vol.open(plist_path).readAll()
                         plist_data = biplist.readPlistFromString(plist_raw_data)
-                        decryption_key = decryptor.EncryptedVol(vol, plist_data, self.password, self.recovery_key, log).decryption_key
+                        decryption_key = decryptor.EncryptedVol(vol, plist_data, self.password).decryption_key
                         if decryption_key is None:
                             log.error(f"No decryption key found. Did you enter the right password? Volume '{vol.volume_name}' cannot be decrypted!")
                         else:

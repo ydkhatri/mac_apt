@@ -5,32 +5,36 @@
    Usage or distribution of this software/code is subject to the
    terms of the MIT License.
 
-
     Written by Jack Farley & Garrett Mahoney
 
     Decrypts APFS volumes
 
-
 '''
-import struct
-from kaitaistruct import  KaitaiStruct, KaitaiStream, BytesIO
+
 import hashlib
-from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
-from cryptography.hazmat.backends import default_backend
+import logging
+import struct
 from cryptography.exceptions import InternalError
-from pskc.exceptions import DecryptionError
-import binascii
+from cryptography.hazmat.backends import default_backend
+from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
+from kaitaistruct import  KaitaiStruct, KaitaiStream, BytesIO
+from uuid import UUID as uuid_obj
+
+log = logging.getLogger('MAIN.HELPERS.DECRYPTOR')
 
 APFS_FV_PERSONAL_RECOVERY_KEY_UUID = "EBC6C064-0000-11AA-AA11-00306543ECAC"
+KB_TAG_UNKNOWN = 0
+KB_TAG_WRAPPING_KEY = 1
+KB_TAG_VOLUME_KEY = 2
+KB_TAG_VOLUME_UNLOCK_RECORDS = 3
+KB_TAG_VOLUME_PASSPHRASE_HINT = 4
+KB_TAG_USER_PAYLOAD = 5
 
 
 """CODE FROM: https://github.com/arthurdejong/python-pskc"""
 def _strxor(a, b):
-    """Return a XOR b."""
-    if isinstance(b'', str):  # pragma: no cover (Python 2 specific)
-        return b''.join(chr(ord(x) ^ ord(y)) for (x, y) in zip(a, b))
-    else:  # pragma: no cover (Python 3 specific)
-        return bytes(x ^ y for (x, y) in zip(a, b))
+    """Return a XOR b"""
+    return bytes(x ^ y for (x, y) in zip(a, b))
 
 
 def _split(value):
@@ -51,7 +55,7 @@ def unwrap(ciphertext, key, iv=None, pad=None, algorithm=algorithms.AES):
         pad = False
 
     if len(ciphertext) % 8 != 0 or (pad is False and len(ciphertext) < 24):
-        raise DecryptionError('Ciphertext length wrong')
+        raise ValueError('Ciphertext length wrong')
 
     cipher = Cipher(algorithm(key), modes.ECB(), default_backend())
     decryptor = cipher.decryptor()
@@ -80,7 +84,7 @@ def unwrap(ciphertext, key, iv=None, pad=None, algorithm=algorithms.AES):
                 return plaintext[:mli]
     elif A == iv:
         return plaintext
-    raise DecryptionError('IV does not match')
+    raise ValueError('IV does not match')
 """END CODE FROM: https://github.com/arthurdejong/python-pskc"""
 
 
@@ -117,8 +121,6 @@ class keybag_entry_vek(KaitaiStruct):
             self.pr_block_count = self._io.read_u8le()
             self.padding = self._io.read_bytes(8)
         else:
-
-
             self.blob_header = blob_header_t_vek(self._io, self, self._root)
 
 
@@ -166,21 +168,6 @@ class media_keybag_t_vek(KaitaiStruct):
 #######################################################################################################################
 
 
-class blob_header_t_kek(KaitaiStruct):
-    def __init__(self, _io, _parent=None, _root=None):
-        self._io = _io
-        self._parent = _parent
-        self._root = _root if _root else self
-        self.unk_80 = self._io.read_bytes(10)
-        self.unk1 = self._io.read_bytes(1)
-        self.hmac = self._io.read_bytes(32)
-        self.unk2 = self._io.read_bytes(2)
-        self.salt = self._io.read_bytes(8)
-        self.unk35 = self._io.read_bytes(35)
-        self.bag_data = self._io.read_bytes(40)
-        self.unk12 = self._io.read_bytes(12)
-
-
 class keybag_entry_kek(KaitaiStruct):
     def __init__(self, _io, _parent=None, _root=None):
         self._io = _io
@@ -189,12 +176,15 @@ class keybag_entry_kek(KaitaiStruct):
         self.UUID = self._io.read_bytes(16)
         self.KeyBag_Tags = self._io.read_u2le()
         self.key_keylen = self._io.read_u2le()
+        self.padding = self._io.read_bytes(4)
 
         #if self.key_keylen == 148:
-        self.padding = self._io.read_bytes(12)
+        # blob header
+        self.unk = self._io.read_bytes(8)
         self.hmac = self._io.read_bytes(32)
         self.unk2 = self._io.read_bytes(2)
         self.salt = self._io.read_bytes(8)
+        # blob follows
         self.unk7 = self._io.read_bytes(7)
         self.uuid = self._io.read_bytes(16)
         self.unk12 = self._io.read_bytes(12)
@@ -264,44 +254,36 @@ def convert_keybag_uuid_to_string(binary_uuid):
     return: uuid: The string like UUID used for comparisons
     """
 
-    readable_UUID = ""
-    for hex_byte in binary_uuid:
-        new_char = str(hex(hex_byte)[2:]).upper()
-        if len(new_char) == 1:
-            readable_UUID += '0'
-            readable_UUID += new_char
-        else:
-            readable_UUID += new_char
-    return readable_UUID
+    uuid = uuid_obj(bytes=binary_uuid)
+    return uuid.hex.upper()
 
 
-def find_volume_uuid_from_vol_keybag(keybag, user_uuid=None):
+def find_wrapped_kek_from_vol_keybag(keybag, user_uuid=None):
 
     user_open_dir_uuid = user_uuid
     user_open_dir_uuid = user_open_dir_uuid.replace("-", "")
 
     for kl_entry in keybag.mk_locker.kl_entries:
-        if kl_entry.KeyBag_Tags == 3:
+        if kl_entry.KeyBag_Tags == KB_TAG_VOLUME_UNLOCK_RECORDS:
             # Converts the UUID in the unwrapped keybag entry to GUID like format for comparisons
             byte_uuid = kl_entry.UUID
             readable_UUID = convert_keybag_uuid_to_string(byte_uuid)
             if readable_UUID == user_open_dir_uuid:
                 return kl_entry.bag_data, kl_entry.iterations, kl_entry.kek_salt
+    return None, None, None
 
 
 class EncryptedVol:
-    def __init__(self, ApfsVolume, preboot_plist, password, recovery_key, log):
+    def __init__(self, ApfsVolume, preboot_plist, password):
         self.ApfsVolume = ApfsVolume
         self.wrapped_keybag_offset = ApfsVolume.container.containersuperblock.body.keylocker_paddr
         self.keylocker_block_count = ApfsVolume.container.containersuperblock.body.keylocker_block_count
         self.block_size = ApfsVolume.container.containersuperblock.body.block_size
         self.uuid = ApfsVolume.container.containersuperblock.body.uuid
         self.preboot_plist = preboot_plist
-        self.log = log
         self.decryption_key = None
         self.password = password
-        self.recovery_key = recovery_key
-        self.log.info("Starting decryption of Volume: " + self.ApfsVolume.volume_name)
+        log.info("Starting decryption of Volume: " + self.ApfsVolume.volume_name)
         self.decrypter()
 
 
@@ -320,7 +302,7 @@ class EncryptedVol:
         # Cipher is AES-XTS with the container UUID as the first and second key
 
         try:
-            self.log.debug("Attempting to decrypt the keybag")
+            log.debug("Attempting to decrypt the keybag")
             k = 0
             size = len(wrapped_keybag)
             while k < size:
@@ -330,14 +312,14 @@ class EncryptedVol:
                 uno += 1
                 k += 0x200
 
-            self.log.debug("Successfully decrypted the keybag")
+            log.debug("Successfully decrypted the keybag")
             return complete_plaintext
         except InternalError as ex:
-            self.log.exception("Could not decrypt the keybag.")
+            log.exception("Could not decrypt the keybag.")
         return ''
 
 
-    def get_key_from_prk(self, volume_keybag):
+    def get_wrapped_key_from_prk(self, volume_keybag):
         """
 
         :param volume_keybag: The parsed volume keybag
@@ -347,15 +329,15 @@ class EncryptedVol:
             salt
         """
 
-        self.log.debug("Finding key details from the Volume Keybag using the Personal Recovery Key")
+        log.debug("Finding key details from the Volume Keybag using the Personal Recovery Key")
 
-        prk_uuid = binascii.unhexlify(APFS_FV_PERSONAL_RECOVERY_KEY_UUID.replace("-", ""))
-
+        prk_uuid = bytes.fromhex(APFS_FV_PERSONAL_RECOVERY_KEY_UUID.replace("-", ""))
 
         for kl_entry in volume_keybag.mk_locker.kl_entries:
             if kl_entry.UUID == prk_uuid:
-                self.log.debug("Found key details from the Volume Keybag!")
+                log.debug("Found key details from the Volume Keybag!")
                 return kl_entry.bag_data, kl_entry.iterations, kl_entry.kek_salt
+        return None, None, None
 
 
     def get_wrapped_keybag(self, offset, block_count):
@@ -367,7 +349,7 @@ class EncryptedVol:
         block = b""
 
         """Logs our current offset to the offset of the wrapped keybag"""
-        self.log.debug("Offset for the wrapped keybag is: " + str(offset))
+        log.debug("Offset for the wrapped keybag is: " + str(offset))
 
         """Loops through reading blocks based on the amount of block the keybag has used based on keylocker_block_count"""
         for x in range(block_count):
@@ -390,11 +372,11 @@ class EncryptedVol:
             UUID
         """
         for kl_entry in container_keybag.mk_locker.kl_entries:
-            if kl_entry.KeyBag_Tags == 3:
+            if kl_entry.KeyBag_Tags == KB_TAG_VOLUME_UNLOCK_RECORDS:
                 # Returns the starting offset and the block count of the volume keybag if keylen is 16
                 if kl_entry.key_keylen == 16:
-                    self.log.debug("Found details for the Wrapped Volume Keybag\n\t" + "Start Address: " + str(kl_entry.pr_start_paddr) +
-                                   "\n\tBlock Count: " + str(kl_entry.pr_block_count))
+                    log.debug(f"Found Wrapped Volume Keybag - Start Address: 0x{kl_entry.pr_start_paddr:X}" +
+                                f" Block Count: {kl_entry.pr_block_count}")
                     return kl_entry.pr_start_paddr, kl_entry.pr_block_count, kl_entry.UUID
 
 
@@ -405,58 +387,69 @@ class EncryptedVol:
         :return: The wrapped VEK for the volume
         """
 
-        self.log.debug("Searching for VEK now")
+        log.debug("Searching for VEK now")
 
         volume_uuid = self.ApfsVolume.uuid
         volume_uuid = volume_uuid.replace("-", "")
 
         for kl_entry in container_keybag.mk_locker.kl_entries:
-            if kl_entry.KeyBag_Tags == 2:
+            if kl_entry.KeyBag_Tags == KB_TAG_VOLUME_KEY:
 
                 # Converts the UUID in the unwrapped keybag entry to GUID like format for comparisons
                 byte_uuid = kl_entry.UUID
                 readable_UUID = convert_keybag_uuid_to_string(byte_uuid)
                 if readable_UUID == volume_uuid:
-                    self.log.debug("Found a UUID within the kl_entry with a Tag of two and a UUID that matches the "
+                    log.debug("Found a UUID within the kl_entry with a Tag of two and a UUID that matches the "
                                    "Volume UUID we are trying to decrypt!")
                     return kl_entry.blob_header.bag_data
 
-        self.log.error("COULD NOT FIND MATCHING UUID IN KEYBAG. VOLUME CANNOT BE DECRYPTED!!")
         return None
 
     def get_open_dir_uuid(self):
         open_dir_uuids = []
         for uuid in self.preboot_plist:
             if self.preboot_plist[uuid]['UserType'] == 'OpenDirectory':
-                self.log.debug("Found Open Directory UUID from user: " + self.preboot_plist[uuid]['FullName'])
-                self.log.debug("User's Open Directory UUID is: " + uuid)
+                log.debug("Found Open Directory UUID from user: " + self.preboot_plist[uuid]['FullName'])
+                log.debug("User's Open Directory UUID is: " + uuid)
                 open_dir_uuids.append( (self.preboot_plist[uuid]['FullName'], uuid) )
         return open_dir_uuids
 
-
+    def get_VEK_by_unwrapping_keys(self, user_password_key, wrapped_kek, wrapped_vek):
+        '''Attempts to unwraps the KEK and then VEK. Returns VEK if successful else None'''
+        try:
+            unwrapped_kek = unwrap(wrapped_kek, user_password_key)
+            vek = unwrap(wrapped_vek, unwrapped_kek)
+            return vek
+        except ValueError as ex: # Unwrap failed
+            if str(ex).find("IV does not match") >= 0:
+                pass # wrong password
+            else:
+                log.error('Error while unwrapping key ' + str(ex))
+            return None
 
     def decrypter(self):
 
         # Uses the get_wrapped_keybag() function to get the wrapped keybag from the offsets defined in the
         # Conatiner Super Block
         # THIS IS STEP 1 OF THE APFS ACCESSING ENCRYPTED OBJECTS DOCUMENTATION
-        self.log.debug("Finding the Wrapped Keybag now")
+        log.debug("Finding the Wrapped Keybag now")
         wrapped_container_keybag = self.get_wrapped_keybag(self.wrapped_keybag_offset, self.keylocker_block_count)
 
         # Decrypts the wrapped keybag
         # THIS IS STEP 2 OF THE APFS ACCESSING ENCRYPTED OBJECTS DOCUMENTATION
-        self.log.debug("Attempting to unwrap the Wrapped Keybag now")
+        log.debug("Attempting to unwrap the Wrapped Keybag now")
         unwrapped_container_keybag = self.decrypt_keybag(wrapped_container_keybag, self.wrapped_keybag_offset, self.uuid)
-        self.log.debug("Successfully unwrapped the Wrapped Keybag!")
+        log.debug("Successfully unwrapped the Wrapped Keybag!")
         parsed_container_keybag = parse_vek_keybag(unwrapped_container_keybag)
 
         # Parses the unwrapped kb_locker object derived from the wrapped keybag into structures
         # THIS IS STEP 3 OF THE APFS ACCESSING ENCRYPTED OBJECTS DOCUMENTATION
-        self.log.debug("Parsing the unwrapped keybag now")
-        wrapped_volume_vek = self.find_wrapped_vek(parsed_container_keybag)
+        log.debug("Parsing the unwrapped keybag now")
+        wrapped_vek = self.find_wrapped_vek(parsed_container_keybag)
 
         # Returns if no UUID is found
-        if wrapped_volume_vek is None:
+        if wrapped_vek is None:
+            log.error("COULD NOT FIND MATCHING UUID IN KEYBAG (for obtaining wrapped VEK). VOLUME CANNOT BE DECRYPTED!!")
             return
 
         # Finds the volumes keybag by looking at the unwrapped containers keybag with a tag of KB_TAG_VOLUME_UNLOCK_RECORDS
@@ -479,56 +472,51 @@ class EncryptedVol:
         THIS IS STEP 6 OF THE APFS ACCESSING ENCRYPTED OBJECTS DOCUMENTATION (find 3)
         """
 
+        user_password_key = b''
 
+        # Try supplied password as a recovery key first
+        log.debug("Trying as Personal Recovery key to decrypt")
+        wrapped_kek, iterations, salt = self.get_wrapped_key_from_prk(parsed_volume_keybag)
+        if wrapped_kek:
+            int_iterations = int.from_bytes(iterations, byteorder='big')
+            # There may be a flag in the volume keybag to use SHA128 instead of SHA256, but that is unknown at the time
+            user_password_key = hashlib.pbkdf2_hmac('sha256', self.password.encode(), salt, int_iterations,
+                                                    dklen=32)
+            self.decryption_key = self.get_VEK_by_unwrapping_keys(user_password_key, wrapped_kek, wrapped_vek)
 
-        # Use password instead of recovery key
-        if self.password != '' or (self.password != '' and self.recovery_key != ''):
+        # Try password if recovery key failed above
+        if self.decryption_key is None:
 
             user_uuids = self.get_open_dir_uuid()
             if len(user_uuids) > 1:
-                self.log.warning("There is more than one User Open Directory UUID. We will try for all users.")
+                log.warning("There is more than one User Open Directory UUID. We will try for all users.")
             if len(user_uuids) == 0:
-                self.log.error("There were no User Open Directory UUIDs found. Decryption cannot move forward")
+                log.error("There were no User Open Directory UUIDs found. Decryption cannot move forward")
                 return
 
-
             for user, open_dir_uuid in user_uuids:
-                self.log.info(f'Trying to decrypt encryption keys for user {user}')
-                try:
+                log.info(f'Trying to decrypt encryption keys for user {user}')
+                """
+                Unwrap the KEK using the userʼs password, and then unwrap the VEK using the KEK, both according to the
+                algorithm described in RFC 3394.
 
-
-                    """
-                    Unwrap the KEK using the userʼs password, and then unwrap the VEK using the KEK, both according to the
-                    algorithm described in RFC 3394.
-    
-                    THIS IS STEP 7 OF THE APFS ACCESSING ENCRYPTED OBJECTS DOCUMENTATION
-                    """
-
-                    volume_wrapped_kek, iterations, salt = find_volume_uuid_from_vol_keybag(parsed_volume_keybag,
-                                                                                            open_dir_uuid)
+                THIS IS STEP 7 OF THE APFS ACCESSING ENCRYPTED OBJECTS DOCUMENTATION
+                """
+                wrapped_kek, iterations, salt = find_wrapped_kek_from_vol_keybag(parsed_volume_keybag,
+                                                                                        open_dir_uuid)
+                if wrapped_kek:
                     int_iterations = int.from_bytes(iterations, byteorder='big')
 
                     # There may be a flag in the volume keybag to use SHA128 instead of SHA256, but that is unknown at the time
                     user_password_key = hashlib.pbkdf2_hmac('sha256', self.password.encode(), salt, int_iterations, dklen=32)
+                    unwrapped_kek = unwrap(wrapped_kek, user_password_key)
+                    unwrapped_vek = unwrap(wrapped_vek, unwrapped_kek)
 
-                except DecryptionError as ex:
-                    self.log.debug(str(ex))
+                    self.decryption_key = self.get_VEK_by_unwrapping_keys(user_password_key, wrapped_kek, wrapped_vek)
+                    if self.decryption_key:
+                        return # on success
+                else:
+                    log.debug(f'Wrapped KEK was not present for user {user}')
 
-
-
-        if self.recovery_key and self.password == '':
-            # Use recovery key instead of password
-            self.log.info("Using Personal Recovery key to decrypt")
-            volume_wrapped_kek, iterations, salt = self.get_key_from_prk(parsed_volume_keybag)
-            int_iterations = int.from_bytes(iterations, byteorder='big')
-
-            # There may be a flag in the volume keybag to use SHA128 instead of SHA256, but that is unknown at the time
-            user_password_key = hashlib.pbkdf2_hmac('sha256', self.recovery_key.encode(), salt, int_iterations,
-                                                    dklen=32)
-
-
-        unwrapped_volume_kek = unwrap(volume_wrapped_kek, user_password_key)
-        unwrapped_vek = unwrap(wrapped_volume_vek, unwrapped_volume_kek)
-
-        self.decryption_key = unwrapped_vek
-        return
+        if not self.decryption_key:
+            log.error('Could not decrypt with credentials provided!')

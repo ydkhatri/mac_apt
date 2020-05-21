@@ -233,7 +233,7 @@ def GetApfsContainerUuid(img, container_start_offset):
 
 def FindMacOsPartitionInApfsContainer(img, vol_info, container_size, container_start_offset, container_uuid):
     global mac_info
-    mac_info = macinfo.ApfsMacInfo(mac_info.output_params, mac_info.password, mac_info.recovery_key)
+    mac_info = macinfo.ApfsMacInfo(mac_info.output_params, mac_info.password)
     mac_info.pytsk_image = img   # Must be populated
     mac_info.vol_info = vol_info # Must be populated
     mac_info.is_apfs = True
@@ -389,8 +389,7 @@ arg_parser.add_argument('-x', '--xlsx', action="store_true", help='Save output i
 arg_parser.add_argument('-c', '--csv', action="store_true", help='Save output as CSV files')
 #arg_parser.add_argument('-s', '--sqlite', action="store_true", help='Save output in an sqlite database')
 arg_parser.add_argument('-l', '--log_level', help='Log levels: INFO, DEBUG, WARNING, ERROR, CRITICAL (Default is INFO)')#, choices=['INFO','DEBUG','WARNING','ERROR','CRITICAL'])
-arg_parser.add_argument('-p', '--password', help='Password for any user (for decrypting encrypted volume)')
-arg_parser.add_argument('-rk', '--recovery_key', help='Personal Recovery Key. Must be exactly how it was shown to you(for decrypting encrypted volume)')
+arg_parser.add_argument('-p', '--password', help='Personal Recovery Key(PRK) or Password for any user (for decrypting encrypted volume). PRK must be exactly how it was shown to you')
 #arg_parser.add_argument('-u', '--use_tsk', action="store_true", help='Use sleuthkit instead of native HFS+ parser (This is slower!)')
 arg_parser.add_argument('plugin', nargs="+", help="Plugins to run (space separated). FAST will run most plugins")
 args = arg_parser.parse_args()
@@ -502,9 +501,6 @@ except Exception as ex:
 
 if args.password:
     mac_info.password = args.password
-
-if args.recovery_key:
-    mac_info.recovery_key = args.recovery_key
 
 if args.input_type.upper() != 'MOUNTED':
     mac_info.pytsk_image = img
