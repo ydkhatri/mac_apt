@@ -32,7 +32,7 @@ from plugins.helpers.writer import *
 from plugins.helpers.disk_report import *
 from plugin import *
 
-__VERSION = "0.5"
+__VERSION = "0.6"
 __PROGRAMNAME = "macOS Artifact Parsing Tool - SYS DATA Mounted mode"
 __EMAIL = "yogesh@swiftforensics.com"
 
