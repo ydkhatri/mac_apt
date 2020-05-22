@@ -29,11 +29,11 @@ import sys
 import textwrap
 import time
 import traceback
+from plugins.helpers.aff4_helper import EvidenceImageStream
 from plugins.helpers.apfs_reader import ApfsContainer, ApfsDbInfo
 from plugins.helpers.writer import *
 from plugins.helpers.disk_report import *
 from plugin import *
-from pyaff4 import container
 from uuid import UUID
 
 __VERSION = "0.5"
@@ -145,19 +145,19 @@ class aff4_Img_Info(pytsk3.Img_Info):
         url="", type=pytsk3.TSK_IMG_TYPE_EXTERNAL)
 
   def close(self):
-    self._aff4_stream.Close()
+    self._aff4_stream.close()
 
   def read(self, offset, size):
-    self._aff4_stream.SeekRead(offset)
-    return self._aff4_stream.Read(size)
+    self._aff4_stream.seek(offset)
+    return self._aff4_stream.read(size)
 
   def get_size(self):
-    return self._aff4_stream.Size()
+    return self._aff4_stream.size
 
 # Call this function instead of pytsk3.Img_Info() for AFF4 files
 def GetImgInfoObjectForAff4(path):
-    aff4_map_stream = container.Container.open(path)
-    img_info = aff4_Img_Info(aff4_map_stream)
+    aff4_img = EvidenceImageStream(path)
+    img_info = aff4_Img_Info(aff4_img)
     return img_info
 
 ####### End special handling for AFF4 #########
@@ -255,6 +255,25 @@ def ParseVolumesInApfsContainer(img, vol_info, container_size, container_start_o
                 return False
         mac_info.output_params.apfs_db_path = apfs_sqlite_path
         if mac_info.apfs_db != None:
+            #test, export a file
+            # mac_info.output_params.export_log_csv = CsvWriter()
+            # mac_info.output_params.export_log_csv.CreateCsvFile(os.path.join(mac_info.output_params.export_path, "Exported_Files_Log.csv"))
+            # column_info = collections.OrderedDict([ ('SourcePath',DataType.TEXT), ('ExportPath',DataType.TEXT),
+            #                                         ('InodeModifiedTime',DataType.DATE),('ModifiedTime',DataType.DATE),
+            #                                         ('CreatedTime',DataType.DATE),('AccessedTime',DataType.DATE) ])
+            # mac_info.output_params.export_log_csv.WriteRow(column_info)
+            # mac_info.output_params.export_path = os.path.join(mac_info.output_params.output_path, "Export")
+            # if not os.path.exists(mac_info.output_params.export_path):
+            #     try:
+            #         os.makedirs(mac_info.output_params.export_path)
+            #     except Exception as ex:
+            #         log.error("Exception while creating Export folder: " + mac_info.output_params.export_path + "\n Is the location Writeable?" +
+            #                 "Is drive full? Perhaps the drive is disconnected? Exception Details: " + str(ex))
+            #         Exit()
+            # mac_info.macos_FS = mac_info.apfs_container.volumes[0]
+            # mac_info.apfs_container.volumes[0].dbo = mac_info.apfs_db
+            # mac_info.ExportFile('/kyoto-1976538_1920.jpg', 'test', '')
+            #endtest
             mac_info.apfs_db.CloseDb()
             mac_info.apfs_db = None
 
@@ -307,7 +326,7 @@ arg_parser.add_argument('input_type', help='Specify Input type as either E01, DD
 arg_parser.add_argument('input_path', help='Path to disk image/volume')
 arg_parser.add_argument('-o', '--output_path', help='Path where output files will be created')
 arg_parser.add_argument('-l', '--log_level', help='Log levels: INFO, DEBUG, WARNING, ERROR, CRITICAL (Default is INFO)')#, choices=['INFO','DEBUG','WARNING','ERROR','CRITICAL'])
-arg_parser.add_argument('-p', '--password', help='Password for any user (for decrypting encrypted volume)')
+arg_parser.add_argument('-p', '--password', help='Personal Recovery Key(PRK) or Password for any user (for decrypting encrypted volume). PRK must be exactly how it was shown to you')
 args = arg_parser.parse_args()
 
 if args.output_path:

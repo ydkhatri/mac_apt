@@ -28,11 +28,11 @@ import sys
 import textwrap
 import time
 import traceback
+from plugins.helpers.aff4_helper import EvidenceImageStream
 from plugins.helpers.apfs_reader import ApfsContainer, ApfsDbInfo
 from plugins.helpers.writer import *
 from plugins.helpers.disk_report import *
 from plugin import *
-from pyaff4 import container
 from uuid import UUID
 
 __VERSION = "0.5"
@@ -153,19 +153,19 @@ class aff4_Img_Info(pytsk3.Img_Info):
         url="", type=pytsk3.TSK_IMG_TYPE_EXTERNAL)
 
   def close(self):
-    self._aff4_stream.Close()
+    self._aff4_stream.close()
 
   def read(self, offset, size):
-    self._aff4_stream.SeekRead(offset)
-    return self._aff4_stream.Read(size)
+    self._aff4_stream.seek(offset)
+    return self._aff4_stream.read(size)
 
   def get_size(self):
-    return self._aff4_stream.Size()
+    return self._aff4_stream.size
 
 # Call this function instead of pytsk3.Img_Info() for AFF4 files
 def GetImgInfoObjectForAff4(path):
-    aff4_map_stream = container.Container.open(path)
-    img_info = aff4_Img_Info(aff4_map_stream)
+    aff4_img = EvidenceImageStream(path)
+    img_info = aff4_Img_Info(aff4_img)
     return img_info
 
 ####### End special handling for AFF4 #########

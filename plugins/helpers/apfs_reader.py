@@ -746,7 +746,11 @@ class ApfsVolume:
         log.debug("  Vol name  = %s" % super_block.body.volume_name)
         log.debug("  Num files = %d" % super_block.body.num_files)
         log.debug("  Num dirs  = %d" % super_block.body.num_folders)
-        log.debug("  Vol used  = %.2f GB" % float((super_block.body.fs_alloc_count * self.container.apfs.block_size)/(1024.0*1024.0*1024.0)))
+        vol_used_size = super_block.body.fs_alloc_count * self.container.apfs.block_size
+        if vol_used_size < 1073741824: # < 1GiB
+            log.debug("  Vol used  = %.2f MiB" % float((super_block.body.fs_alloc_count * self.container.apfs.block_size)/(1024.0*1024.0)))
+        else:
+            log.debug("  Vol used  = %.2f GiB" % float((super_block.body.fs_alloc_count * self.container.apfs.block_size)/(1024.0*1024.0*1024.0)))
         log.debug('  incompatible_features=0x{:X}, fs_flags=0x{:X}'.format(super_block.body.incompatible_features, super_block.body.fs_flags))
 
         if self.is_encrypted:
