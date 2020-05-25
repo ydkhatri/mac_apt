@@ -165,7 +165,7 @@ class HFSCompressedResourceFork(HFSFile):
         '''Warning: If output size > 200 MiB, b'' is returned, file data is only written to output_file.'''
         if self.compression_type in [7, 8, 11, 12] and not lzfse_capable:
             raise ValueError('LZFSE/LZVN compression detected, no decompressor available!')
-        if self.logical_size >= 209715200:
+        if self.logicalSize >= 209715200:
             temp_file = tempfile.SpooledTemporaryFile(209715200)
             super(HFSCompressedResourceFork, self).readAllBuffer(True, temp_file)
             temp_file.seek(0)
@@ -216,7 +216,7 @@ class HFSCompressedResourceFork(HFSFile):
                 decompressed = zlib.decompress(buff[base+b.offset:base+b.offset+b.size])
                 if output_file: output_file.write(decompressed)
                 elif self.uncompressed_size < 209715200: r += decompressed
-        if self.logical_size >= 209715200:
+        if self.logicalSize >= 209715200:
             mmap.close()
             temp_file.close()
         return r
