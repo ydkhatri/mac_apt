@@ -126,22 +126,11 @@ def carveThumbs(offset, length, thumbfile, thumbname, width, height, export):
     :return: Nothing
     """
 
-
-
     if length is not None:
 
-        # Parse via mac_info
-        if type(export) is not str:
-            handle = openDeadbox(thumbfile, export)
-
-        # Parse via single plugin
-        else:
-            handle = openSingle(thumbfile)
-
         # Seek and read thumbnails.data from offsets and lengths found in the index.sqlite
-        handle.seek(offset)
-        thumb = handle.read(length)
-        handle.close()
+        thumbfile.seek(offset)
+        thumb = thumbfile.read(length)
 
         # Use the Pillow Library Image to parse and export files as images
         imgSize = (width, height)
@@ -186,6 +175,15 @@ def parseDb(c, quicklook_array, source, path_to_thumbnails, export):
     try:
         c.execute(thumbnail_query)
         data = c.fetchall()
+        thumbfile = None
+        if len(data):
+            # Export the thumbnails.data file via mac_info
+            if type(export) is not str:
+                thumbfile = openDeadbox(path_to_thumbnails, export)
+
+            # Export thumbnails.data via single plugin
+            else:
+                thumbfile = openSingle(path_to_thumbnails)
 
         # Iterate through the rows returned by the above SQL statment and create QuickLook object based off it,
         # then appends to array
@@ -204,13 +202,15 @@ def parseDb(c, quicklook_array, source, path_to_thumbnails, export):
             inode = "N/A"
             row_id = item[0]
 
-
             ql = QuickLook(folder, file_name, hit_count, last_hit_date, version, bits_per_pixel, bitmapdata_location,
                            bitmapdata_length, width, height, fs_id, inode, row_id, source)
             quicklook_array.append(ql)
 
             # Carve out thumbnails
-            carveThumbs(bitmapdata_location, bitmapdata_length, path_to_thumbnails, file_name, width, height, export)
+            carveThumbs(bitmapdata_location, bitmapdata_length, thumbfile, file_name, width, height, export)
+        
+        if thumbfile:
+            thumbfile.close()
 
     # Catch SQLite3 exceptions
     except sqlite3.Error as e:
@@ -230,20 +230,13 @@ def findParents(c, CNID, full_path):
 
     if CNID == 2:
         return
-
-
     else:
-
         c.execute(inode_query)
         parent_CNID = c.fetchone()[0]
-
         name_query = name_query_unformat.format(parent_CNID)
         c.execute(name_query)
-
         parent_folder = c.fetchone()[0]
-
         full_path[0] =   parent_folder + "/" + full_path[0]
-
         findParents(c, parent_CNID, full_path)
 
 def parseDbNewSinglePlug(c, quicklook_array, source, path_to_thumbnails, export):
@@ -264,27 +257,35 @@ def parseDbNewSinglePlug(c, quicklook_array, source, path_to_thumbnails, export)
 
     # If the statement returned anything, lets parse it further
     if combined_files:
+        # Export thumbnails.data via mac_info
+        if type(export) is not str:
+            thumbfile = openDeadbox(path_to_thumbnails, export)
+        # Export thumbnails.data via single plugin
+        else:
+            thumbfile = openSingle(path_to_thumbnails)
         unknown_count = 0
         for entries in combined_files:
-                # Carve out thumbnails with no iNode
-                bitmapdata_location = entries[11]
-                bitmapdata_length = entries[12]
-                width = entries[5]
-                height = entries[6]
-                name = "Unknown" + str(unknown_count)
-                hit_count = entries[3]
-                last_hit_date = entries[4]
-                version = b""
-                bits_per_pixel = entries[8]
-                fs_id = "N/A"
-                inode = entries[20]
-                row_id = "N/A"
-                carveThumbs(bitmapdata_location, bitmapdata_length, path_to_thumbnails, name, width, height, export)
-                unknown_count += 1
-                ql = QuickLook("UNKNOWN", "UNKNOWN", hit_count, last_hit_date, version, bits_per_pixel,
-                               bitmapdata_location,
-                               bitmapdata_length, width, height, fs_id, inode, row_id, source)
-                quicklook_array.append(ql)
+            # Carve out thumbnails with no iNode
+            bitmapdata_location = entries[11]
+            bitmapdata_length = entries[12]
+            width = entries[5]
+            height = entries[6]
+            name = "Unknown" + str(unknown_count)
+            hit_count = entries[3]
+            last_hit_date = entries[4]
+            version = b""
+            bits_per_pixel = entries[8]
+            fs_id = "N/A"
+            inode = entries[20]
+            row_id = "N/A"
+            carveThumbs(bitmapdata_location, bitmapdata_length, thumbfile, name, width, height, export)
+            unknown_count += 1
+            ql = QuickLook("UNKNOWN", "UNKNOWN", hit_count, last_hit_date, version, bits_per_pixel,
+                            bitmapdata_location,
+                            bitmapdata_length, width, height, fs_id, inode, row_id, source)
+            quicklook_array.append(ql)
+        if thumbfile:
+            thumbfile.close()
 
 
 
@@ -311,11 +312,16 @@ def parseDbNew(c, quicklook_array, source, path_to_thumbnails, export):
 
     # If the statement returned anything, lets parse it further
     if combined_files:
+        # Export the thumbnails.data file via mac_info
+        if type(export) is not str:
+            thumbfile = openDeadbox(path_to_thumbnails, export)
 
-       unknown_count = 0
-       for entries in combined_files:
+        # Export thumbnails.data via single plugin
+        else:
+            thumbfile = openSingle(path_to_thumbnails)
 
-
+        unknown_count = 0
+        for entries in combined_files:
 
            if type(export) is not str:
                # Format the inode_query for our specific iNode number so we can find the filename
@@ -345,7 +351,7 @@ def parseDbNew(c, quicklook_array, source, path_to_thumbnails, export):
                     inode = entries[20]
                     row_id = "N/A"
                     log.debug("Carving an unknown thumbnail, this is unknown number: " + str(unknown_count))
-                    carveThumbs(bitmapdata_location, bitmapdata_length, path_to_thumbnails, name, width, height, export)
+                    carveThumbs(bitmapdata_location, bitmapdata_length, thumbfile, name, width, height, export)
                     unknown_count += 1
                     ql = QuickLook("UNKNOWN", "UNKNOWN", hit_count, last_hit_date, version, bits_per_pixel,
                                    bitmapdata_location,
@@ -376,8 +382,9 @@ def parseDbNew(c, quicklook_array, source, path_to_thumbnails, export):
 
                        # Carve out thumbnails
                        log.debug("Carving thumbnail: " + str(full_path[0]) + row + " from thumbnails.data file")
-                       carveThumbs(bitmapdata_location, bitmapdata_length, path_to_thumbnails, row, width, height, export)
-
+                       carveThumbs(bitmapdata_location, bitmapdata_length, thumbfile, row, width, height, export)
+        if thumbfile:
+            thumbfile.close()
 
 def findDb(mac_info):
     log.debug("Finding QuickLook databases and caches now in user cache dirs")
