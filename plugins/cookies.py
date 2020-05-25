@@ -174,7 +174,7 @@ def Plugin_Start(mac_info):
                         parse_hsts_plist(plist, cookies, user_name, full_path)
                 elif extension in ('.cookies', '.binarycookies'):
                     mac_info.ExportFile(full_path, __Plugin_Name, user_name + "_", False)
-                    f = mac_info.OpenSmallFile(full_path)
+                    f = mac_info.Open(full_path)
                     if f != None:
                         parse_cookie_file(f, cookies, user_name, full_path)
                     else:

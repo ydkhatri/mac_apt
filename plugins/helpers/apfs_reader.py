@@ -869,29 +869,6 @@ class ApfsVolume:
             log.debug('File size > 200 MB')
         return apfs_file
 
-    """ unused function
-    def OpenSmallFile(self, path, apfs_file_meta=None):
-        '''Open small files (<200MB), returns open file handle'''
-        log.debug("Trying to open file : " + path)
-        apfs_file = self.GetFile(path, apfs_file_meta)
-        if apfs_file == None:
-            log.info('File not found! Path was: ' + path)
-            return None
-        if apfs_file.meta.logical_size > 209715200:
-            raise ValueError('File size > 200 MB')
-        try:
-            max_possible_size = apfs_file.meta.logical_size
-            if apfs_file.meta.is_symlink:
-                max_possible_size = 1024 # Symlink is a path, cannot be larger than 1024
-            f = tempfile.SpooledTemporaryFile(max_size=max_possible_size)
-            f.write(apfs_file.readAll())
-            f.seek(0)
-            return f
-        except MemoryError:
-            log.exception("Failed to open file {}".format(path))
-        return None 
-    """
-
     def CopyOutFile(self, path, destination_path):
         '''Copy out file to disk'''
         retval = False

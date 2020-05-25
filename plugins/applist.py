@@ -83,7 +83,7 @@ def Plugin_Start(mac_info):
 
         if mac_info.IsValidFilePath(source_path): # Determine if the above path is valid.
             mac_info.ExportFile(source_path, __Plugin_Name, user_name + "_", False)
-            f = mac_info.OpenSmallFile(source_path)
+            f = mac_info.Open(source_path)
             if f != None:
                 deserialized_plist = process_nsa_plist(source_path, f)
                 if deserialized_plist:

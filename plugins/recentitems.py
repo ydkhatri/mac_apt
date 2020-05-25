@@ -680,7 +680,7 @@ def ProcessSFLFolder(mac_info, user_path, recent_items):
                         log.info('Skipping ' + source_path)
                         continue
                     mac_info.ExportFile(source_path, __Plugin_Name, user_name + "_", False)
-                    f = mac_info.OpenSmallFile(source_path)
+                    f = mac_info.Open(source_path)
                     if f != None:
                         if f_name.endswith('.sfl'):
                             ReadSFLPlist(f, recent_items, source_path, user_name)
@@ -713,7 +713,7 @@ def ProcessSinglePlist(mac_info, source_path, user, recent_items):
 def ProcessSshKnownHostsFile(mac_info, source_path, user_name, recent_items, last_mod_date):
     '''Process known_hosts file found in ~/.ssh/known_hosts'''
     mac_info.ExportFile(source_path, __Plugin_Name, user_name + "_", False)
-    f = mac_info.OpenSmallFile(source_path)
+    f = mac_info.Open(source_path)
     if f:
         data = f.read()
         f.close()

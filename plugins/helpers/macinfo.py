@@ -153,7 +153,7 @@ class NativeHfsParser:
                         "\nException details: " + str(ex))
         return 0
 
-    def OpenSmallFile(self, path):
+    def Open(self, path):
         '''Open files, returns open file handle'''
         if not self.initialized:
             raise ValueError("Volume not loaded (initialized)!")
@@ -506,7 +506,7 @@ class MacInfo:
         log.debug("Trying to open plist file : " + path)
         error = ''
         try:
-            f = self.OpenSmallFile(path)
+            f = self.Open(path)
             if f != None:
                 try:
                     log.debug("Trying to read plist file : " + path)
@@ -561,7 +561,7 @@ class MacInfo:
 
     def ReadSymLinkTargetPath(self, path):
         '''Returns the target file/folder's path from the sym link path provided'''
-        f = self.OpenSmallFile(path)
+        f = self.Open(path)
         if f:
             target_path = f.read()
             f.close()
@@ -638,10 +638,10 @@ class MacInfo:
                 log.error("Failed to get dir info!")
         return items
 
-    def OpenSmallFile(self, path):
+    def Open(self, path):
         '''Open files less than 200 MB, returns open file handle'''
         if self.use_native_hfs_parser:
-            return self.hfs_native.OpenSmallFile(path)
+            return self.hfs_native.Open(path)
         try:
             log.debug("Trying to open file : " + path)
             tsk_file = self.macos_FS.open(path)
@@ -650,7 +650,7 @@ class MacInfo:
                 raise ValueError('File size > 200 MB, use direct TSK file functions!')
 
             f = tempfile.SpooledTemporaryFile(max_size=209715200)
-            BUFF_SIZE = 1024 * 1024
+            BUFF_SIZE = 20 * 1024 * 1024
             offset = 0
             while offset < size:
                 available_to_read = min(BUFF_SIZE, size - offset)
@@ -662,7 +662,7 @@ class MacInfo:
             return f
         except Exception as ex:
             if str(ex).find('tsk_fs_file_open: path not found:') > 0:
-                log.error("OpenSmallFile() returned 'Path not found' error for path: {}".format(path))
+                log.error("Open() returned 'Path not found' error for path: {}".format(path))
             elif str(ex).find('tsk_fs_attrlist_get: Attribute 4352 not found') > 0 or \
                  (str(ex).find('Read error: Invalid file offset') > 0 and self._IsFileCompressed(tsk_file)) or \
                  str(ex).find('Read error: Error in metadata') > 0:
@@ -671,7 +671,7 @@ class MacInfo:
                 try:
                     if not self.hfs_native.initialized:
                         self.hfs_native.Initialize(self.pytsk_image, self.macos_partition_start_offset)
-                    return self.hfs_native.OpenSmallFile(path)
+                    return self.hfs_native.Open(path)
                 except (IOError, OSError, ValueError):
                     log.error("Failed to open file: " + path)
                     log.debug("Exception details:\n", exc_info=True)
@@ -687,7 +687,7 @@ class MacInfo:
             tsk_file = self.macos_FS.open(tsk_path)
             size = tsk_file.info.meta.size
 
-            BUFF_SIZE = 1024 * 1024
+            BUFF_SIZE = 20 * 1024 * 1024
             offset = 0
             try:
                 with open(destination_path, 'wb') as f:
@@ -725,7 +725,7 @@ class MacInfo:
                 log.debug("Exception details:", exc_info=True)
         except Exception as ex:
             if str(ex).find('tsk_fs_file_open: path not found:') > 0:
-                log.debug("OpenSmallFile() returned 'Path not found' error for path: {}".format(tsk_path))
+                log.debug("Open() returned 'Path not found' error for path: {}".format(tsk_path))
             else:
                 #traceback.print_exc()
                 log.error("Failed to open/find file: " + tsk_path)            
@@ -900,7 +900,7 @@ class MacInfo:
             if plist_meta['size'] > 0:
                 try:
                     user_plist_path = users_path + '/' + plist_meta['name']
-                    f = self.OpenSmallFile(user_plist_path)
+                    f = self.Open(user_plist_path)
                     if f!= None:
                         self.ExportFile(user_plist_path, 'USERS', '', False)
                         try:
@@ -936,6 +936,7 @@ class MacInfo:
                                 log.error('Did not find \'home\' in ' + plist_meta['name'])
                         except (InvalidPlistException):
                             log.exception("biplist failed to read plist " + user_plist_path)
+                        f.close()
                 except:
                     log.exception ("Could not open plist " + user_plist_path)
         self._GetDomainUserInfo()
@@ -978,7 +979,7 @@ class MacInfo:
             #plist_string = plist_file.read_random(0, plist_file.info.meta.size) # This is a small file, so this is fine!
             #plist = biplist.readPlistFromString(plist_string)
             log.debug("Trying to get system version from /System/Library/CoreServices/SystemVersion.plist")
-            f = self.OpenSmallFile('/System/Library/CoreServices/SystemVersion.plist')
+            f = self.Open('/System/Library/CoreServices/SystemVersion.plist')
             if f != None:
                 try:
                     plist = biplist.readPlist(f)
@@ -991,6 +992,7 @@ class MacInfo:
                         elif self.os_version.startswith('10.13'): self.os_friendly_name = 'High Sierra'
                         elif self.os_version.startswith('10.14'): self.os_friendly_name = 'Mojave'
                         elif self.os_version.startswith('10.15'): self.os_friendly_name = 'Catalina'
+                        elif self.os_version.startswith('10.16'): self.os_friendly_name = '-UNKNOWN-'
                         elif self.os_version.startswith('10.0'): self.os_friendly_name = 'Cheetah'
                         elif self.os_version.startswith('10.1'): self.os_friendly_name = 'Puma'
                         elif self.os_version.startswith('10.2'): self.os_friendly_name = 'Jaguar'
@@ -1003,9 +1005,11 @@ class MacInfo:
                         elif self.os_version.startswith('10.9'): self.os_friendly_name = 'Mavericks'
                         else: self.os_friendly_name = 'Unknown version!'
                     log.info ('macOS version detected is: {} ({}) Build={}'.format(self.os_friendly_name, self.os_version, self.os_build))
+                    f.close()
                     return True
                 except (InvalidPlistException, NotBinaryPlistException) as ex:
                     log.error ("Could not get ProductVersion from plist. Is it a valid xml plist? Error=" + str(ex))
+                f.close()
             else:
                 log.error("Could not open plist to get system version info!")
         except:
@@ -1128,11 +1132,7 @@ class ApfsMacInfo(MacInfo):
             log.debug ("APFSMacInfo->Exception from GetFileSize() " + str(ex))
         return error
 
-    def OpenSmallFile(self, path):
-        '''Open files less than 200 MB, returns open file handle'''
-        return self.macos_FS.open(path) #self.macos_FS.OpenSmallFile(path)
-
-    def open(self, path):
+    def Open(self, path):
         '''Open file and return a file-like object'''
         return self.macos_FS.open(path)
 
@@ -1341,7 +1341,7 @@ class MountedMacInfo(MacInfo):
             log.exception("Error resolving symlink : " + path)
         return target_path
 
-    def OpenSmallFile(self, path):
+    def Open(self, path):
         try:
             mounted_path = self.BuildFullPath(path)
             log.debug("Trying to open file : " + mounted_path)
@@ -1352,11 +1352,11 @@ class MountedMacInfo(MacInfo):
         return None
 
     def ExtractFile(self, path_in_image, destination_path):
-        source_file = self.OpenSmallFile(path_in_image)
+        source_file = self.Open(path_in_image)
         if source_file:
             size = self.GetFileSize(path_in_image)
 
-            BUFF_SIZE = 1024 * 1024
+            BUFF_SIZE = 20 * 1024 * 1024
             offset = 0
             try:
                 with open(destination_path, 'wb') as f:
@@ -1369,7 +1369,9 @@ class MountedMacInfo(MacInfo):
                     f.flush()
             except (IOError, OSError) as ex:
                 log.exception ("Failed to create file for writing at " + destination_path)
-                return False 
+                source_file.close()
+                return False
+            source_file.close()
             return True
         return False
 
@@ -1483,7 +1485,7 @@ class MountedMacInfo(MacInfo):
         for plist_meta in user_plists:
             if plist_meta['size'] > 0:
                 try:
-                    f = self.OpenSmallFile(users_path + '/' + plist_meta['name'])
+                    f = self.Open(users_path + '/' + plist_meta['name'])
                     if f!= None:
                         plist = biplist.readPlist(f)
                         home_dir = self.GetArrayFirstElement(plist.get('home', ''))
@@ -1508,6 +1510,7 @@ class MountedMacInfo(MacInfo):
                             # There is also accountpolicydata which contains : creation time, failed logon time, failed count, ..
                         else:
                             log.error('Did not find \'home\' in ' + plist_meta['name'])
+                        f.close()
                 except Exception as ex:
                     log.error ("Could not open plist " + plist_meta['name'] + " Exception: " + str(ex))
         #TODO: Domain user uid, gid?
@@ -1622,7 +1625,7 @@ class MountedIosInfo(MountedMacInfo):
         ''' Gets system version information'''
         try:
             log.debug("Trying to get system version from /System/Library/CoreServices/SystemVersion.plist")
-            f = self.OpenSmallFile('/System/Library/CoreServices/SystemVersion.plist')
+            f = self.Open('/System/Library/CoreServices/SystemVersion.plist')
             if f != None:
                 try:
                     plist = biplist.readPlist(f)
@@ -1630,9 +1633,11 @@ class MountedIosInfo(MountedMacInfo):
                     self.os_build = plist.get('ProductBuildVersion', '')
                     self.os_friendly_name = plist.get('ProductName', '')
                     log.info ('iOS version detected is: {} ({}) Build={}'.format(self.os_friendly_name, self.os_version, self.os_build))
+                    f.close()
                     return True
                 except (InvalidPlistException, NotBinaryPlistException) as ex:
                     log.error ("Could not get ProductVersion from plist. Is it a valid xml plist? Error=" + str(ex))
+                f.close()
             else:
                 log.error("Could not open plist to get system version info!")
         except:

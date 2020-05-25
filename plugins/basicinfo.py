@@ -162,7 +162,7 @@ def GetTimezone(mac_info):
     except (IndexError, ValueError) as ex:
         log.error('Error trying to read timezone information - ' + str(ex))
 
-    # f = mac_info.OpenSmallFile('/private/etc/localtime')
+    # f = mac_info.Open('/private/etc/localtime')
     # if f:
     #     try:
     #         data = f.read(128).decode('utf8')

@@ -112,7 +112,7 @@ def openDeadbox(path, mac_info):
     :param mac_info: mac_info object
     :return: handle to file
     """
-    handle = mac_info.OpenSmallFile(path)
+    handle = mac_info.Open(path)
     return handle
 
 def carveThumbs(offset, length, thumbfile, thumbname, width, height, export):

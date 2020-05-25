@@ -52,7 +52,7 @@ class MacAptFile(VirtualFile):
 
     def open(self, mode='rb'):
         try:
-            self.file_pointer = self.mac_info.OpenSmallFile(self.path)
+            self.file_pointer = self.mac_info.Open(self.path)
             return self.file_pointer
         except (IOError, OSError, ValueError) as ex:
             if not self.mac_info.IsValidFilePath(self.path):

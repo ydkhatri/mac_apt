@@ -41,7 +41,7 @@ class BashSession:
         self.source_type = source_type
 
 def ReadFile(mac_info, path):
-    f = mac_info.OpenSmallFile(path)
+    f = mac_info.Open(path)
     if f != None:
         lines = f.readlines()
         lines_utf8 = []
