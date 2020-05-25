@@ -161,10 +161,9 @@ class NativeHfsParser:
             log.debug("Trying to open file : " + path)
             size = self.GetFileSize(path)
             if size > 209715200:
-                log.warning('File size > 200 MB, may crash! File size is {} bytes'.format(size))
-            data = self.volume.readFile(path)
-            f = tempfile.SpooledTemporaryFile(max_size=size)
-            f.write(data)
+                log.warning('File size > 200 MB. File size is {} bytes'.format(size))
+            f = tempfile.SpooledTemporaryFile(max_size=209715200)
+            self.volume.readFile(path, f)
             f.seek(0)
             return f
         except (OSError, IOError) as ex:

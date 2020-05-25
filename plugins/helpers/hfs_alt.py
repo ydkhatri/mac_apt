@@ -20,8 +20,10 @@ THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND 
 #
 
 import os
+import mmap
 import sys
 import struct
+import tempfile
 import zlib
 import pytsk3
 import logging
@@ -91,7 +93,9 @@ class HFSFile(object):
         return r
     '''
     def readAllBuffer(self, truncate=True, output_file=None):
-        '''Write to output_file if valid, else return a buffer of data'''
+        '''Write to output_file if valid, else return a buffer of data.
+           Warning: If file size > 200 MiB, b'' is returned, file data is only written to output_file.
+        '''
         r = b""
         bs = self.volume.blockSize
         blocks_max = 52428800 // bs  # 50MB
@@ -107,19 +111,19 @@ class HFSFile(object):
                     data = self.volume.read(extent.startBlock * bs, num_blocks_to_read * bs)
                     if output_file:
                         output_file.write(data)
-                    else:
+                    elif self.logicalSize < 209715200: # 200MiB
                         r += data
                     remaining_blocks -= num_blocks_to_read
             else:
                 data = self.volume.read(extent.startBlock * bs, bs * extent.blockCount)
                 if output_file:
                     output_file.write(data)
-                else:
+                elif self.logicalSize < 209715200: # 200MiB
                     r += data
         if truncate:
             if output_file:
                 output_file.truncate(self.logicalSize)
-            else:
+            elif self.logicalSize < 209715200: # 200MiB
                 r = r[:self.logicalSize]
         return r
 
@@ -158,9 +162,16 @@ class HFSCompressedResourceFork(HFSFile):
 
     #HAX, readblock not implemented
     def readAllBuffer(self, truncate=True, output_file=None):
+        '''Warning: If output size > 200 MiB, b'' is returned, file data is only written to output_file.'''
         if self.compression_type in [7, 8, 11, 12] and not lzfse_capable:
             raise ValueError('LZFSE/LZVN compression detected, no decompressor available!')
-        buff = super(HFSCompressedResourceFork, self).readAllBuffer()
+        if self.logical_size >= 209715200:
+            temp_file = tempfile.SpooledTemporaryFile(209715200)
+            super(HFSCompressedResourceFork, self).readAllBuffer(True, temp_file)
+            temp_file.seek(0)
+            buff = mmap.mmap(temp_file.fileno(), 0) # memory mapped file to access as buffer
+        else:
+            buff = super(HFSCompressedResourceFork, self).readAllBuffer()
         r = b""
         if self.compression_type in [7, 11]: # lzvn or lzfse # Does it ever go here????
             raise ValueError("Did not expect type " + str(self.compression_type) + " in resource fork")
@@ -170,7 +181,7 @@ class HFSCompressedResourceFork(HFSFile):
                 compressed_stream = buff[data_start:self.header.totalSize]
                 decompressed = lzvn_decompress(compressed_stream, self.header.totalSize - self.header.headerSize, self.uncompressed_size)
                 if output_file: output_file.write(decompressed)
-                else: r += decompressed
+                elif self.uncompressed_size < 209715200: r += decompressed
             except Exception as ex:
                 raise ValueError("Exception from lzfse_lzvn decompressor")
         elif self.compression_type in [8, 12]: # lzvn or lzfse in 64k chunks
@@ -195,7 +206,7 @@ class HFSCompressedResourceFork(HFSFile):
                     else:
                         decompressed = lzvn_decompress(data, compressed_size, chunk_uncomp)
                     if output_file: output_file.write(decompressed)
-                    else: r += decompressed
+                    elif self.uncompressed_size < 209715200: r += decompressed
                     i += 1
             except Exception as ex:
                 raise ValueError("Exception from lzfse_lzvn decompressor")
@@ -204,7 +215,10 @@ class HFSCompressedResourceFork(HFSFile):
             for b in self.blocks.HFSPlusCmpfRsrcBlockArray:
                 decompressed = zlib.decompress(buff[base+b.offset:base+b.offset+b.size])
                 if output_file: output_file.write(decompressed)
-                else: r += decompressed
+                elif self.uncompressed_size < 209715200: r += decompressed
+        if self.logical_size >= 209715200:
+            mmap.close()
+            temp_file.close()
         return r
 
 class HFSVolume(object):
@@ -329,7 +343,9 @@ class HFSVolume(object):
     '''
 
     def readFile(self, path, output_file=None):
-        '''Reads file specified by 'path' and copies it out into output_file if valid, else returns as string'''
+        '''Reads file specified by 'path' and copies it out into output_file if valid, else returns as string.
+           Warning: If file is too large, over 200 MiB, then it will return None, and only write to output_file.
+        '''
         k,v = self.catalogTree.getRecordFromPath(path)
         if not v:
             raise ValueError("File not found")
