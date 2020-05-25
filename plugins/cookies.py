@@ -122,7 +122,7 @@ def parse_cookie_file(cookie_file, cookies, user_name, file_path):
                 cookies.append(Cookie(url, create_time, expiry_time, name, path, value, user_name, file_path))
             page_start = page_start + page_size
     else:
-        log.error('Not the expected header for cookie file. Got {} instead of "cook"'.format(str(dat[0:4])))
+        log.error('Not the expected header for cookie file. Got {} instead of "cook"'.format(str(data[0:4])))
 
 def parse_hsts_plist(plist, cookies, user_name, plist_path):
     '''Parse plist and add items to cookies list'''
