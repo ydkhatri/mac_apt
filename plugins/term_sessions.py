@@ -94,7 +94,7 @@ def PrintAll(sessions, output_params, source_path):
         data_list.append( [ session.source_type, session.start_date, session.end_date, session.new_content, 
                             session.all_content, session.user, session.uuid, session.source ] )
 
-    WriteList("bash session & history", "BashSessions", data_list, session_info, output_params, source_path)
+    WriteList("terminal session & history", "TermSessions", data_list, session_info, output_params, source_path)
     
 def FindSession(bash_sessions, uuid):
     for session in bash_sessions:
@@ -193,7 +193,7 @@ def Plugin_Start(mac_info):
     if len(bash_sessions) > 0:
         PrintAll(bash_sessions, mac_info.output_params, '')
     else:
-        log.info('No bash sessions or history found!')
+        log.info('No terminal sessions or history found!')
     
 if __name__ == '__main__':
     print("This plugin is a part of a framework and does not run independently on its own!")
