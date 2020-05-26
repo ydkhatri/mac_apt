@@ -153,14 +153,14 @@ def carveThumbs(offset, length, thumbfile, thumbname, width, height, export, use
         # Set up output file with png extension attached
         try:
             # Some of the names may have illegal characters in them, filter those out
-            thumbname = CommonFunctions.SanitizeName(thumbname)
-            export_file = os.path.join(export_folder, thumbname + " - " + str(width) +  "x" + str(height) + ".png")
+            thumbname = CommonFunctions.SanitizeName(thumbname) + " - " + str(width) +  "x" + str(height) + ".png"
+            export_file = os.path.join(export_folder, thumbname)
             export_file = CommonFunctions.GetNextAvailableFileName(export_file)
             log.debug("Attempting to copy out thumbnail to file: " + export_file)
 
             img.save(export_file)
         except (ValueError, OSError) as ex:
-            log.exception('Failed to write out thumbnail ' + thumbname + " - " + str(width) +  "x" + str(height) + ".png")
+            log.exception('Failed to write out thumbnail ' + thumbname)
 
 def parseDb(c, quicklook_array, source, path_to_thumbnails, export, user_name):
     """
