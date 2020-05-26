@@ -132,19 +132,19 @@ def parse_hsts_plist(plist, cookies, user_name, plist_path):
             if isinstance(items, dict): # Newer hsts (version 3 or higher seen)
                 c_time = CommonFunctions.ReadMacAbsoluteTime(items.get('Create Time', None))
                 e_time = items.get('Expiry', None)
-                if e_time == float('inf'):
+                if e_time in (float('inf'), float('-inf')):
                     e_time = None
                 else:
                     e_time = CommonFunctions.ReadMacAbsoluteTime(e_time)
-            elif isinstance(items, real): # In older hsts file (version 1):
+            elif isinstance(items, float): # In older hsts file (version 1):
                 c_time = None
                 e_time = items
-                if e_time == float('inf'):
+                if e_time in (float('inf'), float('-inf')):
                     e_time = None
                 else:
                     e_time = CommonFunctions.ReadMacAbsoluteTime(e_time)
-            else:
-                log.error(f"Unknown type for hsts items : {str(type(items))}")
+            #else:
+            #    log.error(f"Unknown type for hsts items : {str(type(items))}") # This is HSTS_Content_Version and schema
 
             cookies.append(Cookie(site, c_time, e_time, '', '','', user_name, plist_path))
     else:
