@@ -290,7 +290,7 @@ class NativeHfsParser:
                     log.error("Can't get dir listing as this is not a folder : " + path)
             else:
                 log.error('Path not found : ' + path)
-        except:
+        except (KeyError, ValueError, TypeError, OSError):
             log.error('Error trying to get file list from folder: ' + path)
             log.exception('')
         return items
@@ -412,14 +412,14 @@ class MacInfo:
         try:
             if not os.path.exists(export_path):
                 os.makedirs(export_path)
-        except Exception as ex:
+        except (KeyError, ValueError, TypeError, OSError) as ex:
             log.error ("Exception while creating Export folder " + export_path + "\n Is output folder Writeable?" +
                        "Is it full? Perhaps the drive is disconnected? Exception Details: " + str(ex))
             return False
         # recursively export files/folders
         try:
             return self._ExportFolder(artifact_path, export_path, overwrite)
-        except:
+        except (KeyError, ValueError, TypeError, OSError):
             log.exception('Exception while exporting folder ' + artifact_path)
         return False
 
