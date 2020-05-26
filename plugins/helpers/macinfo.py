@@ -425,6 +425,7 @@ class MacInfo:
 
     def _ExportFolder(self, artifact_path, export_path, overwrite):
         '''Exports files/folders from artifact_path to export_path recursively'''
+        artifact_path = artifact_path.rstrip('/')
         entries = self.ListItemsInFolder(artifact_path, EntryType.FILES_AND_FOLDERS, True)
         ret = True
         for entry in entries:
