@@ -725,10 +725,10 @@ def ReadKnownHosts(data, source_path, user_name, recent_items, last_mod_date):
         try:
             host = line.split(b' ')[0]
             if host:
-                host = host.decode('utf8')
+                host = host.decode('utf8', 'backslashreplace')
                 ri = RecentItem(host, '', 'File Last Modified on {}'.format(str(last_mod_date)), source_path, RecentType.SSH_KNOWNHOST, user_name)
                 recent_items.append(ri)
-        except:
+        except (OSError, ValueError):
             pass
 
 def ProcessPreferencesFolder(mac_info, recent_items):
