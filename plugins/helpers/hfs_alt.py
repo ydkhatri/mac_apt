@@ -344,7 +344,7 @@ class HFSVolume(object):
 
     def readFile(self, path, output_file=None):
         '''Reads file specified by 'path' and copies it out into output_file if valid, else returns as string.
-           Warning: If file is too large, over 200 MiB, then it will return None, and only write to output_file.
+           Warning: If file is too large, over 200 MiB, then it will return b'', and only write to output_file.
         '''
         k,v = self.catalogTree.getRecordFromPath(path)
         if not v:

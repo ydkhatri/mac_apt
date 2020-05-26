@@ -166,7 +166,7 @@ class NativeHfsParser:
             self.volume.readFile(path, f)
             f.seek(0)
             return f
-        except (OSError, IOError) as ex:
+        except (OSError, ValueError) as ex:
             log.exception("NativeHFSParser->Failed to open file {} Error was {}".format(path, str(ex)))
 
         return None
@@ -181,10 +181,10 @@ class NativeHfsParser:
         try:
             log.debug("Trying to export file : " + path + " to " + extract_to_path)
             with open(extract_to_path, "wb") as f:
-                data = self.volume.readFile(path, f)
+                self.volume.readFile(path, f)
                 f.close()
                 return True
-        except ValueError as ex:
+        except (ValueError, OSError) as ex:
             log.exception("NativeHFSParser->Failed to export file {} to {}".format(path, extract_to_path))
         return False
 
@@ -439,7 +439,10 @@ class MacInfo:
                     continue
                 ret &= self._ExportFolder(artifact_path + '/' + entry['name'], new_path, overwrite)
             else: # FILE
-                ret &= self._ExtractFile(artifact_path + '/' + entry['name'], new_path, entry['dates'])
+                if entry['size'] > 0:
+                    ret &= self._ExtractFile(artifact_path + '/' + entry['name'], new_path, entry['dates'])
+                else:
+                    log.info('Skipping export of {} as filesize=0'.format(artifact_path + '/' + entry['name']))
         return ret
 
     def ExportFile(self, artifact_path, subfolder_name, file_prefix='', check_for_sqlite_files=True, overwrite=False):
