@@ -127,16 +127,28 @@ def parse_cookie_file(cookie_file, cookies, user_name, file_path):
 def parse_hsts_plist(plist, cookies, user_name, plist_path):
     '''Parse plist and add items to cookies list'''
     hsts_store = plist.get('com.apple.CFNetwork.defaultStorageSession', None)
+    if hsts_store:
+        for site, items in hsts_store.items():    
+            if isinstance(items, dict): # Newer hsts (version 3 or higher seen)
+                c_time = CommonFunctions.ReadMacAbsoluteTime(items.get('Create Time', None))
+                e_time = items.get('Expiry', None)
+                if e_time == float('inf'):
+                    e_time = None
+                else:
+                    e_time = CommonFunctions.ReadMacAbsoluteTime(e_time)
+            elif isinstance(items, real): # In older hsts file (version 1):
+                c_time = None
+                e_time = items
+                if e_time == float('inf'):
+                    e_time = None
+                else:
+                    e_time = CommonFunctions.ReadMacAbsoluteTime(e_time)
+            else:
+                log.error(f"Unknown type for hsts items : {str(type(items))}")
 
-    for site, items in hsts_store.items():
-        c_time = CommonFunctions.ReadMacAbsoluteTime(items.get('Create Time', None))
-        e_time = items.get('Expiry', None)
-        if e_time == float('inf'):
-            e_time = None
-        else:
-            e_time = CommonFunctions.ReadMacAbsoluteTime(e_time)
-
-        cookies.append(Cookie(site, c_time, e_time, '', '','', user_name, plist_path))
+            cookies.append(Cookie(site, c_time, e_time, '', '','', user_name, plist_path))
+    else:
+        log.error(f'Did not find com.apple.CFNetwork.defaultStorageSession in {plist_path}')
 
 def read_plist_from_image(mac_info, plist_path):
     success, plist, error = mac_info.ReadPlist(plist_path)
