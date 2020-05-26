@@ -376,7 +376,7 @@ for plugin in plugins:
     plugin_name_list.append(plugin.__Plugin_Name)
 
 plugins_info += "\n    " + "-"*76 + "\n" +\
-                 " "*4 + "FAST" + " "*16 + "Runs all plugins except SPOTLIGHT & UNIFIEDLOGS\n" + \
+                 " "*4 + "FAST" + " "*16 + "Runs all plugins except IDEVICEBACKUPS, SPOTLIGHT, UNIFIEDLOGS\n" + \
                  " "*4 + "ALL" + " "*17 + "Runs all plugins"
 arg_parser = argparse.ArgumentParser(description='mac_apt is a framework to process forensic artifacts on a Mac OSX system\n'\
                                                  f'You are running {__PROGRAMNAME} version {__VERSION}\n\n'\
@@ -387,7 +387,6 @@ arg_parser.add_argument('input_path', help='Path to OSX image/volume')
 arg_parser.add_argument('-o', '--output_path', help='Path where output files will be created')
 arg_parser.add_argument('-x', '--xlsx', action="store_true", help='Save output in Excel spreadsheet')
 arg_parser.add_argument('-c', '--csv', action="store_true", help='Save output as CSV files')
-#arg_parser.add_argument('-s', '--sqlite', action="store_true", help='Save output in an sqlite database')
 arg_parser.add_argument('-l', '--log_level', help='Log levels: INFO, DEBUG, WARNING, ERROR, CRITICAL (Default is INFO)')#, choices=['INFO','DEBUG','WARNING','ERROR','CRITICAL'])
 arg_parser.add_argument('-p', '--password', help='Personal Recovery Key(PRK) or Password for any user (for decrypting encrypted volume). PRK must be exactly how it was shown to you')
 #arg_parser.add_argument('-u', '--use_tsk', action="store_true", help='Use sleuthkit instead of native HFS+ parser (This is slower!)')
@@ -436,6 +435,7 @@ if not process_all:
         plugins_to_run = plugin_name_list
         plugins_to_run.remove('ALL')
         plugins_to_run.remove('FAST')
+        plugins_to_run.remove('IDEVICEBACKUPS')
         plugins_to_run.remove('SPOTLIGHT')
         plugins_to_run.remove('UNIFIEDLOGS')
     else:

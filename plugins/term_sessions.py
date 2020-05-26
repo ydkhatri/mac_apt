@@ -14,10 +14,10 @@ import logging
 from plugins.helpers.macinfo import *
 from plugins.helpers.writer import *
 
-__Plugin_Name = "BASHSESSIONS" # Cannot have spaces, and must be all caps!
-__Plugin_Friendly_Name = "Bash Sessions & History"
+__Plugin_Name = "TERMSESSIONS" # Cannot have spaces, and must be all caps!
+__Plugin_Friendly_Name = "Terminal Sessions & History"
 __Plugin_Version = "1.0"
-__Plugin_Description = "Reads bash (Terminal) sessions & history for every user"
+__Plugin_Description = "Reads Terminal (bash & zsh) sessions & history for every user"
 __Plugin_Author = "Yogesh Khatri"
 __Plugin_Author_Email = "yogesh@swiftforensics.com"
 __Plugin_Modes = "MACOS"

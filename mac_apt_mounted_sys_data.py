@@ -100,7 +100,7 @@ for plugin in plugins:
     plugin_name_list.append(plugin.__Plugin_Name)
 
 plugins_info += "\n    " + "-"*76 + "\n" +\
-                 " "*4 + "FAST" + " "*16 + "Runs all plugins except SPOTLIGHT & UNIFIEDLOGS\n" + \
+                 " "*4 + "FAST" + " "*16 + "Runs all plugins except IDEVICEBACKUPS, SPOTLIGHT, UNIFIEDLOGS\n" + \
                  " "*4 + "ALL" + " "*17 + "Runs all plugins"
 arg_parser = argparse.ArgumentParser(description='mac_apt is a framework to process forensic artifacts on a Mac OSX system\n'\
                                                  f'You are running {__PROGRAMNAME} version {__VERSION}\n\n'\
@@ -158,6 +158,7 @@ if not process_all:
         plugins_to_run = plugin_name_list
         plugins_to_run.remove('ALL')
         plugins_to_run.remove('FAST')
+        plugins_to_run.remove('IDEVICEBACKUPS')
         plugins_to_run.remove('SPOTLIGHT')
         plugins_to_run.remove('UNIFIEDLOGS')
     else:
