@@ -115,7 +115,7 @@ def openDeadbox(path, mac_info):
     handle = mac_info.Open(path)
     return handle
 
-def carveThumbs(offset, length, thumbfile, thumbname, width, height, export):
+def carveThumbs(offset, length, thumbfile, thumbname, width, height, export, user_name):
     """
 
     :param offset: Offset in thumbnails.data for thumbnail
@@ -138,7 +138,7 @@ def carveThumbs(offset, length, thumbfile, thumbname, width, height, export):
 
         # Parse via mac_info
         if type(export) is not str:
-            export_folder = os.path.join(export.output_params.export_path, __Plugin_Name, "Thumbnails")
+            export_folder = os.path.join(export.output_params.export_path, __Plugin_Name, "Thumbnails", user_name)
 
         # Parse via single plugin
         else:
@@ -148,15 +148,19 @@ def carveThumbs(offset, length, thumbfile, thumbname, width, height, export):
         if not os.path.exists(export_folder):
             os.makedirs(export_folder)
 
+        thumbname = CommonFunctions.SanitizeName(thumbname) # remove illegal characters which might cause issues!
+
         # Set up output file with png extension attached
-        export_file = os.path.join(export_folder, thumbname + " - " + str(width) +  "x" + str(height) + ".png")
+        try:
+            export_file = os.path.join(export_folder, thumbname + " - " + str(width) +  "x" + str(height) + ".png")
+            export_file = CommonFunctions.GetNextAvailableFileName(export_file)
+            log.debug("Attempting to copy out thumbnail to file: " + export_file)
 
-        log.debug("Attempting to copy out thumbnail to file: " + export_file)
+            img.save(export_file)
+        except (ValueError, OSError) as ex:
+            log.exception('Failed to write out thumbnail ' + thumbname + " - " + str(width) +  "x" + str(height) + ".png")
 
-        img.save(export_file)
-
-
-def parseDb(c, quicklook_array, source, path_to_thumbnails, export):
+def parseDb(c, quicklook_array, source, path_to_thumbnails, export, user_name):
     """
     :param c: Connection to index.sqlite
     :param quicklook_array: Empty quicklook array to store QuickLook objects
@@ -207,7 +211,7 @@ def parseDb(c, quicklook_array, source, path_to_thumbnails, export):
             quicklook_array.append(ql)
 
             # Carve out thumbnails
-            carveThumbs(bitmapdata_location, bitmapdata_length, thumbfile, file_name, width, height, export)
+            carveThumbs(bitmapdata_location, bitmapdata_length, thumbfile, file_name, width, height, export, user_name)
         
         if thumbfile:
             thumbfile.close()
@@ -278,7 +282,7 @@ def parseDbNewSinglePlug(c, quicklook_array, source, path_to_thumbnails, export)
             fs_id = "N/A"
             inode = entries[20]
             row_id = "N/A"
-            carveThumbs(bitmapdata_location, bitmapdata_length, thumbfile, name, width, height, export)
+            carveThumbs(bitmapdata_location, bitmapdata_length, thumbfile, name, width, height, export, '')
             unknown_count += 1
             ql = QuickLook("UNKNOWN", "UNKNOWN", hit_count, last_hit_date, version, bits_per_pixel,
                             bitmapdata_location,
@@ -290,7 +294,7 @@ def parseDbNewSinglePlug(c, quicklook_array, source, path_to_thumbnails, export)
 
 
 
-def parseDbNew(c, quicklook_array, source, path_to_thumbnails, export):
+def parseDbNew(c, quicklook_array, source, path_to_thumbnails, export, user_name):
     """
         :param c: Connection to index.sqlite
         :param quicklook_array: Empty quicklook array to store QuickLook objects
@@ -351,7 +355,7 @@ def parseDbNew(c, quicklook_array, source, path_to_thumbnails, export):
                     inode = entries[20]
                     row_id = "N/A"
                     log.debug("Carving an unknown thumbnail, this is unknown number: " + str(unknown_count))
-                    carveThumbs(bitmapdata_location, bitmapdata_length, thumbfile, name, width, height, export)
+                    carveThumbs(bitmapdata_location, bitmapdata_length, thumbfile, name, width, height, export, user_name)
                     unknown_count += 1
                     ql = QuickLook("UNKNOWN", "UNKNOWN", hit_count, last_hit_date, version, bits_per_pixel,
                                    bitmapdata_location,
@@ -382,7 +386,7 @@ def parseDbNew(c, quicklook_array, source, path_to_thumbnails, export):
 
                        # Carve out thumbnails
                        log.debug("Carving thumbnail: " + str(full_path[0]) + row + " from thumbnails.data file")
-                       carveThumbs(bitmapdata_location, bitmapdata_length, thumbfile, row, width, height, export)
+                       carveThumbs(bitmapdata_location, bitmapdata_length, thumbfile, row, width, height, export, user_name)
         if thumbfile:
             thumbfile.close()
 
@@ -390,6 +394,7 @@ def findDb(mac_info):
     log.debug("Finding QuickLook databases and caches now in user cache dirs")
     db_path_arr = []
     thumbnail_path_array = []
+    users = []
     for user in mac_info.users:
         if not user.DARWIN_USER_CACHE_DIR or not user.user_name:
             continue  # TODO: revisit this later!
@@ -400,40 +405,34 @@ def findDb(mac_info):
             for darwin_user_cache_dir in darwin_user_folders:
                 db_path = (darwin_user_cache_dir + '/com.apple.QuickLook.thumbnailcache/index.sqlite')
                 thumbnail_path = (darwin_user_cache_dir + '/com.apple.QuickLook.thumbnailcache/thumbnails.data')
-                if not mac_info.IsValidFilePath(db_path):
+                if not mac_info.IsValidFilePath(db_path) or not mac_info.IsValidFilePath(thumbnail_path):
                     continue
-                else:
-                    log.debug("Found valid thumbnail database in darwin user cache dir: " + str(db_path))
-                    db_path_arr.append(db_path)
-                if not mac_info.IsValidFilePath(thumbnail_path):
-                    continue
-                else:
-                    log.debug("Found valid thumbnail data in darwin user cache dir: " + str(thumbnail_path))
-                    thumbnail_path_array.append(thumbnail_path)
+                
+                log.debug(f"Found valid thumbnail database for user '{user.user_name}' at {db_path}")
+                log.debug(f"Found valid thumbnail data for user '{user.user_name}' at {thumbnail_path}")
+                db_path_arr.append(db_path)
+                thumbnail_path_array.append(thumbnail_path)
+                users.append(user.user_name)
 
-    return db_path_arr, thumbnail_path_array
+    return db_path_arr, thumbnail_path_array, users
 
 
 def Plugin_Start(mac_info):
     '''Main Entry point function for plugin'''
 
-    # Check for Mac OS version because QuickLook changes structure in 10.15
-    ver_info = mac_info.GetVersionDictionary()
-    os_minor_version = ver_info['minor']
-
     # Array to store QuickLook objects
     quicklook_array = []
 
     # Finds QuickLook index.sqlite and the thumbnails.data
-    paths_to_quicklook_db, paths_to_thumbnails = findDb(mac_info)
+    paths_to_quicklook_db, paths_to_thumbnails, users = findDb(mac_info)
 
     # Iterate through returned array of paths and pair each index.sqlite with their thumbnails.data
-    for quicklook_db_path, thumbnail_file in zip(paths_to_quicklook_db, paths_to_thumbnails):
+    for quicklook_db_path, thumbnail_file, user in zip(paths_to_quicklook_db, paths_to_thumbnails, users):
         log.info("QuickLook Cache data found!")
 
         # Export index.sqlite and thumbnails.data file
-        mac_info.ExportFile(quicklook_db_path, __Plugin_Name)
-        mac_info.ExportFile(thumbnail_file, __Plugin_Name)
+        mac_info.ExportFile(quicklook_db_path, __Plugin_Name, user + "_", False)
+        mac_info.ExportFile(thumbnail_file, __Plugin_Name, user + "_", False)
 
         # Opens index.sqlite
         quicklook_db, quicklook_wrapper = OpenDbFromImage(mac_info, quicklook_db_path)
@@ -444,10 +443,10 @@ def Plugin_Start(mac_info):
         row = c.fetchone()
         if row is not None:
             log.debug("QuickLook data from Mac OS below 10.15 found... Processing")
-            parseDb(c, quicklook_array, quicklook_db_path, thumbnail_file, mac_info)
+            parseDb(c, quicklook_array, quicklook_db_path, thumbnail_file, mac_info, user)
         else:
             log.debug("QuickLook data from Mac OS 10.15 found... Processing")
-            parseDbNew(c, quicklook_array, quicklook_db_path, thumbnail_file, mac_info)
+            parseDbNew(c, quicklook_array, quicklook_db_path, thumbnail_file, mac_info, user)
 
         # Close the index.sqlite
         quicklook_db.close()
@@ -478,7 +477,7 @@ def Plugin_Start_Standalone(input_files_list, output_params):
         row = c.fetchone()
         if row is not None:
             log.debug("QuickLook data from Mac OS below 10.15 found... Processing")
-            parseDb(c, quicklook_array, quicklook_db, thumbnails, output_params.output_path)
+            parseDb(c, quicklook_array, quicklook_db, thumbnails, output_params.output_path, '')
         else:
             log.debug("QuickLook data from Mac OS 10.15 found... Processing")
             parseDbNewSinglePlug(c, quicklook_array, quicklook_db, thumbnails, output_params.output_path)

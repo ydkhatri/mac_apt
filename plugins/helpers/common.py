@@ -11,6 +11,7 @@ import biplist
 import datetime
 import logging
 import os
+import re
 #import pytz
 from enum import IntEnum
 from sqlite3 import Error as sqlite3Error
@@ -114,7 +115,7 @@ class CommonFunctions:
     @staticmethod
     def GetNextAvailableFileName(filepath):
         '''
-        Checks for existing file and returns next available file name 
+        Checks for existing file and returns full path with next available file name 
         by appending file name with a number. Ex: file01.jpg
         '''
         if os.path.exists(filepath):
@@ -128,6 +129,13 @@ class CommonFunctions:
                 fullpath = filepath_without_ext + '{0:02d}'.format(index) + ext
             filepath = fullpath
         return filepath
+
+    @staticmethod
+    def SanitizeName(filename, replacement_char='_'):
+        '''
+        Removes illegal characters (for windows) from the string passed.
+        '''
+        return re.sub(r'[\\/*?:"<>|\']', replacement_char, filename)
 
     @staticmethod
     def GetFileSize(file):

@@ -97,7 +97,7 @@ def ReadSerialFromDb(mac_info, source):
                     for row in cursor:
                         serial_number = row[0] # Was row['SerialNumber'] but sqlite has issues with unicode, so removed it.
                         if len(serial_number) > 1: found_serial = True
-                        break;
+                        break
                 except sqlite3.Error as ex:
                     log.exception("Db cursor error while reading file " + source)
                 
