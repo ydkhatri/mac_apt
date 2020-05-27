@@ -29,20 +29,20 @@ import sys
 import textwrap
 import time
 import traceback
+from plugins.helpers.aff4_helper import EvidenceImageStream
 from plugins.helpers.apfs_reader import ApfsContainer, ApfsDbInfo
 from plugins.helpers.writer import *
 from plugins.helpers.disk_report import *
 from plugin import *
-from pyaff4 import container
 from uuid import UUID
 
-__VERSION = "0.4.1"
+__VERSION = "0.6"
 __PROGRAMNAME = "APFS metadata extract Tool"
 __EMAIL = "yogesh@swiftforensics.com"
 
 def CheckInputType(input_type):
     input_type = input_type.upper()
-    return input_type in ['AFF4','E01','DD','DMG','VMDK']
+    return input_type in ['AFF4','E01','DD','DMG','VMDK','MOUNTED']
 
 ######### FOR HANDLING E01 file ###############
 class ewf_Img_Info(pytsk3.Img_Info):
@@ -145,19 +145,19 @@ class aff4_Img_Info(pytsk3.Img_Info):
         url="", type=pytsk3.TSK_IMG_TYPE_EXTERNAL)
 
   def close(self):
-    self._aff4_stream.Close()
+    self._aff4_stream.close()
 
   def read(self, offset, size):
-    self._aff4_stream.SeekRead(offset)
-    return self._aff4_stream.Read(size)
+    self._aff4_stream.seek(offset)
+    return self._aff4_stream.read(size)
 
   def get_size(self):
-    return self._aff4_stream.Size()
+    return self._aff4_stream.size
 
 # Call this function instead of pytsk3.Img_Info() for AFF4 files
 def GetImgInfoObjectForAff4(path):
-    aff4_map_stream = container.Container.open(path)
-    img_info = aff4_Img_Info(aff4_map_stream)
+    aff4_img = EvidenceImageStream(path)
+    img_info = aff4_Img_Info(aff4_img)
     return img_info
 
 ####### End special handling for AFF4 #########
@@ -198,7 +198,7 @@ def IsHFSPartition(img, partition_start_offset):
 
 def ParseVolumesInApfsContainer(img, vol_info, container_size, container_start_offset, container_uuid):
     global mac_info
-    mac_info = macinfo.ApfsMacInfo(mac_info.output_params)
+    mac_info = macinfo.ApfsMacInfo(mac_info.output_params, mac_info.password)
     mac_info.pytsk_image = img   # Must be populated
     mac_info.vol_info = vol_info # Must be populated
     mac_info.is_apfs = True
@@ -206,7 +206,7 @@ def ParseVolumesInApfsContainer(img, vol_info, container_size, container_start_o
     mac_info.apfs_container = ApfsContainer(img, container_size, container_start_offset)
     # Check if this is 10.15 style System + Data volume?
     for vol in mac_info.apfs_container.volumes:
-        if vol.is_encrypted: continue
+        #if vol.is_encrypted: continue
         if vol.role == vol.container.apfs.VolumeRoleType.system.value:
             log.debug("{} is SYSTEM volume type".format(vol.volume_name))
             mac_info.apfs_sys_volume = vol
@@ -221,7 +221,7 @@ def ParseVolumesInApfsContainer(img, vol_info, container_size, container_start_o
             existing_db = SqliteWriter()     # open & check if it has the correct data
             existing_db.OpenSqliteDb(apfs_sqlite_path)
             apfs_db_info = ApfsDbInfo(existing_db)
-            if apfs_db_info.CheckVerInfo() and apfs_db_info.CheckVolInfo(mac_info.apfs_container.volumes):
+            if apfs_db_info.CheckVerInfo() and apfs_db_info.CheckVolInfoAndGetVolEncKey(mac_info.apfs_container.volumes):
                 # all good, db is up to date, use it
                 use_existing_db = True
                 mac_info.apfs_db = existing_db
@@ -255,6 +255,30 @@ def ParseVolumesInApfsContainer(img, vol_info, container_size, container_start_o
                 return False
         mac_info.output_params.apfs_db_path = apfs_sqlite_path
         if mac_info.apfs_db != None:
+            #test, export a file
+            # output_params.export_path = os.path.join(output_params.output_path, "Export")
+            # if not os.path.exists(output_params.export_path):
+            #     try:
+            #         os.makedirs(output_params.export_path)
+            #     except Exception as ex:
+            #         log.error("Exception while creating Export folder: " + output_params.export_path + "\n Is the location Writeable?" +
+            #                 "Is drive full? Perhaps the drive is disconnected? Exception Details: " + str(ex))
+            #         Exit()
+
+            # export_sqlite_path = SqliteWriter.CreateSqliteDb(os.path.join(output_params.export_path, "Exported_Files_Log.db"))
+            # writer = SqliteWriter(asynchronous=True)
+            # writer.OpenSqliteDb(export_sqlite_path)
+            # column_info = collections.OrderedDict([ ('SourcePath',DataType.TEXT), ('ExportPath',DataType.TEXT),
+            #                                         ('InodeModifiedTime',DataType.DATE),('ModifiedTime',DataType.DATE),
+            #                                         ('CreatedTime',DataType.DATE),('AccessedTime',DataType.DATE) ])
+            # writer.CreateTable(column_info, 'ExportedFileInfo')
+            # output_params.export_log_sqlite = writer
+
+            # mac_info.macos_FS = mac_info.apfs_container.volumes[0]
+            # mac_info.apfs_container.volumes[0].dbo = mac_info.apfs_db
+            # mac_info.ExportFile('/kyoto-1976538_1920.jpg', 'test', '')
+            # output_params.export_log_sqlite.CloseDb()
+            #endtest
             mac_info.apfs_db.CloseDb()
             mac_info.apfs_db = None
 
@@ -307,14 +331,20 @@ arg_parser.add_argument('input_type', help='Specify Input type as either E01, DD
 arg_parser.add_argument('input_path', help='Path to disk image/volume')
 arg_parser.add_argument('-o', '--output_path', help='Path where output files will be created')
 arg_parser.add_argument('-l', '--log_level', help='Log levels: INFO, DEBUG, WARNING, ERROR, CRITICAL (Default is INFO)')#, choices=['INFO','DEBUG','WARNING','ERROR','CRITICAL'])
+arg_parser.add_argument('-p', '--password', help='Personal Recovery Key(PRK) or Password for any user (for decrypting encrypted volume). PRK must be exactly how it was shown to you')
 args = arg_parser.parse_args()
 
 if args.output_path:
+    if (os.name != 'nt'):
+        if args.output_path.startswith('~/') or args.output_path == '~': # for linux/mac, translate ~ to user profile folder
+            args.output_path = os.path.expanduser(args.output_path)
+
+    args.output_path = os.path.abspath(args.output_path)
     print ("Output path was : {}".format(args.output_path))
     if not CheckOutputPath(args.output_path):
         Exit()
 else:
-    args.output_path = '.' # output to same folder as script.
+    args.output_path = os.path.abspath('.') # output to same folder as script.
 
 if args.log_level:
     args.log_level = args.log_level.upper()
@@ -342,6 +372,14 @@ if not CheckInputType(args.input_type):
 # Check outputs, create output files
 output_params = macinfo.OutputParams()
 output_params.output_path = args.output_path
+try:
+    sqlite_path = os.path.join(output_params.output_path, "disk_info.db")
+    output_params.output_db_path = SqliteWriter.CreateSqliteDb(sqlite_path)
+    output_params.write_sql = True
+except Exception as ex:
+    log.info('Sqlite db could not be created at : ' + sqlite_path)
+    log.exception('Exception occurred when trying to create Sqlite db')
+    Exit()
 
 try:
     xlsx_path = os.path.join(output_params.output_path, "disk_info.xlsx")
@@ -352,14 +390,6 @@ except Exception as ex:
     log.info('XLSX file could not be created at : ' + xlsx_path)
     log.exception('Exception occurred when trying to create XLSX file')
 
-try:
-    sqlite_path = os.path.join(output_params.output_path, "disk_info.db")
-    output_params.output_db_path = SqliteWriter.CreateSqliteDb(sqlite_path)
-    output_params.write_sql = True
-except Exception as ex:
-    log.info('Sqlite db could not be created at : ' + sqlite_path)
-    log.exception('Exception occurred when trying to create Sqlite db')
-
 
 # At this point, all looks good, lets mount the image
 img = None
@@ -368,13 +398,13 @@ mac_info = None
 time_processing_started = time.time()
 try:
     if args.input_type.upper() == 'E01':
-        img = GetImgInfoObjectForE01(args.input_path) # Use this function instead of pytsk3.Img_Info()
+        img = GetImgInfoObjectForE01(args.input_path)
         mac_info = macinfo.MacInfo(output_params)
     elif args.input_type.upper() == 'VMDK':
-        img = GetImgInfoObjectForVMDK(args.input_path) # Use this function instead of pytsk3.Img_Info()
+        img = GetImgInfoObjectForVMDK(args.input_path)
         mac_info = macinfo.MacInfo(output_params)
     elif args.input_type.upper() == 'AFF4':
-        img = GetImgInfoObjectForAff4(args.input_path) # Use this function instead of pytsk3.Img_Info()
+        img = GetImgInfoObjectForAff4(args.input_path)
         mac_info = macinfo.MacInfo(output_params)
     elif args.input_type.upper() in ('DD', 'DMG'):
         img = pytsk3.Img_Info(args.input_path) # Works for split dd images too! Works for DMG too, if no compression/encryption is used!
@@ -385,9 +415,11 @@ except Exception as ex:
     log.error("Failed to load image. Error Details are: " + str(ex))
     Exit()
 
-
+if args.password:
+    mac_info.password = args.password
 mac_info.use_native_hfs_parser = True #False if args.use_tsk else True
 
+mac_info.pytsk_image = img
 if IsApfsContainer(img, 0):
     uuid = GetApfsContainerUuid(img, 0)
     log.info('Found an APFS container with uuid: {}'.format(str(uuid).upper()))
@@ -396,7 +428,6 @@ elif IsHFSVolume(img, 0):
     log.info('Found an HFS partition, skipping it..')
 else: # perhaps this is a full disk image
     try:
-        mac_info.pytsk_image = img
         vol_info = pytsk3.Volume_Info(img)
         vs_info = vol_info.info # TSK_VS_INFO object
         mac_info.vol_info = vol_info

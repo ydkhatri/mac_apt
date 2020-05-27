@@ -66,31 +66,6 @@ def PrintAll(imessages, output_params, source_path):
         imessages_list.append(imsg_items)
     WriteList("iMessages", "IMessages", imessages_list, imessages_info, output_params, source_path)
 
-def GetAttachments(mac_info, sourceDirectory, user):
-    '''
-        Walks through attachment directory of 3 randomely named subdirectories
-        Attachments may be seen as an image and a movie, due to the nature of sending Apple's Live Photos
-    '''
-    files = []
-    initial_folders = mac_info.ListItemsInFolder(sourceDirectory, EntryType.FOLDERS, True)
-    if len(initial_folders) > 0:
-        for folders in initial_folders:
-            folder_names = folders['name'] + '/'
-            raw_secondary_folder_names = mac_info.ListItemsInFolder(sourceDirectory + folder_names, EntryType.FOLDERS, True)
-            for secondary_folders in raw_secondary_folder_names:
-                secondary_folder_names = secondary_folders['name'] + '/'
-                raw_tri_folder_names = mac_info.ListItemsInFolder(sourceDirectory + folder_names + secondary_folder_names, EntryType.FOLDERS, True)
-                for tri_folders in raw_tri_folder_names:
-                    tri_folder_names = tri_folders['name'] + '/'
-                    items = mac_info.ListItemsInFolder(sourceDirectory + folder_names + secondary_folder_names + tri_folder_names, EntryType.FILES, True)
-                    for attachments in items:
-                        attachments = attachments['name']
-                        files.append(sourceDirectory + folder_names + secondary_folder_names + tri_folder_names + attachments)
-        for attachment_paths in files:
-            mac_info.ExportFile(attachment_paths, os.path.join(__Plugin_Name, user), '', False)
-    else:
-        log.info('No attachment files found under {}'.format(sourceDirectory))
-
 def OpenDbFromImage(mac_info, inputPath):
     '''Returns tuple of (connection, wrapper_obj)'''
     try:
@@ -166,7 +141,8 @@ def Plugin_Start(mac_info):
             ProcessChatDbFromPath(mac_info, imessages, chats_file_path, user_name)
             user_attachments_path = attachments_path.format(user.home_dir)
             if mac_info.IsValidFolderPath(user_attachments_path):
-                GetAttachments(mac_info, user_attachments_path, user_name)
+                log.info('Exporting Attachments folder now, this might take some time (depending on size)...')
+                mac_info.ExportFolder(user_attachments_path, os.path.join(__Plugin_Name, user_name), True)
     if imessages:
         PrintAll(imessages, mac_info.output_params, '')
     else:

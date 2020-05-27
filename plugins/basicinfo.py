@@ -97,7 +97,7 @@ def ReadSerialFromDb(mac_info, source):
                     for row in cursor:
                         serial_number = row[0] # Was row['SerialNumber'] but sqlite has issues with unicode, so removed it.
                         if len(serial_number) > 1: found_serial = True
-                        break;
+                        break
                 except sqlite3.Error as ex:
                     log.exception("Db cursor error while reading file " + source)
                 
@@ -162,7 +162,7 @@ def GetTimezone(mac_info):
     except (IndexError, ValueError) as ex:
         log.error('Error trying to read timezone information - ' + str(ex))
 
-    # f = mac_info.OpenSmallFile('/private/etc/localtime')
+    # f = mac_info.Open('/private/etc/localtime')
     # if f:
     #     try:
     #         data = f.read(128).decode('utf8')

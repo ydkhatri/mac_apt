@@ -62,6 +62,8 @@ XATTR_RESERVED_8 = 0x00000008
 # snapshot flags
 OMAP_SNAPSHOT_DELETED  = 0x00000001
 OMAP_SNAPSHOT_REVERTED = 0x00000002
+# software encyption in containersuperblock
+NX_CRYPTO_SW  = 4
 
 class Apfs(KaitaiStruct):
 
@@ -476,8 +478,8 @@ class Apfs(KaitaiStruct):
             self.reaper_oid = self._io.read_u8le()
             self.test_type = self._io.read_u4le()
             self.num_volumesuperblock_ids = self._io.read_u4le()
-            self.volumesuperblock_ids = [None] * (self.num_volumesuperblock_ids)
-            for i in range(self.num_volumesuperblock_ids):
+            self.volumesuperblock_ids = [None] * (100) # NX_MAX_FILE_SYSTEMS=100
+            for i in range(100):
                 self.volumesuperblock_ids[i] = self._io.read_u8le()
             self.counters = [None] * 32
             for i in range(32):

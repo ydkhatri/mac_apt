@@ -239,7 +239,7 @@ def ProcessFsevents(logs, folder_path, file_list, mac_info):
         file_name = item['name']
         path = folder_path + '/' + file_name
         mac_info.ExportFile(path, __Plugin_Name, '', False)
-        f = mac_info.OpenSmallFile(path)
+        f = mac_info.Open(path)
         if f != None:
             if file_name == 'fseventsd-uuid':
                 uuid = ReadUuid(f)

@@ -14,10 +14,10 @@ import logging
 from plugins.helpers.macinfo import *
 from plugins.helpers.writer import *
 
-__Plugin_Name = "BASHSESSIONS" # Cannot have spaces, and must be all caps!
-__Plugin_Friendly_Name = "Bash Sessions & History"
+__Plugin_Name = "TERMSESSIONS" # Cannot have spaces, and must be all caps!
+__Plugin_Friendly_Name = "Terminal Sessions & History"
 __Plugin_Version = "1.0"
-__Plugin_Description = "Reads bash (Terminal) sessions & history for every user"
+__Plugin_Description = "Reads Terminal (bash & zsh) sessions & history for every user"
 __Plugin_Author = "Yogesh Khatri"
 __Plugin_Author_Email = "yogesh@swiftforensics.com"
 __Plugin_Modes = "MACOS"
@@ -41,7 +41,7 @@ class BashSession:
         self.source_type = source_type
 
 def ReadFile(mac_info, path):
-    f = mac_info.OpenSmallFile(path)
+    f = mac_info.Open(path)
     if f != None:
         lines = f.readlines()
         lines_utf8 = []
@@ -94,7 +94,7 @@ def PrintAll(sessions, output_params, source_path):
         data_list.append( [ session.source_type, session.start_date, session.end_date, session.new_content, 
                             session.all_content, session.user, session.uuid, session.source ] )
 
-    WriteList("bash session & history", "BashSessions", data_list, session_info, output_params, source_path)
+    WriteList("terminal session & history", "TermSessions", data_list, session_info, output_params, source_path)
     
 def FindSession(bash_sessions, uuid):
     for session in bash_sessions:
@@ -193,7 +193,7 @@ def Plugin_Start(mac_info):
     if len(bash_sessions) > 0:
         PrintAll(bash_sessions, mac_info.output_params, '')
     else:
-        log.info('No bash sessions or history found!')
+        log.info('No terminal sessions or history found!')
     
 if __name__ == '__main__':
     print("This plugin is a part of a framework and does not run independently on its own!")

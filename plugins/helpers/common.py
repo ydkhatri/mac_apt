@@ -11,10 +11,11 @@ import biplist
 import datetime
 import logging
 import os
-import pytz
+import re
+#import pytz
 from enum import IntEnum
 from sqlite3 import Error as sqlite3Error
-from tzlocal import get_localzone
+#from tzlocal import get_localzone
 
 log = logging.getLogger('MAIN.HELPERS.COMMON')
 
@@ -30,12 +31,12 @@ class TimeZoneType(IntEnum):
 
 class CommonFunctions:
 
-    @staticmethod
-    def GetLocalTimeFromUtcDate(d_utc):
-        '''Returns a datetime object converted to local time'''
-        local_timezone = get_localzone()
-        #local_tz = get_localzone()
-        return d_utc.replace(tzinfo=pytz.utc).astimezone(local_timezone)
+    # @staticmethod
+    # def GetLocalTimeFromUtcDate(d_utc):
+    #     '''Returns a datetime object converted to local time'''
+    #     local_timezone = get_localzone()
+    #     #local_tz = get_localzone()
+    #     return d_utc.replace(tzinfo=pytz.utc).astimezone(local_timezone)
 
     @staticmethod
     def ReadMacAbsoluteTime(mac_abs_time): # Mac Absolute time is time epoch beginning 2001/1/1
@@ -114,7 +115,7 @@ class CommonFunctions:
     @staticmethod
     def GetNextAvailableFileName(filepath):
         '''
-        Checks for existing file and returns next available file name 
+        Checks for existing file and returns full path with next available file name 
         by appending file name with a number. Ex: file01.jpg
         '''
         if os.path.exists(filepath):
@@ -128,6 +129,13 @@ class CommonFunctions:
                 fullpath = filepath_without_ext + '{0:02d}'.format(index) + ext
             filepath = fullpath
         return filepath
+
+    @staticmethod
+    def SanitizeName(filename, replacement_char='_'):
+        '''
+        Removes illegal characters (for windows) from the string passed.
+        '''
+        return re.sub(r'[\\/*?:"<>|\'\r\n]', replacement_char, filename)
 
     @staticmethod
     def GetFileSize(file):

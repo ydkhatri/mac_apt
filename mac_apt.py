@@ -28,14 +28,14 @@ import sys
 import textwrap
 import time
 import traceback
+from plugins.helpers.aff4_helper import EvidenceImageStream
 from plugins.helpers.apfs_reader import ApfsContainer, ApfsDbInfo
 from plugins.helpers.writer import *
 from plugins.helpers.disk_report import *
 from plugin import *
-from pyaff4 import container
 from uuid import UUID
 
-__VERSION = "0.5"
+__VERSION = "0.6"
 __PROGRAMNAME = "macOS Artifact Parsing Tool"
 __EMAIL = "yogesh@swiftforensics.com"
 
@@ -153,19 +153,19 @@ class aff4_Img_Info(pytsk3.Img_Info):
         url="", type=pytsk3.TSK_IMG_TYPE_EXTERNAL)
 
   def close(self):
-    self._aff4_stream.Close()
+    self._aff4_stream.close()
 
   def read(self, offset, size):
-    self._aff4_stream.SeekRead(offset)
-    return self._aff4_stream.Read(size)
+    self._aff4_stream.seek(offset)
+    return self._aff4_stream.read(size)
 
   def get_size(self):
-    return self._aff4_stream.Size()
+    return self._aff4_stream.size
 
 # Call this function instead of pytsk3.Img_Info() for AFF4 files
 def GetImgInfoObjectForAff4(path):
-    aff4_map_stream = container.Container.open(path)
-    img_info = aff4_Img_Info(aff4_map_stream)
+    aff4_img = EvidenceImageStream(path)
+    img_info = aff4_Img_Info(aff4_img)
     return img_info
 
 ####### End special handling for AFF4 #########
@@ -233,7 +233,7 @@ def GetApfsContainerUuid(img, container_start_offset):
 
 def FindMacOsPartitionInApfsContainer(img, vol_info, container_size, container_start_offset, container_uuid):
     global mac_info
-    mac_info = macinfo.ApfsMacInfo(mac_info.output_params)
+    mac_info = macinfo.ApfsMacInfo(mac_info.output_params, mac_info.password)
     mac_info.pytsk_image = img   # Must be populated
     mac_info.vol_info = vol_info # Must be populated
     mac_info.is_apfs = True
@@ -241,7 +241,7 @@ def FindMacOsPartitionInApfsContainer(img, vol_info, container_size, container_s
     mac_info.apfs_container = ApfsContainer(img, container_size, container_start_offset)
     # Check if this is 10.15 style System + Data volume?
     for vol in mac_info.apfs_container.volumes:
-        if vol.is_encrypted: continue
+        #if vol.is_encrypted: continue
         if vol.role == vol.container.apfs.VolumeRoleType.system.value:
             log.debug("{} is SYSTEM volume type".format(vol.volume_name))
             mac_info.apfs_sys_volume = vol
@@ -256,7 +256,7 @@ def FindMacOsPartitionInApfsContainer(img, vol_info, container_size, container_s
             existing_db = SqliteWriter()     # open & check if it has the correct data
             existing_db.OpenSqliteDb(apfs_sqlite_path)
             apfs_db_info = ApfsDbInfo(existing_db)
-            if apfs_db_info.CheckVerInfo() and apfs_db_info.CheckVolInfo(mac_info.apfs_container.volumes):
+            if apfs_db_info.CheckVerInfo() and apfs_db_info.CheckVolInfoAndGetVolEncKey(mac_info.apfs_container.volumes):
                 # all good, db is up to date, use it
                 use_existing_db = True
                 mac_info.apfs_db = existing_db
@@ -300,7 +300,7 @@ def FindMacOsPartitionInApfsContainer(img, vol_info, container_size, container_s
             for vol in mac_info.apfs_container.volumes:
                 if vol.num_blocks_used * vol.container.block_size < 3000000000: # < 3 GB, cannot be a macOS root volume
                     continue
-                if vol.is_encrypted: continue
+                #if vol.is_encrypted: continue
                 mac_info.macos_FS = vol
                 vol.dbo = mac_info.apfs_db
                 if FindMacOsFiles(mac_info):
@@ -353,12 +353,14 @@ def SetupExportLogger(output_params):
                     "Is drive full? Perhaps the drive is disconnected? Exception Details: " + str(ex))
             Exit()
 
-    output_params.export_log_csv = CsvWriter()
-    output_params.export_log_csv.CreateCsvFile(os.path.join(output_params.export_path, "Exported_Files_Log.csv"))
+    export_sqlite_path = SqliteWriter.CreateSqliteDb(os.path.join(output_params.export_path, "Exported_Files_Log.db"))
+    writer = SqliteWriter(asynchronous=True)
+    writer.OpenSqliteDb(export_sqlite_path)
     column_info = collections.OrderedDict([ ('SourcePath',DataType.TEXT), ('ExportPath',DataType.TEXT),
                                             ('InodeModifiedTime',DataType.DATE),('ModifiedTime',DataType.DATE),
                                             ('CreatedTime',DataType.DATE),('AccessedTime',DataType.DATE) ])
-    output_params.export_log_csv.WriteRow(column_info)
+    writer.CreateTable(column_info, 'ExportedFileInfo')
+    output_params.export_log_sqlite = writer
 
 ## Main program ##
 
@@ -376,7 +378,7 @@ for plugin in plugins:
     plugin_name_list.append(plugin.__Plugin_Name)
 
 plugins_info += "\n    " + "-"*76 + "\n" +\
-                 " "*4 + "FAST" + " "*16 + "Runs all plugins except SPOTLIGHT & UNIFIEDLOGS\n" + \
+                 " "*4 + "FAST" + " "*16 + "Runs all plugins except IDEVICEBACKUPS, SPOTLIGHT, UNIFIEDLOGS\n" + \
                  " "*4 + "ALL" + " "*17 + "Runs all plugins"
 arg_parser = argparse.ArgumentParser(description='mac_apt is a framework to process forensic artifacts on a Mac OSX system\n'\
                                                  f'You are running {__PROGRAMNAME} version {__VERSION}\n\n'\
@@ -387,8 +389,8 @@ arg_parser.add_argument('input_path', help='Path to OSX image/volume')
 arg_parser.add_argument('-o', '--output_path', help='Path where output files will be created')
 arg_parser.add_argument('-x', '--xlsx', action="store_true", help='Save output in Excel spreadsheet')
 arg_parser.add_argument('-c', '--csv', action="store_true", help='Save output as CSV files')
-#arg_parser.add_argument('-s', '--sqlite', action="store_true", help='Save output in an sqlite database')
 arg_parser.add_argument('-l', '--log_level', help='Log levels: INFO, DEBUG, WARNING, ERROR, CRITICAL (Default is INFO)')#, choices=['INFO','DEBUG','WARNING','ERROR','CRITICAL'])
+arg_parser.add_argument('-p', '--password', help='Personal Recovery Key(PRK) or Password for any user (for decrypting encrypted volume). PRK must be exactly how it was shown to you')
 #arg_parser.add_argument('-u', '--use_tsk', action="store_true", help='Use sleuthkit instead of native HFS+ parser (This is slower!)')
 arg_parser.add_argument('plugin', nargs="+", help="Plugins to run (space separated). FAST will run most plugins")
 args = arg_parser.parse_args()
@@ -435,6 +437,7 @@ if not process_all:
         plugins_to_run = plugin_name_list
         plugins_to_run.remove('ALL')
         plugins_to_run.remove('FAST')
+        plugins_to_run.remove('IDEVICEBACKUPS')
         plugins_to_run.remove('SPOTLIGHT')
         plugins_to_run.remove('UNIFIEDLOGS')
     else:
@@ -498,7 +501,11 @@ except Exception as ex:
     log.error("Failed to load image. Error Details are: " + str(ex))
     Exit()
 
+if args.password:
+    mac_info.password = args.password
+
 if args.input_type.upper() != 'MOUNTED':
+    mac_info.pytsk_image = img
     mac_info.use_native_hfs_parser = True #False if args.use_tsk else True
 
     if IsApfsContainer(img, 0):
@@ -509,7 +516,6 @@ if args.input_type.upper() != 'MOUNTED':
         found_macos = IsMacOsPartition(img, 0, mac_info)
     if not found_macos: # must be a full disk image
         try:
-            mac_info.pytsk_image = img
             vol_info = pytsk3.Volume_Info(img)
             vs_info = vol_info.info # TSK_VS_INFO object
             mac_info.vol_info = vol_info
@@ -541,6 +547,8 @@ if args.xlsx:
     output_params.xlsx_writer.CommitAndCloseFile()
 if mac_info.is_apfs and mac_info.apfs_db != None:
     mac_info.apfs_db.CloseDb()
+if output_params.export_log_sqlite:
+    output_params.export_log_sqlite.CloseDb()
 
 time_processing_ended = time.time()
 run_time = time_processing_ended - time_processing_started

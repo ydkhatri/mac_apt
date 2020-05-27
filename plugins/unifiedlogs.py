@@ -52,7 +52,7 @@ class MacAptFile(VirtualFile):
 
     def open(self, mode='rb'):
         try:
-            self.file_pointer = self.mac_info.OpenSmallFile(self.path)
+            self.file_pointer = self.mac_info.Open(self.path)
             return self.file_pointer
         except (IOError, OSError, ValueError) as ex:
             if not self.mac_info.IsValidFilePath(self.path):
@@ -193,7 +193,7 @@ def CopyOutputParams(output_params):
     op_copy.xlsx_writer = output_params.xlsx_writer
     op_copy.output_db_path = output_params.output_db_path
     op_copy.export_path = output_params.export_path
-    op_copy.export_log_csv = output_params.export_log_csv
+    op_copy.export_log_sqlite = output_params.export_log_sqlite
     op_copy.timezone = output_params.timezone
     return op_copy
 

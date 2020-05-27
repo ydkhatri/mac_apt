@@ -185,7 +185,7 @@ def GetDhcpInfo(mac_info):
 def GetFileContents(mac_info, path):
     lines = []
     log.debug("Trying to read {}".format(path))
-    f = mac_info.OpenSmallFile(path)
+    f = mac_info.Open(path)
     if f != None:
         try:
             for line in f:

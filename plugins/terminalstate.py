@@ -216,7 +216,7 @@ def Plugin_Start(mac_info):
             success, windows_plist, error = mac_info.ReadPlist(windows_plist_path)
             if success:
                 try:
-                    all_data_file = mac_info.OpenSmallFile(data_path)
+                    all_data_file = mac_info.Open(data_path)
                     if (all_data_file):
                         all_data = all_data_file.read()
                         Process(windows_plist, all_data, terminals, user.user_name, data_path)

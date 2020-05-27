@@ -97,7 +97,7 @@ def CopyOutputParams(output_params):
     op_copy.xlsx_writer = output_params.xlsx_writer
     op_copy.output_db_path = output_params.output_db_path
     op_copy.export_path = output_params.export_path
-    op_copy.export_log_csv = output_params.export_log_csv
+    op_copy.export_log_sqlite = output_params.export_log_sqlite
     op_copy.timezone = output_params.timezone
     return op_copy
 
@@ -119,7 +119,7 @@ def GetFileData(path):
 
     data = b''
     if mac_info_obj != None:
-        f = mac_info_obj.OpenSmallFile(path)
+        f = mac_info_obj.Open(path)
         if f:
             data = f.read()
         else:
@@ -349,7 +349,7 @@ def ProcessStoreAndDotStore(mac_info, store_path_1, store_path_2, prefix):
         mac_info.ExportFile(store_path_1, __Plugin_Name, prefix + '_', False)
         log.info('Now processing file {} '.format(store_path_1))
         # Process store.db here
-        input_file = mac_info.OpenSmallFile(store_path_1)
+        input_file = mac_info.Open(store_path_1)
         output_folder = os.path.join(mac_info.output_params.output_path, 'SPOTLIGHT_DATA', prefix)
         if input_file != None:
             table_name = prefix + '-store'
@@ -360,7 +360,7 @@ def ProcessStoreAndDotStore(mac_info, store_path_1, store_path_2, prefix):
         mac_info.ExportFile(store_path_2,  __Plugin_Name, prefix + '_', False)
         log.info('Now processing file {}'.format(store_path_2))
         # Process .store.db here
-        input_file = mac_info.OpenSmallFile(store_path_2)
+        input_file = mac_info.Open(store_path_2)
         output_folder = os.path.join(mac_info.output_params.output_path, 'SPOTLIGHT_DATA', prefix)
         if input_file != None:
             if items_1: 
@@ -414,7 +414,7 @@ def ProcessVolumeStore(mac_info, spotlight_base_path, export_prefix=''):
             mac_info.ExportFile(store_path_1, sub_folder, '', False)
             log.info('Now processing file {} '.format(store_path_1))
             # Process store.db here
-            input_file = mac_info.OpenSmallFile(store_path_1)
+            input_file = mac_info.Open(store_path_1)
             output_folder = os.path.join(mac_info.output_params.output_path, 'SPOTLIGHT_DATA', uuid)
             if input_file != None:
                 table_name = ((export_prefix + '_') if export_prefix else '') + str(index) + '-store'
@@ -427,7 +427,7 @@ def ProcessVolumeStore(mac_info, spotlight_base_path, export_prefix=''):
             mac_info.ExportFile(store_path_2, sub_folder, '', False)
             log.info('Now processing file {}'.format(store_path_2))
             # Process .store.db here
-            input_file = mac_info.OpenSmallFile(store_path_2)
+            input_file = mac_info.Open(store_path_2)
             output_folder = os.path.join(mac_info.output_params.output_path, 'SPOTLIGHT_DATA', uuid)
             if input_file != None:
                 if items_1: 

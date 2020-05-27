@@ -32,7 +32,7 @@ from plugins.helpers.writer import *
 from plugins.helpers.disk_report import *
 from plugin import *
 
-__VERSION = "0.5"
+__VERSION = "0.6"
 __PROGRAMNAME = "macOS Artifact Parsing Tool - SYS DATA Mounted mode"
 __EMAIL = "yogesh@swiftforensics.com"
 
@@ -77,12 +77,14 @@ def SetupExportLogger(output_params):
                     "Is drive full? Perhaps the drive is disconnected? Exception Details: " + str(ex))
             Exit()
 
-    output_params.export_log_csv = CsvWriter()
-    output_params.export_log_csv.CreateCsvFile(os.path.join(output_params.export_path, "Exported_Files_Log.csv"))
+    export_sqlite_path = SqliteWriter.CreateSqliteDb(os.path.join(output_params.export_path, "Exported_Files_Log.db"))
+    writer = SqliteWriter(asynchronous=True)
+    writer.OpenSqliteDb(export_sqlite_path)
     column_info = collections.OrderedDict([ ('SourcePath',DataType.TEXT), ('ExportPath',DataType.TEXT),
                                             ('InodeModifiedTime',DataType.DATE),('ModifiedTime',DataType.DATE),
                                             ('CreatedTime',DataType.DATE),('AccessedTime',DataType.DATE) ])
-    output_params.export_log_csv.WriteRow(column_info)
+    writer.CreateTable(column_info, 'ExportedFileInfo')
+    output_params.export_log_sqlite = writer
 
 ## Main program ##
 
@@ -100,7 +102,7 @@ for plugin in plugins:
     plugin_name_list.append(plugin.__Plugin_Name)
 
 plugins_info += "\n    " + "-"*76 + "\n" +\
-                 " "*4 + "FAST" + " "*16 + "Runs all plugins except SPOTLIGHT & UNIFIEDLOGS\n" + \
+                 " "*4 + "FAST" + " "*16 + "Runs all plugins except IDEVICEBACKUPS, SPOTLIGHT, UNIFIEDLOGS\n" + \
                  " "*4 + "ALL" + " "*17 + "Runs all plugins"
 arg_parser = argparse.ArgumentParser(description='mac_apt is a framework to process forensic artifacts on a Mac OSX system\n'\
                                                  f'You are running {__PROGRAMNAME} version {__VERSION}\n\n'\
@@ -158,6 +160,7 @@ if not process_all:
         plugins_to_run = plugin_name_list
         plugins_to_run.remove('ALL')
         plugins_to_run.remove('FAST')
+        plugins_to_run.remove('IDEVICEBACKUPS')
         plugins_to_run.remove('SPOTLIGHT')
         plugins_to_run.remove('UNIFIEDLOGS')
     else:
