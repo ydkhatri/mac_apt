@@ -443,8 +443,8 @@ def Plugin_Start(mac_info):
         log.info("QuickLook Cache data found!")
 
         # Export index.sqlite and thumbnails.data file
-        mac_info.ExportFile(quicklook_db_path, __Plugin_Name, user + "_", False)
-        mac_info.ExportFile(thumbnail_file, __Plugin_Name, user + "_", False)
+        mac_info.ExportFile(quicklook_db_path, __Plugin_Name, user + "_")
+        mac_info.ExportFile(thumbnail_file, __Plugin_Name, user + "_")
 
         # Opens index.sqlite
         quicklook_db, quicklook_wrapper = OpenDbFromImage(mac_info, quicklook_db_path)
