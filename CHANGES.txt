@@ -5,8 +5,9 @@ Updates in 20200426 (v0.6):
 + BASHSESSIONS is now TERMSESSIONS (it reads zsh history too)
 + Better HFS parsing, and reading of large files
 + Support for Maquisition created AFF4 images
++ Export_log is now an sqlite db instead of CSV file
++ FSEVENTS plugin is now a lot faster
 
-! FSEVENTS plugin is now a lot faster
 ! Bugfixes, improvements in other plugins - QUICKLOOK, IMESSAGE, COOKIES
 
 Updates in 20200426 (v0.5):
