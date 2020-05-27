@@ -216,9 +216,12 @@ class DataWriter:
         self.row_count += row_len
 
 class SqliteWriter:
-    def __init__(self):
+    def __init__(self, asynchronous=False):
         self.filepath = ''
         self.conn = None
+        self.asynchronous = asynchronous # Async mode is quite limited, only works for db with single table!
+        self.async_buffer = []
+        self.async_buffer_max = 100000
         self.table_names = []
         self.table_name  = ''
         self.column_infos = []
@@ -361,7 +364,14 @@ class SqliteWriter:
         '''Write rows to db, where row is tuple or list of 'tuple or list' (in order).
            If a table_name is supplied, it will use the query (column_info) for 
            that table, else it will use the last created table's column_info
-        '''        
+        '''
+        if self.asynchronous:
+            self.async_buffer.extend(rows)
+            if len(self.async_buffer) <= self.async_buffer_max:
+                return
+            else:
+                rows = self.async_buffer
+                self.async_buffer = []
         try:
             cursor = self.conn.cursor()
             query = self.executemany_query
@@ -381,6 +391,9 @@ class SqliteWriter:
 
     def CloseDb(self):
         if self.conn != None:
+            if self.async_buffer:
+                self.async_buffer_max = 0 # to trigger write!
+                self.WriteRows(self.async_buffer)
             self.conn.close()
             self.conn = None
     

@@ -97,7 +97,7 @@ def CopyOutputParams(output_params):
     op_copy.xlsx_writer = output_params.xlsx_writer
     op_copy.output_db_path = output_params.output_db_path
     op_copy.export_path = output_params.export_path
-    op_copy.export_log_csv = output_params.export_log_csv
+    op_copy.export_log_sqlite = output_params.export_log_sqlite
     op_copy.timezone = output_params.timezone
     return op_copy
 

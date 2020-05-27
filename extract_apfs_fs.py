@@ -256,23 +256,28 @@ def ParseVolumesInApfsContainer(img, vol_info, container_size, container_start_o
         mac_info.output_params.apfs_db_path = apfs_sqlite_path
         if mac_info.apfs_db != None:
             #test, export a file
-            # mac_info.output_params.export_log_csv = CsvWriter()
-            # mac_info.output_params.export_log_csv.CreateCsvFile(os.path.join(mac_info.output_params.export_path, "Exported_Files_Log.csv"))
+            # output_params.export_path = os.path.join(output_params.output_path, "Export")
+            # if not os.path.exists(output_params.export_path):
+            #     try:
+            #         os.makedirs(output_params.export_path)
+            #     except Exception as ex:
+            #         log.error("Exception while creating Export folder: " + output_params.export_path + "\n Is the location Writeable?" +
+            #                 "Is drive full? Perhaps the drive is disconnected? Exception Details: " + str(ex))
+            #         Exit()
+
+            # export_sqlite_path = SqliteWriter.CreateSqliteDb(os.path.join(output_params.export_path, "Exported_Files_Log.db"))
+            # writer = SqliteWriter(asynchronous=True)
+            # writer.OpenSqliteDb(export_sqlite_path)
             # column_info = collections.OrderedDict([ ('SourcePath',DataType.TEXT), ('ExportPath',DataType.TEXT),
             #                                         ('InodeModifiedTime',DataType.DATE),('ModifiedTime',DataType.DATE),
             #                                         ('CreatedTime',DataType.DATE),('AccessedTime',DataType.DATE) ])
-            # mac_info.output_params.export_log_csv.WriteRow(column_info)
-            # mac_info.output_params.export_path = os.path.join(mac_info.output_params.output_path, "Export")
-            # if not os.path.exists(mac_info.output_params.export_path):
-            #     try:
-            #         os.makedirs(mac_info.output_params.export_path)
-            #     except Exception as ex:
-            #         log.error("Exception while creating Export folder: " + mac_info.output_params.export_path + "\n Is the location Writeable?" +
-            #                 "Is drive full? Perhaps the drive is disconnected? Exception Details: " + str(ex))
-            #         Exit()
+            # writer.CreateTable(column_info, 'ExportedFileInfo')
+            # output_params.export_log_sqlite = writer
+
             # mac_info.macos_FS = mac_info.apfs_container.volumes[0]
             # mac_info.apfs_container.volumes[0].dbo = mac_info.apfs_db
             # mac_info.ExportFile('/kyoto-1976538_1920.jpg', 'test', '')
+            # output_params.export_log_sqlite.CloseDb()
             #endtest
             mac_info.apfs_db.CloseDb()
             mac_info.apfs_db = None

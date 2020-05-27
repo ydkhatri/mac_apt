@@ -353,12 +353,14 @@ def SetupExportLogger(output_params):
                     "Is drive full? Perhaps the drive is disconnected? Exception Details: " + str(ex))
             Exit()
 
-    output_params.export_log_csv = CsvWriter()
-    output_params.export_log_csv.CreateCsvFile(os.path.join(output_params.export_path, "Exported_Files_Log.csv"))
+    export_sqlite_path = SqliteWriter.CreateSqliteDb(os.path.join(output_params.export_path, "Exported_Files_Log.db"))
+    writer = SqliteWriter(asynchronous=True)
+    writer.OpenSqliteDb(export_sqlite_path)
     column_info = collections.OrderedDict([ ('SourcePath',DataType.TEXT), ('ExportPath',DataType.TEXT),
                                             ('InodeModifiedTime',DataType.DATE),('ModifiedTime',DataType.DATE),
                                             ('CreatedTime',DataType.DATE),('AccessedTime',DataType.DATE) ])
-    output_params.export_log_csv.WriteRow(column_info)
+    writer.CreateTable(column_info, 'ExportedFileInfo')
+    output_params.export_log_sqlite = writer
 
 ## Main program ##
 
@@ -545,6 +547,8 @@ if args.xlsx:
     output_params.xlsx_writer.CommitAndCloseFile()
 if mac_info.is_apfs and mac_info.apfs_db != None:
     mac_info.apfs_db.CloseDb()
+if output_params.export_log_sqlite:
+    output_params.export_log_sqlite.CloseDb()
 
 time_processing_ended = time.time()
 run_time = time_processing_ended - time_processing_started

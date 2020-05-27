@@ -48,7 +48,7 @@ class OutputParams:
         self.output_db_path = ''
         self.export_path = '' # For artifact source files
         self.export_path_rel = '' # Relative export path
-        self.export_log_csv = None
+        self.export_log_sqlite = None
         self.timezone = TimeZoneType.UTC
 
 class UserInfo:
@@ -491,7 +491,7 @@ class MacInfo:
             export_path_rel = os.path.relpath(export_path, start=self.output_params.export_path)
             if self.is_windows:
                 export_path_rel = export_path_rel.replace('\\', '/')
-            self.output_params.export_log_csv.WriteRow([artifact_path, export_path_rel, mac_times['c_time'], mac_times['m_time'], mac_times['cr_time'], mac_times['a_time']])
+            self.output_params.export_log_sqlite.WriteRow([artifact_path, export_path_rel, mac_times['c_time'], mac_times['m_time'], mac_times['cr_time'], mac_times['a_time']])
             return True
         else:
             log.info("Failed to export '" + artifact_path + "' to '" + export_path + "'")
@@ -938,7 +938,7 @@ class MacInfo:
                         except (InvalidPlistException):
                             log.exception("biplist failed to read plist " + user_plist_path)
                         f.close()
-                except:
+                except (OSError, KeyError, ValueError, IndexError, TypeError):
                     log.exception ("Could not open plist " + user_plist_path)
         self._GetDomainUserInfo()
         self._GetDarwinFoldersInfo() # This probably does not apply to OSX < Mavericks !
