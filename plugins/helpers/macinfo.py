@@ -1099,11 +1099,7 @@ class ApfsMacInfo(MacInfo):
                 times['m_time'] = apfs_file_meta.modified
                 times['cr_time'] = apfs_file_meta.created
                 times['a_time'] = apfs_file_meta.accessed
-                times['i_time'] = apfs_file_meta.date_added
-                             
-                                                                          
-                                                                                                                                 
-                                                             
+                times['i_time'] = apfs_file_meta.date_added                            
             else:
                 log.debug('File not found in GetFileMACTimes() query!, path was ' + file_path)
         except Exception as ex:
@@ -1706,7 +1702,8 @@ class SqliteWrapper:
         with open (path, 'rb') as f:
             if f.read(16) == b'SQLite format 3\0':
                 ret = True
-        return ret                                               
+        return ret
+        
     def __getattr__(self, attr):
         if attr == 'connect': 
             def hooked(path):
