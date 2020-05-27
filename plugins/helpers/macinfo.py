@@ -441,7 +441,7 @@ class MacInfo:
                 ret &= self._ExportFolder(artifact_path + '/' + entry['name'], new_path, overwrite)
             else: # FILE
                 if entry['size'] > 0:
-                    ret &= self._ExtractFile(artifact_path + '/' + entry['name'], new_path, entry['dates'])
+                    ret &= self._ExtractFile(artifact_path + '/' + self._GetSafeFilename(entry['name']), new_path, entry['dates'])
                 else:
                     log.info('Skipping export of {} as filesize=0'.format(artifact_path + '/' + entry['name']))
         return ret
@@ -801,7 +801,7 @@ class MacInfo:
            Eg: Windows does not like ?<>/\:*"! in filename
         '''
         try:
-            unsafe_chars = '?<>/\:*"!' if os.name == 'nt' else '/'
+            unsafe_chars = '?<>/\:*"!\r\n' if self.is_windows else '/'
             return ''.join([c for c in name if c not in unsafe_chars])
         except:
             pass

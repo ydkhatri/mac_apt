@@ -135,7 +135,7 @@ class CommonFunctions:
         '''
         Removes illegal characters (for windows) from the string passed.
         '''
-        return re.sub(r'[\\/*?:"<>|\']', replacement_char, filename)
+        return re.sub(r'[\\/*?:"<>|\'\r\n]', replacement_char, filename)
 
     @staticmethod
     def GetFileSize(file):
