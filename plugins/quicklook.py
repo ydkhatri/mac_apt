@@ -39,14 +39,13 @@ http://www.easymetadata.com/2015/01/sqlite-analysing-the-quicklook-database-in-m
 """
 
 class QuickLook:
-    def __init__(self, folder, file_name, hit_count, last_hit_date, version, bits_per_pixel, bitmapdata_location,
+    def __init__(self, folder, file_name, hit_count, last_hit_date, version, bitmapdata_location,
                  bitmapdata_length, width, height, fs_id, inode, row_id, source):
         self.folder = folder
         self.file_name= file_name
         self.hit_count = hit_count
         self.last_hit_date = last_hit_date
         self.version = version
-        self.bits_per_pixel = bits_per_pixel
         self.bitmapdata_location = bitmapdata_location
         self.bitmapdata_length = bitmapdata_length
         self.width = width
@@ -59,7 +58,7 @@ class QuickLook:
 
 def PrintAll(quicklook_data, output_params, source_path):
     quicklook_info = [ ('Folder',DataType.TEXT),('File_Name',DataType.TEXT),('Hit_Count',DataType.TEXT),
-                       ('Last_Hit_Date',DataType.TEXT), ('version',DataType.BLOB), ('Bits_per_Pixel',DataType.INTEGER), ('bitmap_data_location',DataType.INTEGER),
+                       ('Last_Hit_Date',DataType.TEXT), ('version',DataType.BLOB), ('bitmap_data_location',DataType.INTEGER),
                        ('bitmap_data_length',DataType.INTEGER), ('Width',DataType.INTEGER), ('Height',DataType.INTEGER),
                        ('fs_id',DataType.TEXT),('inode',DataType.TEXT), ('row_id',DataType.TEXT), ('Source',DataType.TEXT)
                      ]
@@ -67,7 +66,7 @@ def PrintAll(quicklook_data, output_params, source_path):
     quicklook_list = []
     for ql in quicklook_data:
         ql_items = [ql.folder, ql.file_name, ql.hit_count,
-                      ql.last_hit_date, ql.version, ql.bits_per_pixel, ql.bitmapdata_location, ql.bitmapdata_length, ql.width,
+                      ql.last_hit_date, ql.version, ql.bitmapdata_location, ql.bitmapdata_length, ql.width,
                       ql.height, ql.fs_id, ql.inode, ql.row_id, ql.source
                      ]
         quicklook_list.append(ql_items)
@@ -115,7 +114,7 @@ def openDeadbox(path, mac_info):
     handle = mac_info.Open(path)
     return handle
 
-def carveThumbs(offset, length, thumbfile, thumbname, width, height, export, user_name):
+def carveThumb(offset, length, thumbfile, thumbname, width, height, export, user_name):
     """
 
     :param offset: Offset in thumbnails.data for thumbnail
@@ -170,12 +169,16 @@ def parseDb(c, quicklook_array, source, path_to_thumbnails, export, user_name):
     :return: Nothing, fills the quicklook array
     """
 
-    #Query from: https://github.com/mdegrazia/OSX-QuickLook-Parser
+    # Query only gets the largest render for a file, ignoring smaller thumbnails
+    # TODO - Identify deleted files based on null thumbnails with non-existing inode numbers
     thumbnail_query = """
-    select distinct f_rowid,k.folder,k.file_name,k.version,t.hit_count,t.last_hit_date, t.bitsperpixel,
-    t.bitmapdata_location,bitmapdata_length,t.width,t.height,datetime(t.last_hit_date + strftime("%s", "2001-01-01 00:00:00"), 
-    "unixepoch") As [decoded-last_hit_date],fs_id from (select rowid as f_rowid,folder,file_name,fs_id,version from files) 
-    k left join thumbnails t on t.file_id = k.f_rowid order by t.hit_count DESC
+    select files.rowid , folder, file_name, fs_id, version, max(size) as size, hit_count,
+        datetime(last_hit_date + strftime('%s', '2001-01-01 00:00:00'), 'unixepoch') as last_hit_date, 
+        width, (bytesperrow / (bitsperpixel/bitspercomponent)) as computed_width, height, 
+        bitmapdata_location, bitmapdata_length 
+    from files left join thumbnails on files.ROWID = thumbnails.file_id
+    where size is not null 
+    group by files.ROWID
     """
 
     try:
@@ -194,26 +197,33 @@ def parseDb(c, quicklook_array, source, path_to_thumbnails, export, user_name):
         # Iterate through the rows returned by the above SQL statment and create QuickLook object based off it,
         # then appends to array
         for item in data:
+            row_id = item[0]
             folder = item[1]
             file_name = item[2]
-            hit_count = item[4]
-            last_hit_date = item[11]
-            version = item[3]
-            bits_per_pixel = item[6]
-            bitmapdata_location = item[7]
-            bitmapdata_length = item[8]
-            width = item[9]
+            hit_count = item[6]
+            last_hit_date = item[7]
+            bitmapdata_location = item[11]
+            bitmapdata_length = item[12]
+            width = item[8]
+            computed_width = item[9]
             height = item[10]
-            fs_id = item[12]
-            inode = "N/A"
-            row_id = item[0]
+            fs_id = item[3]
+            if fs_id and len(fs_id) > 10:
+                try:
+                    inode = fs_id[10:].split('.')[1]
+                    inode = inode.rstrip('/')
+                except IndexError as ex:
+                    inode = ''
+            else:
+                inode = ''
+            version = item[4] #plist
 
-            ql = QuickLook(folder, file_name, hit_count, last_hit_date, version, bits_per_pixel, bitmapdata_location,
-                           bitmapdata_length, width, height, fs_id, inode, row_id, source)
+            ql = QuickLook(folder, file_name, hit_count, last_hit_date, version, bitmapdata_location,
+                           bitmapdata_length, computed_width, height, fs_id, inode, row_id, source)
             quicklook_array.append(ql)
 
-            # Carve out thumbnails
-            carveThumbs(bitmapdata_location, bitmapdata_length, thumbfile, file_name, width, height, export, user_name)
+            # Carve out thumbnail
+            carveThumb(bitmapdata_location, bitmapdata_length, thumbfile, file_name, computed_width, height, export, user_name)
         
         if thumbfile:
             thumbfile.close()
@@ -284,9 +294,9 @@ def parseDbNewSinglePlug(c, quicklook_array, source, path_to_thumbnails, export)
             fs_id = "N/A"
             inode = entries[20]
             row_id = "N/A"
-            carveThumbs(bitmapdata_location, bitmapdata_length, thumbfile, name, width, height, export, '')
+            carveThumb(bitmapdata_location, bitmapdata_length, thumbfile, name, width, height, export, '')
             unknown_count += 1
-            ql = QuickLook("UNKNOWN", "UNKNOWN", hit_count, last_hit_date, version, bits_per_pixel,
+            ql = QuickLook("UNKNOWN", "UNKNOWN", hit_count, last_hit_date, version,
                             bitmapdata_location,
                             bitmapdata_length, width, height, fs_id, inode, row_id, source)
             quicklook_array.append(ql)
@@ -357,9 +367,9 @@ def parseDbNew(c, quicklook_array, source, path_to_thumbnails, export, user_name
                     inode = entries[20]
                     row_id = "N/A"
                     log.debug("Carving an unknown thumbnail, this is unknown number: " + str(unknown_count))
-                    carveThumbs(bitmapdata_location, bitmapdata_length, thumbfile, name, width, height, export, user_name)
+                    carveThumb(bitmapdata_location, bitmapdata_length, thumbfile, name, width, height, export, user_name)
                     unknown_count += 1
-                    ql = QuickLook("UNKNOWN", "UNKNOWN", hit_count, last_hit_date, version, bits_per_pixel,
+                    ql = QuickLook("UNKNOWN", "UNKNOWN", hit_count, last_hit_date, version,
                                    bitmapdata_location,
                                    bitmapdata_length, width, height, fs_id, inode, row_id, source)
                     quicklook_array.append(ql)
@@ -382,13 +392,13 @@ def parseDbNew(c, quicklook_array, source, path_to_thumbnails, export, user_name
                        inode = entries[20]
                        row_id = "N/A"
 
-                       ql = QuickLook(full_path[0], row, hit_count, last_hit_date, version, bits_per_pixel, bitmapdata_location,
+                       ql = QuickLook(full_path[0], row, hit_count, last_hit_date, version, bitmapdata_location,
                                       bitmapdata_length, width, height, fs_id, inode, row_id, source)
                        quicklook_array.append(ql)
 
                        # Carve out thumbnails
                        log.debug("Carving thumbnail: " + str(full_path[0]) + row + " from thumbnails.data file")
-                       carveThumbs(bitmapdata_location, bitmapdata_length, thumbfile, row, width, height, export, user_name)
+                       carveThumb(bitmapdata_location, bitmapdata_length, thumbfile, row, width, height, export, user_name)
         if thumbfile:
             thumbfile.close()
 
