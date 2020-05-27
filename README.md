@@ -19,7 +19,7 @@ mac_apt is a DFIR tool to process Mac computer full disk images (**or _live_ mac
 
 #### Latest
 :heavy_check_mark: FAST mode :hourglass_flowing_sand:   
-:heavy_check_mark: Encrypted APFS images can now be processed using password/recovery-key  
+:heavy_check_mark: Encrypted :lock: APFS images can now be processed using password/recovery-key :key:   
 :heavy_check_mark: macOS Catalina (10.15) images can be parsed now  
 :heavy_check_mark: macOS Catalina (10.15) separately mounted SYSTEM & DATA volumes now supported  
 :heavy_check_mark: AFF4 images (including maquisition created) now supported
