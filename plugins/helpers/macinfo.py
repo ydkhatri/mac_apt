@@ -172,10 +172,7 @@ class NativeHfsParser:
         return None
 
     def ExtractFile(self, path, extract_to_path):
-        '''
-           Extract file, returns True or False
-           This only works on small files currently!
-        '''
+        '''Extract file, returns True or False'''
         if not self.initialized:
             raise ValueError("Volume not loaded!")
         try:
@@ -429,7 +426,7 @@ class MacInfo:
         entries = self.ListItemsInFolder(artifact_path, EntryType.FILES_AND_FOLDERS, True)
         ret = True
         for entry in entries:
-            new_path = os.path.join(export_path, entry['name'])
+            new_path = os.path.join(export_path, self._GetSafeFilename(entry['name']))
             if entry['type'] == EntryType.FOLDERS:
                 try:
                     if not os.path.exists(new_path):
@@ -441,7 +438,7 @@ class MacInfo:
                 ret &= self._ExportFolder(artifact_path + '/' + entry['name'], new_path, overwrite)
             else: # FILE
                 if entry['size'] > 0:
-                    ret &= self._ExtractFile(artifact_path + '/' + self._GetSafeFilename(entry['name']), new_path, entry['dates'])
+                    ret &= self._ExtractFile(artifact_path + '/' + entry['name'], new_path, entry['dates'])
                 else:
                     log.info('Skipping export of {} as filesize=0'.format(artifact_path + '/' + entry['name']))
         return ret
@@ -1703,7 +1700,7 @@ class SqliteWrapper:
             if f.read(16) == b'SQLite format 3\0':
                 ret = True
         return ret
-        
+
     def __getattr__(self, attr):
         if attr == 'connect': 
             def hooked(path):
