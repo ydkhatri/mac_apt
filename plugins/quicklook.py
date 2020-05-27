@@ -265,7 +265,13 @@ def parseDbNewSinglePlug(c, quicklook_array, source, path_to_thumbnails, export)
 
 
     combined_query = """
-        SELECT * FROM thumbnails LEFT JOIN basic_files WHERE basic_files.fileId | -9223372036854775808 == thumbnails.file_id
+        SELECT fileId, version, MAX(size), hit_count, 
+        datetime(last_hit_date + strftime('%s', '2001-01-01 00:00:00'), 'unixepoch') as last_hit_date, 
+        width, (bytesperrow / (bitsperpixel/bitspercomponent)) as computed_width, height,
+        bitmapdata_location, bitmapdata_length
+        FROM thumbnails LEFT JOIN basic_files 
+        ON (basic_files.fileId | -9223372036854775808) == thumbnails.file_id
+        group by fileId
         """
 
     c.execute(combined_query)
@@ -282,23 +288,22 @@ def parseDbNewSinglePlug(c, quicklook_array, source, path_to_thumbnails, export)
         unknown_count = 0
         for entries in combined_files:
             # Carve out thumbnails with no iNode
-            bitmapdata_location = entries[11]
-            bitmapdata_length = entries[12]
-            width = entries[5]
-            height = entries[6]
+            bitmapdata_location = entries[8]
+            bitmapdata_length = entries[9]
+            computed_width = entries[6]
+            height = entries[7]
             name = "Unknown" + str(unknown_count)
             hit_count = entries[3]
             last_hit_date = entries[4]
-            version = b""
-            bits_per_pixel = entries[8]
+            version = b"" # Not writing this out
             fs_id = "N/A"
-            inode = entries[20]
+            inode = entries[0]
             row_id = "N/A"
-            carveThumb(bitmapdata_location, bitmapdata_length, thumbfile, name, width, height, export, '')
+            carveThumb(bitmapdata_location, bitmapdata_length, thumbfile, name, computed_width, height, export, '')
             unknown_count += 1
             ql = QuickLook("UNKNOWN", "UNKNOWN", hit_count, last_hit_date, version,
                             bitmapdata_location,
-                            bitmapdata_length, width, height, fs_id, inode, row_id, source)
+                            bitmapdata_length, computed_width, height, fs_id, inode, row_id, source)
             quicklook_array.append(ql)
         if thumbfile:
             thumbfile.close()
@@ -319,9 +324,14 @@ def parseDbNew(c, quicklook_array, source, path_to_thumbnails, export, user_name
     """
 
     combined_query = """
-    SELECT * FROM thumbnails LEFT JOIN basic_files WHERE basic_files.fileId | -9223372036854775808 == thumbnails.file_id
+        SELECT fileId, version, MAX(size), hit_count, 
+        datetime(last_hit_date + strftime('%s', '2001-01-01 00:00:00'), 'unixepoch') as last_hit_date, 
+        width, (bytesperrow / (bitsperpixel/bitspercomponent)) as computed_width, height,
+        bitmapdata_location, bitmapdata_length
+        FROM thumbnails LEFT JOIN basic_files 
+        ON (basic_files.fileId | -9223372036854775808) == thumbnails.file_id
+        group by fileId
     """
-
 
     c.execute(combined_query)
     combined_files = c.fetchall()
@@ -341,7 +351,7 @@ def parseDbNew(c, quicklook_array, source, path_to_thumbnails, export, user_name
 
            if type(export) is not str:
                # Format the inode_query for our specific iNode number so we can find the filename
-               apfs_query = inode_query.format(entries[20])
+               apfs_query = inode_query.format(entries[0])
 
                # Create cursor to the APFS db created by mac_apt
                apfs_c = export.apfs_db.conn.cursor()
@@ -350,21 +360,20 @@ def parseDbNew(c, quicklook_array, source, path_to_thumbnails, export, user_name
                cursor = apfs_c.execute(apfs_query)
                test_row = cursor.fetchone()
                if test_row is None:
-                    log.warning("No file matches iNode: " + str(entries[20]) + "!!")
+                    log.warning("No file matches iNode: " + str(entries[0]) + "!!")
                     log.warning("This file will be outputted as Unknown" + str(unknown_count))
 
                     # Carve out thumbnails with no iNode
-                    bitmapdata_location = entries[11]
-                    bitmapdata_length = entries[12]
-                    width = entries[5]
-                    height = entries[6]
+                    bitmapdata_location = entries[8]
+                    bitmapdata_length = entries[9]
+                    width = entries[6]
+                    height = entries[7]
                     name = "Unknown" + str(unknown_count)
                     hit_count = entries[3]
                     last_hit_date = entries[4]
                     version = b""
-                    bits_per_pixel = entries[8]
                     fs_id = "N/A"
-                    inode = entries[20]
+                    inode = entries[0]
                     row_id = "N/A"
                     log.debug("Carving an unknown thumbnail, this is unknown number: " + str(unknown_count))
                     carveThumb(bitmapdata_location, bitmapdata_length, thumbfile, name, width, height, export, user_name)
@@ -376,20 +385,19 @@ def parseDbNew(c, quicklook_array, source, path_to_thumbnails, export, user_name
 
                else:
                    for row in test_row:
-                       log.debug("File matching iNode: " + str(entries[20]) + " is: " + str(row))
+                       log.debug("File matching iNode: " + str(entries[0]) + " is: " + str(row))
                        full_path = [""]
-                       findParents(apfs_c, entries[20], full_path)
+                       findParents(apfs_c, entries[0], full_path)
 
                        hit_count = entries[3]
                        last_hit_date = entries[4]
                        version = b""
-                       bits_per_pixel = entries[8]
-                       bitmapdata_location = entries[11]
-                       bitmapdata_length = entries[12]
-                       width = entries[5]
-                       height = entries[6]
+                       bitmapdata_location = entries[8]
+                       bitmapdata_length = entries[9]
+                       width = entries[6]
+                       height = entries[7]
                        fs_id = "N/A"
-                       inode = entries[20]
+                       inode = entries[0]
                        row_id = "N/A"
 
                        ql = QuickLook(full_path[0], row, hit_count, last_hit_date, version, bitmapdata_location,
