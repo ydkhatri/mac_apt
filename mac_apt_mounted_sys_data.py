@@ -108,8 +108,8 @@ arg_parser = argparse.ArgumentParser(description='mac_apt is a framework to proc
                                                  f'You are running {__PROGRAMNAME} version {__VERSION}\n\n'\
                                                  'Note: The default output is now sqlite, no need to specify it now',
                                     epilog=plugins_info, formatter_class=argparse.RawTextHelpFormatter)
-arg_parser.add_argument('input_sys_path', help='Path to mounted SYSTEM image/volume')
-arg_parser.add_argument('input_data_path', help='Path to mounted DATA image/volume')
+arg_parser.add_argument('input_sys_path', help='Path to root folder of mounted SYSTEM image/volume')
+arg_parser.add_argument('input_data_path', help='Path to root folder of mounted DATA image/volume')
 arg_parser.add_argument('-o', '--output_path', help='Path where output files will be created')
 arg_parser.add_argument('-x', '--xlsx', action="store_true", help='Save output in Excel spreadsheet')
 arg_parser.add_argument('-c', '--csv', action="store_true", help='Save output as CSV files')
