@@ -52,7 +52,7 @@ def decrypt_kcpassword(enc_bytes):
         if counter == 11:
             counter = 0
 
-    password = decrypted.decode('utf-8')
+    password = decrypted.decode('utf-8', 'backslashreplace')
     return password
 
 def GetAutoLoginPass(mac_info):

@@ -532,7 +532,7 @@ class IPPRequest :
             name = self._curname
         else :    
             posend += namelength
-            self._curname = name = self._data[pos2:posend].decode('utf8')
+            self._curname = name = self._data[pos2:posend].decode('utf8', 'backslashreplace')
         pos2 = posend + 2
         valuelength = unpack(">H", self._data[posend:pos2])[0]
         posend = pos2 + valuelength

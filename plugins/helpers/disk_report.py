@@ -123,12 +123,12 @@ class Disk_Info:
                                     partition_start_offset,
                                     self.IsApfsBootVolume(volume))
                                 self.volumes.append(vol)
-                        elif part.desc.decode('utf-8').upper() in ("EFI SYSTEM PARTITION", "APPLE_PARTITION_MAP"):
-                            log.debug(" Skipping {}".format(part.desc.decode('utf-8')))
+                        elif part.desc.decode('utf-8', 'ignore').upper() in ("EFI SYSTEM PARTITION", "APPLE_PARTITION_MAP"):
+                            log.debug(" Skipping {}".format(part.desc.decode('utf-8', 'ignore')))
                         else:
                             log.debug(" Error: Failed to detect/parse file system!")
                     if not part_is_apfs:
-                        vol = Vol_Info(part.desc.decode('utf-8'), 
+                        vol = Vol_Info(part.desc.decode('utf-8', 'ignore'), 
                                     partition_size_in_sectors * self.block_size, used_space,
                                     file_system, partition_start_offset, self.mac_info.macos_partition_start_offset==partition_start_offset)
                         self.volumes.append(vol)

@@ -255,7 +255,7 @@ class Bookmark (object):
         dtype = typecode & BMK_DATA_TYPE_MASK
 
         if dtype == BMK_STRING:
-            return databytes.decode('utf-8')
+            return databytes.decode('utf-8', 'backslashreplace')
         elif dtype == BMK_DATA:
             return Data(databytes)
         elif dtype == BMK_NUMBER:
@@ -285,7 +285,7 @@ class Bookmark (object):
             return uuid.UUID(bytes=databytes)
         elif dtype == BMK_URL:
             if dsubtype == BMK_URL_ST_ABSOLUTE:
-                return URL(databytes.decode('utf-8'))
+                return URL(databytes.decode('utf-8', 'ignore'))
             elif dsubtype == BMK_URL_ST_RELATIVE:
                 baseoff,reloff = struct.unpack(b'<II', databytes)
                 base = cls._get_item(data, hdrsize, baseoff)
@@ -552,7 +552,7 @@ class Bookmark (object):
 
         # Find the filesystem
         st = osx.statfs(path)
-        vol_path = st.f_mntonname.decode('utf-8')
+        vol_path = st.f_mntonname.decode('utf-8', 'backslashreplace')
 
         # Grab its attributes
         attrs = [osx.ATTR_CMN_CRTIME,

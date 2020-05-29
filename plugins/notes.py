@@ -182,7 +182,7 @@ def ProcessNoteBodyBlob(blob):
         pos += 1
         length, skip = ReadLengthField(blob[pos:])
         pos += skip
-        data = blob[pos : pos + length].decode('utf-8')
+        data = blob[pos : pos + length].decode('utf-8', 'backslashreplace')
         # Skipping the formatting Tags
     except (IndexError, ValueError):
         log.exception('Error processing note data blob')

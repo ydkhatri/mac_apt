@@ -1259,7 +1259,7 @@ class ApfsSysDataLinkedVolume(ApfsVolume):
         if self.sys_vol.DoesFileExist(firmlink_file_path):
             try:
                 f = self.sys_vol.open(firmlink_file_path)
-                data = [x.decode('utf8') for x in f.read().split(b'\n')]
+                data = [x.decode('utf8', 'backslashreplace') for x in f.read().split(b'\n')]
                 for item in data:
                     if item:
                         source, dest = item.split('\t')

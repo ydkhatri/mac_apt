@@ -210,7 +210,7 @@ def Plugin_Start_Standalone(input_files_list, output_params):
             try:
                 plist = readPlist(input_path)
                 ReadLastGKRejectPlist(plist)
-            except Exception as ex:
+            except (NotBinaryPlistException, InvalidPlistException, OSError) as ex:
                 log.exception('Failed to read file: {}'.format(input_path))
         elif input_path.endswith('QuarantineEventsV2'):
             quarantined = []

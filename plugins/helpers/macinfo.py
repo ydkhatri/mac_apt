@@ -825,7 +825,7 @@ class MacInfo:
     def _GetName(self, entry):
         '''Return utf8 filename from pytsk entry object'''
         try:
-            return entry.info.name.name.decode("utf8")
+            return entry.info.name.name.decode("utf8", "ignore")
         except UnicodeError:
             #log.debug("UnicodeError getting name ")
             pass

@@ -122,7 +122,7 @@ def stringify(binary_str):
     '''Tries to convert a binary string to normal string'''
     if binary_str:
         try:
-            return binary_str.decode('utf8')
+            return binary_str.decode('utf8', 'backslashreplace')
         except AttributeError:
             return str(binary_str)
     return ''

@@ -136,7 +136,7 @@ def ParseTerminalPlist_NSWindow(plist):
                             if key in ('Tab Contents', 'Tab Contents v2'):
                                 for content in value:
                                     if isinstance(content, bytes):
-                                        contents += content.decode('utf8')
+                                        contents += content.decode('utf8', 'backslashreplace')
                             elif key in ('Tab Working Directory URL String', 'Tab Working Directory URL'):
                                 working_dir = value
     except ValueError as ex:

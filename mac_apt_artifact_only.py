@@ -51,13 +51,13 @@ for plugin in plugins:
     plugin_name_list.append(plugin.__Plugin_Name)
 
 arg_parser = argparse.ArgumentParser(description='mac_apt is a framework to process forensic artifacts on a Mac OSX system\n'\
-                                                 'You are running {} version {}'.format(__PROGRAMNAME, __VERSION),
+                                                 f'You are running {__PROGRAMNAME} version {__VERSION}\n\n'\
+                                                 'Note: The default output is now sqlite, no need to specify it now',
                                     epilog=plugins_info, formatter_class=argparse.RawTextHelpFormatter)
 arg_parser.add_argument('-i', '--input_path', nargs='+', help='Path to input file(s)') # Not optional !
 arg_parser.add_argument('-o', '--output_path', help='Path where output files will be created') # Not optional !
 arg_parser.add_argument('-x', '--xlsx', action="store_true", help='Save output in excel spreadsheet(s)')
-arg_parser.add_argument('-c', '--csv', action="store_true", help='Save output as CSV files (Default option if no output type selected)')
-arg_parser.add_argument('-s', '--sqlite', action="store_true", help='Save output in an sqlite database')
+arg_parser.add_argument('-c', '--csv', action="store_true", help='Save output as CSV files')
 arg_parser.add_argument('-l', '--log_level', help='Log levels: INFO, DEBUG, WARNING, ERROR, CRITICAL (Default is INFO)')
 arg_parser.add_argument('plugin', help="Plugin to run")
 arg_parser.add_argument('--plugin_help', action="store_true", help="Plugin usage info")
@@ -111,10 +111,17 @@ log.setLevel(args.log_level)
 log.info("Started {}, version {}".format(__PROGRAMNAME, __VERSION))
 log.info("Dates and times are in UTC unless the specific artifact being parsed saves it as local time!")
 log.debug(' '.join(sys.argv))
-#LogLibraryVersions(log)
 
 output_params = macinfo.OutputParams()
 output_params.output_path = args.output_path
+
+try:
+    log.debug("Trying to create db @ " + os.path.join(output_params.output_path, "mac_apt.db"))
+    output_params.output_db_path = SqliteWriter.CreateSqliteDb(os.path.join(output_params.output_path, "mac_apt.db"))
+    output_params.write_sql = True
+except Exception as ex:
+    log.exception('Exception occurred when tried to create Sqlite db')
+    sys.exit('Exiting -> Cannot create sqlite db!')
 
 if args.xlsx: 
     try:
@@ -127,16 +134,7 @@ if args.xlsx:
         log.info('XLSX file could not be created at : ' + xlsx_path)
         log.exception('Exception occurred when trying to create XLSX file')
 
-if args.sqlite: 
-    try:
-        log.debug("Trying to create db @ " + os.path.join(output_params.output_path, "mac_apt.db"))
-        output_params.output_db_path = SqliteWriter.CreateSqliteDb(os.path.join(output_params.output_path, "mac_apt.db"))
-        output_params.write_sql = True
-    except Exception as ex:
-        log.exception('Exception occurred when tried to create Sqlite db')
-        sys.exit('Exiting -> Cannot create sqlite db!')
-
-if args.csv or not (output_params.write_sql or output_params.write_xlsx):
+if args.csv:
     output_params.write_csv  = True
 
 # At this point, all looks good, lets process the input file

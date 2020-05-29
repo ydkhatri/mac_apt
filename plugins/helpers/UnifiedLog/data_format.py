@@ -32,10 +32,10 @@ class BinaryDataFormat(object):
             null_pos = data.find(b'\x00', 0, max_len)
             if null_pos == -1:
                 logger.warning("Possible corrupted string encountered")
-                string = data.decode('utf8')
+                string = data.decode('utf8', 'backslashreplace')
             else:
-                string = data[0:null_pos].decode('utf8')
-        except:
+                string = data[0:null_pos].decode('utf8', 'backslashreplace')
+        except (ValueError, UnicodeDecodeError):
             logger.exception('Error reading C-String')
 
         return string
@@ -53,9 +53,9 @@ class BinaryDataFormat(object):
             null_pos = data.find(b'\x00', 0, max_len)
             if null_pos == -1:
                 logger.warning("Possible corrupted string encountered")
-                string = data.decode('utf8')
+                string = data.decode('utf8', 'backslashreplace')
             else:
-                string = data[0:null_pos].decode('utf8')
+                string = data[0:null_pos].decode('utf8', 'backslashreplace')
         except:
             logger.exception('Error reading C-String')
         return string, null_pos

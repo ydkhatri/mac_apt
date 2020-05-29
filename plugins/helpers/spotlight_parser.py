@@ -215,7 +215,7 @@ class FileMetaDataListing:
                 v = self.StringifyValue(v)
                 file.write((k + " --> " + v).encode('utf-8', 'backslashreplace'))
                 file.write(b'\r\n')
-        except Exception as ex:
+        except (UnicodeEncodeError, ValueError, TypeError) as ex:
             log.exception("Exception trying to print data : ")
 
     def ConvertUint64ToSigned(self, unsigned_num):
@@ -489,7 +489,7 @@ class SpotlightStore:
         self.index_blocktype_41 = self.ReadUint(self.header[56:60])
         self.index_blocktype_81_1 = self.ReadUint(self.header[60:64])
         self.index_blocktype_81_2 = self.ReadUint(self.header[64:68])
-        self.original_path = self.header[0x144:0x244].decode('utf-8').rstrip('\0') # 256 bytes
+        self.original_path = self.header[0x144:0x244].decode('utf-8', 'backslashreplace').rstrip('\0') # 256 bytes
         self.file_size = self.GetFileSize(self.file)
 
         self.properties = {}
@@ -799,7 +799,7 @@ class SpotlightStore:
                 else: # zlib compression
                     #compressed_size = compressed_block.logical_size - 20
                     uncompressed = zlib.decompress(block_data[20:compressed_block.logical_size])
-            except Exception as ex:
+            except (ValueError,  lz4.block.LZ4BlockError, lzfse.error) as ex:
                 log.error("Decompression error for block @ 0x{:X}\r\n{}".format(index[1] * 0x1000 + 20, str(ex)))
                 if len(uncompressed) == 0: continue
             

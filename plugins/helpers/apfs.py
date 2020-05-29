@@ -234,10 +234,10 @@ class Apfs(KaitaiStruct):
             self.volume_uuid = self._io.read_bytes(16)
             self.last_mod_time = self._io.read_s8le()
             self.fs_flags = self._io.read_u8le()
-            self.created_by = (KaitaiStream.bytes_terminate(self._io.read_bytes(32), 0, False)).decode("UTF-8")
+            self.created_by = (KaitaiStream.bytes_terminate(self._io.read_bytes(32), 0, False)).decode("UTF-8", 'backslashreplace')
             self.time_created = self._io.read_s8le()
             self.unknown_312 = self._io.read_bytes(392)
-            self.volume_name = (KaitaiStream.bytes_terminate(self._io.read_bytes(256), 0, False)).decode("UTF-8")
+            self.volume_name = (KaitaiStream.bytes_terminate(self._io.read_bytes(256), 0, False)).decode("UTF-8", 'backslashreplace')
             self.next_doc_id = self._io.read_u4le()
             self.apfs_role = self._io.read_u2le() #self._root.VolumeRoleType(self._io.read_u2le())
             self.reserved = self._io.read_u2le()
@@ -522,7 +522,7 @@ class Apfs(KaitaiStruct):
                     record = records[i]
                     skip += record.length + ((8 - record.length) % 8) # 8 byte boundary
                     if record.x_type == INO_EXT_TYPE_NAME:
-                        name = (self._io.read_bytes(record.length - 1)).decode("UTF-8")
+                        name = (self._io.read_bytes(record.length - 1)).decode("UTF-8", 'backslashreplace')
                         self.xfields[INO_EXT_TYPE_NAME] = name
                     elif record.x_type == INO_EXT_TYPE_DSTREAM:
                         x_dstream = self._root.DStream(self._io, self, self._root)
@@ -610,7 +610,7 @@ class Apfs(KaitaiStruct):
             self._root = _root if _root else self
             self.parent_id = self._io.read_u8le()
             namelength = self._io.read_u2le()
-            self.name = (KaitaiStream.bytes_terminate(self._io.read_bytes(namelength), 0, False)).decode("UTF-8")
+            self.name = (KaitaiStream.bytes_terminate(self._io.read_bytes(namelength), 0, False)).decode("UTF-8", "backslashreplace")
 
 
     class SiblingMapRecord(KaitaiStruct):
@@ -690,7 +690,7 @@ class Apfs(KaitaiStruct):
             self._parent = _parent
             self._root = _root if _root else self
             name_len = self._io.read_u2le()
-            self.name = (KaitaiStream.bytes_terminate(self._io.read_bytes(name_len), 0, False)).decode("UTF-8")
+            self.name = (KaitaiStream.bytes_terminate(self._io.read_bytes(name_len), 0, False)).decode("UTF-8", "backslashreplace")
 
 
     class XattrRecord(KaitaiStruct):
@@ -749,7 +749,7 @@ class Apfs(KaitaiStruct):
             self._parent = _parent
             self._root = _root if _root else self
             name_len = self._io.read_u2le()
-            self.name = (KaitaiStream.bytes_terminate(self._io.read_bytes(name_len), 0, False)).decode("UTF-8")
+            self.name = (KaitaiStream.bytes_terminate(self._io.read_bytes(name_len), 0, False)).decode("UTF-8", "backslashreplace")
 
 
     class SnapMetadataRecord(KaitaiStruct):
@@ -767,7 +767,7 @@ class Apfs(KaitaiStruct):
             self.extentref_tree_type = self._io.read_u4le()
             self.flags = self._io.read_u4le()
             name_len = self._io.read_u2le()
-            self.name = (KaitaiStream.bytes_terminate(self._io.read_bytes(name_len), 0, False)).decode("UTF-8")
+            self.name = (KaitaiStream.bytes_terminate(self._io.read_bytes(name_len), 0, False)).decode("UTF-8", "backslashreplace")
 
 
     class SnapNameRecord(KaitaiStruct):
@@ -875,7 +875,7 @@ class Apfs(KaitaiStruct):
             self._io = _io
             self._parent = _parent
             self._root = _root if _root else self
-            self.xf_name = (KaitaiStream.bytes_terminate(self._io.read_bytes(name_len), 0, False)).decode("UTF-8")
+            self.xf_name = (KaitaiStream.bytes_terminate(self._io.read_bytes(name_len), 0, False)).decode("UTF-8", "backslashreplace")
 
 
     class DStream(KaitaiStruct):
@@ -933,7 +933,7 @@ class Apfs(KaitaiStruct):
                     record = self.records[i]
                     skip += record.length + ((8 - record.length) % 8) # 8 byte boundary
                     if record.x_type == INO_EXT_TYPE_NAME:
-                        self.name = (self._io.read_bytes(record.length - 1)).decode("UTF-8")
+                        self.name = (self._io.read_bytes(record.length - 1)).decode("UTF-8", "backslashreplace")
                         self.xfields[INO_EXT_TYPE_NAME] = self.name
                     elif record.x_type == INO_EXT_TYPE_DSTREAM:
                         x_dstream = self._root.DStream(self._io, self, self._root)
@@ -987,7 +987,7 @@ class Apfs(KaitaiStruct):
             name_len_and_hash = self._io.read_u4le()
             len_name = name_len_and_hash & 0x000003ff
             self.hash = (name_len_and_hash & 0xfffff400) >> 10
-            self.name = (KaitaiStream.bytes_terminate(self._io.read_bytes(len_name), 0, False)).decode("UTF-8")
+            self.name = (KaitaiStream.bytes_terminate(self._io.read_bytes(len_name), 0, False)).decode("UTF-8", "backslashreplace")
 
 
     class SpacemanFreeQueueKey(KaitaiStruct):
