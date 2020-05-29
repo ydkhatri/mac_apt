@@ -384,7 +384,7 @@ class SqliteWriter:
                     raise ex
             cursor.executemany(query, rows)
             self.conn.commit()
-        except sqlite3.Error as ex:
+        except (sqlite3.Error, OverflowError) as ex:
             log.error(str(ex))
             log.exception("error writing to table " + table_name if table_name else self.table_name)
             #raise ex
