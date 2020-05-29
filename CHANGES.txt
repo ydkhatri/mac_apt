@@ -1,6 +1,6 @@
 Updates in 20200426 (v0.6):
 
-+ APFS encryption support added, encrypted volumes can be processed by sproviding password/recovery-key
++ APFS encryption support added, encrypted volumes can be processed by providing password/recovery-key
 + FAST mode, which skips plugins IDEVICEBACKUPS, SPOTLIGHT, UNIFIEDLOGS
 + BASHSESSIONS is now TERMSESSIONS (it reads zsh history too)
 + Better HFS parsing, and reading of large files
