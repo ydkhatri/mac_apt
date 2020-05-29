@@ -276,9 +276,9 @@ class FileMetaDataListing:
                 elif value_type == 7:
                     #log.debug("Found value_type 7, prop_type=0x{:X} prop={} @ {}, pos 0x{:X}".format(prop_type, prop_name, filepos, self.pos))
                     if prop_type & 2 == 2: #  == 0x0A:
-                        number = self.ReadVarSizeNum()[0]
+                        number = self.ConvertUint64ToSigned(self.ReadVarSizeNum()[0])
                         num_values = number >> 3
-                        value = [self.ReadVarSizeNum()[0] for x in range(num_values)]
+                        value = [self.ConvertUint64ToSigned(self.ReadVarSizeNum()[0]) for x in range(num_values)]
                         discarded_bits = number & 0x07
                         if discarded_bits != 0:
                             log.info('Discarded bits value was 0x{:X}'.format(discarded_bits))
@@ -286,7 +286,7 @@ class FileMetaDataListing:
                         # 0x48 (_kMDItemDataOwnerType, _ICItemSearchResultType, kMDItemRankingHint, FPCapabilities)
                         # 0x4C (_kMDItemStorageSize, _kMDItemApplicationImporterVersion)
                         # 0x0a (_kMDItemOutgoingCounts, _kMDItemIncomingCounts) firstbyte = 0x20 , then 4 bytes
-                        value = self.ReadVarSizeNum()[0]
+                        value = self.ConvertUint64ToSigned(self.ReadVarSizeNum()[0])
                     #if prop_type == 0x48: # Can perhaps be resolved to a category? Need to check.
                     #    print("") 
                 elif value_type == 8 and prop_name != 'kMDStoreAccumulatedSizes':
