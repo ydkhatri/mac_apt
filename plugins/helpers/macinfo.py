@@ -1176,7 +1176,7 @@ class ApfsMacInfo(MacInfo):
             if types_to_fetch == EntryType.FILES_AND_FOLDERS:
                 items = [] #[dict(x) for x in all_items if x['type'] in ['File', 'Folder'] ]
                 for x in all_items:
-                    if x['type'] == 'File':
+                    if x['type'] in ('File', 'SymLink'):
                         x['type'] = EntryType.FILES
                         items.append(dict(x))
                     elif x['type'] == 'Folder':
@@ -1185,7 +1185,7 @@ class ApfsMacInfo(MacInfo):
 
             elif types_to_fetch == EntryType.FILES:
                 for x in all_items:
-                    if x['type'] == 'File':
+                    if x['type'] in ('File', 'SymLink'):
                         x['type'] = EntryType.FILES
                         items.append(dict(x))
             else: # Folders
