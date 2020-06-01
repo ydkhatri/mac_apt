@@ -105,7 +105,7 @@ def OpenDbFromImage(mac_info, inputPath, user):
         return conn, sqlite
     except sqlite3.Error as ex:
         log.exception ("Failed to open database, is it a valid Accounts DB?")
-    return None
+    return None, None
 
 def ProcessDbFromPath(mac_info, accounts, source_path, user):
     db, wrapper = OpenDbFromImage(mac_info, source_path, user)

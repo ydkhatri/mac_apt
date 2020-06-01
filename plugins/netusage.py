@@ -133,7 +133,7 @@ def OpenDbFromImage(mac_info, inputPath):
         return conn, sqlite
     except sqlite3.Error:
         log.exception ("Failed to open database, is it a valid DB?")
-    return None
+    return None, None
 
 def ProcessDbFromPath(mac_info, netusage_items, source_path):
     if mac_info.IsValidFilePath(source_path):

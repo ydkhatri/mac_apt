@@ -75,7 +75,7 @@ def OpenDbFromImage(mac_info, inputPath):
         return conn, sqlite
     except sqlite3.Error as ex:
         log.exception ("Failed to open database, is it a valid iMessage DB?")
-    return None
+    return None, None
 
 def OpenDb(inputPath):
     log.info ("Processing file " + inputPath)
