@@ -101,6 +101,18 @@ class CommonFunctions:
         return ''
 
     @staticmethod
+    def ReadChromeTime(chrome_time): # Chrome time is time epoch beginning 1601/1/1 but in micro-seconds
+        '''Returns datetime object, or empty string upon error'''
+        if chrome_time not in ( 0, None, ''):
+            try:
+                if isinstance(chrome_time, str):
+                    chrome_time = float(chrome_time)
+                return datetime.datetime(1601, 1, 1) + datetime.timedelta(microseconds=chrome_time)
+            except (ValueError, OverflowError, TypeError) as ex:
+                log.error("ReadChromeTime() Failed to convert timestamp from value " + str(chrome_time) + " Error was: " + str(ex))
+        return ''
+
+    @staticmethod
     def IntFromStr(string, base=10, error_val=0):
         integer = error_val
         try:
