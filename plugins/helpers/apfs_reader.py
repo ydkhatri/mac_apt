@@ -376,6 +376,11 @@ class ApfsFileSystemParser:
                 # Go to decmpfs_extent block and read uncompressed size
                 logical_size = row[3]
                 #decmpfs_ext_cnid = row[2]
+                if row[4] is None:
+                    log.error('Perhaps a corrupted record in APFS volume, skipping it.'\
+                        'From populate_compressed_files_table(). Got NULL for block number')
+                    log.error(f'DEBUG values of row = {str(row)}')
+                    continue
                 decmpfs = self.volume.get_raw_decrypted_block(row[4], self.encryption_key, limit_size=512) # only read first 512 bytes of block
                 #magic, compression_type, uncompressed_size = struct.unpack('<IIQ', decmpfs[0:16])
                 uncompressed_size = struct.unpack('<Q', decmpfs[8:16])[0]
