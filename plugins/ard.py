@@ -168,7 +168,7 @@ def Plugin_Start(mac_info):
     if len(user_accounts) > 0:
         PrintUserAccounts(user_accounts, mac_info.output_params, '')
     else:
-        log.info('No user accounts found in RemoteManagement cache')
+        log.info('No ARD user accounts found in RemoteManagement cache')
     
     app_usage_list = []
     if mac_info.IsValidFilePath(app_usage_path_1):
@@ -186,7 +186,7 @@ def Plugin_Start(mac_info):
     if len(app_usage_list) > 0:
         PrintAppUsage(app_usage_list, mac_info.output_params, '')
     else:
-        log.info('No app usage info found in RemoteManagement cache')
+        log.info('No ARD app usage info found in RemoteManagement cache')
 
 def read_plist_file(input_file):
     try:
@@ -209,7 +209,7 @@ def Plugin_Start_Standalone(input_files_list, output_params):
             if len(user_accounts) > 0:
                 PrintUserAccounts(user_accounts, output_params, input_path)
             else:
-                log.info('No user accounts found in {}'.format(input_path))
+                log.info('No ARD user accounts found in {}'.format(input_path))
         elif input_path.lower().endswith('appusage.tmp') or input_path.lower().endswith('appusage.plist'):
             app_usage_list = []
             plist = read_plist_file(input_path)
@@ -218,6 +218,6 @@ def Plugin_Start_Standalone(input_files_list, output_params):
             if len(app_usage_list) > 0:
                 PrintAppUsage(app_usage_list, output_params, input_path)
             else:
-                log.info('No app usage info found in {}'.format(input_path))
+                log.info('No ARD app usage info found in {}'.format(input_path))
 if __name__ == '__main__':
     print ("This plugin is a part of a framework and does not run independently on its own!")

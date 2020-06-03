@@ -275,7 +275,7 @@ def ProcessExtensions(mac_info, chrome_artifacts, user, source):
                     if name.startswith('__MSG_') or \
                         desc.startswith('__MSG_') or \
                         version.startswith('__MSG_'): # Must find it in the _locales
-                        if os.path.isdir(locales_path):
+                        if mac_info.IsValidFolderPath(locales_path):
                             en_path = locales_path + '/en/messages.json'
                             en_path_us = locales_path + '/en_US/messages.json'
                             en_path_gb = locales_path + '/en_GB/messages.json'
