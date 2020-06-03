@@ -530,7 +530,7 @@ class MacInfo:
                         # that has left whitespaces at the start of file before <?xml tag
                         # This is assuming XML format!
                         f.seek(0)
-                        data = f.read().decode('utf8')
+                        data = f.read().decode('utf8', 'ignore')
                         f.close()
                         data = data.lstrip(" \r\n\t").encode('utf8', 'backslashreplace')
                         if deserialize:
@@ -544,7 +544,7 @@ class MacInfo:
                         else:
                             plist = biplist.readPlistFromString(data)                        
                             return (True, plist, '')
-                    except biplist.InvalidPlistException as ex:
+                    except (biplist.InvalidPlistException, biplist.NotBinaryPlistException) as ex:
                         error = 'Could not read plist: ' + path + " Error was : " + str(ex)
                 except IOError as ex:
                     error = 'IOError while reading plist: ' + path + " Error was : " + str(ex)
@@ -879,7 +879,7 @@ class MacInfo:
             target_user.failed_login_timestamp = plist2.get('failedLoginTimestamp', None)
             target_user.last_login_timestamp = plist2.get('lastLoginTimestamp', None)
             target_user.password_last_set_time = plist2.get('passwordLastSetTime', None)
-        except (InvalidPlistException, NotBinaryPlistException):
+        except (biplist.InvalidPlistException, biplist.NotBinaryPlistException):
             log.exception('Error reading password_policy_data embedded plist')
 
     def _ReadAccountPolicyData(self, account_policy_data, target_user):
@@ -889,7 +889,7 @@ class MacInfo:
             target_user.failed_login_count = plist2.get('failedLoginCount', 0)
             target_user.failed_login_timestamp = CommonFunctions.ReadUnixTime(plist2.get('failedLoginTimestamp', None))
             target_user.password_last_set_time = CommonFunctions.ReadUnixTime(plist2.get('passwordLastSetTime', None))
-        except (InvalidPlistException, NotBinaryPlistException):
+        except (biplist.InvalidPlistException, biplist.NotBinaryPlistException):
             log.exception('Error reading password_policy_data embedded plist')     
 
     def _GetUserInfo(self):
@@ -935,10 +935,10 @@ class MacInfo:
                                         self._ReadAccountPolicyData(account_policy_data, target_user)
                             else:
                                 log.error('Did not find \'home\' in ' + plist_meta['name'])
-                        except (InvalidPlistException):
+                        except (biplist.InvalidPlistException, biplist.NotBinaryPlistException):
                             log.exception("biplist failed to read plist " + user_plist_path)
                         f.close()
-                except (OSError, KeyError, ValueError, IndexError, TypeError, biplist.InvalidPlistException, biplist.NotBinaryPlistException):
+                except (OSError, KeyError, ValueError, IndexError, TypeError):
                     log.exception ("Could not open/read plist " + user_plist_path)
         self._GetDomainUserInfo()
         self._GetDarwinFoldersInfo() # This probably does not apply to OSX < Mavericks !
@@ -1632,7 +1632,7 @@ class MountedIosInfo(MountedMacInfo):
                     log.info ('iOS version detected is: {} ({}) Build={}'.format(self.os_friendly_name, self.os_version, self.os_build))
                     f.close()
                     return True
-                except (InvalidPlistException, NotBinaryPlistException) as ex:
+                except (biplist.InvalidPlistException, biplist.NotBinaryPlistException) as ex:
                     log.error ("Could not get ProductVersion from plist. Is it a valid xml plist? Error=" + str(ex))
                 f.close()
             else:
