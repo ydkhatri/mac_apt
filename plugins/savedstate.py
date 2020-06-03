@@ -107,7 +107,7 @@ def Plugin_Start(mac_info):
                         if  mac_info.IsValidFolderPath(target_path):
                             ProcessFolder(mac_info, saved_states, user_name, target_path)
                         else:
-                            if mac_info.IsValidFile(target_path):
+                            if mac_info.IsValidFilePath(target_path):
                                 log.warning(f'Symlink target path was not a folder! Symlink file={file_path}, target={target_path}')
                             #else:
                             #    log.warning(f'Symlink target path does not exist! Symlink file={file_path}, target={target_path}')
