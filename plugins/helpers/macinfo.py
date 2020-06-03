@@ -1008,7 +1008,7 @@ class MacInfo:
                     log.info ('macOS version detected is: {} ({}) Build={}'.format(self.os_friendly_name, self.os_version, self.os_build))
                     f.close()
                     return True
-                except (InvalidPlistException, NotBinaryPlistException) as ex:
+                except (biplist.InvalidPlistException, biplist.NotBinaryPlistException) as ex:
                     log.error ("Could not get ProductVersion from plist. Is it a valid xml plist? Error=" + str(ex))
                 f.close()
             else:
