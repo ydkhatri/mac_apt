@@ -96,12 +96,22 @@ def OpenDbFromImage(mac_info, inputPath, user):
 
 def ReadTopSitesDb(chrome_artifacts, db, user, source):
     db.row_factory = sqlite3.Row
-    cursor = db.cursor()
-    query = "SELECT url, url_rank, title from top_sites ORDER BY url_rank ASC"
-    cursor = db.execute(query)
-    for row in cursor:
-        item = ChromeItem(ChromeItemType.TOPSITE, row['url'], row['title'], None, None, None, None, f"URL_RANK={row['url_rank']}", user, source)
-        chrome_artifacts.append(item)
+    tables = CommonFunctions.GetTableNames(db)
+    if 'topsites' in tables: # meta.version == 4
+        cursor = db.cursor()
+        query = "SELECT url, url_rank, title from top_sites ORDER BY url_rank ASC"
+        cursor = db.execute(query)
+        for row in cursor:
+            item = ChromeItem(ChromeItemType.TOPSITE, row['url'], row['title'], None, None, None, None, f"URL_RANK={row['url_rank']}", user, source)
+            chrome_artifacts.append(item)
+    elif 'thumbnails' in tables: # meta.version == 3
+        cursor = db.cursor()
+        query = "SELECT url, url_rank, title, last_updated from thumbnails ORDER BY url_rank ASC"
+        cursor = db.execute(query)
+        for row in cursor:
+            item = ChromeItem(ChromeItemType.TOPSITE, row['url'], row['title'], CommonFunctions.ReadChromeTime(row['last_updated']),
+                                None, None, None, f"URL_RANK={row['url_rank']}", user, source)
+            chrome_artifacts.append(item)
 
 def ReadHistoryDb(chrome_artifacts, db, user, source):
     db.row_factory = sqlite3.Row
@@ -129,8 +139,11 @@ def ReadHistoryDb(chrome_artifacts, db, user, source):
 
     # downloaded files
     query = """SELECT current_path, target_path, start_time, end_time, 
-            received_bytes, total_bytes, tab_url, referrer
-            FROM downloads ORDER BY start_time"""
+            received_bytes, total_bytes, c.url, referrer
+            FROM downloads 
+			LEFT JOIN downloads_url_chains c ON c.id = downloads.id
+			where c.chain_index = 0
+			ORDER BY start_time"""
     cursor = db.execute(query)
     for row in cursor:
         start_time =  CommonFunctions.ReadChromeTime(row['start_time'])
@@ -143,7 +156,7 @@ def ReadHistoryDb(chrome_artifacts, db, user, source):
         if not path:
             path = row['current_path']
         downloaded_file_name = os.path.basename(path)
-        item = ChromeItem(ChromeItemType.DOWNLOAD, row['tab_url'], downloaded_file_name, 
+        item = ChromeItem(ChromeItemType.DOWNLOAD, row['url'], downloaded_file_name, 
                         start_time, end_time, row['referrer'], path, 
                         f"Received Bytes = {row['received_bytes']}/{row['total_bytes']}", 
                         user, source)
