@@ -938,8 +938,8 @@ class MacInfo:
                         except (InvalidPlistException):
                             log.exception("biplist failed to read plist " + user_plist_path)
                         f.close()
-                except (OSError, KeyError, ValueError, IndexError, TypeError):
-                    log.exception ("Could not open plist " + user_plist_path)
+                except (OSError, KeyError, ValueError, IndexError, TypeError, biplist.InvalidPlistException, biplist.NotBinaryPlistException):
+                    log.exception ("Could not open/read plist " + user_plist_path)
         self._GetDomainUserInfo()
         self._GetDarwinFoldersInfo() # This probably does not apply to OSX < Mavericks !
 
