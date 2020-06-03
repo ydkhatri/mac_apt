@@ -241,7 +241,6 @@ def FindMacOsPartitionInApfsContainer(img, vol_info, container_size, container_s
     mac_info.apfs_container = ApfsContainer(img, container_size, container_start_offset)
     # Check if this is 10.15 style System + Data volume?
     for vol in mac_info.apfs_container.volumes:
-        #if vol.is_encrypted: continue
         if vol.role == vol.container.apfs.VolumeRoleType.system.value:
             log.debug("{} is SYSTEM volume type".format(vol.volume_name))
             mac_info.apfs_sys_volume = vol
@@ -300,7 +299,6 @@ def FindMacOsPartitionInApfsContainer(img, vol_info, container_size, container_s
             for vol in mac_info.apfs_container.volumes:
                 if vol.num_blocks_used * vol.container.block_size < 3000000000: # < 3 GB, cannot be a macOS root volume
                     continue
-                #if vol.is_encrypted: continue
                 mac_info.macos_FS = vol
                 vol.dbo = mac_info.apfs_db
                 if FindMacOsFiles(mac_info):
