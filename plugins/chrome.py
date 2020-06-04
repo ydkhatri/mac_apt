@@ -225,11 +225,13 @@ def ProcessExtensionsLocal(chrome_artifacts, user, source):
                 if not os.path.isfile(manifest_path):
                     log.error(f'Could not find manifest.json @ {manifest_path}')
                 with open(manifest_path, 'r') as manifest_file:
-                    manifest = json.load(manifest_file)
+                    manifest = ReadJson(manifest_file.read())
+                    manifest_file.close()
+                    if not manifest: continue
                     name = manifest.get('name', '')
                     desc = manifest.get('description', '')
                     version = manifest.get('version', '')
-                    
+
                     if name.startswith('__MSG_') or \
                         desc.startswith('__MSG_') or \
                         version.startswith('__MSG_'): # Must find it in the _locales
@@ -249,6 +251,13 @@ def ProcessExtensionsLocal(chrome_artifacts, user, source):
                     chrome_artifacts.append(item)
                 break
 
+def ReadJson(data):
+    try:
+        return json.loads(data)
+    except json.decoder.JSONDecodeError:
+        log.error('Failed to parse json. Input Data was ' + str(data))
+    return {}
+
 def ProcessExtensions(mac_info, chrome_artifacts, user, source):
     ext_obfuscated_names = mac_info.ListItemsInFolder(source, EntryType.FOLDERS, False)
     for obfuscated_dir_name in ext_obfuscated_names:
@@ -267,7 +276,9 @@ def ProcessExtensions(mac_info, chrome_artifacts, user, source):
                 manifest_file = mac_info.Open(manifest_path)
                 if manifest_file:
                     manifest_data = manifest_file.read().decode('utf8', 'ignore')
-                    manifest = json.loads(manifest_data)
+                    manifest_file.close()
+                    manifest = ReadJson(manifest_data)
+                    if not manifest: continue
                     name = manifest.get('name', '')
                     desc = manifest.get('description', '')
                     version = manifest.get('version', '')
