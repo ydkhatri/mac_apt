@@ -728,7 +728,6 @@ class MacInfo:
             if str(ex).find('tsk_fs_file_open: path not found:') > 0:
                 log.debug("Open() returned 'Path not found' error for path: {}".format(tsk_path))
             else:
-                #traceback.print_exc()
                 log.error("Failed to open/find file: " + tsk_path)            
         return False
 
@@ -810,7 +809,6 @@ class MacInfo:
             return int(tsk_file.info.meta.flags) & pytsk3.TSK_FS_META_FLAG_COMP
         except Exception as ex:
             log.error (" Unknown exception from _IsFileCompressed() " + str(ex))
-            #traceback.print_exc()
         return False
 
     def _GetSize(self, entry):
@@ -819,7 +817,6 @@ class MacInfo:
             return entry.info.meta.size
         except Exception as ex:
             log.error (" Unknown exception from _GetSize() " + str(ex))
-            #traceback.print_exc()
         return 0
 
     def _GetName(self, entry):
@@ -831,8 +828,15 @@ class MacInfo:
             pass
         except Exception as ex:
             log.error (" Unknown exception from GetName:" + str(ex))
-            #traceback.print_exc()
         return ""
+
+    def _CheckFileContents(self, f):
+        f.seek(0)
+        header = f.read(4)
+        if len(header) == 4 and header == b'\0\0\0\0':
+            log.error('File header was zeroed out. If the source is an E01 file, this may be a libewf problem.'\
+                ' Try to use a different version of libewf. Read more about this here:'\
+                ' https://github.com/ydkhatri/mac_apt/wiki/Known-issues-and-Workarounds')
 
     def _IsValidFileOrFolderEntry(self, entry):
         try:
@@ -844,7 +848,7 @@ class MacInfo:
                 log.warning(" Found invalid entry - " + self._GetName(entry) + "  " + str(entry.info.name.type) )
         except Exception:
             log.error(" Unknown exception from _IsValidFileOrFolderEntry:" + self._GetName(entry))
-            log.debug("Exception details:\n", exc_info=True) #traceback.print_exc()
+            log.debug("Exception details:\n", exc_info=True)
         return False
     
     def _GetDomainUserInfo(self):
@@ -937,6 +941,7 @@ class MacInfo:
                                 log.error('Did not find \'home\' in ' + plist_meta['name'])
                         except (biplist.InvalidPlistException, biplist.NotBinaryPlistException):
                             log.exception("biplist failed to read plist " + user_plist_path)
+                            self._CheckFileContents(f)
                         f.close()
                 except (OSError, KeyError, ValueError, IndexError, TypeError):
                     log.exception ("Could not open/read plist " + user_plist_path)

@@ -553,18 +553,14 @@ class ApfsFileSystemParser:
                         log.exception('Exception trying to read block {}'.format(entry.data.pointer))
                 else:
                     try:
-
                         if entry.data.flags & 1: #OMAP_VAL_DELETED
-                            log.warning("Block values are deleted? ,block={}".format(entry.data.paddr.value))
+                            log.debug("Deleted OMAP block found, block={}".format(entry.data.paddr.value))
                             continue
-
                         if ( entry.data.flags & 4 ) == 4: # ENCRYPTED FLAG
                             newblock = self.volume.read_vol_block(entry.data.paddr.value, self.encryption_key)
                         else:
                             newblock = self.volume.read_vol_block(entry.data.paddr.value)
                         self.read_entries(entry.data.paddr.value, newblock)
-
-
                     except (ValueError, EOFError, OSError):
                         log.exception('Exception trying to read block {}'.format(entry.data.paddr.value))
         elif block.header.subtype == 0:
