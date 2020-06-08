@@ -35,7 +35,7 @@ log = logging.getLogger('MAIN.' + __Plugin_Name) # Do not rename or remove this 
 class NetType(IntEnum):
     UNKNOWN = 0
     KNOWN = 1
-    PREVIOUSREMEMBERED = 2 # Perhaps after an update ?
+    PREVIOUSREMEMBERED = 2 # After an update ?
 
     def __str__(self):
         return self.name # This returns 'KNOWN' instead of 'NetType.KNOWN'
@@ -95,7 +95,7 @@ class Network:
 
 def GetReadableSSID(ssid, wifi_plist_ver):
     try:
-        if (wifi_plist_ver == 2500):
+        if (wifi_plist_ver >= 2500):
             ssid = ssid[10:]
         else:
             ssid = ssid[11:-1]
