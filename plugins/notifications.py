@@ -50,8 +50,15 @@ data_info = [('User', DataType.TEXT),('Date', DataType.DATE),('Shown', DataType.
             ('Title', DataType.TEXT),('SubTitle', DataType.TEXT),('Message', DataType.TEXT), \
             ('Source', DataType.TEXT)]
 
-def RemoveTabsNewLines(str):
-    return str.replace("\t", " ").replace("\r", " ").replace("\n", "")
+def RemoveTabsNewLines(obj):
+    if isinstance(obj, str):
+        return obj.replace("\t", " ").replace("\r", " ").replace("\n", "")
+    elif isinstance(obj, list):
+        if len(obj) > 0:
+            item = str(obj[0])
+            return item.replace("\t", " ").replace("\r", " ").replace("\n", "")
+    else:
+        log.error('Unknown type found : ' + str(type(obj)))
 
 def ProcessNotificationDb(inputPath, output_params):
     log.info ("Processing file " + inputPath)
@@ -114,7 +121,7 @@ def Parse_ver_17_Db(conn, inputPath, user, timezone):
                         title = RemoveTabsNewLines(req.get('titl', ''))
                         subtitle = RemoveTabsNewLines(req.get('subt', ''))
                         message = RemoveTabsNewLines(req.get('body', ''))
-                    except KeyError as ex: log.debug('Error reading field req - ' + str(ex))
+                    except (KeyError, AttributeError) as ex: log.debug('Error reading field req - ' + str(ex))
                     try:
                         log.debug('Unknown field orig = {}'.format(plist['orig']))
                     except (KeyError, ValueError): pass
@@ -233,16 +240,14 @@ def Plugin_Start(mac_info):
                 darwin_user_folders = user.DARWIN_USER_DIR.split(',')
                 for darwin_user_dir in darwin_user_folders:
                     db_path = darwin_user_dir + '/com.apple.notificationcenter/db/db'
-                    if not mac_info.IsValidFilePath(db_path): continue
-                    else:
-                        ProcessNotificationDb_Wrapper(db_path, mac_info, user.user_name)
+                    if mac_info.IsValidFilePath(db_path):
                         mac_info.ExportFile(db_path, __Plugin_Name, user.user_name + '_')
+                        ProcessNotificationDb_Wrapper(db_path, mac_info, user.user_name)
                     #For High Sierra db2 is present. If upgraded, both might be present
-                    db_path = darwin_user_dir + '/com.apple.notificationcenter/db2/db' 
-                    if not mac_info.IsValidFilePath(db_path): continue
-                    else:
-                        ProcessNotificationDb_Wrapper(db_path, mac_info, user.user_name)
+                    db_path = darwin_user_dir + '/com.apple.notificationcenter/db2/db'
+                    if mac_info.IsValidFilePath(db_path):
                         mac_info.ExportFile(db_path, __Plugin_Name, user.user_name + '_')
+                        ProcessNotificationDb_Wrapper(db_path, mac_info, user.user_name)
     WriteOutput(mac_info.output_params)
 
 ## Standalone Plugin call
@@ -259,5 +264,3 @@ def Plugin_Start_Standalone(input_files_list, output_params):
 ## 
 if __name__ == '__main__':
     print("This plugin is a part of a framework and does not run independently on its own!")
-
-	

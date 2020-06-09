@@ -356,6 +356,8 @@ def PrintAll(recent_items, output_params, source_path):
         name = item.Name
         if name.startswith('file://'):
             name = name[7:]
+        if name == '' and url != '':
+            name = os.path.basename(url)
         data_list.append( [ str(item.Type), name, url, item.Info, item.User, item.Source ] )
 
     WriteList("Recent item information", "RecentItems", data_list, recent_info, output_params, source_path)
