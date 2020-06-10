@@ -51,7 +51,7 @@ def PrintAll(saved_states, output_params, source_path):
     saved_info = [ ('App',DataType.TEXT),('Window Title',DataType.TEXT),('Source Last Modified Date',DataType.TEXT),
                     ('Bundle', DataType.TEXT),('User', DataType.TEXT),('Source',DataType.TEXT)
                    ]
-
+    log.info("Found {} saved state(s)".format(len(saved_states)))
     data_list = []
     for item in saved_states:
         data_list.append( [ item.app, item.window_title, item.last_mod_date, item.bundle, item.user, item.source ] )
