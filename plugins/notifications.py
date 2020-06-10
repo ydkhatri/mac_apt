@@ -53,30 +53,30 @@ data_info = [('User', DataType.TEXT),('Date', DataType.DATE),('Shown', DataType.
 def RemoveTabsNewLines(obj):
     if isinstance(obj, str):
         return obj.replace("\t", " ").replace("\r", " ").replace("\n", "")
-    elif isinstance(obj, list):
+    elif isinstance(obj, list): # On 10.15, sometimes its a list
         if len(obj) > 0:
             item = str(obj[0])
             return item.replace("\t", " ").replace("\r", " ").replace("\n", "")
     else:
         log.error('Unknown type found : ' + str(type(obj)))
 
-def ProcessNotificationDb(inputPath, output_params):
+def ProcessNotificationDb(inputPath, output_params, screentime_strings_dict=None):
     log.info ("Processing file " + inputPath)
     try:
         conn = sqlite3.connect(inputPath)
         log.debug ("Opened database successfully")
-        ParseDb(conn, inputPath, '', output_params.timezone)
+        ParseDb(conn, inputPath, '', output_params.timezone, screentime_strings_dict)
         conn.close()
     except sqlite3.Error as ex:
         log.error ("Failed to open database, is it a valid Notification DB? \nError details: " + str(ex.args))
 
-def ProcessNotificationDb_Wrapper(inputPath, mac_info, user):
+def ProcessNotificationDb_Wrapper(inputPath, mac_info, user, screentime_strings_dict=None):
     log.info ("Processing notifications for user '{}' from file {}".format(user, inputPath))
     try:
         sqlite = SqliteWrapper(mac_info)
         conn = sqlite.connect(inputPath)
         log.debug ("Opened database successfully")
-        ParseDb(conn, inputPath, user, mac_info.output_params.timezone)
+        ParseDb(conn, inputPath, user, mac_info.output_params.timezone, screentime_strings_dict)
         conn.close()
     except sqlite3.Error as ex:
         log.error ("Failed to open database, is it a valid Notification DB? Error details: " + str(ex)) 
@@ -103,7 +103,34 @@ def GetDbVersion(conn):
         log.exception("Exception trying to determine db version")
     return 15 #old version
 
-def Parse_ver_17_Db(conn, inputPath, user, timezone):
+def FetchScreenTimeItem(dictionary, item_name, screentime_strings_dict):
+    ret = ''
+    item = dictionary.get(item_name, '')
+    if item and isinstance(item, list):
+        if len(item) == 3:
+            data = item[2]
+            ret = screentime_strings_dict.get(item[0], '')
+            num_variables = ret.count('%@')
+            if num_variables:
+                if ret.find('%@') >= 0 and num_variables == len(data):
+                    for x in range(num_variables):
+                        ret = ret.replace('%@', '{}', 1)
+                        ret = ret.format(data[x])
+                else:
+                    log.error(f'Mismatch in number of variables and format string, format_string={ret}, data={str(data)}')
+        else:
+            log.error(f'List length was not 3, len={len(item)}, item_name={item_name}, item={str(item)}')
+    else:
+        ret = item
+    return ret
+
+def ProcessScreenTimeNotifications(req, screentime_strings_dict):
+    title = FetchScreenTimeItem(req, 'titl', screentime_strings_dict)
+    subtitle = FetchScreenTimeItem(req ,'subt', screentime_strings_dict)
+    message = FetchScreenTimeItem(req, 'body', screentime_strings_dict)
+    return title, subtitle, message
+
+def Parse_ver_17_Db(conn, inputPath, user, timezone, screentime_strings_dict):
     '''Parse High Sierra's notification db'''
     try:
         conn.row_factory = sqlite3.Row
@@ -118,9 +145,13 @@ def Parse_ver_17_Db(conn, inputPath, user, timezone):
                     plist = readPlistFromString(row['data'])
                     try:
                         req = plist['req']
-                        title = RemoveTabsNewLines(req.get('titl', ''))
-                        subtitle = RemoveTabsNewLines(req.get('subt', ''))
-                        message = RemoveTabsNewLines(req.get('body', ''))
+                        app = plist.get('app', '')
+                        if app == 'com.apple.ScreenTimeNotifications' and screentime_strings_dict:
+                            title, subtitle, message = ProcessScreenTimeNotifications(req, screentime_strings_dict)
+                        else:
+                            title = RemoveTabsNewLines(req.get('titl', ''))
+                            subtitle = RemoveTabsNewLines(req.get('subt', ''))
+                            message = RemoveTabsNewLines(req.get('body', ''))
                     except (KeyError, AttributeError) as ex: log.debug('Error reading field req - ' + str(ex))
                     try:
                         log.debug('Unknown field orig = {}'.format(plist['orig']))
@@ -137,10 +168,10 @@ def Parse_ver_17_Db(conn, inputPath, user, timezone):
     except sqlite3.Error as ex:
         log.error ("Sqlite error - \nError details: \n" + str(ex))
 
-def ParseDb(conn, inputPath, user, timezone):
+def ParseDb(conn, inputPath, user, timezone, screentime_strings_dict):
     '''variable 'timezone' is not being currently used'''
     if GetDbVersion(conn) >= 17: # High Sierra
-        Parse_ver_17_Db(conn, inputPath, user, timezone)
+        Parse_ver_17_Db(conn, inputPath, user, timezone, screentime_strings_dict)
         return
     try:
         conn.row_factory = sqlite3.Row
@@ -210,6 +241,30 @@ def WriteOutput(output_params):
         log.error ("Failed to initilize data writer")
         log.exception ("Error details")
 
+def  GetScreenTimeStrings(mac_info):
+    strings = {}
+    path_1 = '/System/Library/UserNotifications/Bundles/com.apple.ScreenTimeNotifications.bundle/Contents/Resources/en.lproj/Localizable.strings'
+    path_2 = '/System/Library/UserNotifications/Bundles/com.apple.ScreenTimeNotifications.bundle/Contents/Resources/en.lproj/InfoPlist.strings'
+    if mac_info.IsValidFilePath(path_1):
+        success, plist, error = mac_info.ReadPlist(path_1)
+        if success:
+            strings.update(plist)
+        else:
+            log.error(f"Failed to read plist {path_1}")
+    else:
+        log.debug('Did not find path - ' + path_1)
+
+    if mac_info.IsValidFilePath(path_2):
+        success, plist, error = mac_info.ReadPlist(path_2)
+        if success:
+            strings.update(plist)
+        else:
+            log.error(f"Failed to read plist {path_2}")
+    else:
+        log.debug('Did not find path - ' + path_2)
+
+    return strings
+
 def Plugin_Start(mac_info):
     version_dict = mac_info.GetVersionDictionary()
     processed_paths = []
@@ -234,6 +289,9 @@ def Plugin_Start(mac_info):
                         break
             
     elif version_dict['major'] == 10 and version_dict['minor'] >= 10: # Yosemite or higher
+        screentime_strings_dict = None
+        if version_dict['minor'] >= 15: #Catalina
+            screentime_strings_dict = GetScreenTimeStrings(mac_info)
         for user in mac_info.users:
             if not user.DARWIN_USER_DIR or not user.user_name: continue # TODO: revisit this later!
             else:
@@ -242,12 +300,12 @@ def Plugin_Start(mac_info):
                     db_path = darwin_user_dir + '/com.apple.notificationcenter/db/db'
                     if mac_info.IsValidFilePath(db_path):
                         mac_info.ExportFile(db_path, __Plugin_Name, user.user_name + '_')
-                        ProcessNotificationDb_Wrapper(db_path, mac_info, user.user_name)
+                        ProcessNotificationDb_Wrapper(db_path, mac_info, user.user_name, screentime_strings_dict)
                     #For High Sierra db2 is present. If upgraded, both might be present
                     db_path = darwin_user_dir + '/com.apple.notificationcenter/db2/db'
                     if mac_info.IsValidFilePath(db_path):
                         mac_info.ExportFile(db_path, __Plugin_Name, user.user_name + '_')
-                        ProcessNotificationDb_Wrapper(db_path, mac_info, user.user_name)
+                        ProcessNotificationDb_Wrapper(db_path, mac_info, user.user_name, screentime_strings_dict)
     WriteOutput(mac_info.output_params)
 
 ## Standalone Plugin call
