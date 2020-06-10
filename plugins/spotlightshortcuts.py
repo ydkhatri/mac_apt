@@ -35,7 +35,7 @@ def PrintAll(shortcut_items, output_params, source_path):
     shortcut_info = [ ('User',DataType.TEXT),('UserTyped',DataType.TEXT),('DisplayName',DataType.TEXT),
                       ('LastUsed',DataType.DATE),('URL',DataType.TEXT),('Source',DataType.TEXT)
                    ]
-    log.debug('Writing {} spotlight shorcut item(s)'.format(len(shortcut_items)))
+    log.debug('Writing {} spotlight shortcut item(s)'.format(len(shortcut_items)))
     WriteList("spotlight shortcut information", "SpotlightShortcuts", shortcut_items, shortcut_info, output_params, source_path)
     
 def ParseShortcutFile(input_file, shortcuts):
