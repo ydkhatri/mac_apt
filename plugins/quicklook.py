@@ -13,6 +13,7 @@ from plugins.helpers.common import *
 import sqlite3
 import logging
 import os
+from itertools import chain, zip_longest
 from PIL import Image
 
 __Plugin_Name = "QUICKLOOK" # Cannot have spaces, and must be all caps!
@@ -23,10 +24,9 @@ __Plugin_Author = "Jack Farley - BlackStone Discovery"
 __Plugin_Author_Email = "jfarley@blackstonediscovery.com - jfarley248@gmail.com"
 
 __Plugin_Modes = "MACOS,ARTIFACTONLY"
-__Plugin_ArtifactOnly_Usage = 'Provide QuickLook database found at:' \
+__Plugin_ArtifactOnly_Usage = 'Provide QuickLook database folder, found at:' \
                             '/private/var/folders/XX/XXXXXXXXXXXXXXXXXXX_XXXXXXXXX/' \
-                            'C/com.apple.QuickLook.thumbnailcache/index.sqlite AS WELL AS: '\
-                            '/private/var/folders/XX/XXXXXXXXXXXXXXXXXXX_XXXXXXXXX/thumbnails.data' \
+                            'C/com.apple.QuickLook.thumbnailcache/index.sqlite' \
 
 log = logging.getLogger('MAIN.' + __Plugin_Name) # Do not rename or remove this ! This is the logger object
 
@@ -114,7 +114,7 @@ def openDeadbox(path, mac_info):
     handle = mac_info.Open(path)
     return handle
 
-def carveThumb(offset, length, thumbfile, thumbname, width, height, export, user_name):
+def carveThumb(offset, length, thumbfile, thumbname, width, height, export, user_name, is_BGRA=False):
     """
 
     :param offset: Offset in thumbnails.data for thumbnail
@@ -130,6 +130,9 @@ def carveThumb(offset, length, thumbfile, thumbname, width, height, export, user
         # Seek and read thumbnails.data from offsets and lengths found in the index.sqlite
         thumbfile.seek(offset)
         thumb = thumbfile.read(length)
+
+        if is_BGRA:
+            thumb = convertBGRA_to_RGBA(thumb)
 
         # Use the Pillow Library Image to parse and export files as images
         imgSize = (width, height)
@@ -233,7 +236,6 @@ def parseDb(c, quicklook_array, source, path_to_thumbnails, export, user_name):
         log.exception("Exception while executing query for QuickLook cache. Exception was: " + str(e))
 
 
-
 def findParents(c, CNID, full_path):
     inode_query_unformat = """
     SELECT Parent_CNID from Combined_Inodes where Combined_Inodes.CNID == {}
@@ -299,16 +301,21 @@ def parseDbNewSinglePlug(c, quicklook_array, source, path_to_thumbnails, export)
             fs_id = "N/A"
             inode = entries[0]
             row_id = "N/A"
-            carveThumb(bitmapdata_location, bitmapdata_length, thumbfile, name, computed_width, height, export, '')
+            carveThumb(bitmapdata_location, bitmapdata_length, thumbfile, name, computed_width, height, export, '', True)
             unknown_count += 1
             ql = QuickLook("UNKNOWN", "UNKNOWN", hit_count, last_hit_date, version,
-                            bitmapdata_location,
-                            bitmapdata_length, computed_width, height, fs_id, inode, row_id, source)
+                            bitmapdata_location, bitmapdata_length, computed_width, height, fs_id, inode, row_id, source)
             quicklook_array.append(ql)
         if thumbfile:
             thumbfile.close()
 
+def convertBGRA_to_RGBA(data):
+    if len(data)%4 != 0:
+        print("Problem, got a remainder, trying to pad..!")
+        data += b'\0' * (4 - len(data)%4)
 
+    ret = tuple(chain(*((R,G,B,A) for B,G,R,A in zip_longest(*[iter(data)]*4))))
+    return bytes(ret)
 
 
 def parseDbNew(c, quicklook_array, source, path_to_thumbnails, export, user_name):
@@ -339,74 +346,57 @@ def parseDbNew(c, quicklook_array, source, path_to_thumbnails, export, user_name
     # If the statement returned anything, lets parse it further
     if combined_files:
         # Export the thumbnails.data file via mac_info
-        if type(export) is not str:
-            thumbfile = openDeadbox(path_to_thumbnails, export)
-
-        # Export thumbnails.data via single plugin
-        else:
-            thumbfile = openSingle(path_to_thumbnails)
-
+        thumbfile = openDeadbox(path_to_thumbnails, export)
         unknown_count = 0
         for entries in combined_files:
+            bitmapdata_location = entries[8]
+            bitmapdata_length = entries[9]
+            width = entries[6]
+            height = entries[7]
+            hit_count = entries[3]
+            last_hit_date = entries[4]
+            version = b""
+            fs_id = "N/A"
+            inode = entries[0]
+            row_id = "N/A"
 
-           if type(export) is not str:
-               # Format the inode_query for our specific iNode number so we can find the filename
-               apfs_query = inode_query.format(entries[0])
+            # Format the inode_query for our specific iNode number so we can find the filename
+            apfs_query = inode_query.format(entries[0])
 
-               # Create cursor to the APFS db created by mac_apt
-               apfs_c = export.apfs_db.conn.cursor()
+            # Create cursor to the APFS db created by mac_apt
+            apfs_c = export.apfs_db.conn.cursor()
 
-               apfs_c.row_factory = sqlite3.Row
-               cursor = apfs_c.execute(apfs_query)
-               test_row = cursor.fetchone()
-               if test_row is None:
-                    log.warning("No file matches iNode: " + str(entries[0]) + "!!")
-                    log.warning("This file will be outputted as Unknown" + str(unknown_count))
+            apfs_c.row_factory = sqlite3.Row
+            cursor = apfs_c.execute(apfs_query)
+            test_row = cursor.fetchone()
+            if test_row is None:
+                log.warning("No file matches iNode: " + str(inode) + "!!")
+                log.warning("This file will be outputted as Unknown" + str(unknown_count))
 
-                    # Carve out thumbnails with no iNode
-                    bitmapdata_location = entries[8]
-                    bitmapdata_length = entries[9]
-                    width = entries[6]
-                    height = entries[7]
-                    name = "Unknown" + str(unknown_count)
-                    hit_count = entries[3]
-                    last_hit_date = entries[4]
-                    version = b""
-                    fs_id = "N/A"
-                    inode = entries[0]
-                    row_id = "N/A"
-                    log.debug("Carving an unknown thumbnail, this is unknown number: " + str(unknown_count))
-                    carveThumb(bitmapdata_location, bitmapdata_length, thumbfile, name, width, height, export, user_name)
-                    unknown_count += 1
-                    ql = QuickLook("UNKNOWN", "UNKNOWN", hit_count, last_hit_date, version,
-                                   bitmapdata_location,
-                                   bitmapdata_length, width, height, fs_id, inode, row_id, source)
+                # Carve out thumbnails with no iNode
+
+                name = "Unknown" + str(unknown_count)
+
+                log.debug("Carving an unknown thumbnail, this is unknown number: " + str(unknown_count))
+                carveThumb(bitmapdata_location, bitmapdata_length, thumbfile, name, width, height, export, user_name, True)
+                unknown_count += 1
+                ql = QuickLook("UNKNOWN", "UNKNOWN", hit_count, last_hit_date, version, bitmapdata_location,
+                                bitmapdata_length, width, height, fs_id, inode, row_id, source)
+                quicklook_array.append(ql)
+
+            else:
+                for row in test_row:
+                    log.debug("File matching iNode: " + str(inode) + " is: " + row)
+                    full_path = [""]
+                    findParents(apfs_c, inode, full_path)
+
+                    ql = QuickLook(full_path[0], row, hit_count, last_hit_date, version, bitmapdata_location,
+                                    bitmapdata_length, width, height, fs_id, inode, row_id, source)
                     quicklook_array.append(ql)
 
-               else:
-                   for row in test_row:
-                       log.debug("File matching iNode: " + str(entries[0]) + " is: " + str(row))
-                       full_path = [""]
-                       findParents(apfs_c, entries[0], full_path)
-
-                       hit_count = entries[3]
-                       last_hit_date = entries[4]
-                       version = b""
-                       bitmapdata_location = entries[8]
-                       bitmapdata_length = entries[9]
-                       width = entries[6]
-                       height = entries[7]
-                       fs_id = "N/A"
-                       inode = entries[0]
-                       row_id = "N/A"
-
-                       ql = QuickLook(full_path[0], row, hit_count, last_hit_date, version, bitmapdata_location,
-                                      bitmapdata_length, width, height, fs_id, inode, row_id, source)
-                       quicklook_array.append(ql)
-
-                       # Carve out thumbnails
-                       log.debug("Carving thumbnail: " + str(full_path[0]) + row + " from thumbnails.data file")
-                       carveThumb(bitmapdata_location, bitmapdata_length, thumbfile, row, width, height, export, user_name)
+                    # Carve out thumbnails
+                    log.debug("Carving thumbnail: " + str(full_path[0]) + row + " from thumbnails.data file")
+                    carveThumb(bitmapdata_location, bitmapdata_length, thumbfile, row, width, height, export, user_name, True)
         if thumbfile:
             thumbfile.close()
 
