@@ -1,5 +1,5 @@
 '''
-   Copyright (c) 2017 Yogesh Khatri
+   Copyright (c) 2020 Yogesh Khatri
 
    This file is part of mac_apt (macOS Artifact Parsing Tool).
    Usage or distribution of this software/code is subject to the
@@ -7,7 +7,7 @@
 
    sudo_ts.py
    ---------------
-   This gets the last time(s) sudo was used.
+   This gets the last time(s) sudo was used by each user.
 '''
 
 import os
