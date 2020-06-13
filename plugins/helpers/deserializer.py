@@ -17,7 +17,7 @@
 #
 # Script Name  : DeSerializer.py
 # Author       : Yogesh Khatri
-# Last Updated : Nov 12 2019
+# Last Updated : June 13 2020
 # Purpose      : NSKeyedArchive plists (such as .SFL2 files) are stored as 
 #                serialized data, which is machine readable but not human
 #                readable. This script will convert NSKeyedArchive binary 
@@ -28,7 +28,8 @@
 # Requirements : 
 #                Python3.x
 #                biplist (Get it with pip3 install biplist)
-#                ccl_bplist
+#                ccl_bplist (Use the one supplied with this script, as it has 
+#                            been updated to fix few issues)
 #
 # Note: This will not work with python 2.xx
 
@@ -40,8 +41,6 @@ import os
 import plistlib
 import sys
 import traceback
-
-log = logging.getLogger('MAIN.HELPERS.DESERIALIZER')
 
 def recurseCreatePlist(plist, root, object_table):
     if isinstance(root, dict):
@@ -71,7 +70,12 @@ def recurseCreatePlist(plist, root, object_table):
             # is most likely going to be a string. This has to be done, else writing a plist back will fail.
             if v == None:
                 v = ''
-                log.debug('Changing NULL to empty string for key={}'.format(key))
+                if key != 'NS.base': # NS.base is usually UID:0, which is usually None
+                    log.debug('Changing NULL to empty string for key={}'.format(key))
+            # Keys must be string, else plist writing will fail!
+            if not isinstance(key, str):
+                key = str(key)
+                log.debug(f'Converting non-string key {key} to string')
             plist[key] = v
     else: # must be list
         for value in root:
@@ -98,8 +102,34 @@ def recurseCreatePlist(plist, root, object_table):
             # is most likely going to be a string. This has to be done, else writing a plist back will fail.
             if v == None:
                 v = ''
-                log.debug('Changing NULL to empty string for key={}'.format(key))
+                if key != 'NS.base': # NS.base is usually UID:0, which is usually None
+                    log.debug('Changing NULL to empty string for key={}'.format(key))
             plist.append(v)
+
+def ConvertCFUID_to_UID(plist):
+    ''' For converting XML plists to binary, UIDs which are represented
+        as strings 'CF$UID' must be translated to actual UIDs.
+    '''
+    if isinstance(plist, dict):
+        for k, v in plist.items():
+            if isinstance(v, dict):
+                num = v.get('CF$UID', None)
+                if (num is None) or (not isinstance(num, int)):
+                    ConvertCFUID_to_UID(v)
+                else:
+                    plist[k] = biplist.Uid(num)
+            elif isinstance(v, list):
+                ConvertCFUID_to_UID(v)
+    else: # list
+        for index, v in enumerate(plist):
+            if isinstance(v, dict):
+                num = v.get('CF$UID', None)
+                if (num is None) or (not isinstance(num, int)):
+                    ConvertCFUID_to_UID(v)
+                else:
+                    plist[index] = biplist.Uid(num)
+            elif isinstance(v, list):
+                ConvertCFUID_to_UID(v)
 
 def getRootElementNames(f):
     ''' The top element is usually called "root", but sometimes it is not!
@@ -132,7 +162,25 @@ def extract_nsa_plist(f):
             f = io.BytesIO(data)
     except biplist.InvalidPlistException:
         log.exception('Had an exception (error) trying to read plist using biplist')
+        return None
     f.seek(0)
+
+    # Check if file to be returned is an XML plist
+    header = f.read(8)
+    f.seek(0)
+    if header[0:6] != b'bplist': # must be xml
+        # Convert xml to binary (else ccl_bplist wont load!)
+        try:
+            tempfile = io.BytesIO()
+            plist = biplist.readPlist(f)
+            ConvertCFUID_to_UID(plist)
+            biplist.writePlist(plist, tempfile)
+            f.close()
+            tempfile.seek(0)
+            return tempfile
+        except biplist.InvalidPlistException:
+            log.exception('Had exception (error) trying to read plist using biplist')
+            return None
     return f
 
 def process_nsa_plist(input_path, f):
@@ -201,7 +249,7 @@ def write_plist_to_file(deserialised_plist, output_path):
         print('Had an exception (error)')
         traceback.print_exc()
 
-usage = '\r\nDeserializer.py   (c) Yogesh Khatri 2018 \r\n'\
+usage = '\r\nDeserializer.py   (c) Yogesh Khatri 2018-2020 \r\n'\
         'This script converts an NSKeyedArchive plist into a normal deserialized one.\r\n\r\n'\
         'Usage: python.exe deserializer.py input_plist_path \r\n'\
         ' Example: deserializer.py com.apple.preview.sfl2 \r\n\r\n'\
@@ -232,13 +280,16 @@ def main():
     try:
         f = open(input_path, 'rb')
         f = extract_nsa_plist(f)
-        deserialised_plist = process_nsa_plist(input_path, f)
-        output_path = input_path + '_deserialized.plist'
-        if write_plist_to_file(deserialised_plist, output_path):
-            print('Done !')
+        if f:
+            deserialised_plist = process_nsa_plist(input_path, f)
+            output_path = input_path + '_deserialized.plist'
+            if write_plist_to_file(deserialised_plist, output_path):
+                print('Done !')
+            else:
+                print('Converison Failed ! Please send the offending plist my way to\n yogesh@swiftforensics.com')
+            f.close()
         else:
-            print('Converison Failed !')
-        f.close()
+            print('Had an error :(  No output!! Please send the offending plist my way to\n yogesh@swiftforensics.com')
     except Exception as ex:
         print('Had an exception (error)')
         traceback.print_exc()
