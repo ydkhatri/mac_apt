@@ -27,9 +27,11 @@ mac_apt is a DFIR tool to process Mac computer full disk images (**or _live_ mac
 Available Plugins (artifacts parsed) | Description 
 ------------------ | ---------------
 APPLIST | Reads apps & printers installed and/or available for each user from appList.dat
+ARD | Reads ARD (Apple Remote Desktop) cached databases about app usage
 AUTOSTART | Retrieves programs, daemons, services set to start at boot/login
 BASICINFO | Basic machine & OS configuration like SN, timezone, computer name, last logged in user, HFS info
 BLUETOOTH | Gets Bluetooth Artifacts
+CHROME | Read Chrome History, Top Sites, Downloads and Extension info
 COOKIES | Reads .binarycookies, .cookies files and HSTS.plist for each user
 DOCKITEMS | Reads the Dock plist for every user
 DOMAINS | Active Directory Domain(s) that the mac is connected to
@@ -49,9 +51,11 @@ QUARANTINE | Reads the quarantine database and .LastGKReject file
 QUICKLOOK | Reads the QuickLook index.sqlite and carves thumbnails from thumbnails.data
 RECENTITEMS | Recently accessed Servers, Documents, Hosts, Volumes & Applications from .plist and .sfl files. Also gets recent searches and places for each user
 SAFARI | Internet history, downloaded file information, cookies and more from Safari caches
+SAVEDSTATE | Gets window titles from Saved Application State info
 SCREENTIME | Reads ScreenTime database for program and app usage
 SPOTLIGHT | Reads the spotlight index databases
 SPOTLIGHTSHORTCUTS | User typed data in the spotlight bar & targeted document/app
+SUDOLASTRUN | Gets last time sudo was used and a few other times earlier (if available)
 TERMINALSTATE | Reads Terminal saved state files which includes full text content of terminal windows
 TERMSESSIONS | Reads Terminal (bash & zsh) history & sesions for every user
 UNIFIEDLOGS | Reads macOS unified logging logs from .tracev3 files

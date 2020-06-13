@@ -21,12 +21,12 @@ import sqlite3
 __Plugin_Name = "CHROME"
 __Plugin_Friendly_Name = "Chrome"
 __Plugin_Version = "1.0"
-__Plugin_Description = "Read Chrome History, Top Sites, Downloads and Extension info"
+__Plugin_Description = "Read Chrome History, Top Sites, Downloads, Current/Last Tabs/Sessions and Extension info"
 __Plugin_Author = "Yogesh Khatri"
 __Plugin_Author_Email = "yogesh@swiftforensics.com"
 
 __Plugin_Modes = "MACOS,ARTIFACTONLY"
-__Plugin_ArtifactOnly_Usage = 'Provide the path to "Default" folder as argument'
+__Plugin_ArtifactOnly_Usage = 'Provide the path to "/Chrome/Default" folder as argument'
 
 log = logging.getLogger('MAIN.' + __Plugin_Name) # Do not rename or remove this ! This is the logger object
 
@@ -34,8 +34,6 @@ log = logging.getLogger('MAIN.' + __Plugin_Name) # Do not rename or remove this 
 # -----
 # Cookies - url is readable, data is encrypted
 # Favicons - can get url and icon
-# Last Session, Current Session - binary format
-# Last Tabs, Current Tabs - binary format
 # Login Data - can get usernames, urls, password is encrypted
 # Shortcuts - Like SpotlightShortcuts
 # Web Data - Autofill data
@@ -44,6 +42,9 @@ log = logging.getLogger('MAIN.' + __Plugin_Name) # Do not rename or remove this 
 # Top Sites
 # History + Downloads
 # Extensions
+# Last Session, Current Session - binary format
+# Last Tabs, Current Tabs - binary format
+
 #---- Do not change the variable names in above section ----#
 
 class ChromeItemType(IntEnum):
@@ -52,9 +53,11 @@ class ChromeItemType(IntEnum):
     TOPSITE = 2
     BOOKMARK = 3
     DOWNLOAD = 4
-    LASTSESSION = 5
-    RECENTCLOSEDTAB = 6
+    LASTTAB = 5
+    CURRENTTAB = 6
     EXTENSION = 7
+    LASTSESSION = 8
+    CURRENTSESSION = 9
 
     def __str__(self):
         return self.name
@@ -71,6 +74,20 @@ class ChromeItem:
         self.other_info = other
         self.user = user
         self.source = source
+
+def InsertUnique(chrome_items_list, item):
+    for x in chrome_items_list:
+        if x.user == item.user:
+            if x.source == item.source:
+                if x.type == item.type:
+                    if x.url == item.url:
+                        if x.name == item.name:
+                            if x.date == item.date:
+                                if x.end_date == item.end_date:
+                                    if x.referrer == item.referrer:
+                                        if x.other_info == item.other_info:
+                                            return
+    chrome_items_list.append(item)
 
 def OpenDb(inputPath):
     log.info ("Processing file " + inputPath)
@@ -94,7 +111,65 @@ def OpenDbFromImage(mac_info, inputPath, user):
         log.exception ("Failed to open database, is it a valid DB?")
     return None, None
 
-def ReadTopSitesDb(chrome_artifacts, db, user, source):
+def ReadTabsFile(chrome_artifacts, f, file_size, user, source):
+    '''Reads 'Current/Last Tabs/Sessions' binary format'''
+    if source.endswith('Last Tabs'):
+        source_type = ChromeItemType.LASTTAB
+    elif source.endswith('Current Tabs'):
+        source_type = ChromeItemType.CURRENTTAB
+    elif source.endswith('Last Session'):
+        source_type = ChromeItemType.LASTSESSION
+    elif source.endswith('Current Session'):
+        source_type = ChromeItemType.CURRENTSESSION
+    sig = f.read(4)
+    ver = f.read(4)
+    if sig != b'SNSS':
+        log.error(f"ERR, wrong sig for {source}, expected SNSS, got {sig.hex()}")
+    else:
+        pos = 0x8
+        if ver != b'\x01\0\0\0':
+            log.warning(f'Not version 1, parser may fail! Version={ver.hex()}')
+
+        while pos < file_size:
+            f.seek(pos)
+            struct_start = pos + 2
+            size = struct.unpack('<H', f.read(2))[0]
+            if size > 25:
+                t, size_2, unk1, unk2, len_url  = struct.unpack('<B4I', f.read(17))
+                if len_url > size_2:
+                    pos = struct_start + size # something went wrong in parsing, skip this entry
+                    continue
+                url = f.read(len_url).decode('utf8', 'backslashreplace')
+                if len_url % 4 == 0: # odd num, 
+                    skip = 0
+                else:
+                    skip = 4 - (len_url % 4)
+                    f.seek(skip, 1) # skipping ahead by 1            
+                title_len = struct.unpack('I', f.read(4))[0]
+                try:
+                    title = f.read(title_len * 2).decode('utf-16')
+                except UnicodeDecodeError:
+                    pos = struct_start + size # something went wrong in parsing, skip this entry
+                    continue
+
+                pos = f.tell()
+                t1 = t2 = t3 = None
+                if pos < struct_start + size - 28:
+                    f.seek(struct_start + size - 28)
+                    t_data = f.read(24)
+                    timestamps = list(struct.unpack('<QQQ', t_data))
+                    for x in range(3):
+                        if timestamps[x] == 0xFFFFFFFFFFFFFFFF:
+                            timestamps[x] = 0
+                    t1 = CommonFunctions.ReadChromeTime(timestamps[0])
+                    t2 = CommonFunctions.ReadChromeTime(timestamps[1])
+                    t3 = CommonFunctions.ReadChromeTime(timestamps[2])
+                log.debug(f"{url}, {t1}, {t2}, {t3}, 0x{pos:X}")
+                if url or title:
+                    InsertUnique(chrome_artifacts, ChromeItem(source_type, url, title, t3, t1, None, None, t2, user, source))
+            pos = struct_start + size
+
+def ReadTopSitesDb(chrome_artifacts, db, file_size, user, source):
     db.row_factory = sqlite3.Row
     tables = CommonFunctions.GetTableNames(db)
     if 'topsites' in tables: # meta.version == 4
@@ -113,7 +188,7 @@ def ReadTopSitesDb(chrome_artifacts, db, user, source):
                                 None, None, None, f"URL_RANK={row['url_rank']}", user, source)
             chrome_artifacts.append(item)
 
-def ReadHistoryDb(chrome_artifacts, db, user, source):
+def ReadHistoryDb(chrome_artifacts, db, file_size, user, source):
     db.row_factory = sqlite3.Row
     cursor = db.cursor()
 
@@ -324,18 +399,32 @@ def PrintAll(chrome_artifacts, output_params, source_path):
 
     WriteList("Chrome", "Chrome", data_list, chrome_info, output_params, source_path)
 
-def ExtractAndRead(mac_info, chrome_artifacts, user, file_path, parser_function):
+def ExtractAndReadDb(mac_info, chrome_artifacts, user, file_path, file_size, parser_function):
     mac_info.ExportFile(file_path, __Plugin_Name, user + '_')
     db, wrapper = OpenDbFromImage(mac_info, file_path, user)
     if db:
-        parser_function(chrome_artifacts, db, user, file_path)
+        parser_function(chrome_artifacts, db, file_size, user, file_path)
         db.close()
 
-def OpenLocalDbAndRead(chrome_artifacts, user, file_path, parser_function):
+def ExtractAndReadFile(mac_info, chrome_artifacts, user, file_path, file_size, parser_function):
+    mac_info.ExportFile(file_path, __Plugin_Name, user + '_')
+    log.info ("Processing Chrome file {} for user {}".format(file_path, user))
+    f = mac_info.Open(file_path)
+    if f:
+        parser_function(chrome_artifacts, f, file_size, user, file_path)
+        f.close()
+
+def OpenLocalDbAndRead(chrome_artifacts, user, file_path, file_size, parser_function):
     conn = OpenDb(file_path)
     if conn:
-        parser_function(chrome_artifacts, conn, '', file_path)
+        parser_function(chrome_artifacts, conn, file_size, '', file_path)
         conn.close()
+
+def OpenLocalFileAndRead(chrome_artifacts, user, file_path, file_size, parser_function):
+    f = open(file_path, 'rb')
+    log.info ("Processing Chrome file {}".format(file_path))
+    parser_function(chrome_artifacts, f, file_size, '', file_path)
+    f.close()
 
 def Plugin_Start(mac_info):
     '''Main Entry point function for plugin'''
@@ -356,9 +445,17 @@ def Plugin_Start(mac_info):
                     if file_entry['size'] == 0: 
                         continue
                     if file_entry['name'] == 'Top Sites':
-                        ExtractAndRead(mac_info, chrome_artifacts, user_name, source_path + '/Top Sites', ReadTopSitesDb)
+                        ExtractAndReadDb(mac_info, chrome_artifacts, user_name, source_path + '/Top Sites', file_entry['size'], ReadTopSitesDb)
                     elif file_entry['name'] == 'History':
-                        ExtractAndRead(mac_info, chrome_artifacts, user_name, source_path + '/History', ReadHistoryDb)
+                        ExtractAndReadDb(mac_info, chrome_artifacts, user_name, source_path + '/History', file_entry['size'], ReadHistoryDb)
+                    elif file_entry['name'] == 'Last Tabs':
+                        ExtractAndReadFile(mac_info, chrome_artifacts, user_name, source_path + '/Last Tabs', file_entry['size'], ReadTabsFile)
+                    elif file_entry['name'] == 'Current Tabs':
+                        ExtractAndReadFile(mac_info, chrome_artifacts, user_name, source_path + '/Current Tabs', file_entry['size'], ReadTabsFile)
+                    elif file_entry['name'] == 'Last Session':
+                        ExtractAndReadFile(mac_info, chrome_artifacts, user_name, source_path + '/Last Session', file_entry['size'], ReadTabsFile)
+                    elif file_entry['name'] == 'Current Session':
+                        ExtractAndReadFile(mac_info, chrome_artifacts, user_name, source_path + '/Current Session', file_entry['size'], ReadTabsFile)
                 else: # Folder
                     if file_entry['name'] == 'Extensions':
                         ProcessExtensions(mac_info, chrome_artifacts, user_name, source_path + '/Extensions')
@@ -378,10 +475,19 @@ def Plugin_Start_Standalone(input_files_list, output_params):
             file_names = os.listdir(input_path)
             for file_name in file_names:
                 file_path = os.path.join(input_path, file_name)
+                file_size = os.path.getsize(file_path)
                 if file_name == 'Top Sites':
-                    OpenLocalDbAndRead(chrome_artifacts, '', file_path, ReadTopSitesDb)
+                    OpenLocalDbAndRead(chrome_artifacts, '', file_path, file_size, ReadTopSitesDb)
                 elif file_name == 'History':
-                    OpenLocalDbAndRead(chrome_artifacts, '', file_path, ReadHistoryDb)
+                    OpenLocalDbAndRead(chrome_artifacts, '', file_path, file_size, ReadHistoryDb)
+                elif file_name == 'Last Tabs':
+                    OpenLocalFileAndRead(chrome_artifacts, '', file_path, file_size, ReadTabsFile)
+                elif file_name == 'Current Tabs':
+                    OpenLocalFileAndRead(chrome_artifacts, '', file_path, file_size, ReadTabsFile)
+                elif file_name == 'Last Session':
+                    OpenLocalFileAndRead(chrome_artifacts, '', file_path, file_size, ReadTabsFile)
+                elif file_name == 'Current Session':
+                    OpenLocalFileAndRead(chrome_artifacts, '', file_path, file_size, ReadTabsFile)
                 elif file_name == 'Extensions' and os.path.isdir(file_path):
                     ProcessExtensionsLocal(chrome_artifacts, '', file_path)
 
