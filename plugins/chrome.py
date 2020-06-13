@@ -21,7 +21,7 @@ import sqlite3
 __Plugin_Name = "CHROME"
 __Plugin_Friendly_Name = "Chrome"
 __Plugin_Version = "1.0"
-__Plugin_Description = "Read Chrome History, Top Sites, Downloads, Current/Last Tabs/Sessions and Extension info"
+__Plugin_Description = "Read Chrome History, Top Sites, Downloads, Tabs/Sessions and Extension info"
 __Plugin_Author = "Yogesh Khatri"
 __Plugin_Author_Email = "yogesh@swiftforensics.com"
 
