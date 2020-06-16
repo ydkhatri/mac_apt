@@ -17,7 +17,7 @@
 #
 # Script Name  : DeSerializer.py
 # Author       : Yogesh Khatri
-# Last Updated : June 13 2020
+# Last Updated : June 16 2020
 # Purpose      : NSKeyedArchive plists (such as .SFL2 files) are stored as 
 #                serialized data, which is machine readable but not human
 #                readable. This script will convert NSKeyedArchive binary 
@@ -36,26 +36,52 @@
 import biplist
 import logging
 import plugins.helpers.ccl_bplist as ccl_bplist
+import datetime
 import io
+import json
 import os
 import plistlib
 import sys
 import traceback
 
+deserializer_version = '1.2'
+
+rec_depth = 0
+rec_uids = []
+
+def RecurseSafely(uid, plist, root, object_table):
+    '''Returns False if infinite recursion was detected'''
+    global rec_uids
+    if uid in rec_uids:
+        print(f'Possible INFINITE RECURSION detected - breaking loop! uid={uid} , LIST={str(rec_uids)}')
+        #if isinstance(plist, list):
+        #    plist.append('ERROR - Infinite Recursion')
+        return False
+    rec_uids.append(uid)
+    recurseCreatePlist(plist, root, object_table)
+    rec_uids.pop()
+    return True
+
 def recurseCreatePlist(plist, root, object_table):
+    global rec_depth
+    rec_depth += 1
+    
+    if rec_depth > 50:
+        log.error('Possible infinite recursion detected!!')
     if isinstance(root, dict):
         for key, value in root.items():
             if key == '$class': 
                 continue
+            add_this_item = True
             v = None
             if isinstance(value, ccl_bplist.BplistUID):
                 v2 = ccl_bplist.NSKeyedArchiver_convert(object_table[value.value], object_table)
                 if isinstance(v2, dict):
                     v = {}
-                    recurseCreatePlist(v, v2, object_table)
+                    add_this_item = RecurseSafely(value.value, v, v2, object_table) # recurseCreatePlist(v, v2, object_table)
                 elif isinstance(v2, list):
                     v = []
-                    recurseCreatePlist(v, v2, object_table)
+                    add_this_item = RecurseSafely(value.value, v, v2, object_table) # recurseCreatePlist(v, v2, object_table)
                 else:
                     v = v2
             elif isinstance(value, list):
@@ -76,18 +102,20 @@ def recurseCreatePlist(plist, root, object_table):
             if not isinstance(key, str):
                 key = str(key)
                 log.debug(f'Converting non-string key {key} to string')
-            plist[key] = v
+            if add_this_item:
+                plist[key] = v
     else: # must be list
         for value in root:
             v = None
+            add_this_item = True
             if isinstance(value, ccl_bplist.BplistUID):
                 v2 = ccl_bplist.NSKeyedArchiver_convert(object_table[value.value], object_table)
                 if isinstance(v2, dict):
                     v = {}
-                    recurseCreatePlist(v, v2, object_table)
+                    add_this_item = RecurseSafely(value.value, v, v2, object_table) # recurseCreatePlist(v, v2, object_table)
                 elif isinstance(v2, list):
                     v = []
-                    recurseCreatePlist(v, v2, object_table)
+                    add_this_item = RecurseSafely(value.value, v, v2, object_table) # recurseCreatePlist(v, v2, object_table)
                 else:
                     v = v2
             elif isinstance(value, list):
@@ -104,7 +132,9 @@ def recurseCreatePlist(plist, root, object_table):
                 v = ''
                 if key != 'NS.base': # NS.base is usually UID:0, which is usually None
                     log.debug('Changing NULL to empty string for key={}'.format(key))
-            plist.append(v)
+            if add_this_item:
+                plist.append(v)
+    rec_depth -= 1
 
 def ConvertCFUID_to_UID(plist):
     ''' For converting XML plists to binary, UIDs which are represented
@@ -224,6 +254,52 @@ def process_nsa_plist(input_path, f):
 
     return top_level
 
+def get_json_writeable_plist(in_plist, out_plist):
+    if isinstance(in_plist, list):
+        for item in in_plist:
+            if isinstance(item, list):
+                i = []
+                out_plist.append(i)
+                get_json_writeable_plist(item, i)
+            elif isinstance(item, dict):
+                i = {}
+                out_plist.append(i)
+                get_json_writeable_plist(item, i)
+            elif isinstance(item, bytes):
+                out_plist.append(item.hex())
+            else:
+                out_plist.append(str(item))
+    else: #dict
+        for k, v in in_plist.items():
+            if isinstance(v, list):
+                i = []
+                out_plist[k] = i
+                get_json_writeable_plist(v, i)
+            elif isinstance(v, dict):
+                i = {}
+                out_plist[k] = i
+                get_json_writeable_plist(v, i)
+            elif isinstance(v, bytes):
+                out_plist[k] = v.hex()
+            else:
+                out_plist[k] = str(v)
+
+def write_plist_to_json_file(deserialised_plist, output_path):
+    try:
+        print('Writing out .. ' + output_path)
+        out_file = open(output_path, 'w')
+        try:
+            json_plist = {} if isinstance(deserialised_plist, dict) else []
+            get_json_writeable_plist(deserialised_plist, json_plist)
+            json.dump(json_plist, out_file)
+            out_file.close()
+            return True
+        except (TypeError, ValueError) as ex:
+            print('json error - ' + str(ex))
+    except OSError as ex:
+        print('Error opening file for writing: Error={} Path={}'.format(output_path, str(ex)))
+    return False
+
 def write_plist_to_file(deserialised_plist, output_path):
     #Using plistLib to write plist
     out_file = None
@@ -249,30 +325,45 @@ def write_plist_to_file(deserialised_plist, output_path):
         print('Had an exception (error)')
         traceback.print_exc()
 
-usage = '\r\nDeserializer.py   (c) Yogesh Khatri 2018-2020 \r\n'\
+usage = '\r\nDeserializer version {0}  (c) Yogesh Khatri 2018-2020 \r\n'\
         'This script converts an NSKeyedArchive plist into a normal deserialized one.\r\n\r\n'\
-        'Usage: python.exe deserializer.py input_plist_path \r\n'\
-        ' Example: deserializer.py com.apple.preview.sfl2 \r\n\r\n'\
-        'If successful, the resulting plist will be created in the same folder and will have _unserialized appended to its name.\r\n'
+        '  Usage  : {1} [-j] input_plist_path \r\n'\
+        '  Example: {1} C:\\test\\com.apple.preview.sfl2 \r\n'\
+        '           {1} -j  C:\\test\\screentime.plist \r\n\r\n'\
+        'The -j option will create a json file as output. \r\n'\
+        'If successful, the resulting plist or json file will be created in the same folder \r\n'\
+        'and will have _deserialized appended to its name.\r\n'
 
 use_as_library = True
 
 def main():
     global usage
     global use_as_library
+    global deserializer_version
     use_as_library = False
-    if sys.version_info.major == 2:
-        print('ERROR-This will not work with python2. Please run again with python3!')
-        return
+    json_output = False
+
+    if sys.argv[0].lower().endswith('.exe'):
+        deserializer_launcher = 'deserializer.exe'
+    else:
+        deserializer_launcher = 'python deserializer.py'
+
+    usage = usage.format(deserializer_version, deserializer_launcher)
     argc = len(sys.argv)
-    
     if argc < 2 or sys.argv[1].lower() == '-h':
         print(usage)
         return
-
-    input_path = sys.argv[1]
+    elif argc >= 3: # check for -j option
+        if sys.argv[1].lower() == '-j':
+            json_output = True
+        else:
+            print(f'Invalid option "{sys.argv[1]}" The only valid option is "-j"')
+            print(usage)
+        input_path = sys.argv[2]
+    else:
+        input_path = sys.argv[1]
     if not os.path.exists(input_path):
-        print('Error, file does not exist! Check file path!\r\n')
+        print(f'Error, input file "{input_path}" does not exist! Check file path!\r\n')
         print(usage)
         return
 
@@ -282,12 +373,17 @@ def main():
         f = extract_nsa_plist(f)
         if f:
             deserialised_plist = process_nsa_plist(input_path, f)
-            output_path = input_path + '_deserialized.plist'
-            if write_plist_to_file(deserialised_plist, output_path):
+            f.close()
+            output_path_plist = input_path + '_deserialized.plist'
+            output_path_json  = input_path + '_deserialized.json'
+            if json_output:
+                output_success = write_plist_to_json_file(deserialised_plist, output_path_json)
+            else:
+                output_success = write_plist_to_file(deserialised_plist, output_path_plist)
+            if output_success:
                 print('Done !')
             else:
-                print('Converison Failed ! Please send the offending plist my way to\n yogesh@swiftforensics.com')
-            f.close()
+                print('Conversion Failed ! Please send the offending plist my way to\n yogesh@swiftforensics.com')
         else:
             print('Had an error :(  No output!! Please send the offending plist my way to\n yogesh@swiftforensics.com')
     except Exception as ex:
