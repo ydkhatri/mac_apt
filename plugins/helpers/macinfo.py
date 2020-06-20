@@ -1024,7 +1024,7 @@ class MacInfo:
 
 class ApfsMacInfo(MacInfo):
     def __init__(self, output_params, password):
-        MacInfo.__init__(self, output_params, password)
+        super().__init__(output_params, password)
         self.apfs_container = None
         self.apfs_db = None
         self.apfs_db_path = ''
@@ -1204,7 +1204,7 @@ class ApfsMacInfo(MacInfo):
 # TODO: Make this class more efficient, perhaps remove some extractions!
 class MountedMacInfo(MacInfo):
     def __init__(self, root_folder_path, output_params):
-        MacInfo.__init__(self, output_params)
+        super().__init__(output_params)
         self.macos_root_folder = root_folder_path
         # TODO: if os.name == 'nt' and len (root_folder_path) == 2 and root_folder_path[2] == ':': self.macos_root_folder += '\\'
         if self.is_linux:
@@ -1233,7 +1233,7 @@ class MountedMacInfo(MacInfo):
 
     def _get_creation_time(self, local_path):
         if self.is_windows:
-            CommonFunctions.ReadUnixTime(os.path.getctime(local_path))
+            return CommonFunctions.ReadUnixTime(os.path.getctime(local_path))
         elif self.is_linux:
             try:
                 t = statx(local_path).get_btime() # New Linux kernel 4+ has this ability
@@ -1309,6 +1309,11 @@ class MountedMacInfo(MacInfo):
             mounted_path = self.BuildFullPath(path)
             dir = os.listdir(mounted_path)
             for entry in dir:
+                # Exclude the mounted encase <file>.Stream which is uncompressed stream of file,
+                #  not needed as we have the actual file
+                if entry.find('\xB7Stream') >= 0 or entry.find('\xB7Resource') >= 0:
+                    log.debug(f'Excluding {entry} as it is raw stream not FILE. If you think this should be included, let the developers know!')
+                    continue
                 newpath = os.path.join(mounted_path, entry)
                 entry_type = EntryType.FOLDERS if os.path.isdir(newpath) else EntryType.FILES
                 item = { 'name':entry, 'type':entry_type, 'size':self._GetFileSizeNoPathMod(newpath, 0)}
@@ -1320,7 +1325,11 @@ class MountedMacInfo(MacInfo):
                     items.append( item )
                 elif types_to_fetch == EntryType.FOLDERS and entry_type == EntryType.FOLDERS:
                     items.append( item )
-                
+        except FileNotFoundError as ex:
+            if str(ex).find('There are no more files') >= 0: # known windows issue on some empty folders!! '[WinError 18] There are no more files:...'
+                pass
+            else:
+                log.debug("Path not found : " + mounted_path)
         except Exception as ex:
             log.exception('')
             if str(ex).find('cannot find the path specified'):
@@ -1338,7 +1347,7 @@ class MountedMacInfo(MacInfo):
             if not self.is_windows:
                 target_path = os.readlink(self.BuildFullPath(path))
             else:
-                target_path = MacInfo.ReadSymLinkTargetPath(path)
+                target_path = super().ReadSymLinkTargetPath(path)
         except:
             log.exception("Error resolving symlink : " + path)
         return target_path
@@ -1397,7 +1406,7 @@ class MountedMacInfo(MacInfo):
         '''Gets DARWIN_*_DIR paths '''
         if not self.is_windows:
             # Unix/Linux or Mac mounted disks should preserve UID/GID, so we can read it normally from the files.
-            MacInfo._GetDarwinFoldersInfo(self)
+            super()._GetDarwinFoldersInfo(self)
             return
 
         users_dir = self.ListItemsInFolder('/private/var/folders', EntryType.FOLDERS)
@@ -1474,11 +1483,11 @@ class MountedMacInfo(MacInfo):
     def _GetUserInfo(self):
         if not self.is_windows:
             # Unix/Linux or Mac mounted disks should preserve UID/GID, so we can read it normally from the files.
-            MacInfo._GetUserInfo(self)
+            super()._GetUserInfo(self)
             return
 
         # on windows
-        self._GetDarwinFoldersInfos() # This probably does not apply to OSX < Mavericks !
+        self._GetDarwinFoldersInfo() # This probably does not apply to OSX < Mavericks !
 
         #Get user info from plists under: \private\var\db\dslocal\nodes\Default\users\<USER>.plist
         #TODO - make a better plugin that gets all user & group info
@@ -1492,7 +1501,7 @@ class MountedMacInfo(MacInfo):
                         plist = biplist.readPlist(f)
                         home_dir = self.GetArrayFirstElement(plist.get('home', ''))
                         if home_dir != '':
-                            log.info('{} :  {}'.format(plist_meta['name'], home_dir))
+                            #log.info('{} :  {}'.format(plist_meta['name'], home_dir))
                             if home_dir.startswith('/var/'): home_dir = '/private' + home_dir # in mac /var is symbolic link to /private/var
                             # find it in self.users which was populated by _GetDarwinFoldersInfo()
                             target_user = None
@@ -1521,7 +1530,7 @@ class MountedMacInfoSeperateSysData(MountedMacInfo):
     '''Same as MountedMacInfo, but takes into account two volumes (SYS, DATA) mounted separately'''
 
     def __init__(self, sys_root_folder_path, data_root_folder_path, output_params):
-        MountedMacInfo.__init__(self, sys_root_folder_path, output_params)
+        super().__init__(sys_root_folder_path, output_params)
         self.sys_volume_folder = sys_root_folder_path  # New in 10.15, a System read-only partition
         self.data_volume_folder = data_root_folder_path # New in 10.15, a separate Data partition
         self.firmlinks = {}
@@ -1605,7 +1614,7 @@ class MountedMacInfoSeperateSysData(MountedMacInfo):
 
 class MountedIosInfo(MountedMacInfo):
     def __init__(self, root_folder_path, output_params):
-        MountedMacInfo.__init__(self, root_folder_path, output_params)
+        super().__init__(root_folder_path, output_params)
     
     def GetUserAndGroupIDForFile(self, path):
         raise NotImplementedError()
