@@ -146,7 +146,8 @@ def GetTimezone(mac_info):
                 basic_data.append(['TIMEZONE', 'SelectedCity.' + item, data, '', global_pref_plist_path])
                 num_items_read += 1
             except KeyError: pass
-        if num_items_read < 2 and (mac_info.GetVersionDictionary()['minor'] < 12): # Not seen in later versions! 
+        mac_version_dict = mac_info.GetVersionDictionary()
+        if num_items_read < 2 and (mac_version_dict['major'] == 10) and (mac_version_dict['minor'] < 12): # Not seen in later versions! 
             log.info('Only read {} items from TimeZone.SelectedCity, this does not seem right!'.format(num_items_read))
     else:
         log.error('Failed to read plist ' + global_pref_plist_path + " Error was : " + error_message)

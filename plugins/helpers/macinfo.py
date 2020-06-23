@@ -981,9 +981,6 @@ class MacInfo:
     def _GetSystemInfo(self):
         ''' Gets system version information'''
         try:
-            #plist_file = self.macos_FS.open('/System/Library/CoreServices/SystemVersion.plist')
-            #plist_string = plist_file.read_random(0, plist_file.info.meta.size) # This is a small file, so this is fine!
-            #plist = biplist.readPlistFromString(plist_string)
             log.debug("Trying to get system version from /System/Library/CoreServices/SystemVersion.plist")
             f = self.Open('/System/Library/CoreServices/SystemVersion.plist')
             if f != None:
@@ -998,7 +995,6 @@ class MacInfo:
                         elif self.os_version.startswith('10.13'): self.os_friendly_name = 'High Sierra'
                         elif self.os_version.startswith('10.14'): self.os_friendly_name = 'Mojave'
                         elif self.os_version.startswith('10.15'): self.os_friendly_name = 'Catalina'
-                        elif self.os_version.startswith('10.16'): self.os_friendly_name = '-UNKNOWN-'
                         elif self.os_version.startswith('10.0'): self.os_friendly_name = 'Cheetah'
                         elif self.os_version.startswith('10.1'): self.os_friendly_name = 'Puma'
                         elif self.os_version.startswith('10.2'): self.os_friendly_name = 'Jaguar'
@@ -1009,6 +1005,7 @@ class MacInfo:
                         elif self.os_version.startswith('10.7'): self.os_friendly_name = 'Lion'
                         elif self.os_version.startswith('10.8'): self.os_friendly_name = 'Mountain Lion'
                         elif self.os_version.startswith('10.9'): self.os_friendly_name = 'Mavericks'
+                        elif self.os_version.startswith('11.'): self.os_friendly_name = 'Big Sur'
                         else: self.os_friendly_name = 'Unknown version!'
                     log.info ('macOS version detected is: {} ({}) Build={}'.format(self.os_friendly_name, self.os_version, self.os_build))
                     f.close()

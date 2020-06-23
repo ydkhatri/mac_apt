@@ -141,7 +141,6 @@ def Plugin_Start(mac_info):
     accounts = []
     account_plist_rel_path = '{}/Library/Preferences/MobileMeAccounts.plist' # older
     account_sqlite_rel_path = '{0}/Library/Accounts/Accounts{1}.sqlite' # Accounts3 Seen in Mavericks and above, Accounts4 in High Sierra
-    version = mac_info.GetVersionDictionary()
     for user in mac_info.users:
         if user.home_dir == '/private/var/empty': continue # Optimization, nothing should be here!
         plist_path = account_plist_rel_path.format(user.home_dir)
