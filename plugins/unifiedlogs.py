@@ -54,7 +54,7 @@ class MacAptFile(VirtualFile):
         try:
             self.file_pointer = self.mac_info.Open(self.path)
             return self.file_pointer
-        except (IOError, OSError, ValueError) as ex:
+        except (OSError, ValueError) as ex:
             if not self.mac_info.IsValidFilePath(self.path):
                 log.error('Failed to open as file not found {}'.format(self.path))
                 self.file_not_found = True

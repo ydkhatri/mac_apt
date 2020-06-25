@@ -206,10 +206,10 @@ class CommonFunctions:
                             return (True, plist, '')
                         except biplist.InvalidPlistException as ex:
                             error = 'Could not read plist: ' + path + " Error was : " + str(ex)
-                    except IOError as ex:
-                        error = 'IOError while reading plist: ' + path + " Error was : " + str(ex)
+                    except OSError as ex:
+                        error = 'OSError while reading plist: ' + path + " Error was : " + str(ex)
                 else:
                     error = 'Failed to open file'
-        except IOError as ex:
+        except OSError as ex:
             error = 'Exception from ReadPlist while trying to open file. Exception=' + str(ex)
         return (False, None, error)

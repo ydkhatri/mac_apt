@@ -283,7 +283,7 @@ def Plugin_Start_Standalone(input_files_list, output_params):
                 try:
                     with open(path, 'rb') as f:
                         ProcessFile(file_name, f, logs, CommonFunctions.ReadUnixTime(os.path.getmtime(path)), path)
-                except (IOError, OSError):
+                except (OSError):
                     log.exception('Failed to open file for reading: ' + path)
         if len(logs) > 0:
             PrintAll(logs, output_params)

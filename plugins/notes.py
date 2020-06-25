@@ -90,7 +90,7 @@ def ReadAttPathFromPlist(plist_blob):
             return path
         except (KeyError, IndexError):
             log.exception('Could not fetch attachment path from plist')
-    except (InvalidPlistException, IOError) as e:
+    except (InvalidPlistException, OSError) as e:
         log.error ("Invalid plist in table." + str(e) )
     return ''
 

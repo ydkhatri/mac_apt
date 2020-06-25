@@ -182,17 +182,17 @@ def ReadApps(applications_dict):
 def ReadBackupsStandalone(info_plist_path, status_plist_path, manifest_plist_path, backups, source):
     try:
         info_plist = readPlist(info_plist_path)
-    except (InvalidPlistException, IOError, OSError):
+    except (InvalidPlistException, OSError):
         log.exception("Failed to read Info.plist from path {}".format(info_plist_path))
         info_plist = {}
     try:
         status_plist = readPlist(status_plist_path)
-    except (InvalidPlistException, IOError, OSError):
+    except (InvalidPlistException, OSError):
         log.exception("Failed to read Status.plist from path {}".format(status_plist_path))
         status_plist = {}
     try:
         manifest_plist = readPlist(manifest_plist_path)
-    except (InvalidPlistException, IOError, OSError):
+    except (InvalidPlistException, OSError):
         log.exception("Failed to read Manifest.plist from path {}".format(manifest_plist_path))
         manifest_plist = {}
 

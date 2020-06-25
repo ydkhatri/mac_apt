@@ -372,7 +372,7 @@ def ParseRecentFile(input_file):
                     ReadSFLPlist(f, recent_items, input_file, '')
                 else: #SFL2
                     ReadSFL2Plist(f, recent_items, input_file, '')
-        except (IOError, OSError) as ex:
+        except (OSError) as ex:
             log.exception('Failed to open file: {}'.format(input_file))
     elif basename.endswith('.plist'):
         try:
@@ -393,7 +393,7 @@ def ParseRecentFile(input_file):
                 data = f.read()
                 last_mod_date = os.path.getmtime(input_file)
                 ReadKnownHosts(data, input_file, '', recent_items, CommonFunctions.ReadUnixTime(last_mod_date))
-        except (IOError, OSError, ValueError) as ex:
+        except (OSError, ValueError) as ex:
             log.exception('Failed to open/read file: {}'.format(input_file))
     else:
         log.info ('Unknown file: {} '.format(basename))

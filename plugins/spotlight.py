@@ -206,7 +206,7 @@ def ProcessStoreDb(input_file_path, input_file, output_path, output_params, item
                 log.debug ("Trying to write extracted store data for {}".format(file_name_prefix))
                 data_type_info = Get_Column_Info(store)
                 writer = DataWriter(out_params, "Spotlight-" + file_name_prefix, data_type_info, input_file_path)
-            except (sqlite3.Error, ValueError, IOError, OSError) as ex:
+            except (sqlite3.Error, ValueError, OSError) as ex:
                 log.exception ("Failed to initilize data writer")
                 return None
 
@@ -466,7 +466,7 @@ def Plugin_Start_Standalone(input_files_list, output_params):
                     output_folder = os.path.join(output_params.output_path, 'SPOTLIGHT_DATA')
                     log.info('Now processing file {}'.format(input_path))
                     ProcessStoreDb(input_path, input_file, output_folder, output_params, None, os.path.basename(input_path), False, False)
-            except (OSError, IOError):
+            except (OSError):
                 log.exception('Failed to open input file ' + input_path)
         else:
             log.info("Unknown file type: {}".format(os.path.basename()))

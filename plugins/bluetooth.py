@@ -319,7 +319,7 @@ def Plugin_Start_Standalone(input_files_list, output_params):
         try:
             plist = readPlist(input_file)
             cache_list = ReadBluetoothPlist(plist)
-        except (OSError, IOError, InvalidPlistException) as e:
+        except (OSError, InvalidPlistException) as e:
             log.error ("Could not open plist, error was : " + str(e) )
 
         if len(cache_list) > 0:

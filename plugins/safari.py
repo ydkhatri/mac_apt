@@ -373,7 +373,7 @@ def ProcessSafariFolder(mac_info, folder_path, user, safari_items):
             sqlite = SqliteWrapper(mac_info)
             conn = sqlite.connect(source_path)
             ReadHistoryDb(conn, safari_items, source_path, user)
-        except (sqlite3.Error, OSError, IOError) as ex:
+        except (sqlite3.Error, OSError) as ex:
             log.exception ("Failed to open safari history database '{}', is it a valid SQLITE DB?".format(source_path))
 
 def Plugin_Start(mac_info):

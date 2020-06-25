@@ -67,7 +67,7 @@ def GetAutoLoginPass(mac_info):
             dec_data = decrypt_kcpassword(enc_data)
         else:
             log.error('Could not open file ' + kc_path)
-    except (IOError, OSError):
+    except (OSError):
         log.exception('Error while trying to open {}'.format(kc_path))
     return dec_data
 

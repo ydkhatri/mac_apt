@@ -184,7 +184,7 @@ def parse_cups_file(filepath):
                 request.parse()
             except pkipplib.IPPError as ex:
                 log.exception ('Error from pkipplib - {} for file {}'.format(str(ex), filepath))
-    except (IOError, OSError):
+    except (OSError):
         log.exception ('Error opening cups job file ' + filepath)
         return None
     return get_job_properties(request, filepath)
@@ -198,7 +198,7 @@ def Plugin_Start_Standalone(input_files_list, output_params):
         try:
             dirList = os.listdir(input_path)
             had_exception = False
-        except (IOError, OSError):
+        except (OSError):
             log.exception('Problem listing files.. Is the path provided a file (instead of a folder)?')
             had_exception = True
         if not had_exception:

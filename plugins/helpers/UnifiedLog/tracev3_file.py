@@ -1042,7 +1042,7 @@ class TraceV3(data_format.BinaryDataFormat):
                             if has_sp_name:
                                 try:
                                     signpost_name, c_a, c_b = dsc_cache.ReadFmtStringAndEntriesFromVirtualOffset(sp_name_ref)
-                                except (KeyError, IOError):
+                                except (KeyError, OSError):
                                     logger.error("Could not get signpost name! @ 0x{:X} ct={}".format(log_file_pos, ct))
 
                             cache_b1 = dsc_cache.GetUuidEntryFromVirtualOffset(u5)
@@ -1058,7 +1058,7 @@ class TraceV3(data_format.BinaryDataFormat):
                                     logger.debug("fmt_str_v_offset highest bit set @ 0x{:X} ct={}".format(log_file_pos, ct))
                                 else:
                                     format_str, cache_a, cache_b = dsc_cache.ReadFmtStringAndEntriesFromVirtualOffset(fmt_str_v_offset)
-                            except (KeyError, IOError):
+                            except (KeyError, OSError):
                                 logger.error('Failed to get DSC msg string @ 0x{:X} ct={}'.format(log_file_pos, ct))
 
                         elif has_alternate_uuid: pass #u2 & 0x0008: # Parsed above

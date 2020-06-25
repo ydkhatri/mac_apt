@@ -417,7 +417,7 @@ class CsvWriter:
         self.filepath = CommonFunctions.GetNextAvailableFileName(filepath)
         try:
             self.file_handle = codecs.open(self.filepath, 'w', encoding=self.codec)
-        except (OSError, IOError) as ex:
+        except (OSError) as ex:
             log.error('Failed to create csv file at path {}'.format(self.filepath))
             log.exception('Error details')
             raise ex
@@ -662,12 +662,12 @@ def WriteList(data_description, data_name, data_list, data_type_info, output_par
         writer = DataWriter(output_params, data_name, data_type_info, source_file)
         try:
             writer.WriteRows(data_list)
-        except (IOError, OSError, xlsxwriter.exceptions.XlsxWriterException, sqlite3.Error) as ex:
+        except (OSError, xlsxwriter.exceptions.XlsxWriterException, sqlite3.Error) as ex:
             log.error ("Failed to write row data")
             log.exception ("Error details")
         finally:
             writer.FinishWrites()
-    except (IOError, OSError, xlsxwriter.exceptions.XlsxWriterException, sqlite3.Error) as ex:
+    except (OSError, xlsxwriter.exceptions.XlsxWriterException, sqlite3.Error) as ex:
         log.error ("Failed to initilize data writer")
         log.exception ("Error details")
 

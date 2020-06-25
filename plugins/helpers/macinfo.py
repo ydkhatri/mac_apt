@@ -546,8 +546,8 @@ class MacInfo:
                             return (True, plist, '')
                     except (biplist.InvalidPlistException, biplist.NotBinaryPlistException) as ex:
                         error = 'Could not read plist: ' + path + " Error was : " + str(ex)
-                except IOError as ex:
-                    error = 'IOError while reading plist: ' + path + " Error was : " + str(ex)
+                except OSError as ex:
+                    error = 'OSError while reading plist: ' + path + " Error was : " + str(ex)
             else:
                 error = 'Failed to open file'
         except Exception as ex:
@@ -673,7 +673,7 @@ class MacInfo:
                     if not self.hfs_native.initialized:
                         self.hfs_native.Initialize(self.pytsk_image, self.macos_partition_start_offset)
                     return self.hfs_native.Open(path)
-                except (IOError, OSError, ValueError):
+                except (OSError, ValueError):
                     log.error("Failed to open file: " + path)
                     log.debug("Exception details:\n", exc_info=True)
             else:
@@ -1355,7 +1355,7 @@ class MountedMacInfo(MacInfo):
             log.debug("Trying to open file : " + mounted_path)
             file = open(mounted_path, 'rb')
             return file
-        except (IOError, OSError) as ex:
+        except (OSError) as ex:
             log.exception("Error opening file : " + mounted_path)
         return None
 
@@ -1375,7 +1375,7 @@ class MountedMacInfo(MacInfo):
                         offset += len(data)
                         f.write(data)
                     f.flush()
-            except (IOError, OSError) as ex:
+            except (OSError) as ex:
                 log.exception ("Failed to create file for writing at " + destination_path)
                 source_file.close()
                 return False
@@ -1542,7 +1542,7 @@ class MountedMacInfoSeperateSysData(MountedMacInfo):
             mounted_path = super().BuildFullPath(firmlink_file_path)
             log.debug("Trying to open file : " + mounted_path)
             f = open(mounted_path, 'rb')
-        except (IOError, OSError) as ex:
+        except (OSError) as ex:
             log.exception("Error opening file : " + mounted_path)
             raise ValueError('Fatal : Could not find/read Firmlinks file in System volume!')
 

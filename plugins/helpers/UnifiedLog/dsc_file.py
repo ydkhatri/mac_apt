@@ -43,7 +43,6 @@ class Dsc(data_format.BinaryDataFormat):
               False otherwise.
 
         Raises:
-          IOError: if the dsc file cannot be parsed.
           OSError: if the dsc file cannot be parsed.
           struct.error: if the dsc file cannot be parsed.
         '''
@@ -114,7 +113,7 @@ class Dsc(data_format.BinaryDataFormat):
 
         Raises:
           KeyError: if no range entry could be found corresponding the offset.
-          IOError: if the format string cannot be read.
+          OSError: if the format string cannot be read.
         '''
         range_entry, uuid_entry = self.FindVirtualOffsetEntries(v_offset)
         if not range_entry:
@@ -169,7 +168,7 @@ class Dsc(data_format.BinaryDataFormat):
 
         try:
             result = self._ParseFileObject(file_object)
-        except (IOError, OSError, struct.error):
+        except (OSError, struct.error):
             logger.exception('DSC Parser error')
             result = False
 

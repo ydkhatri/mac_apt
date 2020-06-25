@@ -39,7 +39,6 @@ class Uuidtext(data_format.BinaryDataFormat):
               False otherwise.
 
         Raises:
-          IOError: if the uuidtext file cannot be parsed.
           OSError: if the uuidtext file cannot be parsed.
           struct.error: if the uuidtext file cannot be parsed.
         '''
@@ -128,7 +127,7 @@ class Uuidtext(data_format.BinaryDataFormat):
 
         try:
             result = self._ParseFileObject(file_object)
-        except (IOError, OSError, struct.error):
+        except (OSError, struct.error):
             logger.exception('Uuidtext Parser error')
             result = False
 
