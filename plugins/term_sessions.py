@@ -182,13 +182,16 @@ def Plugin_Start(mac_info):
         if mac_info.IsValidFolderPath(source_folder):
             ProcessBashSessionsForUser(mac_info, bash_sessions, source_folder, user_name)
         
-        #Export .bash_history or .zsh_history file
-        bash_history_path = user.home_dir + ('/.sh_history' if user_name == 'root' else '/.bash_history')
+        #Export .bash_history, .sh_history or .zsh_history file
+        sh_history_path = user.home_dir + '/.sh_history'
+        bash_history_path = user.home_dir + '/.bash_history'
         zsh_history_path = user.home_dir + '/.zsh_history'
         if mac_info.IsValidFilePath(bash_history_path):
             ReadHistoryFile(mac_info, bash_history_path, 'BASH_HISTORY', bash_sessions, user_name)
         if mac_info.IsValidFilePath(zsh_history_path):
             ReadHistoryFile(mac_info, zsh_history_path, 'ZSH_HISTORY', bash_sessions, user_name)
+        if mac_info.IsValidFilePath(sh_history_path):
+            ReadHistoryFile(mac_info, sh_history_path, 'SH_HISTORY', bash_sessions, user_name)
 
     if len(bash_sessions) > 0:
         PrintAll(bash_sessions, mac_info.output_params, '')
