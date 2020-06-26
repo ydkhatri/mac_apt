@@ -24,6 +24,7 @@ import time
 import traceback
 from io import BytesIO
 from plugins.helpers.apfs_reader import *
+from plugins.helpers.darwin_path_generator import GetDarwinPath, GetDarwinPath2
 from plugins.helpers.deserializer import process_nsa_plist
 from plugins.helpers.hfs_alt import HFSVolume
 from plugins.helpers.common import *
@@ -1197,6 +1198,100 @@ class ApfsMacInfo(MacInfo):
                         items.append(dict(x))
         return items
 
+class MountedFile(): 
+    # This class is a file-like object, its existence is due to 
+    # Xways Forensics bug with reading mounted files, which can't 
+    # handle f.read() , only f.read(size) works and size must not
+    # go beyond end of file. This class ensures that part.
+    def __init__(self):
+        self.pos = 0
+        self.size = 0
+        self._file = None
+        self.closed = True
+
+    def _check_closed(self):
+        if self.closed:
+            raise ValueError("File is closed!")
+
+    # file methods
+    def open(self, file_path, mode='rb'):
+        self.size = os.path.getsize(file_path)
+        self._file  = open(file_path, mode)
+        self.closed = False
+        return self
+
+    def close(self):
+        self.closed = True
+        if self._file:
+            self._file.close()
+
+    def tell(self):
+        return self.pos
+
+    def seek(self, offset, whence=0):
+        if self.closed:
+            raise ValueError("seek of closed file")
+        self._file.seek(offset, whence)
+        self.pos = self._file.tell()
+
+    def __iter__(self):
+        return self
+
+    def __next__(self):
+        line = self.readline()
+        if len(line) == 0:
+            raise StopIteration
+        return line
+
+    def readline(self, size=None):
+        ret = b''
+        original_file_pos = self.tell()
+        stop_at_one_iteration = True
+        lf_found = False
+        if size == None:
+            stop_at_one_iteration = False
+            size = 1024
+        buffer = self.read(size)
+        while buffer:
+            new_line_pos = buffer.find(b'\n')
+            if new_line_pos == -1: # not_found, add to line
+                ret += buffer
+            else:
+                ret += buffer[0:new_line_pos + 1]
+                lf_found = True
+            self.seek(original_file_pos + len(ret))
+
+            if stop_at_one_iteration or lf_found: break
+            buffer = self.read(size)
+        return ret
+
+    def readlines(self, sizehint=None):
+        lines = []
+        line = self.readline()
+        while line:
+            lines.append(line)
+            line = self.readline()
+        return lines
+
+    def read(self, size_to_read=None):
+        if self.closed:
+            raise ValueError("read of closed file")
+        data = b''
+        if size_to_read == None:
+            size_to_read = self.size - self.pos
+            if size_to_read > 0:
+                data = self._file.read(size_to_read)
+                self.pos += len(data)
+        elif self.pos >= self.size: # at or beyond EOF, nothing to read
+            pass
+        else:
+            end_pos = self.pos + size_to_read
+            if end_pos > self.size:
+                size_to_read = self.size - self.pos
+            if size_to_read > 0:
+                data = self._file.read(size_to_read)
+                self.pos += len(data)
+        return data
 
 # TODO: Make this class more efficient, perhaps remove some extractions!
 class MountedMacInfo(MacInfo):
@@ -1353,7 +1448,7 @@ class MountedMacInfo(MacInfo):
         try:
             mounted_path = self.BuildFullPath(path)
             log.debug("Trying to open file : " + mounted_path)
-            file = open(mounted_path, 'rb')
+            file = MountedFile().open(mounted_path, 'rb')
             return file
         except (OSError) as ex:
             log.exception("Error opening file : " + mounted_path)
@@ -1405,123 +1500,71 @@ class MountedMacInfo(MacInfo):
             # Unix/Linux or Mac mounted disks should preserve UID/GID, so we can read it normally from the files.
             super()._GetDarwinFoldersInfo(self)
             return
+        
+        for user in self.users:
+            if user.UID != '' and user.UUID != '':
+                darwin_path = '/private/var/folders/' + GetDarwinPath2(user.UUID, user.UID)
+                if not self.IsValidFolderPath(darwin_path):
+                    darwin_path = '/private/var/folders/' + GetDarwinPath(user.UUID, user.UID)
+                    if not self.IsValidFolderPath(darwin_path):
+                        log.error(f'Could not find DARWIN_PATH for user {user.user_name}, uid={user.UID}, uuid={user.UUID}')
+                        continue
+                user_info.DARWIN_USER_DIR       = darwin_path + '/0'
+                user_info.DARWIN_USER_CACHE_DIR = darwin_path + '/C'
+                user_info.DARWIN_USER_TEMP_DIR  = darwin_path + '/T'
 
-        users_dir = self.ListItemsInFolder('/private/var/folders', EntryType.FOLDERS)
-        # In /private/var/folders/  --> Look for --> xx/yyyyyy/C/com.apple.sandbox/sandbox-cache.db
-        for unknown1 in users_dir:
-            unknown1_name = unknown1['name']
-            unknown1_dir = self.ListItemsInFolder('/private/var/folders/' + unknown1_name, EntryType.FOLDERS)
-            for unknown2 in unknown1_dir:
-                unknown2_name = unknown2['name']
-                found_home = False
-                found_user = False
-                home = ''
-                # This is yyyyyy folder
-                path_to_sandbox_db = '/private/var/folders/' + unknown1_name + '/' + unknown2_name + '/C/com.apple.sandbox/sandbox-cache.db'
-                if self.IsValidFilePath(path_to_sandbox_db) and self.GetFileSize(path_to_sandbox_db): # This does not always exist or it may be zero in size!
-                    sqlite = SqliteWrapper(self)
-                    try:
-                        conn = sqlite.connect(path_to_sandbox_db)
-                        try:
-                            if CommonFunctions.TableExists(conn, 'entry'):
-                                cursor = conn.execute("select params from entry where params like '%HOME%'") # This query is for El Capitan, table 'entry' does not exist on Yosemite
-                                for row in cursor:
-                                    if found_home: break
-                                    try:
-                                        data_dict = ast.literal_eval(str(row[0]))
-                                        for item in data_dict:
-                                            if item.upper().lstrip('_').rstrip('_') in ('HOME', 'HOME_DIR'):
-                                                home = data_dict[item]
-                                                if home != '':
-                                                    found_home = True
-                                                    break
-                                    except Exception as ex:
-                                        log.error ("Unknown error while processing query output")
-                                        log.debug("Exception details:\n", exc_info=True) #traceback.print_exc()
-                            #    cursor = conn.execute("select params from entry where params like '%USER%'") # This query is for El Capitan, table 'entry' does not exist on Yosemite
-                            #     for row in cursor:
-                            #         if found_user: break;
-                            #         try:
-                            #             data_dict = ast.literal_eval(str(row[0]))
-                            #             for item in data_dict:
-                            #                 #print ('item =' + item + ' -> ' + data_dict[item])
-                            #                 if item.upper().lstrip('_').rstrip('_') in ('HOME', 'HOME_DIR'):
-                            #                     home = data_dict[item]
-                            #                     if home != '':
-                            #                         found_home = True
-                            #                         break;
-                            #         except Exception as ex:
-                            #             log.error ("Unknown error while processing query output")
-                            #             log.debug("Exception details:\n", exc_info=True) #traceback.print_exc()   
-                                     
-                            elif CommonFunctions.TableExists(conn, 'params'):
-                                cursor = conn.execute("select distinct value from params where key like '%HOME%'  and value not like ''") # This query is for Yosemite
-                                for row in cursor:
-                                    home = row[0]
-                                    found_home = True
-                                    break;
-                            else:
-                                log.critical ("Unknown database type or bad database! Could not get DARWIN_USER_* paths!")
-                        except sqlite3.Error as ex:
-                            log.error ("Failed to execute query on db : {} Error Details:{}".format(path_to_sandbox_db, str(ex)) )
-                        conn.close()
-                    except sqlite3.Error as ex:
-                        log.error ("Failed to connect to db " + str(ex))
-                #log.debug('found_home={} found_user={}  HOME={}'.format(found_home, found_user, home))
-                if found_home:# and found_user:
-                    user_info = UserInfo()
-                    user_info.home_dir = home
-                    user_info.DARWIN_USER_DIR       = '/private/var/folders/' + unknown1_name + '/' + unknown2_name + '/0'
-                    user_info.DARWIN_USER_CACHE_DIR = '/private/var/folders/' + unknown1_name + '/' + unknown2_name + '/C'
-                    user_info.DARWIN_USER_TEMP_DIR  = '/private/var/folders/' + unknown1_name + '/' + unknown2_name + '/T'
-                    user_info._source = path_to_sandbox_db
-                    self.users.append(user_info)
-
-    def _GetUserInfo(self):
+    def _GetDomainUserInfo(self):
         if not self.is_windows:
             # Unix/Linux or Mac mounted disks should preserve UID/GID, so we can read it normally from the files.
-            super()._GetUserInfo(self)
+            super()._GetDomainUserInfo(self)
             return
+        # Not implemented for windows as uid, gid not obtainable!
 
-        # on windows
-        self._GetDarwinFoldersInfo() # This probably does not apply to OSX < Mavericks !
+    # def _GetUserInfo(self):
+    #     if not self.is_windows:
+    #         # Unix/Linux or Mac mounted disks should preserve UID/GID, so we can read it normally from the files.
+    #         super()._GetUserInfo(self)
+    #         return
 
-        #Get user info from plists under: \private\var\db\dslocal\nodes\Default\users\<USER>.plist
-        #TODO - make a better plugin that gets all user & group info
-        users_path  = '/private/var/db/dslocal/nodes/Default/users'
-        user_plists = self.ListItemsInFolder(users_path, EntryType.FILES)
-        for plist_meta in user_plists:
-            if plist_meta['size'] > 0:
-                try:
-                    f = self.Open(users_path + '/' + plist_meta['name'])
-                    if f!= None:
-                        plist = biplist.readPlist(f)
-                        home_dir = self.GetArrayFirstElement(plist.get('home', ''))
-                        if home_dir != '':
-                            #log.info('{} :  {}'.format(plist_meta['name'], home_dir))
-                            if home_dir.startswith('/var/'): home_dir = '/private' + home_dir # in mac /var is symbolic link to /private/var
-                            # find it in self.users which was populated by _GetDarwinFoldersInfo()
-                            target_user = None
-                            for user in self.users:
-                                if user.home_dir == home_dir:
-                                    target_user = user
-                                    break
-                            if target_user == None:
-                                target_user = UserInfo()
-                                self.users.append(target_user)
-                            target_user.UID = str(self.GetArrayFirstElement(plist.get('uid', '')))
-                            target_user.GID = str(self.GetArrayFirstElement(plist.get('gid', '')))
-                            target_user.UUID = self.GetArrayFirstElement(plist.get('generateduid', ''))
-                            target_user.home_dir = home_dir
-                            target_user.user_name = self.GetArrayFirstElement(plist.get('name', ''))
-                            target_user.real_name = self.GetArrayFirstElement(plist.get('realname', ''))
-                            # There is also accountpolicydata which contains : creation time, failed logon time, failed count, ..
-                        else:
-                            log.error('Did not find \'home\' in ' + plist_meta['name'])
-                        f.close()
-                except Exception as ex:
-                    log.error ("Could not open plist " + plist_meta['name'] + " Exception: " + str(ex))
-        #TODO: Domain user uid, gid?
+    #     # on windows
+    #     self._GetDarwinFoldersInfo() # This probably does not apply to OSX < Mavericks !
+
+    #     #Get user info from plists under: \private\var\db\dslocal\nodes\Default\users\<USER>.plist
+    #     #TODO - make a better plugin that gets all user & group info
+    #     users_path  = '/private/var/db/dslocal/nodes/Default/users'
+    #     user_plists = self.ListItemsInFolder(users_path, EntryType.FILES)
+    #     for plist_meta in user_plists:
+    #         if plist_meta['size'] > 0:
+    #             try:
+    #                 f = self.Open(users_path + '/' + plist_meta['name'])
+    #                 if f!= None:
+    #                     plist = biplist.readPlist(f)
+    #                     home_dir = self.GetArrayFirstElement(plist.get('home', ''))
+    #                     if home_dir != '':
+    #                         #log.info('{} :  {}'.format(plist_meta['name'], home_dir))
+    #                         if home_dir.startswith('/var/'): home_dir = '/private' + home_dir # in mac /var is symbolic link to /private/var
+    #                         # find it in self.users which was populated by _GetDarwinFoldersInfo()
+    #                         target_user = None
+    #                         for user in self.users:
+    #                             if user.home_dir == home_dir:
+    #                                 target_user = user
+    #                                 break
+    #                         if target_user == None:
+    #                             target_user = UserInfo()
+    #                             self.users.append(target_user)
+    #                         target_user.UID = str(self.GetArrayFirstElement(plist.get('uid', '')))
+    #                         target_user.GID = str(self.GetArrayFirstElement(plist.get('gid', '')))
+    #                         target_user.UUID = self.GetArrayFirstElement(plist.get('generateduid', ''))
+    #                         target_user.home_dir = home_dir
+    #                         target_user.user_name = self.GetArrayFirstElement(plist.get('name', ''))
+    #                         target_user.real_name = self.GetArrayFirstElement(plist.get('realname', ''))
+    #                         # There is also accountpolicydata which contains : creation time, failed logon time, failed count, ..
+    #                     else:
+    #                         log.error('Did not find \'home\' in ' + plist_meta['name'])
+    #                     f.close()
+    #             except Exception as ex:
+    #                 log.error ("Could not open plist " + plist_meta['name'] + " Exception: " + str(ex))
+    #     #TODO: Domain user uid, gid?
 
 class MountedMacInfoSeperateSysData(MountedMacInfo):
     '''Same as MountedMacInfo, but takes into account two volumes (SYS, DATA) mounted separately'''
