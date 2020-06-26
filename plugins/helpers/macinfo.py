@@ -1502,16 +1502,19 @@ class MountedMacInfo(MacInfo):
             return
         
         for user in self.users:
-            if user.UID != '' and user.UUID != '':
+            if user.UUID != '' and user.UID not in ('', '-2', '1', '201'): # Users nobody, daemon, guest don't have one
                 darwin_path = '/private/var/folders/' + GetDarwinPath2(user.UUID, user.UID)
                 if not self.IsValidFolderPath(darwin_path):
                     darwin_path = '/private/var/folders/' + GetDarwinPath(user.UUID, user.UID)
                     if not self.IsValidFolderPath(darwin_path):
-                        log.error(f'Could not find DARWIN_PATH for user {user.user_name}, uid={user.UID}, uuid={user.UUID}')
+                        if user.user_name.startswith('_') and user.UUID.upper().startswith('FFFFEEEE'):
+                            pass
+                        else:
+                            log.error(f'Could not find DARWIN_PATH for user {user.user_name}, uid={user.UID}, uuid={user.UUID}')
                         continue
-                user_info.DARWIN_USER_DIR       = darwin_path + '/0'
-                user_info.DARWIN_USER_CACHE_DIR = darwin_path + '/C'
-                user_info.DARWIN_USER_TEMP_DIR  = darwin_path + '/T'
+                user.DARWIN_USER_DIR       = darwin_path + '/0'
+                user.DARWIN_USER_CACHE_DIR = darwin_path + '/C'
+                user.DARWIN_USER_TEMP_DIR  = darwin_path + '/T'
 
     def _GetDomainUserInfo(self):
         if not self.is_windows:
@@ -1519,52 +1522,6 @@ class MountedMacInfo(MacInfo):
             super()._GetDomainUserInfo(self)
             return
         # Not implemented for windows as uid, gid not obtainable!
-
-    # def _GetUserInfo(self):
-    #     if not self.is_windows:
-    #         # Unix/Linux or Mac mounted disks should preserve UID/GID, so we can read it normally from the files.
-    #         super()._GetUserInfo(self)
-    #         return
-
-    #     # on windows
-    #     self._GetDarwinFoldersInfo() # This probably does not apply to OSX < Mavericks !
-
-    #     #Get user info from plists under: \private\var\db\dslocal\nodes\Default\users\<USER>.plist
-    #     #TODO - make a better plugin that gets all user & group info
-    #     users_path  = '/private/var/db/dslocal/nodes/Default/users'
-    #     user_plists = self.ListItemsInFolder(users_path, EntryType.FILES)
-    #     for plist_meta in user_plists:
-    #         if plist_meta['size'] > 0:
-    #             try:
-    #                 f = self.Open(users_path + '/' + plist_meta['name'])
-    #                 if f!= None:
-    #                     plist = biplist.readPlist(f)
-    #                     home_dir = self.GetArrayFirstElement(plist.get('home', ''))
-    #                     if home_dir != '':
-    #                         #log.info('{} :  {}'.format(plist_meta['name'], home_dir))
-    #                         if home_dir.startswith('/var/'): home_dir = '/private' + home_dir # in mac /var is symbolic link to /private/var
-    #                         # find it in self.users which was populated by _GetDarwinFoldersInfo()
-    #                         target_user = None
-    #                         for user in self.users:
-    #                             if user.home_dir == home_dir:
-    #                                 target_user = user
-    #                                 break
-    #                         if target_user == None:
-    #                             target_user = UserInfo()
-    #                             self.users.append(target_user)
-    #                         target_user.UID = str(self.GetArrayFirstElement(plist.get('uid', '')))
-    #                         target_user.GID = str(self.GetArrayFirstElement(plist.get('gid', '')))
-    #                         target_user.UUID = self.GetArrayFirstElement(plist.get('generateduid', ''))
-    #                         target_user.home_dir = home_dir
-    #                         target_user.user_name = self.GetArrayFirstElement(plist.get('name', ''))
-    #                         target_user.real_name = self.GetArrayFirstElement(plist.get('realname', ''))
-    #                         # There is also accountpolicydata which contains : creation time, failed logon time, failed count, ..
-    #                     else:
-    #                         log.error('Did not find \'home\' in ' + plist_meta['name'])
-    #                     f.close()
-    #             except Exception as ex:
-    #                 log.error ("Could not open plist " + plist_meta['name'] + " Exception: " + str(ex))
-    #     #TODO: Domain user uid, gid?
 
 class MountedMacInfoSeperateSysData(MountedMacInfo):
     '''Same as MountedMacInfo, but takes into account two volumes (SYS, DATA) mounted separately'''

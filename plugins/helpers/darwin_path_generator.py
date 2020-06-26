@@ -29,8 +29,12 @@ def GetDarwinPath(uuid, uid):
        osx older than Mavericks(10.9)'''
     charset ='+-0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz'
     uuid = uuid.replace('-', '') # strip '-' if present
+    uid = int(uid)
+    if uid < 0:
+        # convert to unsigned num
+        uid = struct.unpack('<I', struct.pack('<i', uid))[0]
     #Convert uid to hex 8 byte string
-    uid = '{:08x}'.format(int(uid)) # input uid may be int or string (decimal)
+    uid = '{:08x}'.format(uid) # input uid may be int or string (decimal)
     hex_string = uuid + uid
     binary_string = ''.join('{0:04b}'.format(int(c, 16)) for c in hex_string) # get binary string
     
@@ -48,8 +52,12 @@ def GetDarwinPath2(uuid, uid):
        This is the algorithm for newer osx - Mavericks(10.9) thru Sierra(10.12)'''
     charset ='0123456789_bcdfghjklmnpqrstvwxyz'
     uuid = uuid.replace('-', '') # strip '-' if present
+    uid = int(uid)
+    if uid < 0:
+        # convert to unsigned num
+        uid = struct.unpack('<I', struct.pack('<i', uid))[0]
     #Convert uid to hex 8 byte string
-    uid = '{:08x}'.format(int(uid)) # input uid may be int or string (decimal)
+    uid = '{:08x}'.format(uid) # input uid may be int or string (decimal)
     hex_string = uuid + uid
     binary_string = ''.join('{0:04b}'.format(int(c, 16)) for c in hex_string) # get binary string
     
