@@ -78,7 +78,8 @@ def OpenDbFromImage(mac_info, inputPath):
     try:
         sqlite = SqliteWrapper(mac_info)
         conn = sqlite.connect(inputPath)
-        log.debug ("Opened database successfully")
+        if conn:
+            log.debug ("Opened database successfully")
         return conn, sqlite
     except sqlite3.Error as ex:
         log.exception ("Failed to open database, is it a valid QuickLook DB?")
@@ -446,6 +447,8 @@ def Plugin_Start(mac_info):
 
         # Opens index.sqlite
         quicklook_db, quicklook_wrapper = OpenDbFromImage(mac_info, quicklook_db_path)
+        if quicklook_db == None:
+            continue
 
         c = quicklook_db.cursor()
         query = "PRAGMA table_info('files');"

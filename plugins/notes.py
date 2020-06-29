@@ -325,7 +325,8 @@ def OpenDbFromImage(mac_info, inputPath, user):
     try:
         sqlite = SqliteWrapper(mac_info)
         conn = sqlite.connect(inputPath)
-        log.debug ("Opened database successfully")
+        if conn:
+            log.debug ("Opened database successfully")
         return conn, sqlite
     except sqlite3.Error:
         log.exception ("Failed to open database, is it a valid Notes DB?")

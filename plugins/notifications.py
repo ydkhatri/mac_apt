@@ -75,9 +75,10 @@ def ProcessNotificationDb_Wrapper(inputPath, mac_info, user, screentime_strings_
     try:
         sqlite = SqliteWrapper(mac_info)
         conn = sqlite.connect(inputPath)
-        log.debug ("Opened database successfully")
-        ParseDb(conn, inputPath, user, mac_info.output_params.timezone, screentime_strings_dict)
-        conn.close()
+        if conn:
+            log.debug ("Opened database successfully")
+            ParseDb(conn, inputPath, user, mac_info.output_params.timezone, screentime_strings_dict)
+            conn.close()
     except sqlite3.Error as ex:
         log.error ("Failed to open database, is it a valid Notification DB? Error details: " + str(ex)) 
 

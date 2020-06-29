@@ -70,7 +70,8 @@ def OpenDbFromImage(mac_info, inputPath):
     try:
         sqlite = SqliteWrapper(mac_info)
         conn = sqlite.connect(inputPath)
-        log.debug ("Opened database successfully")
+        if conn:
+            log.debug ("Opened database successfully")
         return conn, sqlite
     except sqlite3.Error as ex:
         log.exception ("Failed to open database, is it a valid Screen Time DB?")

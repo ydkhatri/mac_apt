@@ -89,21 +89,22 @@ def ReadSerialFromDb(mac_info, source):
         try:
             sqlite = SqliteWrapper(mac_info)
             conn = sqlite.connect(source)
-            log.debug ("Opened DB {} successfully".format(os.path.basename(source)))
-            try:
-                conn.row_factory = sqlite3.Row
-                cursor = conn.execute("SELECT SerialNumber FROM TableInfo")
+            if conn:
+                log.debug ("Opened DB {} successfully".format(os.path.basename(source)))
                 try:
-                    for row in cursor:
-                        serial_number = row[0] # Was row['SerialNumber'] but sqlite has issues with unicode, so removed it.
-                        if len(serial_number) > 1: found_serial = True
-                        break
+                    conn.row_factory = sqlite3.Row
+                    cursor = conn.execute("SELECT SerialNumber FROM TableInfo")
+                    try:
+                        for row in cursor:
+                            serial_number = row[0] # Was row['SerialNumber'] but sqlite has issues with unicode, so removed it.
+                            if len(serial_number) > 1: found_serial = True
+                            break
+                    except sqlite3.Error as ex:
+                        log.exception("Db cursor error while reading file " + source)
+                    
                 except sqlite3.Error as ex:
-                    log.exception("Db cursor error while reading file " + source)
-                
-            except sqlite3.Error as ex:
-                log.error ("Sqlite error - \nError details: \n" + str(ex))
-            conn.close()
+                    log.error ("Sqlite error - \nError details: \n" + str(ex))
+                conn.close()
         except sqlite3.Error as ex:
             log.error ("Failed to open {} database, is it a valid Notification DB? Error details: ".format(os.path.basename(source)) + str(ex))
     else:
