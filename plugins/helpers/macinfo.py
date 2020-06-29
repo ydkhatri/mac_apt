@@ -1510,7 +1510,7 @@ class MountedMacInfo(MacInfo):
                         if user.user_name.startswith('_') and user.UUID.upper().startswith('FFFFEEEE'):
                             pass
                         else:
-                            log.error(f'Could not find DARWIN_PATH for user {user.user_name}, uid={user.UID}, uuid={user.UUID}')
+                            log.warning(f'Could not find DARWIN_PATH for user {user.user_name}, uid={user.UID}, uuid={user.UUID}')
                         continue
                 user.DARWIN_USER_DIR       = darwin_path + '/0'
                 user.DARWIN_USER_CACHE_DIR = darwin_path + '/C'
@@ -1521,7 +1521,87 @@ class MountedMacInfo(MacInfo):
             # Unix/Linux or Mac mounted disks should preserve UID/GID, so we can read it normally from the files.
             super()._GetDomainUserInfo(self)
             return
-        # Not implemented for windows as uid, gid not obtainable!
+        log.debug('Trying to get domain profiles from /Users/')
+        domain_users = []
+        users_folder = self.ListItemsInFolder('/Users/', EntryType.FOLDERS)
+        for folder in users_folder:
+            folder_name = folder['name']
+            if folder_name in ('Shared', 'root'):
+                continue
+            found_user = False
+            for user in self.users:
+                if user.user_name == folder_name:
+                    found_user = True # Existing local user
+                    break
+            if found_user: continue
+            else:
+                log.info(f'Found a domain user {folder_name} or deleted user?')
+                target_user = UserInfo()
+                domain_users.append(target_user)
+                target_user.home_dir = '/Users/' + folder_name
+                target_user.user_name = folder_name
+                target_user.real_name = folder_name
+                target_user._source = '/Users/' + folder_name
+        if domain_users:
+            known_darwin_paths = set()
+            for user in self.users:
+                if user.UID and user.UUID and not user.UID.startswith('-'):
+                    known_darwin_paths.add('/private/var/folders/' + GetDarwinPath(user.UUID, user.UID)) # They haven't been populated yet in user!
+                    known_darwin_paths.add('/private/var/folders/' + GetDarwinPath2(user.UUID, user.UID))
+            # try to get darwin_cache folders
+            var_folders = self.ListItemsInFolder('/private/var/folders', EntryType.FOLDERS)
+            for level_1 in var_folders:
+                name_1 = level_1['name']
+                var_folders_level_2 = self.ListItemsInFolder(f'/private/var/folders/{name_1}', EntryType.FOLDERS)
+                for level_2 in var_folders_level_2:
+                    darwin_path = f'/private/var/folders/{name_1}/' + level_2['name']
+                    if darwin_path in known_darwin_paths:
+                        continue
+                    else:
+                        matched_darwin_path_to_user = False
+                        font_reg_db = darwin_path + '/C/com.apple.FontRegistry/fontregistry.user'
+                        if self.IsValidFilePath(font_reg_db):
+                            try:
+                                sqlite_wrapper = SqliteWrapper(self)
+                                db = sqlite_wrapper.connect(font_reg_db)
+                                if db:
+                                    cursor = db.cursor()
+                                    cursor.execute('SELECT path_column from dir_table WHERE domain_column=1')
+                                    user_path = ''
+                                    for row in cursor:
+                                        user_path = row[0]
+                                        break
+                                    cursor.close()
+                                    db.close()
+                                    if user_path:
+                                        if user_path.startswith('/Users/'):
+                                            username = user_path.split('/')[2]
+                                            for dom_user in domain_users:
+                                                if dom_user.user_name == username:
+                                                    dom_user.DARWIN_USER_DIR = darwin_path + '/0'
+                                                    dom_user.DARWIN_USER_TEMP_DIR = darwin_path + '/T'
+                                                    dom_user.DARWIN_USER_CACHE_DIR = darwin_path + '/C'
+                                                    log.debug(f'Found darwin path for user {username}')
+                                                    matched_darwin_path_to_user = True
+                                                    # Try to get uid now.
+                                                    if self.IsValidFolderPath(dom_user.DARWIN_USER_DIR + '/com.apple.LaunchServices.dv'):
+                                                        for item in self.ListItemsInFolder(dom_user.DARWIN_USER_DIR + '/com.apple.LaunchServices.dv', EntryType.FILES):
+                                                            name = item['name']
+                                                            if name.startswith('com.apple.LaunchServices.trustedsignatures-') and name.endswith('.db'):
+                                                                dom_user.UID = name[43:-3]
+                                                                break
+                                                    break
+                                        else:
+                                            log.error(f'user profile path was non-standard - {user_path}')
+                                    else:
+                                        log.error('Query did not yield any output!')
+                                    if not matched_darwin_path_to_user:
+                                        log.error(f'Could not find mapping for darwin folder {darwin_path} to user')
+                            except sqlite3.Error:
+                                log.exception(f'Error reading {font_reg_db}, Cannot map darwin folder to user profile!')
+                        else:
+                            log.error(f'Could not find {font_reg_db}, Cannot map darwin folder to user profile!')
+            self.users.extend(domain_users)
 
 class MountedMacInfoSeperateSysData(MountedMacInfo):
     '''Same as MountedMacInfo, but takes into account two volumes (SYS, DATA) mounted separately'''
