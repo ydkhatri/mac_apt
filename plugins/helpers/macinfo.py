@@ -1498,7 +1498,7 @@ class MountedMacInfo(MacInfo):
         '''Gets DARWIN_*_DIR paths '''
         if not self.is_windows:
             # Unix/Linux or Mac mounted disks should preserve UID/GID, so we can read it normally from the files.
-            super()._GetDarwinFoldersInfo(self)
+            super()._GetDarwinFoldersInfo()
             return
         
         for user in self.users:
