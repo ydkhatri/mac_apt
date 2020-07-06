@@ -10,7 +10,7 @@ mac_apt is a DFIR tool to process Mac computer full disk images (**or _live_ mac
 
 #### Features
 * Cross platform (no dependency on pyobjc)
-* Works on E01, VMDK, DD, split-DD, DMG (no compression) & mounted images (good for nix, limited support on windows)
+* Works on E01, VMDK, DD, split-DD, DMG (no compression) & mounted images  
 * XLSX, CSV, Sqlite outputs
 * Analyzed files/artifacts are exported for later review
 * zlib, lzvn, lzfse compressed files are supported!
