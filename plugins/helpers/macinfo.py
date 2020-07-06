@@ -1519,7 +1519,7 @@ class MountedMacInfo(MacInfo):
     def _GetDomainUserInfo(self):
         if not self.is_windows:
             # Unix/Linux or Mac mounted disks should preserve UID/GID, so we can read it normally from the files.
-            super()._GetDomainUserInfo(self)
+            super()._GetDomainUserInfo()
             return
         log.debug('Trying to get domain profiles from /Users/')
         domain_users = []
