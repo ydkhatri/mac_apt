@@ -17,12 +17,9 @@
 #
 # Script Name  : spotlight_parser.py
 # Author       : Yogesh Khatri
-# Last Updated : 04/01/2019
-# Requirement  : Python 3.7, modules ( lz4, enum34 ) and lzfse library
-#                Dependencies can be installed using the command 'pip install lz4 enum34' 
-#                You will also need to install the lzfse decompression library. Follow the 
-#                instructions here (https://github.com/ydkhatri/mac_apt/tree/master/Libraries_For_Windows)
-#                to install lzfse.pyd. This is dependent on your version of python and platform.
+# Last Updated : 08/07/2020
+# Requirement  : Python 3.7, modules ( lz4, pyliblzfse )
+#                Dependencies can be installed using the command 'pip install lz4 pyliblzfse' 
 # 
 # Purpose      : Parse the Spotlight store.db or .store.db file from mac OSX
 #                These files are located under:
