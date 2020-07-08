@@ -35,10 +35,10 @@ log = logging.getLogger('MAIN.HELPERS.HFS_ALT')
 lzfse_capable = False
 
 try:
-    import lzfse
+    import liblzfse
     lzfse_capable = True
 except ImportError:
-    print("lzfse not found. Won't decompress lzfse/lzvn streams")
+    print("liblzfse not found. Won't decompress lzfse/lzvn streams")
 
 def write_file(filename,data):
     f = open(filename, "wb")
@@ -51,7 +51,7 @@ def lzvn_decompress(compressed_stream, compressed_size, uncompressed_size): #TOD
     '''
     header = b'bvxn' + struct.pack('<I', uncompressed_size) + struct.pack('<I', compressed_size)
     footer = b'bvx$'
-    return lzfse.decompress(header + compressed_stream + footer)
+    return liblzfse.decompress(header + compressed_stream + footer)
 
 class HFSFile(object):
     def __init__(self, volume, hfsplusfork, fileID, deleted=False):
@@ -182,7 +182,7 @@ class HFSCompressedResourceFork(HFSFile):
                 decompressed = lzvn_decompress(compressed_stream, self.header.totalSize - self.header.headerSize, self.uncompressed_size)
                 if output_file: output_file.write(decompressed)
                 elif self.uncompressed_size < 209715200: r += decompressed
-            except Exception as ex:
+            except liblzfse.error as ex:
                 raise ValueError("Exception from lzfse_lzvn decompressor")
         elif self.compression_type in [8, 12]: # lzvn or lzfse in 64k chunks
             try:
@@ -208,7 +208,7 @@ class HFSCompressedResourceFork(HFSFile):
                     if output_file: output_file.write(decompressed)
                     elif self.uncompressed_size < 209715200: r += decompressed
                     i += 1
-            except Exception as ex:
+            except liblzfse.error as ex:
                 raise ValueError("Exception from lzfse_lzvn decompressor")
         else:
             base = self.header.headerSize + 4

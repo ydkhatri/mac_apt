@@ -11,7 +11,7 @@ from kaitaistruct import __version__ as ks_version, KaitaiStream, BytesIO
 import plugins.helpers.apfs as apfs
 import collections
 import logging
-import lzfse
+import liblzfse
 import struct
 import zlib
 from uuid import UUID
@@ -1790,13 +1790,13 @@ class ApfsFileCompressed(ApfsFile):
         header = b'bvxn' + struct.pack('<I', uncompressed_size) + struct.pack('<I', compressed_size)
         footer = b'bvx$'
         try:
-            decompressed_stream = lzfse.decompress(header + compressed_stream + footer)
+            decompressed_stream = liblzfse.decompress(header + compressed_stream + footer)
             len_dec = len(decompressed_stream)
             if len_dec != uncompressed_size:
                 log.error("_lzvn_decompress ERROR - decompressed_stream size is incorrect! Decompressed={} Expected={}. Padding stream with nulls".format(len_dec, uncompressed_size))
                 decompressed_stream += b'\x00'*(uncompressed_size - len_dec)
             return decompressed_stream
-        except lzfse.error as ex:
+        except liblzfse.error as ex:
             log.error('lzvn error - could not decompress stream, returning nulls')
             #raise ValueError('lzvn decompression failed')
         return b'\x00'* uncompressed_size
