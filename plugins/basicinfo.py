@@ -106,7 +106,7 @@ def ReadSerialFromDb(mac_info, source):
                     log.error ("Sqlite error - \nError details: \n" + str(ex))
                 conn.close()
         except sqlite3.Error as ex:
-            log.error ("Failed to open {} database, is it a valid Notification DB? Error details: ".format(os.path.basename(source)) + str(ex))
+            log.error ("Failed to open {}, is it a valid DB? Error details: ".format(os.path.basename(source)) + str(ex))
     else:
         log.debug("File not found: {}".format(source))
     return (found_serial, serial_number)
