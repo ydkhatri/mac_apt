@@ -14,6 +14,8 @@ import os
 import re
 #import pytz
 from enum import IntEnum
+from io import BytesIO
+from plugins.helpers.deserializer import process_nsa_plist
 from sqlite3 import Error as sqlite3Error
 #from tzlocal import get_localzone
 
@@ -181,35 +183,57 @@ class CommonFunctions:
         return ''
 
     @staticmethod
-    def ReadPlist(path):
+    def ReadPlist(path_or_file, deserialize=False):
         '''
             Safely open and read a plist.
             Returns a tuple (True/False, plist/None, "error_message")
         '''
         #log.debug("Trying to open plist file : " + path)
         error = ''
-        try:
-            with open(path, 'rb') as f:
-                if f != None:
+        path = ''
+        f = None
+        if isinstance(path_or_file, str):
+            path = path_or_file
+            try:
+                f = open(path, 'rb')
+            except OSError as ex:
+                error = 'Could not open file, Error was : ' + str(ex)
+        else: # its a file
+            f = path_or_file
+
+        if f:
+            try:
+                plist = biplist.readPlist(f)
+                if deserialize:
                     try:
-                        #log.debug("Trying to read plist file : " + path)
-                        plist = biplist.readPlist(f)
+                        f.seek(0)
+                        plist = process_nsa_plist('', f)
                         return (True, plist, '')
-                    except biplist.InvalidPlistException as ex:
+                    except Exception as ex:
+                        error = 'Could not read deserialized plist: ' + path + " Error was : " + str(ex)
+                return (True, plist, '')
+            except biplist.InvalidPlistException as ex:
+                try:
+                    # Perhaps this is manually edited or incorrectly formatted by a non-Apple utility  
+                    # that has left whitespaces at the start of file before <?xml tag
+                    f.seek(0)
+                    data = f.read().decode('utf8', 'ignore')
+                    data = data.lstrip(" \r\n\t").encode('utf8', 'backslashreplace')
+                    if deserialize:
                         try:
-                            # Perhaps this is manually edited or incorrectly formatted by a non-Apple utility  
-                            # that has left whitespaces at the start of file before <?xml tag
-                            f.seek(0)
-                            data = f.read()
-                            data = data.lstrip(" \r\n\t")
-                            plist = biplist.readPlistFromString(data)
+                            temp_file = BytesIO(data)
+                            plist = process_nsa_plist('', temp_file)
+                            temp_file.close()
                             return (True, plist, '')
-                        except biplist.InvalidPlistException as ex:
-                            error = 'Could not read plist: ' + path + " Error was : " + str(ex)
-                    except OSError as ex:
-                        error = 'OSError while reading plist: ' + path + " Error was : " + str(ex)
-                else:
-                    error = 'Failed to open file'
-        except OSError as ex:
-            error = 'Exception from ReadPlist while trying to open file. Exception=' + str(ex)
+                        except Exception as ex:
+                            error = 'Could not read deserialized plist: ' + path + " Error was : " + str(ex)
+                    else:
+                        plist = biplist.readPlistFromString(data)                        
+                        return (True, plist, '')
+                    plist = biplist.readPlistFromString(data)
+                    return (True, plist, '')
+                except biplist.InvalidPlistException as ex:
+                    error = 'Could not read plist: ' + path + " Error was : " + str(ex)
+            except OSError as ex:
+                error = 'OSError while reading plist: ' + path + " Error was : " + str(ex)
         return (False, None, error)

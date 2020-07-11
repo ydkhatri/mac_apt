@@ -46,6 +46,8 @@ import traceback
 
 deserializer_version = '1.2'
 
+log = logging.getLogger('MAIN.HELPERS.DESERIALIZER')
+
 rec_depth = 0
 rec_uids = []
 
