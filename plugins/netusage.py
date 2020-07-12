@@ -20,7 +20,7 @@ __Plugin_Description = "Reads the NetUsage (network usage) database to get progr
 __Plugin_Author = "Yogesh Khatri"
 __Plugin_Author_Email = "yogesh@swiftforensics.com"
 
-__Plugin_Modes = "MACOS,ARTIFACTONLY"
+__Plugin_Modes = "MACOS,ARTIFACTONLY,IOS"
 __Plugin_ArtifactOnly_Usage = 'Provide one or more netusage sqlite databases as input to process. This is '\
                             'located at /private/var/networkd/netusage.sqlite'
 
@@ -129,7 +129,8 @@ def OpenDbFromImage(mac_info, inputPath):
     try:
         sqlite = SqliteWrapper(mac_info)
         conn = sqlite.connect(inputPath)
-        log.debug ("Opened database successfully")
+        if conn:
+            log.debug ("Opened database successfully")
         return conn, sqlite
     except sqlite3.Error:
         log.exception ("Failed to open database, is it a valid DB?")
@@ -167,6 +168,18 @@ def Plugin_Start_Standalone(input_files_list, output_params):
             PrintAll(netusage_items, output_params)
         else:
             log.info('No net usage data found in {}'.format(input_path))
+
+def Plugin_Start_Ios(ios_info):
+    '''Entry point for ios_apt plugin'''
+    netusage_items = []
+    netusage_path  = '/private/var/networkd/netusage.sqlite'
+    
+    ProcessDbFromPath(ios_info, netusage_items, netusage_path)
+
+    if len(netusage_items) > 0:
+        PrintAll(netusage_items, ios_info.output_params)
+    else:
+        log.info('No net usage data found')
 
 if __name__ == '__main__':
     print ("This plugin is a part of a framework and does not run independently on its own!")

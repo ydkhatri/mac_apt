@@ -89,7 +89,7 @@ arg_parser.add_argument('-i', '--input_path', help='Path to root folder of ios i
 arg_parser.add_argument('-o', '--output_path', help='Path where output files will be created') # Not optional !
 arg_parser.add_argument('-x', '--xlsx', action="store_true", help='Save output in excel spreadsheet(s)')
 arg_parser.add_argument('-c', '--csv', action="store_true", help='Save output as CSV files (Default option if no output type selected)')
-arg_parser.add_argument('-s', '--sqlite', action="store_true", help='Save output in an sqlite database')
+#arg_parser.add_argument('-s', '--sqlite', action="store_true", help='Save output in an sqlite database')
 arg_parser.add_argument('-l', '--log_level', help='Log levels: INFO, DEBUG, WARNING, ERROR, CRITICAL (Default is INFO)')
 arg_parser.add_argument('plugin', nargs="+", help="Plugins to run (space separated). 'ALL' will process every available plugin")
 args = arg_parser.parse_args()
@@ -141,10 +141,19 @@ if args.input_path:
         if not FindIosFiles(ios_info):
             sys.exit(":( Could not find an iOS installation on path provided. Make sure you provide the path to the root folder."
                         " This folder should contain folders 'bin', 'System', 'private', 'Library' and others. ")
+        ios_info._GetAppDetails()
     else:
         sys.exit("Exiting -> Provided input path is not a folder! - " + args.input_path)
 else:
     sys.exit("Exiting -> No input file provided, the -i option is mandatory. Please provide a file to process!")
+
+try:
+    log.debug("Trying to create db @ " + os.path.join(output_params.output_path, "ios_apt.db"))
+    output_params.output_db_path = SqliteWriter.CreateSqliteDb(os.path.join(output_params.output_path, "ios_apt.db"))
+    output_params.write_sql = True
+except Exception as ex:
+    log.exception('Exception occurred when tried to create Sqlite db')
+    sys.exit('Exiting -> Cannot create sqlite db!')
 
 if args.xlsx: 
     try:
@@ -156,15 +165,6 @@ if args.xlsx:
     except Exception as ex:
         log.info('XLSX file could not be created at : ' + xlsx_path)
         log.exception('Exception occurred when trying to create XLSX file')
-
-if args.sqlite: 
-    try:
-        log.debug("Trying to create db @ " + os.path.join(output_params.output_path, "mac_apt.db"))
-        output_params.output_db_path = SqliteWriter.CreateSqliteDb(os.path.join(output_params.output_path, "mac_apt.db"))
-        output_params.write_sql = True
-    except Exception as ex:
-        log.exception('Exception occurred when tried to create Sqlite db')
-        sys.exit('Exiting -> Cannot create sqlite db!')
 
 if args.csv or not (output_params.write_sql or output_params.write_xlsx):
     output_params.write_csv  = True
@@ -186,6 +186,8 @@ log.info("-"*50)
 
 if args.xlsx:
     output_params.xlsx_writer.CommitAndCloseFile()
+if output_params.export_log_sqlite:
+    output_params.export_log_sqlite.CloseDb()
 
 time_processing_ended = time.time()
 run_time = time_processing_ended - time_processing_started

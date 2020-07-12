@@ -261,10 +261,88 @@ def Plugin_Start_Standalone(input_files_list, output_params):
 def GetIOSVersion(ios_info):
     basic_data.append(['SYSTEM', 'iOS Version', ios_info.os_version, ios_info.os_friendly_name, '/System/Library/CoreServices/SystemVersion.plist'])
     basic_data.append(['SYSTEM', 'iOS Build Version', ios_info.os_build, ios_info.os_friendly_name, '/System/Library/CoreServices/SystemVersion.plist'])
-      
+        
+def GetLastWipeDate(ios_info):
+    pass #TODO
+
+def GetDiskUsageAndSyncInfo(ios_info):
+    plist_path = '/private/var/Mobile/Library/Preferences/com.apple.atc.plist'
+    if ios_info.IsValidFilePath(plist_path):
+        ios_info.ExportFile(plist_path, __Plugin_Name, '', False)
+    success, plist, error = ios_info.ReadPlist(plist_path)
+    if success:
+        disk_usage = plist.get('DiskUsage', None)
+        if disk_usage:
+            disk_size = disk_usage.get('_PhysicalSize', '')
+            free_size = disk_usage.get('_FreeSize', '')
+            basic_data.append(['DISKUSAGE', 'Total Physical Size', f'{disk_size} bytes', 
+                '{:.2f} GB'.format(disk_size/ (1024 * 1024 * 1024)), plist_path])
+            basic_data.append(['DISKUSAGE', 'Total Free Size', f'{free_size} bytes', 
+                '{:.2f} GB'.format(free_size/ (1024 * 1024 * 1024)), plist_path])
+            for k, v in disk_usage.items():
+                if not isinstance(v, dict):
+                    continue
+                category = k
+                if '_Count' in v:
+                    count = v.get('_Count', '')
+                    phy_size = v.get('_PhysicalSize', '')
+                    basic_data.append(['DISKUSAGE', category, f'{phy_size} bytes', f'Count={count}' if count else '', plist_path])
+                else:
+                    for sub_cat, values in v.items():
+                        count = values.get('_Count', '')
+                        phy_size = values.get('_PhysicalSize', 0)
+                        basic_data.append(['DISKUSAGE', category + f'-{sub_cat}', f'{phy_size} bytes', f'Count={count}' if count else '', plist_path])
+        hosts = plist.get('Hosts', None)
+        if hosts:
+            for k, v in hosts.items():
+                host_id = k
+                last_sync = v.get('LastSync', None)
+                if last_sync:
+                    last_sync = CommonFunctions.ReadMacAbsoluteTime(last_sync)
+                os_type = v.get('OSType', '')
+                os_ver = v.get('OSVersion', '')
+                host_name = v.get('SyncHostName', '')
+                basic_data.append([f'SYNC-HOST-{host_id}', 'Hostname',  host_name, '', plist_path])
+                basic_data.append([f'SYNC-HOST-{host_id}', 'OS Name',  os_type, '', plist_path])
+                basic_data.append([f'SYNC-HOST-{host_id}', 'OS Version',  os_ver, '', plist_path])
+                basic_data.append([f'SYNC-HOST-{host_id}', 'Last Sync',  last_sync, '', plist_path])
+    else:
+        log.error(f'Error reading {plist_path} : {error}')
+
+
+    #TODO
+    # This plist also has last sync info
+
+def GetLastFacetimeId(ios_info):
+    tel_utilities_plist = '/private/var/Mobile/Library/Preferences/com.apple.TelephonyUtilities.plist'
+    if ios_info.IsValidFilePath(tel_utilities_plist):
+        ios_info.ExportFile(tel_utilities_plist, __Plugin_Name, '', False)
+        success, plist, error = ios_info.ReadPlist(tel_utilities_plist)
+        if success:
+            facetime_id = plist.get('lastKnownFaceTimeCallerID', None)
+            basic_data.append(['FACETIME', 'Last known Facetime Caller ID', facetime_id, '', tel_utilities_plist])
+        else:
+            log.error(f'Error reading {tel_utilities_plist} : {error}')
+    
+def GetPreviousRestoreDate(ios_info):
+    prev_restore_date = None
+    last_update_plist = '\private\var\MobileSoftwareUpdate\last_update_result.plist'
+    if ios_info.IsValidFilePath(last_update_plist):
+        ios_info.ExportFile(last_update_plist, __Plugin_Name, '', False)
+        success, plist, error = ios_info.ReadPlist(last_update_plist)
+        if success:
+            prev_restore_date = plist.get('PreviousRestoreDate', None)
+        else:
+            log.error(f'Error reading {last_update_plist} : {error}')
+    
+    basic_data.append(['SYSTEM', 'iOS Previous Restore Date', prev_restore_date, '', last_update_plist])
+
 def Plugin_Start_Ios(ios_info):
     '''Entry point for ios_apt plugin'''
     GetIOSVersion(ios_info)
+    GetPreviousRestoreDate(ios_info)
+    GetLastFacetimeId(ios_info)
+    GetDiskUsageAndSyncInfo(ios_info)
     #TODO
     # Get Model, ComputerName, Hostname from /private/var/preferences/SystemConfiguration/preferences.plist
    

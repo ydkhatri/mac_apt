@@ -20,7 +20,7 @@ __Plugin_Version = "1.0"
 __Plugin_Description = "Reads Terminal (bash & zsh) sessions & history for every user"
 __Plugin_Author = "Yogesh Khatri"
 __Plugin_Author_Email = "yogesh@swiftforensics.com"
-__Plugin_Modes = "MACOS"
+__Plugin_Modes = "MACOS,IOS"
 __Plugin_ArtifactOnly_Usage = ""
 
 log = logging.getLogger('MAIN.' + __Plugin_Name) # Do not rename or remove this ! This is the logger object
@@ -197,6 +197,18 @@ def Plugin_Start(mac_info):
         PrintAll(bash_sessions, mac_info.output_params, '')
     else:
         log.info('No terminal sessions or history found!')
-    
+
+def Plugin_Start_Ios(ios_info):
+    '''Entry point for ios_apt plugin'''
+    bash_sessions = []
+    bash_history_path = '/private/var/mobile/.bash_history'
+    if ios_info.IsValidFilePath(bash_history_path):
+        ReadHistoryFile(ios_info, bash_history_path, 'BASH_HISTORY', bash_sessions, '')
+
+    if len(bash_sessions) > 0:
+        PrintAll(bash_sessions, ios_info.output_params, '')
+    else:
+        log.info('No terminal history found!')
+
 if __name__ == '__main__':
     print("This plugin is a part of a framework and does not run independently on its own!")

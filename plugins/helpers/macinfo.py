@@ -23,6 +23,7 @@ import tempfile
 import time
 import traceback
 from io import BytesIO
+from uuid import UUID
 from plugins.helpers.apfs_reader import *
 from plugins.helpers.darwin_path_generator import GetDarwinPath, GetDarwinPath2
 from plugins.helpers.deserializer import process_nsa_plist
@@ -519,7 +520,7 @@ class MacInfo:
                             plist = self.DeserializeNsKeyedPlist(f)
                             f.close()
                             return (True, plist, '')
-                        except:
+                        except Exception as ex:
                             f.close()
                             error = 'Could not read deserialized plist: ' + path + " Error was : " + str(ex)  
                     else:
@@ -540,7 +541,7 @@ class MacInfo:
                                 plist = self.DeserializeNsKeyedPlist(temp_file)
                                 temp_file.close()
                                 return (True, plist, '')
-                            except:
+                            except Exception as ex:
                                 error = 'Could not read deserialized plist: ' + path + " Error was : " + str(ex)
                         else:
                             plist = biplist.readPlistFromString(data)                        
@@ -1666,7 +1667,6 @@ class MountedMacInfoSeperateSysData(MountedMacInfo):
                 log.debug("Searched for {}".format('/' + '/'.join(path_parts[:index + 1])))
                 dest = self.firmlinks.get('/' + '/'.join(path_parts[:index + 1]), None)
                 if dest != None:
-                    log.debug("FOUND**********")
                     found_in_firmlink = True
                     vol_folder = self.data_volume_folder
                     path = dest
@@ -1689,9 +1689,30 @@ class MountedMacInfoSeperateSysData(MountedMacInfo):
         log.debug("req={} final={}".format(path_in_image, full_path))
         return full_path
 
+class ApplicationInfo:
+    def __init__(self, app_identifier):
+        self.bundle_container_path = '' # /private/var/containers/Bundle/UUID1 ## Not for buitin apps
+        self.bundle_identifier = app_identifier # com.xxx.yyy
+        self.bundle_path = '' # <bundle_container_path>/Appname.app  or /Applications/Appname.app
+        self.sandbox_path = '' # /private/var/mobilce/Containers/Data/Application/UUID2
+
+        self.uninstall_date = None
+        self.bundle_uuid = None
+        self.data_uuid = None
+
+        # From <bundle_path>/Info.plist
+        self.main_icon_path = '' # CFBundleIcons/CFBundlePrimaryIcon/CFBundleIconFiles (array)
+        self.bundle_display_name = '' #CFBundleDisplayName  # Main App Name as it appears to user
+        self.bundle_version = '' # CFBundleShortVersionString
+        self.hidden = False # SBAppTags
+
+        self.source = ''
+
+
 class MountedIosInfo(MountedMacInfo):
     def __init__(self, root_folder_path, output_params):
         super().__init__(root_folder_path, output_params)
+        self.apps = []
     
     def GetUserAndGroupIDForFile(self, path):
         raise NotImplementedError()
@@ -1731,6 +1752,112 @@ class MountedIosInfo(MountedMacInfo):
         except:
             log.exception("Unknown error from _GetSystemInfo()")
         return False
+
+    def _GetAppDetails(self):
+        '''Get app name, path, version, uuid, container path and other info'''
+        app_state_db = '/private/var/mobile/Library/FrontBoard/applicationState.db'
+        if self.IsValidFilePath(app_state_db):
+            self.ExportFile(app_state_db, 'APPS')
+            try:
+                sqlite = SqliteWrapper(self)
+                conn = sqlite.connect(app_state_db)
+                if conn:
+                    log.debug ("Opened DB {} successfully".format(os.path.basename(app_state_db)))
+                    try:
+                        conn.row_factory = sqlite3.Row
+                        query = \
+                        """
+                        SELECT application_identifier_tab.application_identifier as ai, key_tab.key, value 
+                        FROM application_identifier_tab, key_tab, kvs 
+                        WHERE kvs.application_identifier=application_identifier_tab.id 
+                            AND kvs.key=key_tab.id 
+                        ORDER BY ai
+                        """
+                        cursor = conn.execute(query)
+                        apps = []
+                        last_app_name = ''
+                        app_info = None
+                        try:
+                            for row in cursor:
+                                app = row['ai']
+                                key = row['key']
+                                val = row['value']
+                                if last_app_name != app: # new app found
+                                    app_info = ApplicationInfo(app)
+                                    apps.append(app_info)
+                                    last_app_name = app
+                                    app_info.source = app_state_db
+                                # Process key/val pairs
+                                if key == '__UninstallDate':
+                                    if val:
+                                        temp_file = BytesIO(val)
+                                        success, plist, error = CommonFunctions.ReadPlist(temp_file)
+                                        if success:
+                                            if isinstance(plist, datetime.datetime):
+                                                app_info.uninstall_date = plist
+                                            else:
+                                                log.error('Uninstall plist is not in the expected form, plist was ' + str(plist))
+                                        else:
+                                            log.error(f'Failed to read "compatibilityInfo" for {ai}. {error}')
+                                        temp_file.close()
+                                elif key == 'XBApplicationSnapshotManifest':
+                                    pass
+                                elif key == 'compatibilityInfo':
+                                    if val:
+                                        temp_file = BytesIO(val)
+                                        success, plist, error = CommonFunctions.ReadPlist(temp_file, True)
+                                        if success:
+                                            app_info.bundle_container_path = plist.get('bundleContainerPath', '')
+                                            if app_info.bundle_container_path:
+                                                app_info.bundle_uuid = UUID(os.path.basename(app_info.bundle_container_path))
+                                            app_info.bundle_path = plist.get('bundlePath', '')
+                                            app_info.sandbox_path = plist.get('sandboxPath', '')
+                                            if app_info.sandbox_path:
+                                                app_info.data_uuid = UUID(os.path.basename(app_info.sandbox_path))
+                                            self._ReadInfoPlist(app_info, app_info.bundle_path + '/Info.plist')
+                                            app_info.source += ',' + app_info.bundle_path + '/Info.plist'
+                                        else:
+                                            log.error(f'Failed to read "compatibilityInfo" for {ai}. {error}')
+                                        temp_file.close()
+                            conn.close()
+                            for app in apps: # add app to main list if properties are not empty
+                                if not app.bundle_display_name and not app.bundle_path \
+                                    and not app.sandbox_path and not app.uninstall_date \
+                                    and not app.bundle_display_name:
+                                    pass
+                                else:
+                                    self.apps.append(app)
+                            return True
+                        except sqlite3.Error as ex:
+                            log.exception("Db cursor error while reading file " + app_state_db)
+                    except sqlite3.Error as ex:
+                        log.error ("Sqlite error - \nError details: \n" + str(ex))
+                    conn.close()
+            except sqlite3.Error as ex:
+                log.error ("Failed to open {}, is it a valid DB? Error details: ".format(os.path.basename(app_state_db)) + str(ex))
+                return False
+        else:
+            log.error(f'Could not find {app_state_db}, cannot get Application information!')
+        return False
+
+    def _ReadInfoPlist(self, app_info, plist_path):
+        if self.IsValidFilePath(plist_path):
+            success, plist, error = self.ReadPlist(plist_path)
+            if success:
+                app_info.bundle_display_name = plist.get('CFBundleDisplayName', '')
+                if app_info.bundle_display_name == '':
+                    app_info.bundle_display_name = plist.get('CFBundleName', '')
+                app_info.bundle_version = plist.get('CFBundleShortVersionString', '')
+                try:
+                    icon = plist['CFBundleIcons']['CFBundlePrimaryIcon']['CFBundleIconFiles'][0]
+                    app_info.main_icon_path = app_info.bundle_path + '/' + icon
+                except (KeyError, ValueError, IndexError, TypeError) as ex:
+                    log.debug(ex)
+                app_info.hidden = True if 'hidden' in plist.get('SBAppTags', []) else False
+            else:
+                log.error(f'Failed to read {plist_path}. {error}')
+        else:
+            log.error(f'File not found: {plist_path}')
 
 class SqliteWrapper:
     '''
