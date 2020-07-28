@@ -34,6 +34,7 @@ BLUETOOTH | Gets Bluetooth Artifacts
 CHROME | Read Chrome History, Top Sites, Downloads and Extension info
 COOKIES | Reads .binarycookies, .cookies files and HSTS.plist for each user
 DOCKITEMS | Reads the Dock plist for every user
+DOCUMENTREVISIONS | Reads DocumentRevisions database
 DOMAINS | Active Directory Domain(s) that the mac is connected to
 FSEVENTS | Reads file system event logs (from .fseventsd)
 IDEVICEBACKUPS | Reads and exports iPhone/iPad backup databases
