@@ -309,7 +309,7 @@ class NativeHfsParser:
 
 class MacInfo:
 
-    def __init__(self, output_params, password=''):
+    def __init__(self, output_params, password='', dont_decrypt=False):
         #self.Partitions = {}   # Dictionary of all partition objects returned from pytsk LATER! 
         self.pytsk_image = None
         self.macos_FS = None      # Just the FileSystem object (fs) from OSX partition
@@ -328,7 +328,7 @@ class MacInfo:
         self.is_linux = (sys.platform == 'linux')
         # for encrypted volumes
         self.password = password
-        self.dont_decrypt = False # To force turning off decryption in case a 3rd party tool has already decrypted image but container and volume flags still say its enc
+        self.dont_decrypt = dont_decrypt # To force turning off decryption in case a 3rd party tool has already decrypted image but container and volume flags still say its enc
 
     # Public functions, plugins can use these
     def GetAbsolutePath(self, current_abs_path, dest_rel_path):
@@ -1023,8 +1023,8 @@ class MacInfo:
         return False
 
 class ApfsMacInfo(MacInfo):
-    def __init__(self, output_params, password):
-        super().__init__(output_params, password)
+    def __init__(self, output_params, password, dont_decrypt):
+        super().__init__(output_params, password, dont_decrypt)
         self.apfs_container = None
         self.apfs_db = None
         self.apfs_db_path = ''

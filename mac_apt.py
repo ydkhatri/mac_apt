@@ -233,7 +233,7 @@ def GetApfsContainerUuid(img, container_start_offset):
 
 def FindMacOsPartitionInApfsContainer(img, vol_info, container_size, container_start_offset, container_uuid):
     global mac_info
-    mac_info = macinfo.ApfsMacInfo(mac_info.output_params, mac_info.password)
+    mac_info = macinfo.ApfsMacInfo(mac_info.output_params, mac_info.password, mac_info.dont_decrypt)
     mac_info.pytsk_image = img   # Must be populated
     mac_info.vol_info = vol_info # Must be populated
     mac_info.is_apfs = True
