@@ -328,6 +328,7 @@ class MacInfo:
         self.is_linux = (sys.platform == 'linux')
         # for encrypted volumes
         self.password = password
+        self.dont_decrypt = False # To force turning off decryption in case a 3rd party tool has already decrypted image but container and volume flags still say its enc
 
     # Public functions, plugins can use these
     def GetAbsolutePath(self, current_abs_path, dest_rel_path):
@@ -1058,7 +1059,7 @@ class ApfsMacInfo(MacInfo):
             vol.dbo = self.apfs_db
             if vol == preboot_vol:
                 continue
-            elif vol.is_encrypted and self.apfs_container.is_sw_encrypted: # For hardware encryption(T2), do nothing, it should have been acquired as decrypted..
+            elif vol.is_encrypted and self.apfs_container.is_sw_encrypted and (not self.dont_decrypt): # For hardware encryption(T2), do nothing, it should have been acquired as decrypted..
                 if self.password == '':
                     log.error(f'Skipping vol {vol.volume_name}. The vol is ENCRYPTED and user did not specify a password to decrypt it!' +
                                 f' If you know the password, run mac_apt again with the -p option to decrypt this volume.')

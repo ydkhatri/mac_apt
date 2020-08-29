@@ -331,6 +331,7 @@ arg_parser.add_argument('input_path', help='Path to disk image/volume')
 arg_parser.add_argument('-o', '--output_path', help='Path where output files will be created')
 arg_parser.add_argument('-l', '--log_level', help='Log levels: INFO, DEBUG, WARNING, ERROR, CRITICAL (Default is INFO)')#, choices=['INFO','DEBUG','WARNING','ERROR','CRITICAL'])
 arg_parser.add_argument('-p', '--password', help='Personal Recovery Key(PRK) or Password for any user (for decrypting encrypted volume). PRK must be exactly how it was shown to you')
+arg_parser.add_argument('-d', '--dont_decrypt', default=False, action="store_true", help='Don\'t decrypt as image is already decrypted!')
 args = arg_parser.parse_args()
 
 if args.output_path:
@@ -417,6 +418,7 @@ except Exception as ex:
 if args.password:
     mac_info.password = args.password
 mac_info.use_native_hfs_parser = True #False if args.use_tsk else True
+mac_info.dont_decrypt = True if args.dont_decrypt else False
 
 mac_info.pytsk_image = img
 if IsApfsContainer(img, 0):

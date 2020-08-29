@@ -269,7 +269,8 @@ def find_wrapped_kek_from_vol_keybag(keybag, user_uuid=None):
             byte_uuid = kl_entry.UUID
             readable_UUID = convert_keybag_uuid_to_string(byte_uuid)
             if readable_UUID == user_open_dir_uuid:
-                return kl_entry.bag_data, kl_entry.iterations, kl_entry.kek_salt
+                int_iterations = int.from_bytes(kl_entry.iterations, byteorder='big')
+                return kl_entry.bag_data, int_iterations, kl_entry.kek_salt
     return None, None, None
 
 
@@ -336,7 +337,8 @@ class EncryptedVol:
         for kl_entry in volume_keybag.mk_locker.kl_entries:
             if kl_entry.UUID == prk_uuid:
                 log.debug("Found key details from the Volume Keybag!")
-                return kl_entry.bag_data, kl_entry.iterations, kl_entry.kek_salt
+                int_iterations = int.from_bytes(kl_entry.iterations, byteorder='big')
+                return kl_entry.bag_data, int_iterations, kl_entry.kek_salt
         return None, None, None
 
 
@@ -478,10 +480,8 @@ class EncryptedVol:
         log.debug("Trying as Personal Recovery key to decrypt")
         wrapped_kek, iterations, salt = self.get_wrapped_key_from_prk(parsed_volume_keybag)
         if wrapped_kek:
-            int_iterations = int.from_bytes(iterations, byteorder='big')
             # There may be a flag in the volume keybag to use SHA128 instead of SHA256, but that is unknown at the time
-            user_password_key = hashlib.pbkdf2_hmac('sha256', self.password.encode(), salt, int_iterations,
-                                                    dklen=32)
+            user_password_key = hashlib.pbkdf2_hmac('sha256', self.password.encode(), salt, iterations, dklen=32)
             self.decryption_key = self.get_VEK_by_unwrapping_keys(user_password_key, wrapped_kek, wrapped_vek)
 
         # Try password if recovery key failed above
@@ -502,16 +502,10 @@ class EncryptedVol:
 
                 THIS IS STEP 7 OF THE APFS ACCESSING ENCRYPTED OBJECTS DOCUMENTATION
                 """
-                wrapped_kek, iterations, salt = find_wrapped_kek_from_vol_keybag(parsed_volume_keybag,
-                                                                                        open_dir_uuid)
+                wrapped_kek, iterations, salt = find_wrapped_kek_from_vol_keybag(parsed_volume_keybag, open_dir_uuid)
                 if wrapped_kek:
-                    int_iterations = int.from_bytes(iterations, byteorder='big')
-
                     # There may be a flag in the volume keybag to use SHA128 instead of SHA256, but that is unknown at the time
-                    user_password_key = hashlib.pbkdf2_hmac('sha256', self.password.encode(), salt, int_iterations, dklen=32)
-                    unwrapped_kek = unwrap(wrapped_kek, user_password_key)
-                    unwrapped_vek = unwrap(wrapped_vek, unwrapped_kek)
-
+                    user_password_key = hashlib.pbkdf2_hmac('sha256', self.password.encode(), salt, iterations, dklen=32)
                     self.decryption_key = self.get_VEK_by_unwrapping_keys(user_password_key, wrapped_kek, wrapped_vek)
                     if self.decryption_key:
                         return # on success

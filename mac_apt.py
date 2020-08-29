@@ -389,6 +389,7 @@ arg_parser.add_argument('-x', '--xlsx', action="store_true", help='Save output i
 arg_parser.add_argument('-c', '--csv', action="store_true", help='Save output as CSV files')
 arg_parser.add_argument('-l', '--log_level', help='Log levels: INFO, DEBUG, WARNING, ERROR, CRITICAL (Default is INFO)')#, choices=['INFO','DEBUG','WARNING','ERROR','CRITICAL'])
 arg_parser.add_argument('-p', '--password', help='Personal Recovery Key(PRK) or Password for any user (for decrypting encrypted volume). PRK must be exactly how it was shown to you')
+arg_parser.add_argument('-d', '--dont_decrypt', default=False, action="store_true", help='Don\'t decrypt as image is already decrypted!')
 #arg_parser.add_argument('-u', '--use_tsk', action="store_true", help='Use sleuthkit instead of native HFS+ parser (This is slower!)')
 arg_parser.add_argument('plugin', nargs="+", help="Plugins to run (space separated). FAST will run most plugins")
 args = arg_parser.parse_args()
@@ -505,6 +506,7 @@ if args.password:
 if args.input_type.upper() != 'MOUNTED':
     mac_info.pytsk_image = img
     mac_info.use_native_hfs_parser = True #False if args.use_tsk else True
+    mac_info.dont_decrypt = True if args.dont_decrypt else False
 
     if IsApfsContainer(img, 0):
         uuid = GetApfsContainerUuid(img, 0)
