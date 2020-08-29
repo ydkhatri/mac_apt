@@ -369,7 +369,7 @@ if plugin_count == 0:
     Exit ("No plugins could be added ! Exiting..")
 
 plugin_name_list = ['ALL', 'FAST']
-plugins_info = "The following plugins are available:"
+plugins_info = f"The following {len(plugins)} plugins are available:"
 
 for plugin in plugins:
     plugins_info += "\n    {:<20}{}".format(plugin.__Plugin_Name, textwrap.fill(plugin.__Plugin_Description, subsequent_indent=' '*24, initial_indent=' '*24, width=80)[24:])

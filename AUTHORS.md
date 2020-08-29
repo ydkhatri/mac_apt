@@ -6,7 +6,7 @@
 * Adam Ferrante (@ferran7e) - Plugin Documentation on wiki and wrote DOCKITEMS & BLUETOOTH plugins
 * Jack Farley (@JackFarley248) - Added Encryption support and plugins - IDEVICE_BACKUPS, IDEVICE_INFO, PRINTJOBS, IMESSAGE, SCREENTIME, QUICKLOOK
 * Michael Geyer - Wrote the WIFI plugin
-* Nicole Ibrahim - Wrote the DOCUMENTREVISIONS plugin
+* Nicole Ibrahim (@nicoleibrahim) - Wrote the DOCUMENTREVISIONS plugin
 * Brandon Mignini - Wrote the AUTOSTART plugin
 * Noah Sidall (@noah_sidd) - Wrote the INSTALLHISTORY plugin
 * Austin Truax - Wrote the proof of concept parsing wifi information from airport plist

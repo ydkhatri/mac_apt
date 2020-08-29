@@ -6,11 +6,12 @@
 __pycache__/
 *.py[co]
 *_test*.py
-mac_apt_compiled*
-mac_apt_artifact_only_compiled*
-mac_apt_vmdk*
+*_compiled*
 *$py.class
 kill_pycache.bat
+
+libewf*
+
 
 # C extensions
 *.so
