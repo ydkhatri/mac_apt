@@ -198,7 +198,7 @@ def IsHFSPartition(img, partition_start_offset):
 
 def ParseVolumesInApfsContainer(img, vol_info, container_size, container_start_offset, container_uuid):
     global mac_info
-    mac_info = macinfo.ApfsMacInfo(mac_info.output_params, mac_info.password)
+    mac_info = macinfo.ApfsMacInfo(mac_info.output_params, mac_info.password, mac_info.dont_decrypt)
     mac_info.pytsk_image = img   # Must be populated
     mac_info.vol_info = vol_info # Must be populated
     mac_info.is_apfs = True
@@ -419,6 +419,7 @@ if args.password:
     mac_info.password = args.password
 mac_info.use_native_hfs_parser = True #False if args.use_tsk else True
 mac_info.dont_decrypt = True if args.dont_decrypt else False
+log.debug('mac_info.dont_decrypt=' + 'TRUE' if mac_info.dont_decrypt else 'FALSE')
 
 mac_info.pytsk_image = img
 if IsApfsContainer(img, 0):
