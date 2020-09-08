@@ -564,6 +564,7 @@ class ApfsFileSystemParser:
                     except (ValueError, EOFError, OSError):
                         log.exception('Exception trying to read block {}'.format(entry.data.paddr.value))
         elif block.header.subtype == 0:
+            log.debug(f'Invalid obj type, block={block_num}, type=0x{block.header.type_block.value:X}')
             pass # invalid object type
         else:
             log.warning("unexpected entry {} in block {}".format(repr(block.header.subtype), block_num))

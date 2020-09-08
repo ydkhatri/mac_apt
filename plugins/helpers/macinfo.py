@@ -1799,7 +1799,7 @@ class MountedIosInfo(MountedMacInfo):
                                             else:
                                                 log.error('Uninstall plist is not in the expected form, plist was ' + str(plist))
                                         else:
-                                            log.error(f'Failed to read "compatibilityInfo" for {ai}. {error}')
+                                            log.error(f'Failed to read "compatibilityInfo" for {app}. {error}')
                                         temp_file.close()
                                 elif key == 'XBApplicationSnapshotManifest':
                                     pass
