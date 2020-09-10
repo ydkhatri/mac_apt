@@ -189,6 +189,8 @@ class ApfsFileSystemParser:
         self.hard_type = self.container.apfs.EntryType.sibling_link.value
         self.attr_type = self.container.apfs.EntryType.xattr.value
         self.dir_stats_type = self.container.apfs.EntryType.dir_stats.value
+        self.container_type_fext_tree = self.container.apfs.ObjType.fext_tree.value
+        self.sealed_extent = self.container.apfs.EntryType.sealed_extent.value
         ## End optimization
 
         self.debug_stats = {}
@@ -415,6 +417,10 @@ class ApfsFileSystemParser:
         root_block = self.container.read_block(self.volume.root_block_num)
         self.read_entries(self.volume.root_block_num, root_block)
 
+        if self.volume.is_sealed: # Extents are stored in fext_tree
+            extents_tree = self.container.read_block(self.volume.fext_tree_oid)
+            self.read_entries(self.volume.fext_tree_oid, extents_tree)
+
         # write remaining records to db
         if self.num_records_read_batch > 0:
             self.num_records_read_batch = 0
@@ -475,16 +481,33 @@ class ApfsFileSystemParser:
 
         self.create_indexes()
 
-    def read_entries(self, block_num, block):
+    def read_entries(self, block_num, block, force_subtype_omap=False):
         '''Read file system entries(inodes) and add to database'''
         if block_num in self.blocks_read: return # block already processed
         else: self.blocks_read.add(block_num)
 
-        xid = block.header.xid
+        xid = block.header.xid # TODO - fix for Sealed volumes where header is zeroed out
 
-        if block.header.subtype == self.container_type_files:
+        if force_subtype_omap or \
+           (block.header.subtype == self.container_type_files) or \
+           ((block.header.subtype == self.container_type_fext_tree) and (block.body.level == 0)):
             if block.body.level > 0: # not leaf nodes
                 return
+            # For sealed vol
+            if block.header.subtype == self.container_type_fext_tree:
+                for _, entry in enumerate(block.body.entries):
+                    entry_type = self.sealed_extent
+                    self.AddToStats(entry_type)
+                    self.num_records_read_batch += 1
+                    self.num_records_read_total += 1
+                    self.extent_records.append([xid, entry.key.private_id, entry.key.logical_addr, entry.data.size, entry.data.phys_block_num, 0, None])
+                if self.num_records_read_batch > 400000:
+                    self.num_records_read_batch = 0
+                    # write to db / file
+                    self.write_records()
+                    self.clear_records() # Clear the data once written
+                return
+            # For Others
             for _, entry in enumerate(block.body.entries):
                 if type(entry.data) == self.ptr_type: #apfs.Apfs.PointerRecord: 
                     log.debug('Skipping pointer record..')
@@ -534,13 +557,14 @@ class ApfsFileSystemParser:
                     pass # this just has refcnts
                 elif entry_type == 7: #crypto_state
                     pass
-                elif entry_type == 0xc: # sibling_map
-                    pass # TODO: Maybe process this later
-                elif entry_type >= 0xd:
+                elif entry_type in (0xc, 0xd) : # sibling_map, file_info
+                    pass # TODO: Maybe process these later
+                elif entry_type >= 0xe:
                     log.warning('Unknown entry_type 0x{:X} block_num={}'.format(entry_type, block_num))
                 else:
                     log.debug('Got entry_type 0x{:X} block_num={}'.format(entry_type, block_num))
-        elif block.header.subtype == self.container_type_location:
+        elif (block.header.subtype == self.container_type_location) or \
+             ((block.header.subtype == self.container_type_fext_tree) and (block.body.level > 0)):
             for _, entry in enumerate(block.body.entries):
                 if type(entry.data) == self.ptr_type: #apfs.Apfs.PointerRecord: 
                     # Must process this!!!!
@@ -556,14 +580,15 @@ class ApfsFileSystemParser:
                         if entry.data.flags & 1: #OMAP_VAL_DELETED
                             log.debug("Deleted OMAP block found, block={}".format(entry.data.paddr.value))
                             continue
+                        noheader_is_set = ((entry.data.flags & 8) == 8) # OMAP_VAL_NOHEADER
                         if ( entry.data.flags & 4 ) == 4: # ENCRYPTED FLAG
-                            newblock = self.volume.read_vol_block(entry.data.paddr.value, self.encryption_key)
+                            newblock = self.volume.read_vol_block(entry.data.paddr.value, self.encryption_key, noheader=noheader_is_set)
                         else:
-                            newblock = self.volume.read_vol_block(entry.data.paddr.value)
-                        self.read_entries(entry.data.paddr.value, newblock)
+                            newblock = self.volume.read_vol_block(entry.data.paddr.value, noheader=noheader_is_set)
+                        self.read_entries(entry.data.paddr.value, newblock, noheader_is_set)
                     except (ValueError, EOFError, OSError):
                         log.exception('Exception trying to read block {}'.format(entry.data.paddr.value))
-        elif block.header.subtype == 0:
+        elif  (block.header.subtype == 0) and (block.header.type_block.value not in (0x1D, 0x1E)):
             log.debug(f'Invalid obj type, block={block_num}, type=0x{block.header.type_block.value:X}')
             pass # invalid object type
         else:
@@ -706,17 +731,17 @@ class ApfsVolume:
             return decrypted_block[:size]
         return decrypted_block
 
-    def read_vol_block(self, block_num, key=None):
+    def read_vol_block(self, block_num, key=None, noheader=False):
         """ Parse a single block """
         data = self.container.get_block(block_num)
 
         if not data:
             return None
         if key is None:
-            block = self.apfs.Block(KaitaiStream(BytesIO(data)), self.apfs, self.apfs)
+            block = self.apfs.Block(KaitaiStream(BytesIO(data)), self.apfs, self.apfs, noheader)
         else:
             decrypted_block = self.decrypt_vol_block(data, block_num, key)
-            block = self.apfs.Block(KaitaiStream(BytesIO(decrypted_block)), self.apfs, self.apfs)
+            block = self.apfs.Block(KaitaiStream(BytesIO(decrypted_block)), self.apfs, self.apfs, noheader)
         return block
 
     def read_volume_info(self, volume_super_block_num):
@@ -737,7 +762,8 @@ class ApfsVolume:
         self.time_created = super_block.body.time_created
         self.time_updated = super_block.body.last_mod_time
         self.uuid = self.ReadUUID(super_block.body.volume_uuid)
-        self.is_case_sensitive = (super_block.body.incompatible_features & 0x8 != 0)
+        #self.is_case_insensitive = (super_block.body.incompatible_features & apfs.INCOMPAT_CASE_INSENSITIVE != 0)
+        self.is_sealed = ((super_block.body.incompatible_features & apfs.INCOMPAT_SEALED_VOLUME) == apfs.INCOMPAT_SEALED_VOLUME)
         self.is_encrypted = (super_block.body.fs_flags & 0x1 != 1)
         self.role = super_block.body.apfs_role
         self.linked_data_uuid = self.ReadUUID(super_block.body.data_uuid)
@@ -757,7 +783,8 @@ class ApfsVolume:
 
         if self.is_encrypted:
             log.info("Volume appears to be ENCRYPTED. ")
-            #TODO - Detect hardware vs software encryption!
+        if self.is_sealed:
+            self.fext_tree_oid = super_block.body.fext_tree_oid
 
         # get volume omap
         vol_omap = self.container.read_block(self.omap_oid)
@@ -1788,16 +1815,28 @@ class ApfsFileCompressed(ApfsFile):
             Adds Prefix and Postfix bytes as required by decompressor, 
             then decompresses and returns uncompressed bytes buffer
         '''
+        lzvn_end_marker = b'\x06\0\0\0\0\0\0\0'
+        if compressed_stream[-8:] != lzvn_end_marker:
+            log.debug("lzvn compressed size seems incorrect, trying to correct..")
+            end = compressed_stream.rfind(b'\x06\0\0\0\0\0\0\0')
+            if end == -1:
+                log.debug("could not find end of stream..")
+            else:
+                original_compressed_size = compressed_size # for debug only
+                compressed_size = end + 8
+                log.debug(f"found end of stream, correcting now.. old size={original_compressed_size} new size={compressed_size}, diff={original_compressed_size-compressed_size}")
+                compressed_stream = compressed_stream[:end + 8]
+
         header = b'bvxn' + struct.pack('<I', uncompressed_size) + struct.pack('<I', compressed_size)
         footer = b'bvx$'
         try:
             decompressed_stream = liblzfse.decompress(header + compressed_stream + footer)
             len_dec = len(decompressed_stream)
-            if len_dec != uncompressed_size:
+            if len_dec != uncompressed_size: # I don't believe this will ever happen with current liblzfse code, it will just throw an exception
                 log.error("_lzvn_decompress ERROR - decompressed_stream size is incorrect! Decompressed={} Expected={}. Padding stream with nulls".format(len_dec, uncompressed_size))
                 decompressed_stream += b'\x00'*(uncompressed_size - len_dec)
             return decompressed_stream
-        except liblzfse.error as ex:
+        except (MemoryError, liblzfse.error) as ex:
             log.error('lzvn error - could not decompress stream, returning nulls')
             #raise ValueError('lzvn decompression failed')
         return b'\x00'* uncompressed_size
@@ -1983,7 +2022,7 @@ class ApfsFileCompressed(ApfsFile):
             else:
                 decompressed = zlib.decompress(decmpfs[16:])
         elif compression_type in [4, 8, 12]: # types in ResourceFork
-            log.error ("compression_type = {} in DecompressInline --> ERROR! Should not go here!".format(compression_type))
+            log.error (f"compression_type = {compression_type} in DecompressInline --> ERROR! Should not go here! data_size={len(decmpfs)}" + str(decmpfs))
         elif compression_type == 7: # LZVN inline
             data = decmpfs[16:]
             if (uncompressed_size <= total_len - 16) and (data[0] == 0x06):

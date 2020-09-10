@@ -64,6 +64,19 @@ OMAP_SNAPSHOT_DELETED  = 0x00000001
 OMAP_SNAPSHOT_REVERTED = 0x00000002
 # software encyption in containersuperblock
 NX_CRYPTO_SW  = 4
+# omap value flags
+OMAP_VAL_DELETED = 0x00000001
+OMAP_VAL_SAVED = 0x00000002
+OMAP_VAL_ENCRYPTED = 0x00000004
+OMAP_VAL_NOHEADER = 0x00000008
+OMAP_VAL_CRYPTO_GENERATION = 0x00000010
+# volume incompatible flags
+INCOMPAT_CASE_INSENSITIVE = 1
+INCOMPAT_DATALESS_SNAPS = 2
+INCOMPAT_ENC_ROLLED = 4
+INCOMPAT_NORMALIZATION_INSENSITIVE = 8
+INCOMPAT_INCOMPLETE_RESTORE = 0x10
+INCOMPAT_SEALED_VOLUME = 0x20
 
 class Apfs(KaitaiStruct):
 
@@ -123,11 +136,10 @@ class Apfs(KaitaiStruct):
         gbitmap = 0x19
         gbitmap_tree = 0x1a
         gbitmap_block = 0x1b
-        # There are more types seen, like 0x1D
-        unk1 = 0x1C
-        unk2 = 0x1D
-        unk3 = 0x1E
-        unk4 = 0x1F
+        er_recovery_block = 0x1c
+        snap_meta_ext = 0x1d
+        integrity_meta = 0x1e
+        fext_tree = 0x1f
 
     class ItemType(Enum):
         unknown = 0
@@ -154,9 +166,10 @@ class Apfs(KaitaiStruct):
         dir_stats = 10
         snap_name = 11
         sibling_map = 12
-        unknown_reserved = 13
-        unknown_reserved2 = 14
+        file_info = 13
+        unknown_reserved = 14
         invalid = 15
+        sealed_extent = 20 # Added by YK, not in disk or spec!
 
     class SnapshotFlag(Enum):
         deleted = 1
@@ -204,7 +217,7 @@ class Apfs(KaitaiStruct):
             self._io = _io
             self._parent = _parent
             self._root = _root if _root else self
-            self.magic = self._io.ensure_fixed_contents(struct.pack('4b', 65, 80, 83, 66))
+            self.magic = self._io.ensure_fixed_contents(b'APSB')
             self.fs_index = self._io.read_u4le()
             self.features = self._io.read_u8le()
             self.readonly_compatible_features = self._io.read_u8le()
@@ -243,11 +256,16 @@ class Apfs(KaitaiStruct):
             self.reserved = self._io.read_u2le()
             self.apfs_root_to_xid = self._io.read_s8le()
             self.apfs_er_state_oid = self._io.read_s8le()
-            self.unknown1 = self._io.read_s4le()
-            self.unknown2 = self._io.read_s4le()
-            self.unknown3 = self._io.read_s8le()
-            self.unknown4 = self._io.read_s8le()
-            self.data_uuid = self._io.read_bytes(16) # In both System & Data vol, Data's uuid is seen
+            self.cloneinfo_id_epoch = self._io.read_s8le()
+            self.cloneinfo_xid = self._io.read_s8le()
+            self.snap_meta_ext_oid = self._io.read_s8le()
+            self.data_uuid = self._io.read_bytes(16) # In both System & Data vol, Data's uuid is seen, officially called volume_group_id
+            self.integrity_meta_oid = self._io.read_s8le()
+            self.fext_tree_oid = self._io.read_s8le()
+            self.fext_tree_type = self._io.read_u4le()
+            self.reserved_type = self._io.read_u4le()
+            self.reserved_oid = self._io.read_s8le()
+            
 
     class FileExtentKey(KaitaiStruct):
         __slots__ = ['_io', '_parent', '_root', 'offset']
@@ -289,6 +307,28 @@ class Apfs(KaitaiStruct):
             self.paddr = self._root.RefBlock(self._io, self, self._root)
 
 
+    class FextTreeKey(KaitaiStruct):
+        __slots__ = ['_io', '_parent', '_root', 'private_id', 'logical_addr']
+        def __init__(self, _io, _parent=None, _root=None):
+            self._io = _io
+            self._parent = _parent
+            self._root = _root if _root else self
+            self.private_id = self._io.read_u8le()
+            self.logical_addr = self._io.read_u8le()
+
+
+    class FextTreeRecord(KaitaiStruct):
+        __slots__ = ['_io', '_parent', '_root', 'size', 'phys_block_num']
+        def __init__(self, _io, _parent=None, _root=None):
+            self._io = _io
+            self._parent = _parent
+            self._root = _root if _root else self
+            len_and_flags = self._io.read_u8le()
+            self.size = len_and_flags & 0x00ffffffffffffff
+            #self.flags = (len_and_flags & 0xff00000000000000) >> 56 # not needed by us, hence commented out
+            self.phys_block_num = self._io.read_u8le()
+
+
     class SpacemanFreeQueueNodeEntry(KaitaiStruct):
         __slots__ = ['_io', '_parent', '_root', 'header', 'key', 'data']
         def __init__(self, _io, _parent=None, _root=None):
@@ -305,6 +345,25 @@ class Apfs(KaitaiStruct):
             else:
                 self._io.seek(((self._root.block_size - self.header.data_offset) - (40 * (self._parent.node_type & BTNODE_ROOT))))
                 self.data = self._io.read_u8le() # val? # Do we need to check for leaf/non-leaf?
+            self._io.seek(_pos)
+
+
+    class FextNodeEntry(KaitaiStruct):
+        __slots__ = ['_io', '_parent', '_root', 'header', 'key', 'data']
+        def __init__(self, _io, _parent=None, _root=None):
+            self._io = _io
+            self._parent = _parent
+            self._root = _root if _root else self
+            self.header = self._root.DynamicEntryHeader(self._io, self, self._root)
+            _pos = self._io.pos()
+            self._io.seek(((self.header.key_offset + self._parent.table_space_len) + 56))
+            self.key = self._root.FextTreeKey(self._io, self, self._root)
+
+            if self.header.data_offset == 0xFFFF: # no data
+                self.data = None
+            else:
+                self._io.seek(((self._root.block_size - self.header.data_offset) - (40 * (self._parent.node_type & BTNODE_ROOT))))
+                self.data = self._root.FextTreeRecord(self._io, self, self._root)
             self._io.seek(_pos)
 
 
@@ -454,7 +513,7 @@ class Apfs(KaitaiStruct):
             self._io = _io
             self._parent = _parent
             self._root = _root if _root else self
-            self.magic = self._io.ensure_fixed_contents(struct.pack('4b', 78, 88, 83, 66))
+            self.magic = self._io.ensure_fixed_contents(b'NXSB')
             self.block_size = self._io.read_u4le()
             self.num_blocks = self._io.read_u8le()
             self.features = self._io.read_u8le()
@@ -648,11 +707,14 @@ class Apfs(KaitaiStruct):
 
     class Block(KaitaiStruct):
         __slots__ = ['_io', '_parent', '_root', 'header', 'body']
-        def __init__(self, _io, _parent=None, _root=None):
+        def __init__(self, _io, _parent=None, _root=None, noheader=False):
             self._io = _io
             self._parent = _parent
             self._root = _root if _root else self
             self.header = self._root.BlockHeader(self._io, self, self._root)
+            if noheader: # comes from OMAP_VAL_NOHEADER, all headers will be 0
+                self.body = self._root.Node(self._io, self, self._root)
+                return
             _on = self.header.type_block.value
             if _on == 3: #self._root.ObjType.btree_node:
                 self.body = self._root.Node(self._io, self, self._root)
@@ -848,6 +910,13 @@ class Apfs(KaitaiStruct):
             elif subtype == 9: #spaceman_free_queue
                 for i in range(self.entry_count):
                     self.entries[i] = self._root.SpacemanFreeQueueNodeEntry(self._io, self, self._root)
+            elif subtype == 0x1F: # fext_tree
+                if self.level > 0:
+                    for i in range(self.entry_count):
+                        self.entries[i] = self._root.OmapNodeEntry(self._io, self, self._root)
+                else:
+                    for i in range(self.entry_count):
+                        self.entries[i] = self._root.FextNodeEntry(self._io, self, self._root)
             else:
                 for i in range(self.entry_count):
                     self.entries[i] = self._root.NodeEntry(self._io, self, self._root)
