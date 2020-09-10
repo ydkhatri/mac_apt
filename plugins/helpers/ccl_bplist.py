@@ -71,6 +71,9 @@ def __decode_multibyte_int_val(b):
         fmt = ">I"
     elif len(b) == 8:
         fmt = ">q" # Always Signed?
+    elif len(b) == 16 and b[0:8] == b'\0\0\0\0\0\0\0\0':
+        fmt = '>Q'
+        b = b[8:]
     else:
         raise BplistError("Cannot decode multibyte int of length {0}".format(len(b)))
 
