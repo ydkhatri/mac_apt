@@ -64,6 +64,7 @@ USERS | Local & Domain user information - name, UID, UUID, GID, account creation
 WIFI | Gets wifi network information
 
 ### Coming soon..
+* Support for macOS Big Sur (11.0)
 * More plugins
 * More documentation
 
