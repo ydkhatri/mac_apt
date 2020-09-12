@@ -82,6 +82,8 @@ def Plugin_Start(mac_info):
             user_plist_rel_path = '{}/Library/Application Support/com.apple.spotlight.Shortcuts'
         elif version['minor'] >= 15:
             user_plist_rel_path = '{}/Library/Application Support/com.apple.spotlight/com.apple.spotlight.Shortcuts'
+    elif version['major'] == 11:
+        user_plist_rel_path = '{}/Library/Application Support/com.apple.spotlight/com.apple.spotlight.Shortcuts.v3'
     
     processed_paths = set()
     for user in mac_info.users:
