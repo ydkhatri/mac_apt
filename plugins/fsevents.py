@@ -258,7 +258,7 @@ def Plugin_Start(mac_info):
 
     if hasattr(mac_info, 'BuildFullPath'): # its a MOUNTED or live image
         os_ver = mac_info.GetVersionDictionary()
-        if os_ver['major'] == 10 and os_ver['minor'] >= 15:
+        if (os_ver['major'] == 10 and os_ver['minor'] >= 15) or os_ver['major'] == 11:
             # Then also get DATA volume's FSEVENTS from /System/Volumes/Data
             file_list = mac_info.ListItemsInFolder('/System/Volumes/Data/.fseventsd', EntryType.FILES, True)
             ProcessFsevents(logs, '/System/Volumes/Data/.fseventsd', file_list, mac_info)
