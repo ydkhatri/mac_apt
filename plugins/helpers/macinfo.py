@@ -531,10 +531,12 @@ class MacInfo:
                     try:
                         # Perhaps this is manually edited or incorrectly formatted by a non-Apple utility  
                         # that has left whitespaces at the start of file before <?xml tag
+                        # Or it's a bigSur (11.0) plist with hex integers
                         # This is assuming XML format!
                         f.seek(0)
                         data = f.read().decode('utf8', 'ignore')
                         f.close()
+                        data = CommonFunctions.replace_all_hex_int_with_int(data) # Fix for BigSur plists with hex ints
                         data = data.lstrip(" \r\n\t").encode('utf8', 'backslashreplace')
                         if deserialize:
                             try:
@@ -547,7 +549,7 @@ class MacInfo:
                         else:
                             plist = biplist.readPlistFromString(data)                        
                             return (True, plist, '')
-                    except (biplist.InvalidPlistException, biplist.NotBinaryPlistException) as ex:
+                    except (biplist.InvalidPlistException, biplist.NotBinaryPlistException, ValueError) as ex:
                         error = 'Could not read plist: ' + path + " Error was : " + str(ex)
                 except OSError as ex:
                     error = 'OSError while reading plist: ' + path + " Error was : " + str(ex)

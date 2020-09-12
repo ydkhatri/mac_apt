@@ -183,6 +183,28 @@ class CommonFunctions:
         return ''
 
     @staticmethod
+    def replace_all_hex_int_with_int(xml_text):
+        '''
+            Returns string replacing all instances of hex integers
+            in xml to their decimal equivalent 
+            like \<integer>0x55\</integer>
+            with \<integer>85\</integer>
+            
+            Exceptions: ValueError (for invalid int conversions)
+        '''
+        pattern = re.compile("<integer>0x[0-9a-fA-F]*</integer>")
+        search_from = 0
+        match = pattern.search(xml_text, search_from)
+        while match:
+            hex_int = xml_text[match.start() + 11:match.end()-10]
+            dec_int = str(int(hex_int, 16))
+            
+            xml_text = xml_text[:match.start() + 9] + dec_int + xml_text[match.end()-10:]
+            search_from = match.start() + 9 + len(dec_int) + 10
+            match = pattern.search(xml_text, search_from)
+        return xml_text
+
+    @staticmethod
     def ReadPlist(path_or_file, deserialize=False):
         '''
             Safely open and read a plist.
