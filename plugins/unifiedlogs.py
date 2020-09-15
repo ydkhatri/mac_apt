@@ -215,7 +215,7 @@ def Plugin_Start(mac_info):
     global total_logs_processed
 
     version_info = mac_info.GetVersionDictionary()
-    if version_info['major'] >= 10:
+    if version_info['major'] == 10:
         if (version_info['minor'] < 12):
             log.info('Unified Logging is not present in this version of macOS ({})'.format(mac_info.os_version))
             return
