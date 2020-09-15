@@ -339,12 +339,13 @@ class ApfsFileSystemParser:
         # will make the lookup easier as it consolidates the data, thus avoiding multiple queries when fetching 
         # info about a file. Also, we provide the uncompressed size of the file (logical size), so its always 
         # available for listing, without having to go and read an extent.
+        # Note - removed 'and a.XID=b.XID' from query as XID will be different for ResourceFork & decmpfs
 
         #Copy all decmpfs-Type2 attributes to table, where no resource forks <-- Nothing to do, just copy
         type2_no_rsrc_query = "INSERT INTO \"{0}_Compressed_Files\" select b.XID, b.CNID, b.Data, "\
                 " b.logical_uncompressed_size, 0 as extent_cnid, 0 as fpmc_in_extent, 0 as Extent_Logical_Size, 0, NULL"\
                 " from \"{0}_Attributes\" as b "\
-                " left join \"{0}_Attributes\" as a on (a.cnid = b.cnid and a.Name = 'com.apple.ResourceFork' and a.XID=b.XID) "\
+                " left join \"{0}_Attributes\" as a on (a.cnid = b.cnid and a.Name = 'com.apple.ResourceFork') "\
                 " where b.Name='com.apple.decmpfs' and (b.Flags & 2)=2 and a.cnid is null".format(self.name)
         if not self.run_query(type2_no_rsrc_query, True):
             return
@@ -353,7 +354,7 @@ class ApfsFileSystemParser:
         type2_rsrc_query = "INSERT INTO \"{0}_Compressed_Files\" "\
                 "SELECT b.XID, b.CNID, b.Data, b.logical_uncompressed_size, a.extent_cnid as extent_cnid, 0 as fpmc_in_extent, "\
                 " a.logical_uncompressed_size as Extent_Logical_Size, 0, NULL FROM \"{0}_Attributes\" as b "\
-                " left join \"{0}_Attributes\" as a on (a.cnid = b.cnid and a.Name = 'com.apple.ResourceFork' and a.XID=b.XID)"\
+                " left join \"{0}_Attributes\" as a on (a.cnid = b.cnid and a.Name = 'com.apple.ResourceFork')"\
                 " where b.Name='com.apple.decmpfs' and (b.Flags & 2)=2 and a.cnid is not null".format(self.name)
         if not self.run_query(type2_rsrc_query, True):
             return
@@ -365,7 +366,7 @@ class ApfsFileSystemParser:
         type1_query = "select b.XID, b.CNID, b.extent_cnid as decmpfs_ext_cnid,  b.logical_uncompressed_size, "\
                 "e.Block_Num as decmpfs_first_ext_Block_num, a.extent_cnid as rsrc_extent_cnid , er.Block_Num as rsrc_first_extent_Block_num, "\
                 " a.logical_uncompressed_size as Extent_Logical_Size from \"{0}_Attributes\" as b "\
-                " left join \"{0}_Attributes\" as a on (a.cnid = b.cnid and a.Name = 'com.apple.ResourceFork' and a.XID=b.XID) "\
+                " left join \"{0}_Attributes\" as a on (a.cnid = b.cnid and a.Name = 'com.apple.ResourceFork') "\
                 " left join \"{0}_Extents\" as e on e.cnid=b.extent_cnid "\
                 " left join \"{0}_Extents\" as er on er.cnid=a.extent_cnid "\
                 " where b.Name='com.apple.decmpfs' and (b.Flags & 1)=1"\
@@ -588,11 +589,11 @@ class ApfsFileSystemParser:
                         self.read_entries(entry.data.paddr.value, newblock, noheader_is_set)
                     except (ValueError, EOFError, OSError):
                         log.exception('Exception trying to read block {}'.format(entry.data.paddr.value))
-        elif  (block.header.subtype == 0) and (block.header.type_block.value not in (0x1D, 0x1E)):
-            log.debug(f'Invalid obj type, block={block_num}, type=0x{block.header.type_block.value:X}')
-            pass # invalid object type
+        elif (block.header.subtype == 0):
+            if (block.header.type_block.value not in (0x1D, 0x1E)):
+                log.debug(f'Invalid obj type, block={block_num}, type=0x{block.header.type_block.value:X}')
         else:
-            log.warning("unexpected entry {} in block {}".format(repr(block.header.subtype), block_num))
+            log.warning("unexpected entry type=0x{:X} subtype={} in block {}".format(block.header.type_block.value, repr(block.header.subtype), block_num))
 
         if self.num_records_read_batch > 400000:
             self.num_records_read_batch = 0
