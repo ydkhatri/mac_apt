@@ -96,13 +96,19 @@ def PrintAll(sessions, output_params, source_path):
 
     WriteList("terminal session & history", "TermSessions", data_list, session_info, output_params, source_path)
     
-def FindSession(bash_sessions, uuid):
-    for session in bash_sessions:
+def FindSession(term_sessions, uuid):
+    for session in term_sessions:
         if session.uuid == uuid:
             return session
     return None
 
-def ProcessBashSessionsForUser(mac_info, bash_sessions, source_folder, user_name):
+def GetSessionHistoryFile(files_list, uuid):
+    for x in files_list:
+        if x['name'] == uuid + '.historynew':
+            return x
+    return None
+
+def ProcessTermSessionsForUser(mac_info, term_sessions, source_folder, user_name, session_type='BASH_SESSION'):
     files_list = mac_info.ListItemsInFolder(source_folder,EntryType.FILES, True)
     if len(files_list) > 0:
         files_list = sorted(files_list, key=lambda x:x['dates']['cr_time'])
@@ -111,8 +117,8 @@ def ProcessBashSessionsForUser(mac_info, bash_sessions, source_folder, user_name
         for file_entry in files_list:
             mac_info.ExportFile(source_folder + '/' + file_entry['name'], __Plugin_Name, user_name + "_", False)
             if file_entry['name'].endswith('.history'):
-                session = BashSession(user_name, source_folder + '/' + file_entry['name'], 'BASH_SESSION')
-                bash_sessions.append(session)
+                session = BashSession(user_name, source_folder + '/' + file_entry['name'], session_type)
+                term_sessions.append(session)
                 session.uuid = file_entry['name'].split('.')[0]
                 session.end_date = file_entry['dates']['cr_time']
                 content = ReadFile(mac_info, source_folder + '/' + file_entry['name'])
@@ -122,9 +128,9 @@ def ProcessBashSessionsForUser(mac_info, bash_sessions, source_folder, user_name
                 else:
                     session.new_content = ''.join(content) # This is oldest session, no way to tell if this was all from this session or carried from before!
                 session.all_content = ''.join(content)
-                # Get .historynew file
+                # Get .historynew file, only for bash_sessions, zsh does not seem to create these #TODO- see if zsh can provide session.start_date
                 try:
-                    historynew_entry = [x for x in files_list if x['name'] == session.uuid + '.historynew'][0]
+                    historynew_entry =  GetSessionHistoryFile(files_list, session.uuid)
                     if historynew_entry != None:
                         session.start_date = historynew_entry['dates']['cr_time']
                         if historynew_entry['size'] > 0:
@@ -148,11 +154,11 @@ def ProcessBashSessionsForUser(mac_info, bash_sessions, source_folder, user_name
             file_name = file_entry['name']
             if file_name.endswith('.historynew') and file_entry['size'] > 0:
                 uuid = file_name.split('.')[0]
-                existing_session = FindSession(bash_sessions, uuid)
+                existing_session = FindSession(term_sessions, uuid)
                 if not existing_session:
                     log.info('Found a .historynew file with no corresponding .history files! - {}'.format(file_name))
-                    session = BashSession(user_name, source_folder + '/' + file_name, 'BASH_SESSION')
-                    bash_sessions.append(session)
+                    session = BashSession(user_name, source_folder + '/' + file_name, session_type)
+                    term_sessions.append(session)
                     session.uuid = uuid
                     session.start_date = file_entry['dates']['cr_time']
                     session.end_date = file_entry['dates']['m_time']
@@ -160,53 +166,56 @@ def ProcessBashSessionsForUser(mac_info, bash_sessions, source_folder, user_name
     else:
         log.info('No files found under {}, bash sessions may have been manually deleted!'.format(source_folder))
 
-def ReadHistoryFile(mac_info, history_path, history_type_str, bash_sessions, user_name):
+def ReadHistoryFile(mac_info, history_path, history_type_str, term_sessions, user_name):
     mac_info.ExportFile(history_path , __Plugin_Name, user_name + "_", False)
     content = ReadFile(mac_info, history_path)
     session = BashSession(user_name, history_path, history_type_str)
-    bash_sessions.append(session)
+    term_sessions.append(session)
     session.all_content = ''.join(content)
 
 def Plugin_Start(mac_info):
     '''Main Entry point function for plugin'''
-    history_path = '{}/.bash_sessions'
+    bash_sessions_path = '{}/.bash_sessions'
+    zsh_sessions_path = '{}/.zsh_sessions'
     processed_paths = []
-    bash_sessions = []
+    term_sessions = []
     for user in mac_info.users:
         user_name = user.user_name
         if user.home_dir == '/private/var/empty': continue # Optimization, nothing should be here!
         elif user.home_dir == '/private/var/root': user_name = 'root' # Some other users use the same root folder, we will list such all users as 'root', as there is no way to tell
         if user.home_dir in processed_paths: continue # Avoid processing same folder twice (some users have same folder! (Eg: root & daemon))
         processed_paths.append(user.home_dir)
-        source_folder = history_path.format(user.home_dir)
-        if mac_info.IsValidFolderPath(source_folder):
-            ProcessBashSessionsForUser(mac_info, bash_sessions, source_folder, user_name)
+        for sessions_path in (bash_sessions_path, zsh_sessions_path):
+            source_folder = sessions_path.format(user.home_dir)
+            if mac_info.IsValidFolderPath(source_folder):
+                ProcessTermSessionsForUser(mac_info, term_sessions, source_folder, user_name, \
+                    'BASH_SESSION' if sessions_path.find('bash') > 0 else 'ZSH_SESSION')
         
         #Export .bash_history, .sh_history or .zsh_history file
         sh_history_path = user.home_dir + '/.sh_history'
         bash_history_path = user.home_dir + '/.bash_history'
         zsh_history_path = user.home_dir + '/.zsh_history'
         if mac_info.IsValidFilePath(bash_history_path):
-            ReadHistoryFile(mac_info, bash_history_path, 'BASH_HISTORY', bash_sessions, user_name)
+            ReadHistoryFile(mac_info, bash_history_path, 'BASH_HISTORY', term_sessions, user_name)
         if mac_info.IsValidFilePath(zsh_history_path):
-            ReadHistoryFile(mac_info, zsh_history_path, 'ZSH_HISTORY', bash_sessions, user_name)
+            ReadHistoryFile(mac_info, zsh_history_path, 'ZSH_HISTORY', term_sessions, user_name)
         if mac_info.IsValidFilePath(sh_history_path):
-            ReadHistoryFile(mac_info, sh_history_path, 'SH_HISTORY', bash_sessions, user_name)
+            ReadHistoryFile(mac_info, sh_history_path, 'SH_HISTORY', term_sessions, user_name)
 
-    if len(bash_sessions) > 0:
-        PrintAll(bash_sessions, mac_info.output_params, '')
+    if len(term_sessions) > 0:
+        PrintAll(term_sessions, mac_info.output_params, '')
     else:
         log.info('No terminal sessions or history found!')
 
 def Plugin_Start_Ios(ios_info):
     '''Entry point for ios_apt plugin'''
-    bash_sessions = []
+    term_sessions = []
     bash_history_path = '/private/var/mobile/.bash_history'
     if ios_info.IsValidFilePath(bash_history_path):
-        ReadHistoryFile(ios_info, bash_history_path, 'BASH_HISTORY', bash_sessions, '')
+        ReadHistoryFile(ios_info, bash_history_path, 'BASH_HISTORY', term_sessions, '')
 
-    if len(bash_sessions) > 0:
-        PrintAll(bash_sessions, ios_info.output_params, '')
+    if len(term_sessions) > 0:
+        PrintAll(term_sessions, ios_info.output_params, '')
     else:
         log.info('No terminal history found!')
 

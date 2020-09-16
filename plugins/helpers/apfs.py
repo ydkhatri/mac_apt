@@ -964,7 +964,7 @@ class Apfs(KaitaiStruct):
         __slots__ = ['_io', '_parent', '_root', 'parent_id', 'node_id', 'creation_timestamp', 'modified_timestamp', 
                     'changed_timestamp', 'accessed_timestamp', 'flags', 'nchildren_or_nlink', 'default_protection_class', 
                     'write_generation_counter', 'bsdflags', 'owner_id', 'group_id', 'mode', 'xf_num_exts', 
-                    'xf_used_data', 'records','name', 'logical_size', 'physical_size', 'xfields']
+                    'xf_used_data', 'records','name', 'logical_size', 'physical_size', 'uncompressed_size', 'xfields']
         def __init__(self, _io, _parent=None, _root=None):
             self._io = _io
             self._parent = _parent
@@ -984,7 +984,7 @@ class Apfs(KaitaiStruct):
             self.group_id = self._io.read_u4le()
             self.mode = self._io.read_u2le()
             pad1 = self._io.read_u2le()
-            pad2 = self._io.read_u8le()
+            self.uncompressed_size = self._io.read_u8le() # From 10.15 onwards!
             self.xfields = {}
             self.name = ''
             self.logical_size = 0

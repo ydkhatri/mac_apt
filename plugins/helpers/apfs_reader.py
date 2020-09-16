@@ -165,7 +165,7 @@ class ApfsFileSystemParser:
                                                      ('Modified',DataType.INTEGER), ('Changed',DataType.INTEGER), ('Accessed',DataType.INTEGER), 
                                                      ('Flags',DataType.INTEGER), ('Links_or_Children',DataType.INTEGER), ('BSD_flags',DataType.INTEGER), 
                                                      ('UID',DataType.INTEGER), ('GID',DataType.INTEGER), ('Mode',DataType.INTEGER), 
-                                                     ('Logical_Size',DataType.INTEGER), ('Physical_Size',DataType.INTEGER),
+                                                     ('Logical_Size',DataType.INTEGER), ('Physical_Size',DataType.INTEGER),('UncompressedSize',DataType.INTEGER),
                                                      ('Valid',DataType.INTEGER),('DB_ID',(DataType.INTEGER,"PRIMARY KEY AUTOINCREMENT"))])
         self.dir_info = collections.OrderedDict([('XID',DataType.INTEGER),('CNID',DataType.INTEGER), ('Parent_CNID',DataType.INTEGER),
                                                     ('DateAdded',DataType.INTEGER),('ItemType',DataType.INTEGER), 
@@ -529,7 +529,7 @@ class ApfsFileSystemParser:
                     self.num_records_read_batch += 1
                     self.num_records_read_total += 1
                     rec = entry.data
-                    self.inode_records.append([xid, entry.key.obj_id, rec.parent_id, rec.node_id, rec.name, rec.creation_timestamp, rec.modified_timestamp, rec.changed_timestamp, rec.accessed_timestamp, rec.flags, rec.nchildren_or_nlink, rec.bsdflags, rec.owner_id, rec.group_id, rec.mode, rec.logical_size, rec.physical_size, 0, None])
+                    self.inode_records.append([xid, entry.key.obj_id, rec.parent_id, rec.node_id, rec.name, rec.creation_timestamp, rec.modified_timestamp, rec.changed_timestamp, rec.accessed_timestamp, rec.flags, rec.nchildren_or_nlink, rec.bsdflags, rec.owner_id, rec.group_id, rec.mode, rec.logical_size, rec.physical_size, rec.uncompressed_size, 0, None])
                 elif entry_type == self.hard_type: #container.apfs.EntryType.sibling_link.value:
                     self.num_records_read_batch += 1
                     self.num_records_read_total += 1
