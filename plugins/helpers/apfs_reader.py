@@ -487,7 +487,7 @@ class ApfsFileSystemParser:
         if block_num in self.blocks_read: return # block already processed
         else: self.blocks_read.add(block_num)
 
-        xid = block.header.xid # TODO - fix for Sealed volumes where header is zeroed out
+        xid = block.header.xid
 
         if force_subtype_omap or \
            (block.header.subtype == self.container_type_files) or \
