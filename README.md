@@ -22,7 +22,7 @@ mac_apt is a DFIR (Digital Forensics and Incident Response) tool to process Mac 
 :heavy_check_mark: Encrypted :lock: APFS images can now be processed using password/recovery-key :key:   
 :heavy_check_mark: macOS Catalina (10.15) images can be parsed now  
 :heavy_check_mark: macOS Catalina (10.15) separately mounted SYSTEM & DATA volumes now supported  
-:heavy_check_mark: AFF4 images (including maquisition created) now supported
+:heavy_check_mark: AFF4 images (including macquisition created) now supported
 
 Available Plugins (artifacts parsed) | Description 
 ------------------ | ---------------
