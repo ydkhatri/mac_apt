@@ -222,6 +222,8 @@ def Plugin_Start(mac_info):
         elif (version_info['minor'] == 12) and (version_info['micro'] == 0):
             log.info('Unified Logging in macOS 10.12.0 is not yet supported!')
             return
+    elif version_info['major'] > 10:
+        pass
     else:
         log.info('Unified Logging is not present in this version of macOS ({})'.format(mac_info.os_version))
         return
