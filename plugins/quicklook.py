@@ -38,6 +38,8 @@ https://github.com/mdegrazia/OSX-QuickLook-Parser
 http://www.easymetadata.com/2015/01/sqlite-analysing-the-quicklook-database-in-macos/
 """
 
+running_on_windows = (os.name == 'nt')
+
 class QuickLook:
     def __init__(self, folder, file_name, hit_count, last_hit_date, version, bitmapdata_location,
                  bitmapdata_length, width, height, fs_id, inode, row_id, source):
@@ -125,7 +127,7 @@ def carveThumb(offset, length, thumbfile, thumbname, width, height, export, user
     :param export: Either output directory in single plugin mode or mac_info object
     :return: Nothing
     """
-
+    global running_on_windows
     if length is not None:
 
         # Seek and read thumbnails.data from offsets and lengths found in the index.sqlite
@@ -160,7 +162,9 @@ def carveThumb(offset, length, thumbfile, thumbname, width, height, export, user
             export_file = os.path.join(export_folder, thumbname)
             export_file = CommonFunctions.GetNextAvailableFileName(export_file)
             log.debug("Attempting to copy out thumbnail to file: " + export_file)
-
+            # fix for very long thumbnail names
+            if running_on_windows and len(export_file) > 260 and export_file[1:3]==':\\':
+                export_file = '\\\\?\\' + export_file
             img.save(export_file)
         except (ValueError, OSError) as ex:
             log.exception('Failed to write out thumbnail ' + thumbname)
