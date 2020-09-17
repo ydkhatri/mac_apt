@@ -464,7 +464,7 @@ def Plugin_Start(mac_info):
             log.debug("QuickLook data from Mac OS below 10.15 found... Processing")
             parseDb(c, quicklook_array, quicklook_db_path, thumbnail_file, mac_info, user)
         else:
-            log.debug("QuickLook data from Mac OS 10.15 found... Processing")
+            log.debug("QuickLook data from Mac OS 10.15+ found... Processing")
             parseDbNew(c, quicklook_array, quicklook_db_path, thumbnail_file, mac_info, user)
 
         # Close the index.sqlite
@@ -498,7 +498,7 @@ def Plugin_Start_Standalone(input_files_list, output_params):
             log.debug("QuickLook data from Mac OS below 10.15 found... Processing")
             parseDb(c, quicklook_array, quicklook_db, thumbnails, output_params.output_path, '')
         else:
-            log.debug("QuickLook data from Mac OS 10.15 found... Processing")
+            log.debug("QuickLook data from Mac OS 10.15+ found... Processing")
             parseDbNewSinglePlug(c, quicklook_array, quicklook_db, thumbnails, output_params.output_path)
         db.close()
     else:
