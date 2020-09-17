@@ -406,6 +406,8 @@ def findDb(mac_info):
     db_path_arr = []
     thumbnail_path_array = []
     users = []
+    is_big_sur_or_higher = mac_info.GetVersionDictionary()['major'] >= 11
+
     for user in mac_info.users:
         if not user.DARWIN_USER_CACHE_DIR or not user.user_name:
             continue  # TODO: revisit this later!
@@ -414,8 +416,12 @@ def findDb(mac_info):
             darwin_user_folders = user.DARWIN_USER_CACHE_DIR.split(',')
 
             for darwin_user_cache_dir in darwin_user_folders:
-                db_path = (darwin_user_cache_dir + '/com.apple.QuickLook.thumbnailcache/index.sqlite')
-                thumbnail_path = (darwin_user_cache_dir + '/com.apple.QuickLook.thumbnailcache/thumbnails.data')
+                if is_big_sur_or_higher:
+                    db_path = darwin_user_cache_dir + '/com.apple.quicklook.ThumbnailsAgent/com.apple.QuickLook.thumbnailcache/index.sqlite'
+                    thumbnail_path = darwin_user_cache_dir + '/com.apple.quicklook.ThumbnailsAgent/com.apple.QuickLook.thumbnailcache/thumbnails.data'
+                else:
+                    db_path = darwin_user_cache_dir + '/com.apple.QuickLook.thumbnailcache/index.sqlite'
+                    thumbnail_path = darwin_user_cache_dir + '/com.apple.QuickLook.thumbnailcache/thumbnails.data'
                 if not mac_info.IsValidFilePath(db_path) or not mac_info.IsValidFilePath(thumbnail_path):
                     continue
                 
