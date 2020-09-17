@@ -8,7 +8,7 @@ mac_apt is a DFIR (Digital Forensics and Incident Response) tool to process Mac 
 
 #### Features
 * Cross platform (no dependency on pyobjc)
-* Works on E01, VMDK, DD, split-DD, DMG (no compression) & mounted images  
+* Works on E01, VMDK, AFF4, DD, split-DD, DMG (no compression) & mounted images  
 * XLSX, CSV, Sqlite outputs
 * Analyzed files/artifacts are exported for later review
 * zlib, lzvn, lzfse compressed files are supported!
