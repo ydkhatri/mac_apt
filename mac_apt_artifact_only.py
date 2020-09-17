@@ -29,7 +29,7 @@ import time
 import textwrap
 from plugin import *
 
-__VERSION = "0.7.dev"
+__VERSION = "0.7"
 __PROGRAMNAME = "macOS Artifact Parsing Tool - Artifact Only mode"
 __EMAIL = "yogesh@swiftforensics.com"
 
