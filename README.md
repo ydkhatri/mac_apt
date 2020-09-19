@@ -1,16 +1,14 @@
-# mac_apt
-macOS Artifact Parsing Tool   
-[![Latest version](https://img.shields.io/badge/version-v0.6-blue)](https://github.com/ydkhatri/mac_apt/releases/tag/v0.6-beta)
-[![status](https://img.shields.io/badge/status-beta-red)]()
+# mac_apt - macOS Artifact Parsing Tool   
+[![Latest version](https://img.shields.io/badge/version-v0.7-blue)](https://github.com/ydkhatri/mac_apt/releases/tag/v0.7)
+[![status](https://img.shields.io/badge/status-stable-green)]()
 
 mac_apt is a DFIR (Digital Forensics and Incident Response) tool to process Mac computer full disk images (**or _live_ machines**) and extract data/metadata useful for forensic investigation. It is a python based framework, which has plugins to process individual artifacts (such as Safari internet history, Network interfaces, Recently accessed files & volumes, ..)
 
-#### Project Status: _BETA_
-#### Requirements: Python 3.7 (32/64 bit)
+#### Requirements: Python 3.7 (32/64 bit) on Windows or Python 3.7+ on Linux/macOS
 
 #### Features
 * Cross platform (no dependency on pyobjc)
-* Works on E01, VMDK, DD, split-DD, DMG (no compression) & mounted images  
+* Works on E01, VMDK, AFF4, DD, split-DD, DMG (no compression) & mounted images  
 * XLSX, CSV, Sqlite outputs
 * Analyzed files/artifacts are exported for later review
 * zlib, lzvn, lzfse compressed files are supported!
@@ -18,6 +16,7 @@ mac_apt is a DFIR (Digital Forensics and Incident Response) tool to process Mac 
 * Reads the Spotlight database and Unified Logging (tracev3) files
 
 #### Latest
+:heavy_check_mark: Support for macOS Big Sur (11.0)  
 :heavy_check_mark: FAST mode :hourglass_flowing_sand:   
 :heavy_check_mark: Encrypted :lock: APFS images can now be processed using password/recovery-key :key:   
 :heavy_check_mark: macOS Catalina (10.15) images can be parsed now  
@@ -64,7 +63,6 @@ USERS | Local & Domain user information - name, UID, UUID, GID, account creation
 WIFI | Gets wifi network information
 
 ### Coming soon..
-* Support for macOS Big Sur (11.0)
 * More plugins
 * More documentation
 
