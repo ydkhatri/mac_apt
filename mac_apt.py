@@ -35,7 +35,7 @@ from plugins.helpers.disk_report import *
 from plugin import *
 from uuid import UUID
 
-__VERSION = "0.7"
+__VERSION = "0.8.dev"
 __PROGRAMNAME = "macOS Artifact Parsing Tool"
 __EMAIL = "yogesh@swiftforensics.com"
 

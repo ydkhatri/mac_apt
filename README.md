@@ -2,9 +2,12 @@
 [![Latest version](https://img.shields.io/badge/version-v0.7-blue)](https://github.com/ydkhatri/mac_apt/releases/tag/v0.7)
 [![status](https://img.shields.io/badge/status-stable-green)]()
 
+[![Latest version](https://img.shields.io/badge/version-v0.8-blue)](https://github.com/ydkhatri/mac_apt/releases/tag/v0.8)
+[![status](https://img.shields.io/badge/status-development-orange)]()
+
 mac_apt is a DFIR (Digital Forensics and Incident Response) tool to process Mac computer full disk images (**or _live_ machines**) and extract data/metadata useful for forensic investigation. It is a python based framework, which has plugins to process individual artifacts (such as Safari internet history, Network interfaces, Recently accessed files & volumes, ..)
 
-#### Requirements: Python 3.7 (32/64 bit) on Windows or Python 3.7+ on Linux/macOS
+#### Requirements: Python 3.7 or above (32/64 bit)
 
 #### Features
 * Cross platform (no dependency on pyobjc)
