@@ -69,7 +69,7 @@ WIFI | Gets wifi network information
 * More plugins
 * More documentation
 
-For installation (to run from code) see https://github.com/ydkhatri/mac_apt/wiki/Installation-for-Python3.7  
+For installation (to run from code) see https://github.com/ydkhatri/mac_apt/wiki/Installation-for-Python3  
 **Please read the documentation here:** https://github.com/ydkhatri/mac_apt/wiki
 
 To download, proceed here - https://github.com/ydkhatri/mac_apt/releases
