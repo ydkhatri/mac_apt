@@ -320,7 +320,7 @@ class ApfsFileSystemParser:
                 log.error('Error creating index: ' + error)
                 break
     
-    def run_query(self, query, writing=True):
+    def run_query(self, query, writing=True, table_name='', print_rowcount=False):
         '''Returns True/False on query execution'''
         success, cursor, error = self.dbo.RunQuery(query, writing)
         if not success:
@@ -328,7 +328,10 @@ class ApfsFileSystemParser:
             return False
         if query.find('DELETE') >= 0:
             rows_deleted = cursor.rowcount
-            log.debug('{} rows deleted'.format(rows_deleted))
+            log.debug(f'{rows_deleted} rows deleted from {table_name}')
+        elif print_rowcount:
+            rows_affected = cursor.rowcount
+            log.debug(f'{rows_affected} rows affected' + f' in {table_name}' if table_name else '')
         return True
 
     def populate_compressed_files_table(self):
@@ -345,7 +348,7 @@ class ApfsFileSystemParser:
         type2_no_rsrc_query = "INSERT INTO \"{0}_Compressed_Files\" select b.XID, b.CNID, b.Data, "\
                 " b.logical_uncompressed_size, 0 as extent_cnid, 0 as fpmc_in_extent, 0 as Extent_Logical_Size, 0, NULL"\
                 " from \"{0}_Attributes\" as b "\
-                " left join \"{0}_Attributes\" as a on (a.cnid = b.cnid and a.Name = 'com.apple.ResourceFork') "\
+                " left join \"{0}_Attributes\" as a on (a.cnid = b.cnid and a.Name = 'com.apple.ResourceFork' and a.XID=b.XID) "\
                 " where b.Name='com.apple.decmpfs' and (b.Flags & 2)=2 and a.cnid is null".format(self.name)
         if not self.run_query(type2_no_rsrc_query, True):
             return
@@ -354,7 +357,7 @@ class ApfsFileSystemParser:
         type2_rsrc_query = "INSERT INTO \"{0}_Compressed_Files\" "\
                 "SELECT b.XID, b.CNID, b.Data, b.logical_uncompressed_size, a.extent_cnid as extent_cnid, 0 as fpmc_in_extent, "\
                 " a.logical_uncompressed_size as Extent_Logical_Size, 0, NULL FROM \"{0}_Attributes\" as b "\
-                " left join \"{0}_Attributes\" as a on (a.cnid = b.cnid and a.Name = 'com.apple.ResourceFork')"\
+                " left join \"{0}_Attributes\" as a on (a.cnid = b.cnid and a.Name = 'com.apple.ResourceFork' and a.XID=b.XID)"\
                 " where b.Name='com.apple.decmpfs' and (b.Flags & 2)=2 and a.cnid is not null".format(self.name)
         if not self.run_query(type2_rsrc_query, True):
             return
@@ -366,7 +369,7 @@ class ApfsFileSystemParser:
         type1_query = "select b.XID, b.CNID, b.extent_cnid as decmpfs_ext_cnid,  b.logical_uncompressed_size, "\
                 "e.Block_Num as decmpfs_first_ext_Block_num, a.extent_cnid as rsrc_extent_cnid , er.Block_Num as rsrc_first_extent_Block_num, "\
                 " a.logical_uncompressed_size as Extent_Logical_Size from \"{0}_Attributes\" as b "\
-                " left join \"{0}_Attributes\" as a on (a.cnid = b.cnid and a.Name = 'com.apple.ResourceFork') "\
+                " left join \"{0}_Attributes\" as a on (a.cnid = b.cnid and a.Name = 'com.apple.ResourceFork' and a.XID=b.XID) "\
                 " left join \"{0}_Extents\" as e on e.cnid=b.extent_cnid "\
                 " left join \"{0}_Extents\" as er on er.cnid=a.extent_cnid "\
                 " where b.Name='com.apple.decmpfs' and (b.Flags & 1)=1"\
@@ -453,10 +456,25 @@ class ApfsFileSystemParser:
         for table_type in ['Hardlinks','Inodes','DirEntries','DirStats','Compressed_Files']:
             self.run_query(query.format(self.name, table_type), True)
 
+        # Remove compressed table entries which are no longer compressed # not sure if this is useful !
+        query = "UPDATE \"{0}_Compressed_Files\" set valid=0 "\
+                "WHERE DB_ID IN ( "\
+                "SELECT c.db_id FROM \"{0}_Compressed_Files\" AS c "\
+                "LEFT JOIN \"{0}_Inodes\" AS i ON c.cnid = i.CNID and c.xid=i.xid "\
+                "WHERE i.Logical_Size > 0 AND i.xid IS NOT NULL)".format(self.name)
+        self.run_query(query, True, f'{self.name}_Compressed_Files', True)
+        # Remove compressed table entries from old invalidated inode XIDs
+        query = "UPDATE \"{0}_Compressed_Files\" set valid=0 "\
+                "WHERE DB_ID IN ( "\
+                "SELECT c.db_id FROM \"{0}_Compressed_Files\" as c  "\
+                "LEFT JOIN \"{0}_Inodes\" AS i ON c.cnid=i.CNID and c.xid=i.xid "\
+                "WHERE i.Valid=0)".format(self.name)
+        self.run_query(query, True)
+
         #Now delete invalid entries
         query = "DELETE FROM \"{0}_{1}\" WHERE Valid=0 "
         for table_type in ['Attributes','Hardlinks','Extents','Inodes','DirEntries','DirStats','Compressed_Files']:
-            self.run_query(query.format(self.name, table_type), True)
+            self.run_query(query.format(self.name, table_type), True, table_name=self.name + "_" + table_type)
 
     def create_other_tables_and_indexes(self):
         '''Populate paths table in db, create compressed_files table and create indexes for faster queries'''
@@ -482,14 +500,14 @@ class ApfsFileSystemParser:
 
         self.create_indexes()
 
-    def read_entries(self, block_num, block, force_subtype_omap=False):
+    def read_entries(self, block_num, block, no_blk_hdr_force_subtype_omap=False, sealed_xid=0):
         '''Read file system entries(inodes) and add to database'''
         if block_num in self.blocks_read: return # block already processed
         else: self.blocks_read.add(block_num)
 
         xid = block.header.xid
 
-        if force_subtype_omap or \
+        if no_blk_hdr_force_subtype_omap or \
            (block.header.subtype == self.container_type_files) or \
            ((block.header.subtype == self.container_type_fext_tree) and (block.body.level == 0)):
             if block.body.level > 0: # not leaf nodes
@@ -509,6 +527,8 @@ class ApfsFileSystemParser:
                     self.clear_records() # Clear the data once written
                 return
             # For Others
+            if no_blk_hdr_force_subtype_omap:
+                xid = sealed_xid
             for _, entry in enumerate(block.body.entries):
                 if type(entry.data) == self.ptr_type: #apfs.Apfs.PointerRecord: 
                     log.debug('Skipping pointer record..')
@@ -519,8 +539,7 @@ class ApfsFileSystemParser:
                     self.num_records_read_batch += 1
                     self.num_records_read_total += 1
                     self.extent_records.append([xid, entry.key.obj_id, entry.key.content.offset, entry.data.size, entry.data.phys_block_num, 0, None])
-                elif entry_type == self.dir_rec_type: #container.apfs.EntryType.dir_rec.value:
-                    # dir_rec key!!    
+                elif entry_type == self.dir_rec_type: #container.apfs.EntryType.dir_rec.value:  
                     self.num_records_read_batch += 1
                     self.num_records_read_total += 1
                     rec = entry.data
@@ -586,7 +605,7 @@ class ApfsFileSystemParser:
                             newblock = self.volume.read_vol_block(entry.data.paddr.value, self.encryption_key, noheader=noheader_is_set)
                         else:
                             newblock = self.volume.read_vol_block(entry.data.paddr.value, noheader=noheader_is_set)
-                        self.read_entries(entry.data.paddr.value, newblock, noheader_is_set)
+                        self.read_entries(entry.data.paddr.value, newblock, noheader_is_set, entry.key.xid)
                     except (ValueError, EOFError, OSError):
                         log.exception('Exception trying to read block {}'.format(entry.data.paddr.value))
         elif (block.header.subtype == 0):
@@ -990,7 +1009,7 @@ class ApfsVolume:
                 " left join \"{0}_Extents\" as ec on ec.CNID = c.Extent_CNID "\
                 " left join \"{0}_Attributes\" as a on a.CNID = p.CNID "\
                 " left join \"{0}_Extents\" as ex on ex.CNID = a.Extent_CNID "\
-                " {1} "\
+                " {1}  and i.Name is not null "\
                 " order by Extent_Offset, compressed_Extent_Offset, xName, xExOff"
         # This query gets file metadata as well as extents for file. If compressed, it gets compressed extents.
         # It gets XAttributes, except decmpfs and ResourceFork (we already got those in _Compressed_Files table)
@@ -1016,6 +1035,11 @@ class ApfsVolume:
                                         row['Logical_Size'], row['Physical_Size'], row['ItemType'])
 
                     if row['Uncompressed_size'] != None:
+                        # if row['Logical_Size'] > 0:
+                        #     # This means no compression / res fork, if comp data is returned that must be for older xid, compare xid for sanity
+                        #     if row['xid'] < row['cxid']:
+                        #         log.error(f"GetFileMetadata() --> Something wrong in apfs parsing logic, xid={row['xid']} cxid={row['cxid']} cnid={row['cnid']}")
+                        # else:
                         apfs_file_meta.logical_size = row['Uncompressed_size']
                         apfs_file_meta.is_compressed = True
                         apfs_file_meta.decmpfs = row['Data']
@@ -1137,10 +1161,11 @@ class ApfsVolume:
                 " left join \"{0}_Extents\" as ec on ec.CNID = c.Extent_CNID "\
                 " left join \"{0}_Attributes\" as a on a.CNID = p.CNID "\
                 " left join \"{0}_Extents\" as ex on ex.CNID = a.Extent_CNID "\
-                " {1} "\
+                " {1} and i.Name is not null "\
                 " order by p.Path, p.CNID, Extent_Offset, compressed_Extent_Offset, xName, xExOff"
         # This query gets file metadata as well as extents for file. If compressed, it gets compressed extents.
         # It gets XAttributes, except decmpfs and ResourceFork (we already got those in _Compressed_Files table)
+        # Sometimes, there are old items in dirEntries but not present in inodes or elsewhere, "i.Name is not null" removes these.
         success, cursor, error_message = self.dbo.RunQuery(query.format(self.name, where_clause), return_named_objects=True)
         if success:
             apfs_file_meta = None
