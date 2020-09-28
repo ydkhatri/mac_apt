@@ -50,7 +50,7 @@ for plugin in plugins:
     plugins_info += "\n    {:<20}{}".format(plugin.__Plugin_Name, textwrap.fill(plugin.__Plugin_Description, subsequent_indent=' '*24, initial_indent=' '*24, width=80)[24:])
     plugin_name_list.append(plugin.__Plugin_Name)
 
-arg_parser = argparse.ArgumentParser(description='mac_apt is a framework to process forensic artifacts on a Mac OSX system\n'\
+arg_parser = argparse.ArgumentParser(description='mac_apt is a framework to process macOS forensic artifacts\n'\
                                                  f'You are running {__PROGRAMNAME} version {__VERSION}\n\n'\
                                                  'Note: The default output is now sqlite, no need to specify it now',
                                     epilog=plugins_info, formatter_class=argparse.RawTextHelpFormatter)

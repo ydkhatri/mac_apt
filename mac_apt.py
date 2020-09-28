@@ -185,7 +185,7 @@ def FindMacOsFiles(mac_info):
     return False
 
 def IsMacOsPartition(img, partition_start_offset, mac_info):
-    '''Determines if the partition contains OSX installation'''
+    '''Determines if the partition contains macOS installation'''
     try:
         fs = pytsk3.FS_Info(img, offset=partition_start_offset)    
         fs_info = fs.info # TSK_FS_INFO
@@ -328,7 +328,7 @@ def FindMacOsPartition(img, vol_info, vs_info):
                 log.info('Found an APFS container with uuid: {}'.format(str(uuid).upper()))
                 return FindMacOsPartitionInApfsContainer(img, vol_info, vs_info.block_size * part.len, partition_start_offset, uuid)
 
-            elif IsMacOsPartition(img, partition_start_offset, mac_info): # Assumes there is only one single OSX installation partition
+            elif IsMacOsPartition(img, partition_start_offset, mac_info): # Assumes there is only one single macOS installation partition
                 return True
                 
     return False
@@ -378,12 +378,12 @@ for plugin in plugins:
 plugins_info += "\n    " + "-"*76 + "\n" +\
                  " "*4 + "FAST" + " "*16 + "Runs all plugins except IDEVICEBACKUPS, SPOTLIGHT, UNIFIEDLOGS\n" + \
                  " "*4 + "ALL" + " "*17 + "Runs all plugins"
-arg_parser = argparse.ArgumentParser(description='mac_apt is a framework to process forensic artifacts on a Mac OSX system\n'\
+arg_parser = argparse.ArgumentParser(description='mac_apt is a framework to process macOS forensic artifacts\n'\
                                                  f'You are running {__PROGRAMNAME} version {__VERSION}\n\n'\
                                                  'Note: The default output is now sqlite, no need to specify it now',
                                     epilog=plugins_info, formatter_class=argparse.RawTextHelpFormatter)
 arg_parser.add_argument('input_type', help='Specify Input type as either E01, DD, DMG, VMDK, AFF4 or MOUNTED')
-arg_parser.add_argument('input_path', help='Path to OSX image/volume')
+arg_parser.add_argument('input_path', help='Path to macOS image/volume')
 arg_parser.add_argument('-o', '--output_path', help='Path where output files will be created')
 arg_parser.add_argument('-x', '--xlsx', action="store_true", help='Save output in Excel spreadsheet')
 arg_parser.add_argument('-c', '--csv', action="store_true", help='Save output as CSV files')
