@@ -97,16 +97,28 @@ class blob_header_t_vek(KaitaiStruct):
         self._io = _io
         self._parent = _parent
         self._root = _root if _root else self
-        self.unk_80 = self._io.read_bytes(10)
+
+        self.pad = self._io.read_bytes(4)
+        self.tag_len_1 = self._io.read_bytes(2) # 30 7A
+        # new struct of type 0x30
+        self.tag_len_2 = self._io.read_bytes(2) # 80 01
         self.unk1 = self._io.read_bytes(1)
+        self.tag_len_3 = self._io.read_bytes(2) # 81 20
         self.hmac = self._io.read_bytes(32)
-        self.unk2 = self._io.read_bytes(2)
+        self.tag_len_4 = self._io.read_bytes(2) # 82 08
         self.salt = self._io.read_bytes(8)
-        self.unk7 = self._io.read_bytes(7)
+        self.tag_len_5 = self._io.read_bytes(2) # A3 49
+        # new struct of type 0xA3
+        self.tag_len_6 = self._io.read_bytes(2) # 80 01
+        self.unk2 = self._io.read_bytes(1)
+        self.tag_len_7 = self._io.read_bytes(2) # 81 10
         self.vek_uuid = self._io.read_bytes(16)
-        self.unk12_1 = self._io.read_bytes(12)
+        self.tag_len_8 = self._io.read_bytes(2) # 82 08
+        self.enc_type = self._io.read_u4le() # determines 128 or 256 bit encryption key
+        self.unk3 = self._io.read_bytes(4)
+        self.tag_len_9 = self._io.read_bytes(2) # 83 28
         self.bag_data = self._io.read_bytes(40)
-        self.unk12_2 = self._io.read_bytes(12)
+
 
 class keybag_entry_vek(KaitaiStruct):
     def __init__(self, _io, _parent=None, _root=None):
@@ -340,6 +352,7 @@ class EncryptedVol:
             bag_data
             iterations
             salt
+            enc_type
         """
 
         log.debug("Finding key details from the Volume Keybag using the Personal Recovery Key")
@@ -397,7 +410,7 @@ class EncryptedVol:
         """
 
         :param container_keybag: The parsed container keybag
-        :return: tuple (The wrapped VEK for the volume, vek UUID)
+        :return: tuple (The wrapped VEK for the volume, vek UUID, enc_type)
         """
 
         log.debug("Searching for VEK now")
@@ -414,7 +427,7 @@ class EncryptedVol:
                 if readable_UUID == volume_uuid:
                     log.debug("Found a UUID within the kl_entry with a Tag of two and a UUID that matches the "
                                    "Volume UUID we are trying to decrypt!")
-                    return kl_entry.blob_header.bag_data, kl_entry.blob_header.vek_uuid
+                    return kl_entry.blob_header.bag_data, kl_entry.blob_header.vek_uuid, kl_entry.blob_header.enc_type
 
         return None, None
 
@@ -427,17 +440,22 @@ class EncryptedVol:
                 open_dir_uuids.append( (self.preboot_plist[uuid]['FullName'], uuid) )
         return open_dir_uuids
 
-    def get_VEK_by_unwrapping_keys(self, user_password_key, wrapped_kek, wrapped_vek, vek_uuid, enc_type):
-        '''Attempts to unwraps the KEK and then VEK. Returns VEK if successful else None'''
+    def get_VEK_by_unwrapping_keys(self, user_password_key, wrapped_kek, wrapped_vek, vek_uuid, kek_enc_type, vek_enc_type):
+        '''Attempts to unwrap the KEK, and then VEK. Returns VEK if successful else None'''
         try:
-            if enc_type == 2: # for 128 bit keys, when filevauled HFS upgraded to APFS
+            # KEK unwrapping
+            if kek_enc_type == 2: # for 128 bit keys, when filevauled HFS upgraded to APFS
                 unwrapped_kek = unwrap(wrapped_kek[:24], user_password_key[:16])
+            else:
+                unwrapped_kek = unwrap(wrapped_kek, user_password_key)
+            # VEK unwrapping
+            if vek_enc_type == 2: # for 128 bit keys, when filevauled HFS upgraded to APFS
                 vek_first_half = unwrap(wrapped_vek[:24], unwrapped_kek)
                 vek_second_half = hashlib.sha256(vek_first_half + vek_uuid).digest()[:16]
                 vek = vek_first_half + vek_second_half
             else:
-                unwrapped_kek = unwrap(wrapped_kek, user_password_key)
                 vek = unwrap(wrapped_vek, unwrapped_kek)
+
             return vek
         except ValueError as ex: # Unwrap failed
             if str(ex).find("IV does not match") >= 0:
@@ -464,7 +482,7 @@ class EncryptedVol:
         # Parses the unwrapped kb_locker object derived from the wrapped keybag into structures
         # THIS IS STEP 3 OF THE APFS ACCESSING ENCRYPTED OBJECTS DOCUMENTATION
         log.debug("Parsing the unwrapped keybag now")
-        wrapped_vek, vek_uuid = self.find_wrapped_vek(parsed_container_keybag)
+        wrapped_vek, vek_uuid, vek_enc_type = self.find_wrapped_vek(parsed_container_keybag)
 
         # Returns if no UUID is found
         if wrapped_vek is None:
@@ -495,10 +513,10 @@ class EncryptedVol:
 
         # Try supplied password as a recovery key first
         log.debug("Trying as Personal Recovery key to decrypt")
-        wrapped_kek, iterations, salt, enc_type = self.get_wrapped_key_from_prk(parsed_volume_keybag)
+        wrapped_kek, iterations, salt, kek_enc_type = self.get_wrapped_key_from_prk(parsed_volume_keybag)
         if wrapped_kek:
             user_password_key = hashlib.pbkdf2_hmac('sha256', self.password.encode(), salt, iterations, dklen=32)
-            self.decryption_key = self.get_VEK_by_unwrapping_keys(user_password_key, wrapped_kek, wrapped_vek, vek_uuid, enc_type)
+            self.decryption_key = self.get_VEK_by_unwrapping_keys(user_password_key, wrapped_kek, wrapped_vek, vek_uuid, kek_enc_type, vek_enc_type)
 
         # Try password if recovery key failed above
         if self.decryption_key is None:
@@ -519,11 +537,11 @@ class EncryptedVol:
 
                 THIS IS STEP 7 OF THE APFS ACCESSING ENCRYPTED OBJECTS DOCUMENTATION
                 """
-                wrapped_kek, iterations, salt, enc_type = find_wrapped_kek_from_vol_keybag(parsed_volume_keybag, open_dir_uuid)
+                wrapped_kek, iterations, salt, kek_enc_type = find_wrapped_kek_from_vol_keybag(parsed_volume_keybag, open_dir_uuid)
                 if wrapped_kek:
-                    log.debug(f'enc_type = {enc_type}')
+                    log.debug(f'kek_enc_type = {kek_enc_type}, vek_enc_type = {vek_enc_type}')
                     user_password_key = hashlib.pbkdf2_hmac('sha256', self.password.encode(), salt, iterations, dklen=32)
-                    self.decryption_key = self.get_VEK_by_unwrapping_keys(user_password_key, wrapped_kek, wrapped_vek, vek_uuid, enc_type)
+                    self.decryption_key = self.get_VEK_by_unwrapping_keys(user_password_key, wrapped_kek, wrapped_vek, vek_uuid, kek_enc_type, vek_enc_type)
                     if self.decryption_key:
                         return # on success
                 else:
