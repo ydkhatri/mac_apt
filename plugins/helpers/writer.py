@@ -393,7 +393,7 @@ class SqliteWriter:
         if self.conn != None:
             if self.async_buffer:
                 self.async_buffer_max = 0 # to trigger write!
-                self.WriteRows(self.async_buffer)
+                self.WriteRows(list())
             self.conn.close()
             self.conn = None
     
