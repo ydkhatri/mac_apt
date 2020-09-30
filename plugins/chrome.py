@@ -10,6 +10,7 @@
    This module gets Chrome browser artifacts
 '''
 
+from construct import *
 from plugins.helpers.macinfo import *
 from plugins.helpers.writer import *
 
@@ -46,6 +47,34 @@ log = logging.getLogger('MAIN.' + __Plugin_Name) # Do not rename or remove this 
 # Last Tabs, Current Tabs - binary format
 
 #---- Do not change the variable names in above section ----#
+
+Utf8Str = Struct (
+    "size" / Int32ul,
+    "data" / Bytes(this.size),
+    "padding" / If (this.size % 4,  Bytes(4 - (this.size % 4)))
+)
+
+Utf16Str = Struct (
+    "size" / Int32ul,
+    "data" / Bytes(this.size * 2),
+    "padding" / If (this.size % 2,  Bytes(2))
+)
+
+NavigationEntry = Struct (
+    "unk" / Int32ul,
+    "index" / Int32ul,
+    "virtual_url_spec" / Utf8Str,
+    "title" / Utf16Str,
+    "encoded_page_statec" / Utf8Str,
+    "transition_type" / Int32ul,
+    "type_mask" / Int32ul,
+    "referrer" / Utf8Str,
+    "ignored_referrer_policy" / Int32ul,
+    "original_request_url_specc" / Utf8Str,
+    "is_overriding_user_agent" / Int32ul,
+    "timestamp_internal_value" / Int64ul
+)
+
 
 class ChromeItemType(IntEnum):
     UNKNOWN = 0
@@ -133,42 +162,26 @@ def ReadTabsFile(chrome_artifacts, f, file_size, user, source):
 
         while pos < file_size:
             f.seek(pos)
-            struct_start = pos + 2
-            size = struct.unpack('<H', f.read(2))[0]
+            size, command = struct.unpack('<HB', f.read(3))
             if size > 25:
-                t, size_2, unk1, unk2, len_url  = struct.unpack('<B4I', f.read(17))
-                if len_url > size_2:
-                    pos = struct_start + size # something went wrong in parsing, skip this entry
-                    continue
-                url = f.read(len_url).decode('utf8', 'backslashreplace')
-                if len_url % 4 == 0: # odd num, 
-                    skip = 0
-                else:
-                    skip = 4 - (len_url % 4)
-                    f.seek(skip, 1) # skipping ahead by 1            
-                title_len = struct.unpack('I', f.read(4))[0]
-                try:
-                    title = f.read(title_len * 2).decode('utf-16')
-                except UnicodeDecodeError:
-                    pos = struct_start + size # something went wrong in parsing, skip this entry
-                    continue
+                if command in (1, 6):
+                    data = f.read(size - 1)
+                    nav = NavigationEntry.parse(data[4:])
+                    #print(nav)
+                    url = nav.virtual_url_spec.data.decode('utf8', 'ignore')
+                    title = nav.title.data.decode('utf16', 'ignore')
+                    referrer = nav.referrer.data.decode('utf8', 'ignore')
+                    ts = CommonFunctions.ReadChromeTime(nav.timestamp_internal_value)
+                    url2 = nav.original_request_url_specc.data.decode('utf8', 'ignore')
+                    if url2:
+                        url2 = 'requested_orig_url=' + url2
 
-                pos = f.tell()
-                t1 = t2 = t3 = None
-                if pos < struct_start + size - 28:
-                    f.seek(struct_start + size - 28)
-                    t_data = f.read(24)
-                    timestamps = list(struct.unpack('<QQQ', t_data))
-                    for x in range(3):
-                        if timestamps[x] == 0xFFFFFFFFFFFFFFFF:
-                            timestamps[x] = 0
-                    t1 = CommonFunctions.ReadChromeTime(timestamps[0])
-                    t2 = CommonFunctions.ReadChromeTime(timestamps[1])
-                    t3 = CommonFunctions.ReadChromeTime(timestamps[2])
-                log.debug(f"{url}, {t1}, {t2}, {t3}, 0x{pos:X}")
-                if url or title:
-                    InsertUnique(chrome_artifacts, ChromeItem(source_type, url, title, t3, t1, None, None, t2, user, source))
-            pos = struct_start + size
+                    if url or title:
+                        InsertUnique(chrome_artifacts, ChromeItem(source_type, url, title, ts, None, None, referrer, url2, user, source))
+                else:
+                    if command != 19:
+                        log.debug(f'size ({size}) > 25, command = {command}')
+            pos += size + 2
 
 def ReadTopSitesDb(chrome_artifacts, db, file_size, user, source):
     db.row_factory = sqlite3.Row
