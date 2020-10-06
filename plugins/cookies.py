@@ -160,7 +160,8 @@ def read_plist_from_image(mac_info, plist_path):
 
 def Plugin_Start(mac_info):
     '''Main Entry point function for plugin'''
-    cookies_folder_path = '{}/Library/Cookies'
+    cookies_folder_paths = ('{}/Library/Cookies',
+                            '{}/Library/Containers/com.apple.Safari/Data/Library/Cookies') # BigSur / Safari 14
 
     cookies = []
     processed_paths = []
@@ -170,31 +171,32 @@ def Plugin_Start(mac_info):
         elif user.home_dir == '/private/var/root': user_name = 'root' # Some other users use the same root folder, we will list such all users as 'root', as there is no way to tell
         if user.home_dir in processed_paths: continue # Avoid processing same folder twice (some users have same folder! (Eg: root & daemon))
         processed_paths.append(user.home_dir)
-        source_path = cookies_folder_path.format(user.home_dir)
-        if not mac_info.IsValidFolderPath(source_path):
-            continue
-        files_list = mac_info.ListItemsInFolder(source_path, EntryType.FILES, False)
-        if len(files_list):
-            for file in files_list:
-                file_name = file['name']
-                full_path = source_path + '/' + file_name
-                extension = os.path.splitext(file_name)[1].lower()
-                if file_name == 'HSTS.plist':
-                    mac_info.ExportFile(full_path, __Plugin_Name, user_name + "_", False)
-                    plist = read_plist_from_image(mac_info, full_path)
-                    if plist:
-                        parse_hsts_plist(plist, cookies, user_name, full_path)
-                elif extension in ('.cookies', '.binarycookies'):
-                    mac_info.ExportFile(full_path, __Plugin_Name, user_name + "_", False)
-                    f = mac_info.Open(full_path)
-                    if f != None:
-                        parse_cookie_file(f, cookies, user_name, full_path)
+        for path in cookies_folder_paths:
+            source_path = path.format(user.home_dir)
+            if not mac_info.IsValidFolderPath(source_path):
+                continue
+            files_list = mac_info.ListItemsInFolder(source_path, EntryType.FILES, False)
+            if len(files_list):
+                for file in files_list:
+                    file_name = file['name']
+                    full_path = source_path + '/' + file_name
+                    extension = os.path.splitext(file_name)[1].lower()
+                    if file_name == 'HSTS.plist':
+                        mac_info.ExportFile(full_path, __Plugin_Name, user_name + "_", False)
+                        plist = read_plist_from_image(mac_info, full_path)
+                        if plist:
+                            parse_hsts_plist(plist, cookies, user_name, full_path)
+                    elif extension in ('.cookies', '.binarycookies'):
+                        mac_info.ExportFile(full_path, __Plugin_Name, user_name + "_", False)
+                        f = mac_info.Open(full_path)
+                        if f != None:
+                            parse_cookie_file(f, cookies, user_name, full_path)
+                        else:
+                            log.error('Could not open file {}'.format(full_path))
                     else:
-                        log.error('Could not open file {}'.format(full_path))
-                else:
-                    log.debug(f'Found unknown file - {full_path}')
-        #else:
-        #    log.debug(f'No cookie files or hsts.plist for user {user_name}')
+                        log.debug(f'Found unknown file - {full_path}')
+            #else:
+            #    log.debug(f'No cookie files or hsts.plist for user {user_name}')
 
     if len(cookies) > 0:
         PrintAll(cookies, mac_info.output_params, '')
