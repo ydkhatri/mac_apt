@@ -11,6 +11,7 @@ import logging
 import os
 import sqlite3
 from plugins.helpers.common import *
+from plugins.helpers.disk_report import Disk_Info
 from plugins.helpers.macinfo import *
 from plugins.helpers.writer import *
 
@@ -37,15 +38,15 @@ def GetVolumeInfo(mac_info):
     if vol == None: # For MOUNTED option, this is None
         return
     if mac_info.is_apfs:
-        used_space = '{:.2f}'.format(float(vol.container.block_size * vol.num_blocks_used / (1024*1024*1024.0)))
-        container_size = '{:.2f}'.format(float(vol.container.apfs_container_size / (1024*1024*1024.0)))
+        used_space = Disk_Info.GetSizeStr(vol.container.block_size * vol.num_blocks_used)
+        container_size = Disk_Info.GetSizeStr(vol.container.apfs_container_size)
         if mac_info.apfs_sys_volume:
             basic_data.append(['APFS', 'Information', '', 'Data below represents a combined SYSTEM & DATA volume', ''])
             basic_data.append(['APFS', 'Block Size (bytes)', vol.container.block_size, 'Container Block size', ''])
-            basic_data.append(['APFS', 'Container Size (GB)', container_size, 'Container size (SYSTEM + DATA)', ''])
+            basic_data.append(['APFS', 'Container Size', container_size, 'Container size (SYSTEM + DATA)', ''])
             basic_data.append(['APFS', 'Volume Name', mac_info.apfs_sys_volume.volume_name + "," + mac_info.apfs_data_volume.volume_name, 'Volume names (SYSTEM, DATA)', ''])
             basic_data.append(['APFS', 'Volume UUID', mac_info.apfs_sys_volume.uuid + "," + mac_info.apfs_data_volume.uuid, 'Volume Unique Identifiers (SYSTEM, DATA)', ''])
-            basic_data.append(['APFS', 'Size Used (GB)', used_space, 'Space allocated  (SYSTEM + DATA)', ''])
+            basic_data.append(['APFS', 'Size Used', used_space, 'Space allocated  (SYSTEM + DATA)', ''])
             basic_data.append(['APFS', 'Total Files', vol.num_files, 'Total number of files (SYSTEM + DATA)', ''])
             basic_data.append(['APFS', 'Total Folders', vol.num_folders, 'Total number of directories/folders (SYSTEM + DATA)', ''])
             basic_data.append(['APFS', 'Total Symlinks', vol.num_symlinks, 'Total number of symbolic links (SYSTEM + DATA)', ''])
@@ -58,7 +59,7 @@ def GetVolumeInfo(mac_info):
             basic_data.append(['APFS', 'Container Size (GB)', container_size, 'Container size', ''])
             basic_data.append(['APFS', 'Volume Name', vol.volume_name, 'Volume name', ''])
             basic_data.append(['APFS', 'Volume UUID', vol.uuid, 'Volume Unique Identifier', ''])
-            basic_data.append(['APFS', 'Size Used (GB)', used_space, 'Space allocated', ''])
+            basic_data.append(['APFS', 'Size Used', used_space, 'Space allocated', ''])
             basic_data.append(['APFS', 'Total Files', vol.num_files, 'Total number of files', ''])
             basic_data.append(['APFS', 'Total Folders', vol.num_folders, 'Total number of directories/folders', ''])
             basic_data.append(['APFS', 'Total Symlinks', vol.num_symlinks, 'Total number of symbolic links', ''])

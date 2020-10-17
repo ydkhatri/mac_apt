@@ -92,7 +92,7 @@ class Disk_Info:
         if self.apfs_container_only:
             size = self.mac_info.apfs_container_size
             for volume in self.mac_info.apfs_container.volumes:
-                used_space = '{:.2f} GB'.format(float(volume.container.block_size * volume.num_blocks_used / (1024*1024*1024.0)))
+                used_space = Disk_Info.GetSizeStr(volume.container.block_size * volume.num_blocks_used)
                 vol = Vol_Info(volume.volume_name, size, used_space, 'APFS', 0, self.IsApfsBootVolume(volume))
                 self.volumes.append(vol)
         else:
@@ -111,12 +111,12 @@ class Disk_Info:
                         file_system = fs_type
                         if file_system == 'HFS' and self.mac_info.macos_partition_start_offset == partition_start_offset: # For macOS partition only
                             hfs_info = self.mac_info.hfs_native.GetVolumeInfo()
-                            used_space = '{:.2f} GB'.format(float(hfs_info.block_size * (hfs_info.total_blocks - hfs_info.free_blocks) / (1024*1024*1024.0)))
+                            used_space = Disk_Info.GetSizeStr(hfs_info.block_size * (hfs_info.total_blocks - hfs_info.free_blocks))
                     except Exception as ex:
                         if self.mac_info.is_apfs and partition_start_offset == self.mac_info.macos_partition_start_offset:
                             part_is_apfs = True
                             for volume in self.mac_info.apfs_container.volumes:
-                                used_space = '{:.2f} GB'.format(float(volume.container.block_size * volume.num_blocks_used / (1024*1024*1024.0)))
+                                used_space = Disk_Info.GetSizeStr(volume.container.block_size * volume.num_blocks_used)
                                 vol = Vol_Info(volume.volume_name, 
                                     partition_size_in_sectors * self.block_size, 
                                     used_space, 'APFS', 
