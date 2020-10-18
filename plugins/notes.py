@@ -26,7 +26,7 @@ import struct
 
 __Plugin_Name = "NOTES"
 __Plugin_Friendly_Name = "Notes"
-__Plugin_Version = "1.1"
+__Plugin_Version = "1.2"
 __Plugin_Description = "Reads Notes databases"
 __Plugin_Author = "Yogesh Khatri"
 __Plugin_Author_Email = "yogesh@swiftforensics.com"
@@ -42,7 +42,8 @@ log = logging.getLogger('MAIN.' + __Plugin_Name) # Do not rename or remove this 
 
 class Note:
 
-    def __init__(self, id, folder, title, snippet, data, att_id, att_path, acc_desc, acc_identifier, acc_username, created, edited, version, user, source):
+    def __init__(self, id, folder, title, snippet, data, att_id, att_path, acc_desc, acc_identifier, acc_username, \
+                created, edited, version, user, source, embed_type='', embed_summary='', embed_url='', embed_title=''):
         self.note_id = id
         self.folder = folder
         self.title = title
@@ -59,13 +60,18 @@ class Note:
         self.user = user
         self.source_file = source
         #self.folder_title_modified = folder_title_modified
+        self.embed_type = embed_type
+        self.embed_summary = embed_summary
+        self.embed_url = embed_url
+        self.embed_title = embed_title
 
 def PrintAll(notes, output_params):
 
     note_info = [ ('ID',DataType.INTEGER),('Title',DataType.TEXT),('Snippet',DataType.TEXT),('Folder',DataType.TEXT),
                     ('Created',DataType.DATE),('LastModified',DataType.DATE),('Data', DataType.TEXT),
-                    ('AttachmentID',DataType.TEXT),('AttachmentPath',DataType.TEXT),('AccountDescription',DataType.TEXT),
-                    ('AccountIdentifier', DataType.TEXT),('AccountUsername', DataType.TEXT),
+                    ('AttachmentID',DataType.TEXT),('AttachmentPath',DataType.TEXT),
+                    ('EmbedType',DataType.TEXT),('EmbedSummary',DataType.TEXT),('EmbedURL',DataType.TEXT),('EmbedTitle',DataType.TEXT),
+                    ('AccountDescription',DataType.TEXT),('AccountIdentifier', DataType.TEXT),('AccountUsername', DataType.TEXT),
                     ('Version', DataType.TEXT),('User', DataType.TEXT),('Source',DataType.TEXT)
                 ]
 
@@ -74,8 +80,9 @@ def PrintAll(notes, output_params):
     for note in notes:
         note_items = [note.note_id, note.title, note.snippet, note.folder, 
                       note.date_created, note.date_edited, note.data,
-                      note.attachment_id, note.attachment_path, note.account,
-                      note.account_identifier, note.account_username, 
+                      note.attachment_id, note.attachment_path, 
+                      note.embed_type, note.embed_summary, note.embed_url, note.embed_title,
+                      note.account, note.account_identifier, note.account_username, 
                       note.version, note.user, note.source_file
                      ]
         notes_list.append(note_items)
@@ -188,8 +195,9 @@ def ProcessNoteBodyBlob(blob):
         log.exception('Error processing note data blob')
     return data
 
-def ReadNotesHighSierra(db, notes, source, user):
+def ReadNotesHighSierraAndAbove(db, notes, source, user):
     '''Read Notestore.sqlite'''
+    ### embed_type='', embed_summary='', embed_url='', embed_title='')
     try:
         query = " SELECT n.Z_PK, n.ZNOTE as note_id, n.ZDATA as data, " \
                 " c3.ZFILESIZE, "\
@@ -197,7 +205,8 @@ def ReadNotesHighSierra(db, notes, source, user):
                 " c1.ZTITLE1 as title, c1.ZSNIPPET as snippet, c1.ZIDENTIFIER as noteID, "\
                 " c1.ZCREATIONDATE1 as created, c1.ZLASTVIEWEDMODIFICATIONDATE, c1.ZMODIFICATIONDATE1 as modified, "\
                 " c2.ZACCOUNT3, c2.ZTITLE2 as folderName, c2.ZIDENTIFIER as folderID, "\
-                " c5.ZNAME as acc_name, c5.ZIDENTIFIER as acc_identifier, c5.ZACCOUNTTYPE "\
+                " c5.ZNAME as acc_name, c5.ZIDENTIFIER as acc_identifier, c5.ZACCOUNTTYPE, "\
+                " c3.ZSUMMARY, c3.ZTITLE, c3.ZURLSTRING, c3.ZTYPEUTI "\
                 " FROM ZICNOTEDATA as n "\
                 " LEFT JOIN ZICCLOUDSYNCINGOBJECT as c1 ON c1.ZNOTEDATA = n.Z_PK  "\
                 " LEFT JOIN ZICCLOUDSYNCINGOBJECT as c2 ON c2.Z_PK = c1.ZFOLDER "\
@@ -220,14 +229,14 @@ def ReadNotesHighSierra(db, notes, source, user):
                 note = Note(row['note_id'], row['folderName'], row['title'], row['snippet'], text_content, row['att_uuid'], att_path,
                             row['acc_name'], row['acc_identifier'], '', 
                             CommonFunctions.ReadMacAbsoluteTime(row['created']), CommonFunctions.ReadMacAbsoluteTime(row['modified']),
-                            'NoteStore', user, source)
+                            'NoteStore', user, source, row['ZTYPEUTI'], row['ZSUMMARY'], row['ZURLSTRING'], row['ZTITLE'])
                 notes.append(note)
             except sqlite3.Error:
                 log.exception('Error fetching row data')
     except sqlite3.Error:
         log.exception('Query  execution failed. Query was: ' + query)
 
-def IsHighSierraDb(db):
+def IsHighSierraOrAboveDb(db):
     '''Returns false if Z_xxNOTE is a table where xx is a number'''
     try:
         cursor = db.execute("SELECT name FROM sqlite_master WHERE type='table' AND name LIKE '%NOTE%'")
@@ -251,8 +260,8 @@ def ExecuteQuery(db, query):
 
 def ReadNotes(db, notes, source, user):
     '''Read Notestore.sqlite'''
-    if IsHighSierraDb(db):
-        ReadNotesHighSierra(db, notes, source, user)
+    if IsHighSierraOrAboveDb(db):
+        ReadNotesHighSierraAndAbove(db, notes, source, user)
         return
 
     query1 = " SELECT n.Z_12FOLDERS as folder_id , n.Z_9NOTES as note_id, d.ZDATA as data, " \
