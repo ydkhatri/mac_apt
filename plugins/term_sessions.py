@@ -210,9 +210,10 @@ def Plugin_Start(mac_info):
 def Plugin_Start_Ios(ios_info):
     '''Entry point for ios_apt plugin'''
     term_sessions = []
-    bash_history_path = '/private/var/mobile/.bash_history'
-    if ios_info.IsValidFilePath(bash_history_path):
-        ReadHistoryFile(ios_info, bash_history_path, 'BASH_HISTORY', term_sessions, '')
+    for user in ('mobile', 'root'):
+        bash_history_path = f'/private/var/{user}/.bash_history'
+        if ios_info.IsValidFilePath(bash_history_path):
+            ReadHistoryFile(ios_info, bash_history_path, 'BASH_HISTORY', term_sessions, f'{user}')
 
     if len(term_sessions) > 0:
         PrintAll(term_sessions, ios_info.output_params, '')
