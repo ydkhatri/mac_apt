@@ -24,7 +24,7 @@ __Plugin_Description = 'Gets network related information - Interfaces, last IP a
 __Plugin_Author = "Yogesh Khatri"
 __Plugin_Author_Email = "yogesh@swiftforensics.com"
 
-__Plugin_Modes = "MACOS"
+__Plugin_Modes = "MACOS,IOS"
 __Plugin_ArtifactOnly_Usage = ''
 
 log = logging.getLogger('MAIN.' + __Plugin_Name) # Do not rename or remove this ! This is the logger object
@@ -55,9 +55,9 @@ net_interface_detail_info = [ ('UUID',DataType.TEXT),('IPv4.ConfigMethod',DataTy
                               ('PPP',DataType.TEXT),('Modem',DataType.TEXT),('Source', DataType.TEXT) #,('VirtualInterfaces',DataType.TEXT)
                             ]
 
-def GetNetworkInterface2Info(mac_info):
+def GetNetworkInterface2Info(mac_info, preference_plist_path):
     '''Read interface info from /Library/Preferences/SystemConfiguration/preferences.plist'''
-    preference_plist_path = '/Library/Preferences/SystemConfiguration/preferences.plist'
+    #preference_plist_path = '/Library/Preferences/SystemConfiguration/preferences.plist'
     mac_info.ExportFile(preference_plist_path, __Plugin_Name, '', False)
     success, plist, error_message = mac_info.ReadPlist(preference_plist_path)
     if success:
@@ -111,9 +111,9 @@ def GetNetworkInterface2Info(mac_info):
     else:
         log.error('Failed to read plist ' + preference_plist_path + " Error was : " + error_message)
 
-def GetNetworkInterfaceInfo(mac_info):
+def GetNetworkInterfaceInfo(mac_info, path):
     '''Read interface info from NetworkInterfaces.plist'''
-    path = '/Library/Preferences/SystemConfiguration/NetworkInterfaces.plist'
+    #path = '/Library/Preferences/SystemConfiguration/NetworkInterfaces.plist'
     mac_info.ExportFile(path, __Plugin_Name, '', False)
     log.debug("Trying to read {}".format(path))
     success, plist, error = mac_info.ReadPlist(path)
@@ -225,15 +225,26 @@ def Plugin_Start(mac_info):
     GetDhcpInfo(mac_info)
     GetResolvConf(mac_info) # Not writing to file yet!
     GetEtcHosts(mac_info) # Not writing to file yet!
-    GetNetworkInterfaceInfo(mac_info)
-    GetNetworkInterface2Info(mac_info)
+    GetNetworkInterfaceInfo(mac_info, '/Library/Preferences/SystemConfiguration/NetworkInterfaces.plist')
+    GetNetworkInterface2Info(mac_info, '/Library/Preferences/SystemConfiguration/preferences.plist')
     WriteList('dhcp data', 'Network_DHCP', dhcp_interfaces, dhcp_data_info, mac_info.output_params)
     WriteList('network interface data', 'Network_Interfaces', net_interfaces, net_interface_info, mac_info.output_params, '/Library/Preferences/SystemConfiguration/NetworkInterfaces.plist')
     WriteList('network interface details', 'Network_Details', net_interface_details, net_interface_detail_info, mac_info.output_params, '/Library/Preferences/SystemConfiguration/preferences.plist')
 
 def Plugin_Start_Standalone(input_files_list, output_params):
     log.info("This plugin cannot be run as standalone")
-    
+
+def Plugin_Start_Ios(ios_info):
+    '''Entry point for ios_apt plugin'''
+    GetDhcpInfo(ios_info)
+    GetResolvConf(ios_info) # Not writing to file yet!
+    GetEtcHosts(ios_info) # Not writing to file yet!
+    GetNetworkInterfaceInfo(ios_info, '/private/var/Preferences/SystemConfiguration/NetworkInterfaces.plist')
+    GetNetworkInterface2Info(ios_info, '/private/var/Preferences/SystemConfiguration/preferences.plist')
+    WriteList('dhcp data', 'Network_DHCP', dhcp_interfaces, dhcp_data_info, ios_info.output_params)
+    WriteList('network interface data', 'Network_Interfaces', net_interfaces, net_interface_info, ios_info.output_params, '/Library/Preferences/SystemConfiguration/NetworkInterfaces.plist')
+    WriteList('network interface details', 'Network_Details', net_interface_details, net_interface_detail_info, ios_info.output_params, '/Library/Preferences/SystemConfiguration/preferences.plist')
+
 
 if __name__ == '__main__':
     print ("This plugin is a part of a framework and does not run independently on its own!")
