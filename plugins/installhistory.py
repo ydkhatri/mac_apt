@@ -77,7 +77,8 @@ def PrintAll(history, output_params, source_path):
     data_list = []
     for entry in history:
         data_list.append( [ entry.ContentType, entry.Date, entry.DisplayName, entry.DisplayVersion, 
-                            ', '.join(entry.PackageIdentifiers), entry.ProcessName, source_path
+                            ', '.join(entry.PackageIdentifiers) if entry.PackageIdentifiers else '',
+                            entry.ProcessName, source_path
                           ] )
 
     WriteList("Installation history", "InstallHistory", data_list, install_info, output_params, source_path)
