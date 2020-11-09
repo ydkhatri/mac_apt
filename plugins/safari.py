@@ -27,7 +27,7 @@ __Plugin_Description = "Gets internet history, downloaded file information, cook
 __Plugin_Author = "Yogesh Khatri"
 __Plugin_Author_Email = "yogesh@swiftforensics.com"
 
-__Plugin_Modes = "MACOS,ARTIFACTONLY"
+__Plugin_Modes = "IOS,MACOS,ARTIFACTONLY"
 __Plugin_ArtifactOnly_Usage = ''
 
 log = logging.getLogger('MAIN.' + __Plugin_Name) # Do not rename or remove this ! This is the logger object
@@ -366,6 +366,9 @@ def ProcessSafariFolder(mac_info, folder_path, user, safari_items):
         else:
             log.debug('Safari File not found : {}'.format(source_path))
     # Yosemite onwards there is History.db
+    ReadHistoryDbFromImage(mac_info, folder_path, user, safari_items)
+
+def ReadHistoryDbFromImage(mac_info, folder_path, user, safari_items):
     source_path = folder_path + '/History.db'
     if mac_info.IsValidFilePath(source_path) and mac_info.GetFileSize(source_path, 0) > 0:
         mac_info.ExportFile(source_path, __Plugin_Name, user + "_")
@@ -447,6 +450,26 @@ def Plugin_Start_Standalone(input_files_list, output_params):
             PrintAll(safari_items, output_params, input_path)
         else:
             log.info('No safari items found in {}'.format(input_path))
+
+def Plugin_Start_Ios(ios_info):
+    '''Entry point for ios_apt plugin'''
+    safari_items = []
+    for app in ios_info.apps:
+        if app.bundle_display_name.lower() == "safari":
+            log.debug(f'Safari version {app.bundle_version} found at {app.sandbox_path}')
+            safari_plist_path = f'{app.sandbox_path}/Library/Preferences/com.apple.mobilesafari.plist'
+
+            if ios_info.IsValidFilePath(safari_plist_path):
+                ProcessSafariPlist(ios_info, safari_plist_path, 'mobile', safari_items, ReadSafariPlist)
+            break
+    source_path = '/private/var/mobile/Library/Safari'
+    if ios_info.IsValidFolderPath(source_path):
+        ReadHistoryDbFromImage(ios_info, source_path, 'mobile', safari_items)
+
+    if len(safari_items) > 0:
+        PrintAll(safari_items, ios_info.output_params, '')
+    else:
+        log.info('No safari items were found!')
 
 if __name__ == '__main__':
     print ("This plugin is a part of a framework and does not run independently on its own!")
