@@ -114,7 +114,7 @@ def CreateLogger(log_file_path, log_file_level=logging.DEBUG, log_console_level=
     try:
         # Log file setting
         logger = logging.getLogger('MAIN')
-        log_file_handler = logging.FileHandler(log_file_path)
+        log_file_handler = logging.FileHandler(log_file_path, encoding='utf8')
         log_file_format  = logging.Formatter('%(asctime)s|%(name)s|%(levelname)s|%(message)s', datefmt='%Y-%m-%d %H:%M:%S')
         log_file_handler.setFormatter(log_file_format)
         logger.addHandler(log_file_handler)
