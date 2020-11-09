@@ -210,8 +210,8 @@ def GetLastLoggedInUser(mac_info):
     return
 
 # Source - /Library/Preferences/SystemConfiguration/preferences.plist FOR ComputerName
-def GetModelAndHostNameFromPreference(mac_info):
-    preference_plist_path = '/Library/Preferences/SystemConfiguration/preferences.plist'
+def GetModelAndHostNameFromPreference(mac_info, preference_plist_path):
+    #preference_plist_path = '/Library/Preferences/SystemConfiguration/preferences.plist'
     mac_info.ExportFile(preference_plist_path, __Plugin_Name, '', False)
     success, plist, error_message = mac_info.ReadPlist(preference_plist_path)
     if success:
@@ -246,7 +246,7 @@ def Plugin_Start(mac_info):
     '''Main Entry point function for plugin'''
     GetMacOSVersion(mac_info)
     GetMacSerialNum(mac_info)
-    GetModelAndHostNameFromPreference(mac_info)
+    GetModelAndHostNameFromPreference(mac_info, '/Library/Preferences/SystemConfiguration/preferences.plist')
     GetTimezone(mac_info)
     GetLastLoggedInUser(mac_info)
     GetVolumeInfo(mac_info)
@@ -327,7 +327,7 @@ def GetLastFacetimeId(ios_info):
     
 def GetPreviousRestoreDate(ios_info):
     prev_restore_date = None
-    last_update_plist = '\private\var\MobileSoftwareUpdate\last_update_result.plist'
+    last_update_plist = '/private/var/MobileSoftwareUpdate/last_update_result.plist'
     if ios_info.IsValidFilePath(last_update_plist):
         ios_info.ExportFile(last_update_plist, __Plugin_Name, '', False)
         success, plist, error = ios_info.ReadPlist(last_update_plist)
@@ -341,16 +341,10 @@ def GetPreviousRestoreDate(ios_info):
 def Plugin_Start_Ios(ios_info):
     '''Entry point for ios_apt plugin'''
     GetIOSVersion(ios_info)
+    GetModelAndHostNameFromPreference(ios_info, '/private/var/Preferences/SystemConfiguration/preferences.plist')
     GetPreviousRestoreDate(ios_info)
     GetLastFacetimeId(ios_info)
-    GetDiskUsageAndSyncInfo(ios_info)
-    #TODO
-    # Get Model, ComputerName, Hostname from /private/var/preferences/SystemConfiguration/preferences.plist
-   
-    #GetIOSModel(ios_info)
-    #GetIOSComputerName(ios_info)
-    #GetIOSHostName(ios_info)
-      
+    GetDiskUsageAndSyncInfo(ios_info)      
       
     WriteList("basic device info", "Basic_Info", basic_data, basic_data_info, ios_info.output_params)
 
