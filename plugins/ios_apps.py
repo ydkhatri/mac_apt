@@ -29,7 +29,7 @@ log = logging.getLogger('MAIN.' + __Plugin_Name) # Do not rename or remove this 
 
 app_info = [ ('App_Name',DataType.TEXT),('Hidden',DataType.TEXT),('Bundle_Identifier',DataType.TEXT),
               ('Bundle_Path',DataType.TEXT),('Data_Path',DataType.TEXT),
-              ('Uninstall_Date',DataType.DATE),('Version',DataType.INTEGER),
+              ('Uninstall_Date',DataType.DATE),('Version',DataType.TEXT),
               ('Icon_Path',DataType.TEXT),('Source',DataType.TEXT)
              ]
 
