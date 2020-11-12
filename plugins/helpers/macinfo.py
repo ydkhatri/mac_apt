@@ -1697,7 +1697,7 @@ class ApplicationInfo:
         self.bundle_container_path = '' # /private/var/containers/Bundle/UUID1 ## Not for buitin apps
         self.bundle_identifier = app_identifier # com.xxx.yyy
         self.bundle_path = '' # <bundle_container_path>/Appname.app  or /Applications/Appname.app
-        self.sandbox_path = '' # /private/var/mobilce/Containers/Data/Application/UUID2
+        self.sandbox_path = '' # /private/var/mobile/Containers/Data/Application/UUID2
 
         self.uninstall_date = None
         self.bundle_uuid = None
