@@ -342,7 +342,6 @@ class ApfsFileSystemParser:
         # will make the lookup easier as it consolidates the data, thus avoiding multiple queries when fetching 
         # info about a file. Also, we provide the uncompressed size of the file (logical size), so its always 
         # available for listing, without having to go and read an extent.
-        # Note - removed 'and a.XID=b.XID' from query as XID will be different for ResourceFork & decmpfs
 
         #Copy all decmpfs-Type2 attributes to table, where no resource forks <-- Nothing to do, just copy
         type2_no_rsrc_query = "INSERT INTO \"{0}_Compressed_Files\" select b.XID, b.CNID, b.Data, "\
@@ -2121,7 +2120,8 @@ class ApfsFileCompressed(ApfsFile):
 
         if self.meta.is_symlink: # if symlink, return symlink  path as data 
             data += self.meta.attributes['com.apple.fs.symlink'].data[0:size_to_read]
-            log.error("This should not happen, compressed + symlink?")
+            log.warning("This does not usually happen, compressed + symlink? Perhaps was compressed file before, now (new XID) is symlink")
+            return data
         
         # If file is < 10MB, read entire file
         if self.uncompressed_size < 10485760:
