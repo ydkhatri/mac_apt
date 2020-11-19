@@ -994,10 +994,10 @@ class ApfsVolume:
         '''Returns ApfsFileMeta object from database. A where_clause specifies either cnid or path to find'''
 
         query = "SELECT a.name as xName, a.flags as xFlags, a.data as xData, a.Logical_uncompressed_size as xSize, "\
-                " a.Extent_CNID as xCNID, ex.Offset as xExOff, ex.Size as xExSize, ex.Block_Num as xBlock_Num, "\
-                " p.CNID, p.Path, i.Parent_CNID, i.Extent_CNID, i.Name, i.Created, i.Modified, i.Changed, i.Accessed, i.Flags, "\
+                " a.Extent_CNID as xCNID, a.XID as xXID, ex.Offset as xExOff, ex.Size as xExSize, ex.Block_Num as xBlock_Num, "\
+                " p.CNID, p.Path, i.Parent_CNID, i.Extent_CNID, i.XID as iXID, i.Name, i.Created, i.Modified, i.Changed, i.Accessed, i.Flags, "\
                 " i.Links_or_Children, i.BSD_flags, i.UID, i.GID, i.Mode, i.Logical_Size, i.Physical_Size, "\
-                " d.ItemType, d.DateAdded, e.Offset as Extent_Offset, e.Size as Extent_Size, e.Block_Num as Extent_Block_Num, "\
+                " d.ItemType, d.DateAdded, e.XID as eXID, e.Offset as Extent_Offset, e.Size as Extent_Size, e.Block_Num as Extent_Block_Num, "\
                 " c.Uncompressed_size, c.Data, c.Extent_Logical_Size, "\
                 " ec.Offset as compressed_Extent_Offset, ec.Size as compressed_Extent_Size, ec.Block_Num as compressed_Extent_Block_Num "\
                 " from \"{0}_Paths\" as p "\
@@ -1039,10 +1039,14 @@ class ApfsVolume:
                         #     if row['xid'] < row['cxid']:
                         #         log.error(f"GetFileMetadata() --> Something wrong in apfs parsing logic, xid={row['xid']} cxid={row['cxid']} cnid={row['cnid']}")
                         # else:
-                        apfs_file_meta.logical_size = row['Uncompressed_size']
-                        apfs_file_meta.is_compressed = True
-                        apfs_file_meta.decmpfs = row['Data']
-                        apfs_file_meta.compressed_extent_size = row['Extent_Logical_Size']
+                        # Check XID
+                        if row['eXID'] and (row['eXID'] > row['xXID']): # extent_xid > attrib_xid, so it was compressed earlier, now it's not
+                            log.debug(f"extent_xid > attrib_xid for file {row['Path']}")
+                        else:
+                            apfs_file_meta.logical_size = row['Uncompressed_size']
+                            apfs_file_meta.is_compressed = True
+                            apfs_file_meta.decmpfs = row['Data']
+                            apfs_file_meta.compressed_extent_size = row['Extent_Logical_Size']
                 if apfs_file_meta.is_compressed:
                     extent = ApfsExtent(row['compressed_Extent_Offset'], row['compressed_Extent_Size'], row['compressed_Extent_Block_Num'])
                 else:
@@ -1146,10 +1150,10 @@ class ApfsVolume:
         '''Returns ApfsFileMeta object from database. A where_clause specifies either cnid or path to find'''
         #apfs_file_meta_list = []
         query = "SELECT a.name as xName, a.flags as xFlags, a.data as xData, a.Logical_uncompressed_size as xSize, "\
-                " a.Extent_CNID as xCNID, ex.Offset as xExOff, ex.Size as xExSize, ex.Block_Num as xBlock_Num, "\
-                " p.CNID, p.Path, i.Parent_CNID, i.Extent_CNID, i.Name, i.Created, i.Modified, i.Changed, i.Accessed, i.Flags, "\
+                " a.Extent_CNID as xCNID, a.XID as xXID, ex.Offset as xExOff, ex.Size as xExSize, ex.Block_Num as xBlock_Num, "\
+                " p.CNID, p.Path, i.Parent_CNID, i.Extent_CNID, i.XID as iXID, i.Name, i.Created, i.Modified, i.Changed, i.Accessed, i.Flags, "\
                 " i.Links_or_Children, i.BSD_flags, i.UID, i.GID, i.Mode, i.Logical_Size, i.Physical_Size, "\
-                " d.ItemType, d.DateAdded, e.Offset as Extent_Offset, e.Size as Extent_Size, e.Block_Num as Extent_Block_Num, "\
+                " d.ItemType, d.DateAdded, e.XID as eXID, e.Offset as Extent_Offset, e.Size as Extent_Size, e.Block_Num as Extent_Block_Num, "\
                 " c.Uncompressed_size, c.Data, c.Extent_Logical_Size, "\
                 " ec.Offset as compressed_Extent_Offset, ec.Size as compressed_Extent_Size, ec.Block_Num as compressed_Extent_Block_Num "\
                 " from \"{0}_Paths\" as p "\
@@ -1207,10 +1211,13 @@ class ApfsVolume:
                                             row['Logical_Size'], row['Physical_Size'], row['ItemType'])
 
                         if row['Uncompressed_size'] != None:
-                            apfs_file_meta.logical_size = row['Uncompressed_size']
-                            apfs_file_meta.is_compressed = True
-                            apfs_file_meta.decmpfs = row['Data']
-                            apfs_file_meta.compressed_extent_size = row['Extent_Logical_Size']
+                            if row['eXID'] and (row['eXID'] > row['xXID']): # extent_xid > attrib_xid, so it was compressed earlier, now it's not
+                                log.debug(f"extent_xid > attrib_xid for file {row['Path']}")
+                            else:
+                                apfs_file_meta.logical_size = row['Uncompressed_size']
+                                apfs_file_meta.is_compressed = True
+                                apfs_file_meta.decmpfs = row['Data']
+                                apfs_file_meta.compressed_extent_size = row['Extent_Logical_Size']
                     if apfs_file_meta.is_compressed:
                         extent = ApfsExtent(row['compressed_Extent_Offset'], row['compressed_Extent_Size'], row['compressed_Extent_Block_Num'])
                     else:
