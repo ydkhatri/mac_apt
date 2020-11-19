@@ -9,6 +9,7 @@
 
 
 import os
+import re
 from plugins.helpers.macinfo import *
 from plugins.helpers.writer import *
 import logging
@@ -142,6 +143,20 @@ def GetNetworkInterfaceInfo(mac_info, path):
     else:
         log.error("Could not open plist to get interface info for " + path + " Error was " + error)
 
+def ParseDhcpFromPlist(plist, interface_info):
+
+    for item, value in list(plist.items()):
+        if item in ['IPAddress','LeaseLength','LeaseStartDate','PacketData','RouterIPAddress','SSID']:
+            interface_info[item] = value
+        elif item == 'RouterHardwareAddress':  # convert binary blob to MAC address
+            data = ':'.join(value.hex()[i:i+2] for i in range(0,len(value.hex()),2))
+            interface_info[item] = data.upper()
+        elif item == 'ClientIdentifier': # ios 14
+            value = value[1:]
+            data = ':'.join(value.hex()[i:i+2] for i in range(0,len(value.hex()),2))
+            interface_info['MAC_Address'] = data.upper()
+        else:
+            log.info("Found unknown item in plist: ITEM=" + item + " VALUE=" + str(value))
 
 def GetDhcpInfo(mac_info):
     '''Read dhcp leases & interface entries'''
@@ -149,29 +164,28 @@ def GetDhcpInfo(mac_info):
         interfaces = mac_info.ListItemsInFolder('/private/var/db/dhcpclient/leases', EntryType.FILES)
         for interface in interfaces:
             name = interface['name']
-            if name.find(",") > 0:
+            has_plist_ext = False
+            if name.endswith('.plist'): # ios14
+                has_plist_ext = True
+            if name.find(",") > 0 or has_plist_ext:
                 #Process plist
                 mac_info.ExportFile('/private/var/db/dhcpclient/leases/' + name, __Plugin_Name, '', False)
-                name_no_ext = os.path.splitext(name)[0] # not needed as there is no .plist extension on these files
-                if_name, mac_address = name_no_ext.split(",")
-                log.info("Found mac address = " + mac_address + " on interface " + if_name)
-
+                name_no_ext = os.path.splitext(name)[0]
+                if_name = name_no_ext # ios 14 
+                mac_address = ''
+                if name.find(",") > 0:
+                    if_name, mac_address = name_no_ext.split(",")
+                    mac_address = re.sub("[^0-9a-fA-F]+", ":", mac_address)
+                    log.info("Found mac address = " + mac_address + " on interface " + if_name)
+                
                 log.debug("Trying to read {}".format(name))
                 path = '/private/var/db/dhcpclient/leases/' + name
                 success, plist, error = mac_info.ReadPlist(path)
                 if success:
-                    interface_info = {  'Source':'/private/var/db/dhcpclient/leases/' + name,
+                    interface_info = {  'Source':path,
                                         'Interface':if_name,
                                         'MAC_Address':mac_address }
-
-                    for item, value in list(plist.items()):
-                        if item in ['IPAddress','LeaseLength','LeaseStartDate','PacketData','RouterIPAddress','SSID']:
-                            interface_info[item] = value
-                        elif item == 'RouterHardwareAddress':  # convert binary blob to MAC address
-                            data = ':'.join(value.hex()[i:i+2] for i in range(0,len(value.hex()),2))
-                            interface_info[item] = data.upper()
-                        else:
-                            log.info("Found unknown item in plist: ITEM=" + item + " VALUE=" + str(value))
+                    ParseDhcpFromPlist(plist, interface_info)
                     dhcp_interfaces.append(interface_info)
                 else:
                     log.error("Could not open plist to get interface info for " + path + " Error was " + error)
