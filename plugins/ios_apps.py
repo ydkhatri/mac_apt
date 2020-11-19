@@ -15,7 +15,7 @@ from plugins.helpers.writer import *
 __Plugin_Name = "APPS"
 __Plugin_Friendly_Name = "App Information"
 __Plugin_Version = "1.0"
-__Plugin_Description = "Extract App information"
+__Plugin_Description = "Gets App listing, install dates, sandbox locations"
 __Plugin_Author = "Yogesh Khatri"
 __Plugin_Author_Email = "yogesh@swiftforensics.com"
 
