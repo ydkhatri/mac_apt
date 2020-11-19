@@ -19,7 +19,7 @@ __Plugin_Description = "Information about connected/stored wifi access points"
 __Plugin_Author = "Yogesh Khatri"
 __Plugin_Author_Email = "yogesh@swiftforensics.com"
 
-__Plugin_Modes = "IOS,ARTIFACTONLY"
+__Plugin_Modes = "IOS"
 __Plugin_ArtifactOnly_Usage = ""
 
 log = logging.getLogger('MAIN.' + __Plugin_Name) # Do not rename or remove this ! This is the logger object
@@ -43,6 +43,7 @@ def Plugin_Start_Ios(ios_info):
     '''Entry point for ios_apt plugin'''
     networks = []
     wifi_plist_path = '/private/var/preferences/SystemConfiguration/com.apple.wifi.plist'
+    wifi_plist_path_2 = '/private/var/preferences/com.apple.wifi.known-networks.plist' # iOS/ipadOS 14, wifi_plist_path exists but holds other data
     if ios_info.IsValidFilePath(wifi_plist_path):
         ios_info.ExportFile(wifi_plist_path, __Plugin_Name, '', False)
         success, plist, error = ios_info.ReadPlist(wifi_plist_path)
@@ -63,11 +64,35 @@ def Plugin_Start_Ios(ios_info):
                     pass
                 networks.append( [ssid, bssid, enabled, user, last_auto_join, last_join, last_update, usage, wifi_plist_path] )
         else:
-            log.error(f'Error reading {plist_path} : {error}')
+            log.error(f'Error reading {wifi_plist_path} : {error}')
     else:
-        log.info(f'Did not find wifi plist at {wifi_plist_path}')
+        log.debug(f'Did not find wifi plist at {wifi_plist_path}')
+
+    if ios_info.IsValidFilePath(wifi_plist_path_2):
+        ios_info.ExportFile(wifi_plist_path_2, __Plugin_Name, '', False)
+        success, plist, error = ios_info.ReadPlist(wifi_plist_path_2)
+        if success:
+            for name, network in plist.items():
+                ssid = network.get('SSID', b'').decode('utf8', 'ignore')
+                last_join = network.get('JoinedByUserAt', '')
+                last_auto_join = network.get('JoinedBySystemAt', '')
+                last_update = network.get('UpdatedAt', '')
+                details = network.get('__OSSpecific__', {})
+                bssid = details.get('BSSID', '')
+                usage = details.get('networkUsage', 0)
+                user = ''
+                try:
+                    user = network['EAPProfile']['UserName']
+                except (KeyError, ValueError):
+                    pass
+                networks.append( [ssid, bssid, '', user, last_auto_join, last_join, last_update, usage, wifi_plist_path_2] )
+        else:
+            log.error(f'Error reading {wifi_plist_path_2} : {error}')
 
     log.info('Found {} wifi access points'.format(len(networks)))
+
+    wifi_plist_path_3 = '/private/var/preferences/SystemConfiguration/com.apple.wifi-private-mac-networks.plist'
+    #TODO - ios14 private (random) mac address capability
 
     WriteList("wifi information", "Wifi", networks, wifi_info, ios_info.output_params, '')
 
