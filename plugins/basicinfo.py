@@ -16,9 +16,9 @@ from plugins.helpers.macinfo import *
 from plugins.helpers.writer import *
 
 __Plugin_Name = "BASICINFO" 
-__Plugin_Friendly_Name = "Basic machine and OS configuration"
+__Plugin_Friendly_Name = "Basic system and OS configuration"
 __Plugin_Version = "0.1"
-__Plugin_Description = "Gets basic machine and OS configuration like SN, timezone, computer name, last logged in user, FS info, etc.."
+__Plugin_Description = "Gets basic system and OS configuration like SN, timezone, device name, last logged in user, FS info, etc.."
 __Plugin_Author = "Yogesh Khatri"
 __Plugin_Author_Email = "yogesh@swiftforensics.com"
 __Plugin_Modes = "MACOS,IOS"
