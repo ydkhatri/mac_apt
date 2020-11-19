@@ -36,7 +36,7 @@ from plugins.helpers.disk_report import *
 from plugin import *
 from uuid import UUID
 
-__VERSION = "0.8.dev"
+__VERSION = "0.8"
 __PROGRAMNAME = "APFS metadata extract Tool"
 __EMAIL = "yogesh@swiftforensics.com"
 

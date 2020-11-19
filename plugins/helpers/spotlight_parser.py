@@ -354,6 +354,7 @@ class FileMetaDataListing:
                                     cat = categories.get(v, None)
                                     if cat == None:
                                         log.error('error getting category for index={}  prop_type={}  prop_name={}'.format(v, prop_type, prop_name))
+                                        value = ''
                                     else:
                                         all_translations = cat.split(b'\x16\x02')
                                         if len(all_translations) > 2:
@@ -381,6 +382,7 @@ class FileMetaDataListing:
                                 cat = categories.get(value, None)
                                 if cat == None:
                                     log.error('error getting category for index={}  prop_type={}  prop_name={}'.format(v, prop_type, prop_name))
+                                    value = ''
                                 else:
                                     value = cat
                                 value = value.decode('utf8', 'backslashreplace')
@@ -738,7 +740,11 @@ class SpotlightStore:
         # Index = [last_id_in_block, offset_index, dest_block_size]
         for index in self.block0.indexes:
             #go to offset and parse
-            self.Seek(index[1] * 0x1000)
+            seek_offset = index[1] * 0x1000
+            if seek_offset >= self.file_size:
+                log.error(f'File may be truncated, index seeks ({seek_offset}) outside file size ({self.file_size})!')
+                continue
+            self.Seek(seek_offset)
             block_data = self.ReadFromFile(self.block_size)
             compressed_block = StoreBlock(block_data)
             if compressed_block.block_type & 0xFF != BlockType.METADATA:
