@@ -1097,7 +1097,7 @@ class ApfsMacInfo(MacInfo):
         '''Gets MACB and the 5th Index timestamp too'''
         times = { 'c_time':None, 'm_time':None, 'cr_time':None, 'a_time':None, 'i_time':None }
         try:
-            apfs_file_meta = self.macos_FS.GetFileMetadataByPath(file_path)
+            apfs_file_meta = self.macos_FS.GetApfsFileMeta(file_path)
             if apfs_file_meta:
                 times['c_time'] = apfs_file_meta.changed
                 times['m_time'] = apfs_file_meta.modified
