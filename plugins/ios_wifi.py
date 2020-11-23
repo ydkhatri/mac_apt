@@ -94,6 +94,9 @@ def Plugin_Start_Ios(ios_info):
     wifi_plist_path_3 = '/private/var/preferences/SystemConfiguration/com.apple.wifi-private-mac-networks.plist'
     #TODO - ios14 private (random) mac address capability
 
+    wifi_plist_path_4 = '/private/var/mobile/Library/SyncedPreferences/com.apple.wifid.plist'
+    #TODO - icloud synced wifi preferences
+
     WriteList("wifi information", "Wifi", networks, wifi_info, ios_info.output_params, '')
 
 if __name__ == '__main__':

@@ -16,6 +16,7 @@ import plugins.helpers.ccl_bplist as ccl_bplist
 
 from biplist import *
 from enum import IntEnum
+from plugins.helpers.common import CommonFunctions
 from plugins.helpers.macinfo import *
 from plugins.helpers.writer import *
 
@@ -439,7 +440,7 @@ def Plugin_Start_Standalone(input_files_list, output_params):
         elif input_path.endswith('History.db'):
             log.info ("Processing file " + input_path)
             try:
-                conn = sqlite3.connect(input_path)
+                conn = CommonFunctions.open_sqlite_db_readonly(input_path)
                 log.debug ("Opened database successfully")
                 ReadHistoryDb(conn, safari_items, input_path, '')
             except (sqlite3.Error, OSError) as ex:

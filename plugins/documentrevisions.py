@@ -88,7 +88,7 @@ def ReadRevisionsdB(db, revisions, source):
 def OpenDb(inputPath):
     log.info ("Processing file " + inputPath)
     try:
-        conn = sqlite3.connect(inputPath)
+        conn = CommonFunctions.open_sqlite_db_readonly(inputPath)
         log.debug ("Opened database successfully")
         return conn
     except sqlite3.Error:
@@ -161,6 +161,18 @@ def Plugin_Start_Standalone(input_files_list, output_params):
                 log.info('No revisions item found in {}'.format(input_path))
         else:
             log.info(f'Not a DocumentRevisions database file: {input_path}')
+
+def Plugin_Start_Ios(ios_info):
+    '''Main Entry point function for plugin'''
+    revisions = []
+    revisions_path = '/private/var/.DocumentRevisions-V100/db-V1/db.sqlite'
+    ProcessDbFromPath(ios_info, revisions, revisions_path)
+    CheckForRevisionExistence(ios_info, revisions, '/.DocumentRevisions-V100')
+
+    if len(revisions) > 0:
+        PrintAll(revisions, ios_info.output_params)
+    else:
+        log.info('No revisions item found')
 
 if __name__ == '__main__':
     print ("This plugin is a part of a framework and does not run independently on its own!")

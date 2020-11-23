@@ -63,7 +63,7 @@ def RemoveTabsNewLines(obj):
 def ProcessNotificationDb(inputPath, output_params, screentime_strings_dict=None):
     log.info ("Processing file " + inputPath)
     try:
-        conn = sqlite3.connect(inputPath)
+        conn = CommonFunctions.open_sqlite_db_readonly(inputPath)
         log.debug ("Opened database successfully")
         ParseDb(conn, inputPath, '', output_params.timezone, screentime_strings_dict)
         conn.close()

@@ -15,6 +15,7 @@
 '''
 
 import os
+from plugins.helpers.common import CommonFunctions
 from plugins.helpers.macinfo import *
 from plugins.helpers.writer import *
 import logging
@@ -321,7 +322,7 @@ def ReadQueryResults(cursor, notes, user, source):
 def OpenDb(inputPath):
     log.info ("Processing file " + inputPath)
     try:
-        conn = sqlite3.connect(inputPath)
+        conn = CommonFunctions.open_sqlite_db_readonly(inputPath)
         log.debug ("Opened database successfully")
         return conn
     except sqlite3.Error:

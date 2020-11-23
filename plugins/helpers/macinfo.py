@@ -1881,7 +1881,6 @@ class SqliteWrapper:
 
     def __init__(self, mac_info):
         self.mac_info = mac_info
-        self.sqlite3 = sqlite3
         self.db_file_path = ''
         self.jrn_file_path = ''
         self.wal_file_path = ''
@@ -1932,7 +1931,7 @@ class SqliteWrapper:
                 if self._ExtractFiles():
                     log.debug('Trying to extract and read db: ' + path)
                     if self._is_valid_sqlite_file(self.db_file_path_temp):
-                        result = self.sqlite3.connect(self.db_file_path_temp) # TODO -> Why are exceptions not being raised here when bad paths are sent?
+                        result = CommonFunctions.open_sqlite_db_readonly(self.db_file_path_temp) # TODO -> Why are exceptions not being raised here when bad paths are sent?
                     else:
                         log.error('File is not an SQLITE db or it is corrupted!')
                         result = None
