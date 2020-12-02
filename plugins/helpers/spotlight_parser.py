@@ -339,6 +339,8 @@ class FileMetaDataListing:
                         else: # single string
                             value = binascii.hexlify(value).decode('ascii').upper()
                 elif value_type == 0x0F:
+                    if not value:
+                        pass
                     value = self.ConvertUint32ToSigned(self.ReadVarSizeNum()[0])
                     if value < 0:
                         value = 'INVALID ({})'.format(value)
@@ -353,7 +355,7 @@ class FileMetaDataListing:
                                     if v < 0: continue
                                     cat = categories.get(v, None)
                                     if cat == None:
-                                        log.error('error getting category for index={}  prop_type={}  prop_name={}'.format(v, prop_type, prop_name))
+                                        #log.error('error getting category for index={}  prop_type={}  prop_name={}'.format(v, prop_type, prop_name))
                                         value = ''
                                     else:
                                         all_translations = cat.split(b'\x16\x02')
@@ -362,7 +364,7 @@ class FileMetaDataListing:
                                                         'string.')
                                             log.debug('Found this list: {}', other)
                                         value = all_translations[0].decode('utf8', 'backslashreplace')
-                                    break # only get first, rest are language variants!
+                                        break # only get first, rest are language variants!
                         elif prop_type & 0x2 == 0x2: #== 0x4A: # ContentTypeTree ItemUserTags
                             value = indexes_1.get(value, None)
                             if value == None:
@@ -496,6 +498,8 @@ class SpotlightStore:
         self.indexes_1 = {}
         self.indexes_2 = {}
         self.block0 = None
+
+        self.is_ios_or_user_user_store = False # will be set later
 
     def GetFileSize(self, file):
         '''Return size from an open file handle'''
@@ -839,7 +843,7 @@ class SpotlightStore:
                 count += 1
 
             if process_items_func:
-                process_items_func(items_in_block)
+                process_items_func(items_in_block, self.is_ios_or_user_user_store)
 
             for md_item in items_in_block:
                 md_item.Print(output_file)

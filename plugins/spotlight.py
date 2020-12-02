@@ -34,13 +34,24 @@ writer = None
 mac_info_obj = None
 spotlight_parser.log = logging.getLogger('MAIN.' + __Plugin_Name + '.SPOTLIGHT_PARSER')
     
-def ProcessStoreItem(item):
+def ProcessStoreItem(item, id_as_hex):
     '''Reads a single store item and processes it for output. Returns dictionary'''
     try:
         data_dict = {}
-        data_dict['ID'] = item.id
+        if id_as_hex:
+            id_hex_str = f'{(item.id & (2**64-1)):X}'
+            if len(id_hex_str) % 2:
+                id_hex_str = '0' + id_hex_str
+            reversed_id = ''
+            for x in range(-1, -len(id_hex_str), -2):
+                reversed_id += id_hex_str[x-1] + id_hex_str[x]
+            data_dict['ID_hex'] = id_hex_str
+            data_dict['Parent_ID_hex'] = f'{(item.parent_id & (2**64-1)):X}'
+            data_dict['ID_hex_reversed'] = reversed_id
+        else:
+            data_dict['ID'] = item.id
+            data_dict['Parent_ID'] = item.parent_id
         data_dict['Flags'] = item.flags
-        data_dict['Parent_ID'] = item.parent_id
         data_dict['Date_Updated'] = item.ConvertEpochToUtcDateStr(item.date_updated)
         for k, v in list(item.meta_data_dict.items()):
             orig_debug = v
@@ -58,12 +69,12 @@ def ProcessStoreItem(item):
     except Exception as ex:
         log.exception ("Failed while processing row data before writing")
 
-def ProcessStoreItems(store_items):
+def ProcessStoreItems(store_items, id_as_hex=False):
     global writer
     try:
         data_list = []
         for item in store_items:
-            data = ProcessStoreItem(item)
+            data = ProcessStoreItem(item, id_as_hex)
             if data:
                 data_list.append(data)
         writer.WriteRows(data_list)
@@ -71,9 +82,13 @@ def ProcessStoreItems(store_items):
         log.exception ("Failed to write row data")
 
 def Get_Column_Info(store):
-    '''Returns a list of columns with data types for use with writer'''
-    data_info = [ ('ID',DataType.INTEGER),('Flags',DataType.INTEGER),('Parent_ID',DataType.INTEGER),
-                  ('Date_Updated',DataType.TEXT) ]
+    '''Returns a list of columns with data types for use with writer''' 
+    if store.is_ios_or_user_user_store:
+        data_info = [ ('ID_hex',DataType.TEXT),('ID_hex_reversed',DataType.TEXT),('Flags',DataType.INTEGER),
+                      ('Parent_ID_hex',DataType.TEXT),('Date_Updated',DataType.TEXT) ]
+    else:
+        data_info = [ ('ID',DataType.INTEGER),('Flags',DataType.INTEGER),
+                      ('Parent_ID',DataType.INTEGER),('Date_Updated',DataType.TEXT) ]
     for _, prop in list(store.properties.items()):
         # prop = [name, prop_type, value_type]
         if prop[0] in ('_kMDXXXX___DUMMY', 'kMDStoreAccumulatedSizes') : continue # skip this
@@ -171,10 +186,11 @@ def ProcessStoreDb(input_file_path, input_file, output_path, output_params, item
         with open(output_path_data, 'wb') as output_file:
             output_paths_file = None
             store = spotlight_parser.SpotlightStore(input_file)
-            no_path_file = store.flags & 0x00010000 == 0x00010000
-            log.debug('This appears to be either an iOS spotlight db or a user spotlight db. no_path_file set to {}'.format(str(no_path_file)))
+            #no_path_file = store.flags & 0x00010000 == 0x00010000
+            #log.debug('This appears to be either an iOS spotlight db or a user spotlight db. no_path_file set to {}'.format(str(no_path_file))) # not reliable
             ##TODO - insert code here for ios
-            if store.index_blocktype_11 == 0: # The properties, categories and indexes must be stored in external files
+            store.is_ios_or_user_user_store = store.index_blocktype_11 == 0 # The properties, categories and indexes must be stored in external files
+            if store.is_ios_or_user_user_store: 
                 input_folder = os.path.dirname(input_file_path)
                 try:
                     prop_map_data, prop_map_offsets,prop_map_header = GetMapDataOffsetHeader(input_folder, 1)
@@ -214,7 +230,7 @@ def ProcessStoreDb(input_file_path, input_file, output_path, output_params, item
             writer.FinishWrites()
             
             # Write Paths db as csv
-            if not no_path_file:
+            if (not store.is_ios_or_user_user_store) and (not no_path_file):
                 path_type_info = [ ('ID',DataType.INTEGER),('FullPath',DataType.TEXT) ]
                 fullpath_writer = DataWriter(out_params, "Spotlight-" + file_name_prefix + '-paths', path_type_info, input_file_path)
                 with open(output_path_full_paths, 'wb') as output_paths_file:
