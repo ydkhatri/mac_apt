@@ -24,7 +24,10 @@ __Plugin_Author = "Yogesh Khatri"
 __Plugin_Author_Email = "yogesh@swiftforensics.com"
 
 __Plugin_Modes = "IOS,MACOS,ARTIFACTONLY"
-__Plugin_ArtifactOnly_Usage = "This module reads spotlight's index database file found at: /.Spotlight-V100/Store-V2/<UUID>/store.db and also '.store.db' at the same location"
+__Plugin_ArtifactOnly_Usage = "This module reads spotlight's index database file found at: /.Spotlight-V100/Store-V2/<UUID>/store.db and "\
+                                "also '.store.db' at the same location. Since macOS 10.13, there are also spotlight databases for each "\
+                                "user under ~/Library/Metadata/CoreSpotlight/index.spotlightV3/ \niOS spotlight databases are also "\
+                                "parsed. These would be found here: /private/var/mobile/Library/Spotlight/CoreSpotlight/*/index.spotlightV2"
 
 log = logging.getLogger('MAIN.' + __Plugin_Name) # Do not rename or remove this ! This is the logger object
 
