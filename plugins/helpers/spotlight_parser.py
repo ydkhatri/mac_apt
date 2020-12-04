@@ -339,11 +339,12 @@ class FileMetaDataListing:
                         else: # single string
                             value = binascii.hexlify(value).decode('ascii').upper()
                 elif value_type == 0x0F:
-                    if not value:
-                        pass
                     value = self.ConvertUint32ToSigned(self.ReadVarSizeNum()[0])
                     if value < 0:
-                        value = 'INVALID ({})'.format(value)
+                        if value == -16777217:
+                            value = ''
+                        else:
+                            value = 'INVALID ({})'.format(value)
                     else:
                         old_value = value
                         if prop_type & 3 == 3: # in (0x83, 0xC3, 0x03): # ItemKind
@@ -818,6 +819,8 @@ class SpotlightStore:
             while (pos < meta_size):
                 item_size = struct.unpack("<I", uncompressed[pos:pos+4])[0]
                 md_item = FileMetaDataListing(pos + 4, uncompressed[pos + 4 : pos + 4 + item_size], item_size)
+                if pos == 1377:
+                    log.debug("HERE")
                 try:
                     md_item.ParseItem(self.properties, self.categories, self.indexes_1, self.indexes_2)
                     if items_to_compare and self.ItemExistsInDictionary(items_to_compare, md_item): pass # if md_item exists in compare_dict, skip it, else add
