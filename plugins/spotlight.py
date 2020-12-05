@@ -11,6 +11,7 @@ import os
 import logging
 import struct
 from plugins.helpers import spotlight_parser as spotlight_parser
+from plugins.helpers.spotlight_filter import create_views_for_ios_db
 
 from biplist import *
 from plugins.helpers.macinfo import *
@@ -131,12 +132,13 @@ def EnableSqliteDb(output_path, out_params, file_name_prefix):
         log.exception('Exception occurred when trying to create Sqlite db')
     return False
 
-def GetFileData(path):
+def GetFileData(path, user):
     '''Get entire file data - ios Only'''
     global mac_info_obj
 
     data = b''
     if mac_info_obj != None:
+        mac_info_obj.ExportFile(path, __Plugin_Name, user + '_', False)
         f = mac_info_obj.Open(path)
         if f:
             data = f.read()
@@ -147,7 +149,7 @@ def GetFileData(path):
             data = f.read()
     return data
 
-def GetMapDataOffsetHeader(input_folder, id):
+def GetMapDataOffsetHeader(input_folder, id, user):
     ''' Given an id X, this returns the data from 3 files, 
         dbStr-X.map.data, dbStr-X.map.header, dbStr-X.map.offsets. It will
         search for these files in the input_folder.
@@ -161,13 +163,13 @@ def GetMapDataOffsetHeader(input_folder, id):
         data_path = input_folder + '/dbStr-{}.map.data'.format(id)
         offsets_path = input_folder + '/dbStr-{}.map.offsets'.format(id)
         header_path =  input_folder + '/dbStr-{}.map.header'.format(id)
-    map_data = GetFileData(data_path)
-    offsets_data = GetFileData(offsets_path)
-    header_data = GetFileData(header_path)
+    map_data = GetFileData(data_path, user)
+    offsets_data = GetFileData(offsets_path, user)
+    header_data = GetFileData(header_path, user)
 
     return (map_data, offsets_data, header_data)
 
-def ProcessStoreDb(input_file_path, input_file, output_path, output_params, items_to_compare, file_name_prefix, limit_output_types=True, no_path_file=False):
+def ProcessStoreDb(input_file_path, input_file, output_path, output_params, items_to_compare, file_name_prefix, limit_output_types=True, no_path_file=False, user=""):
     '''Main spotlight store.db processing function
        file_name_prefix is used to name the excel sheet or sqlite table, as well as prefix for name of paths_file.
        limit_output_types=True will only write to SQLITE, else all output options are honored. This is for faster 
@@ -189,17 +191,13 @@ def ProcessStoreDb(input_file_path, input_file, output_path, output_params, item
         with open(output_path_data, 'wb') as output_file:
             output_paths_file = None
             store = spotlight_parser.SpotlightStore(input_file)
-            #no_path_file = store.flags & 0x00010000 == 0x00010000
-            #log.debug('This appears to be either an iOS spotlight db or a user spotlight db. no_path_file set to {}'.format(str(no_path_file))) # not reliable
-            ##TODO - insert code here for ios
-            store.is_ios_or_user_user_store = store.index_blocktype_11 == 0 # The properties, categories and indexes must be stored in external files
-            if store.is_ios_or_user_user_store: 
+            if store.is_ios_or_user_user_store: # The properties, categories and indexes must be stored in external files
                 input_folder = os.path.dirname(input_file_path)
                 try:
-                    prop_map_data, prop_map_offsets,prop_map_header = GetMapDataOffsetHeader(input_folder, 1)
-                    cat_map_data, cat_map_offsets, cat_map_header = GetMapDataOffsetHeader(input_folder, 2)
-                    idx_1_map_data, idx_1_map_offsets, idx_1_map_header = GetMapDataOffsetHeader(input_folder, 4)
-                    idx_2_map_data, idx_2_map_offsets, idx_2_map_header = GetMapDataOffsetHeader(input_folder, 5)
+                    prop_map_data, prop_map_offsets,prop_map_header = GetMapDataOffsetHeader(input_folder, 1, user)
+                    cat_map_data, cat_map_offsets, cat_map_header = GetMapDataOffsetHeader(input_folder, 2, user)
+                    idx_1_map_data, idx_1_map_offsets, idx_1_map_header = GetMapDataOffsetHeader(input_folder, 4, user)
+                    idx_2_map_data, idx_2_map_offsets, idx_2_map_header = GetMapDataOffsetHeader(input_folder, 5, user)
 
                     store.ParsePropertiesFromFileData(prop_map_data, prop_map_offsets, prop_map_header)
                     store.ParseCategoriesFromFileData(cat_map_data, cat_map_offsets, cat_map_header)
@@ -229,8 +227,14 @@ def ProcessStoreDb(input_file_path, input_file, output_path, output_params, item
                 log.exception ("Failed to initilize data writer")
                 return None
 
-            store.ParseMetadataBlocks(output_file, items, items_to_compare, ProcessStoreItems)
+            total_items_parsed = store.ParseMetadataBlocks(output_file, items, items_to_compare, ProcessStoreItems)
             writer.FinishWrites()
+
+            if total_items_parsed == 0:
+                log.debug('Nothing was parsed from this file!')
+            # create Views in ios/user style db
+            if store.is_ios_or_user_user_store and (total_items_parsed > 0):
+                create_views_for_ios_db(writer.sql_writer.filepath, writer.sql_writer.table_name)
             
             # Write Paths db as csv
             if (not store.is_ios_or_user_user_store) and (not no_path_file):
@@ -373,7 +377,7 @@ def ProcessStoreAndDotStore(mac_info, store_path_1, store_path_2, prefix):
         if input_file != None:
             table_name = prefix + '-store'
             log.info("Spotlight data for user='{}' db='{}' will be saved with table/sheet name as {}".format(prefix, 'store.db', table_name))
-            items_1 = ProcessStoreDb(store_path_1, input_file, output_folder, mac_info.output_params, None, table_name, True, True)
+            items_1 = ProcessStoreDb(store_path_1, input_file, output_folder, mac_info.output_params, None, table_name, True, True, prefix)
     
     if mac_info.IsValidFilePath(store_path_2):
         mac_info.ExportFile(store_path_2,  __Plugin_Name, prefix + '_', False)
@@ -390,7 +394,7 @@ def ProcessStoreAndDotStore(mac_info, store_path_1, store_path_2, prefix):
                                         'file with mac_apt_single_plugin.py and this plugin')
             table_name = prefix + '-.store-DIFF'
             log.info("Spotlight store for user='{}' db='{}' will be saved with table/sheet name as {}".format(prefix, '.store.db', table_name))
-            items_2 = ProcessStoreDb(store_path_2, input_file, output_folder, mac_info.output_params, items_1, table_name, True, True)
+            items_2 = ProcessStoreDb(store_path_2, input_file, output_folder, mac_info.output_params, items_1, table_name, True, True, prefix)
 
 def Process_User_DBs(mac_info):
     '''
@@ -438,7 +442,7 @@ def ProcessVolumeStore(mac_info, spotlight_base_path, export_prefix=''):
             if input_file != None:
                 table_name = ((export_prefix + '_') if export_prefix else '') + str(index) + '-store'
                 log.info("Spotlight data for uuid='{}' db='{}' will be saved with table/sheet name as {}".format(uuid, 'store.db', table_name))
-                items_1 = ProcessStoreDb(store_path_1, input_file, output_folder, mac_info.output_params, None, table_name, True, False)
+                items_1 = ProcessStoreDb(store_path_1, input_file, output_folder, mac_info.output_params, None, table_name, True, False, '')
         else:
             log.debug('File not found: {}'.format(store_path_1))
 
@@ -457,7 +461,7 @@ def ProcessVolumeStore(mac_info, spotlight_base_path, export_prefix=''):
                                             'file with mac_apt_single_plugin.py and this plugin')
                 table_name = ((export_prefix + '_') if export_prefix else '') + str(index) + '-.store-DIFF'
                 log.info("Spotlight store for uuid='{}' db='{}' will be saved with table/sheet name as {}".format(uuid, '.store.db', table_name))
-                items_2 = ProcessStoreDb(store_path_2, input_file, output_folder, mac_info.output_params, items_1, table_name, True, False)
+                items_2 = ProcessStoreDb(store_path_2, input_file, output_folder, mac_info.output_params, items_1, table_name, True, False, '')
         else:
             log.debug('File not found: {}'.format(store_path_2))
 
@@ -484,7 +488,7 @@ def Plugin_Start_Standalone(input_files_list, output_params):
                 with open(input_path, 'rb') as input_file:
                     output_folder = os.path.join(output_params.output_path, 'SPOTLIGHT_DATA')
                     log.info('Now processing file {}'.format(input_path))
-                    ProcessStoreDb(input_path, input_file, output_folder, output_params, None, os.path.basename(input_path), False, False)
+                    ProcessStoreDb(input_path, input_file, output_folder, output_params, None, os.path.basename(input_path), False, False, '')
             except (OSError):
                 log.exception('Failed to open input file ' + input_path)
         else:

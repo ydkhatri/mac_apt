@@ -500,7 +500,7 @@ class SpotlightStore:
         self.indexes_2 = {}
         self.block0 = None
 
-        self.is_ios_or_user_user_store = False # will be set later
+        self.is_ios_or_user_user_store = self.index_blocktype_11 == 0
 
     def GetFileSize(self, file):
         '''Return size from an open file handle'''
@@ -742,7 +742,9 @@ class SpotlightStore:
         return False
 
     def ParseMetadataBlocks(self, output_file, items, items_to_compare=None, process_items_func=None):
+        '''Parses block, return number of items written (after deduplication if items_to_compare!=None)'''
         # Index = [last_id_in_block, offset_index, dest_block_size]
+        total_items_written = 0
         for index in self.block0.indexes:
             #go to offset and parse
             seek_offset = index[1] * 0x1000
@@ -819,13 +821,12 @@ class SpotlightStore:
             while (pos < meta_size):
                 item_size = struct.unpack("<I", uncompressed[pos:pos+4])[0]
                 md_item = FileMetaDataListing(pos + 4, uncompressed[pos + 4 : pos + 4 + item_size], item_size)
-                if pos == 1377:
-                    log.debug("HERE")
                 try:
                     md_item.ParseItem(self.properties, self.categories, self.indexes_1, self.indexes_2)
                     if items_to_compare and self.ItemExistsInDictionary(items_to_compare, md_item): pass # if md_item exists in compare_dict, skip it, else add
                     else:
                         items_in_block.append(md_item)
+                        total_items_written += 1
                         name = md_item.GetFileName()
                         existing_item = items.get(md_item.id, None)
                         if existing_item != None:
@@ -850,6 +851,8 @@ class SpotlightStore:
 
             for md_item in items_in_block:
                 md_item.Print(output_file)
+                
+        return total_items_written
 
     def ParseBlockSequence(self, initial_index, type, dictionary):
         '''Follow the sequence of next_block_index to parse all blocks in the chain'''
@@ -969,12 +972,11 @@ def ProcessStoreDb(input_file_path, output_path, file_name_prefix='store'):
         f = open(input_file_path, 'rb')
 
         store = SpotlightStore(f)
-        if store.flags & 0x00010000 == 0x00010000:
-             create_full_paths_output_file = False
-             log.info('This appears to be either an iOS spotlight db or a user spotlight db. '\
-                 "File inode numbers are not stored here, and hence full_path file won't be created!")
-        # check if needs other files
-        if store.index_blocktype_11 == 0: # The properties, categories and indexes must be stored in external files
+        if store.is_ios_or_user_user_store: #store.flags & 0x00010000 == 0x00010000:
+            create_full_paths_output_file = False
+            log.info('This appears to be either an iOS spotlight db or a user spotlight db. '\
+                "File inode numbers are not stored here, and hence full_path file won't be created!")
+            # The properties, categories and indexes must be stored in external files
             # Find and parse files
             input_folder = os.path.dirname(os.path.abspath(input_file_path))
             data_path = os.path.join(input_folder, 'dbStr-1.map.data')
