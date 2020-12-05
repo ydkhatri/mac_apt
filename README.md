@@ -1,5 +1,5 @@
 # mac_apt - macOS Artifact Parsing Tool   
-[![Latest version](https://img.shields.io/badge/version-v0.8-blue)](https://github.com/ydkhatri/mac_apt/releases/tag/v0.8)
+[![Latest version](https://img.shields.io/badge/version-v0.7-blue)](https://github.com/ydkhatri/mac_apt/releases/tag/v0.7)
 [![status](https://img.shields.io/badge/status-stable-green)]()
 
 [![Latest version](https://img.shields.io/badge/version-v0.9-blue)](https://github.com/ydkhatri/mac_apt/releases/tag/v0.9)
