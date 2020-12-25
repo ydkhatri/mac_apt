@@ -188,6 +188,17 @@ class CommonFunctions:
         return False
     
     @staticmethod
+    def ColumnExists(db_conn, table_name, col_name):
+        '''Checks if a specific column exists in given table in an sqlite db'''
+        try:
+            cursor = db_conn.execute(f'SELECT name from PRAGMA_table_info("{table_name}") where name like "{col_name}"')
+            for row in cursor:
+                return True
+        except sqlite3Error as ex:
+            log.error ("In ColumnExists({}, {}). Failed to list tables of db. Error Details:{}".format(table_name, col_name, str(ex)) )
+        return False
+
+    @staticmethod
     def GetTableNames(db_conn):
         '''Retrieve all table names in an sqlite database'''
         try:
