@@ -44,7 +44,7 @@ log = logging.getLogger('MAIN.' + __Plugin_Name) # Do not rename or remove this 
 class Note:
 
     def __init__(self, id, folder, title, snippet, data, att_id, att_path, acc_desc, acc_identifier, acc_username, \
-                created, edited, version, user, source, embed_type='', embed_summary='', embed_url='', embed_title=''):
+                created, edited, version, encrypted, user, source, embed_type='', embed_summary='', embed_url='', embed_title=''):
         self.note_id = id
         self.folder = folder
         self.title = title
@@ -58,6 +58,7 @@ class Note:
         self.date_created = created
         self.date_edited = edited
         self.version = version
+        self.encrypted = encrypted
         self.user = user
         self.source_file = source
         #self.folder_title_modified = folder_title_modified
@@ -69,7 +70,7 @@ class Note:
 def PrintAll(notes, output_params):
 
     note_info = [ ('ID',DataType.INTEGER),('Title',DataType.TEXT),('Snippet',DataType.TEXT),('Folder',DataType.TEXT),
-                    ('Created',DataType.DATE),('LastModified',DataType.DATE),('Data', DataType.TEXT),
+                    ('Created',DataType.DATE),('LastModified',DataType.DATE),('Encrypted',DataType.INTEGER),('Data', DataType.TEXT),
                     ('AttachmentID',DataType.TEXT),('AttachmentPath',DataType.TEXT),
                     ('EmbedType',DataType.TEXT),('EmbedSummary',DataType.TEXT),('EmbedURL',DataType.TEXT),('EmbedTitle',DataType.TEXT),
                     ('AccountDescription',DataType.TEXT),('AccountIdentifier', DataType.TEXT),('AccountUsername', DataType.TEXT),
@@ -80,7 +81,7 @@ def PrintAll(notes, output_params):
     notes_list = []
     for note in notes:
         note_items = [note.note_id, note.title, note.snippet, note.folder, 
-                      note.date_created, note.date_edited, note.data,
+                      note.date_created, note.date_edited, note.encrypted, note.data,
                       note.attachment_id, note.attachment_path, 
                       note.embed_type, note.embed_summary, note.embed_url, note.embed_title,
                       note.account, note.account_identifier, note.account_username, 
@@ -134,7 +135,7 @@ def ReadNotesV2_V4_V6(db, notes, version, source, user):
                 note = Note(row['note_id'], row['folder'], row['title'], '', row['data'], row['att_id'], att_path,
                             row['acc_desc'], row['email'], row['username'], 
                             CommonFunctions.ReadMacAbsoluteTime(row['created']), CommonFunctions.ReadMacAbsoluteTime(row['edited']),
-                            version, user, source)
+                            version, 0, user, source)
                 notes.append(note)
             except (sqlite3.Error, KeyError):
                 log.exception('Error fetching row data')
@@ -200,7 +201,7 @@ def ReadNotesHighSierraAndAbove(db, notes, source, user):
     '''Read Notestore.sqlite'''
     ### embed_type='', embed_summary='', embed_url='', embed_title='')
     try:
-        query = " SELECT n.Z_PK, n.ZNOTE as note_id, n.ZDATA as data, " \
+        query = " SELECT n.Z_PK, n.ZNOTE as note_id, n.ZDATA as data, c1.ZISPASSWORDPROTECTED as encrypted, " \
                 " c3.ZFILESIZE, "\
                 " c4.ZFILENAME, c4.ZIDENTIFIER as att_uuid,  "\
                 " c1.ZTITLE1 as title, c1.ZSNIPPET as snippet, c1.ZIDENTIFIER as noteID, "\
@@ -225,12 +226,15 @@ def ReadNotesHighSierraAndAbove(db, notes, source, user):
                         att_path = '/Users/' + user + '/Library/Group Containers/group.com.apple.notes/Media/' + row['att_uuid'] + '/' + row['ZFILENAME']
                     else:
                         att_path = 'Media/' + row['att_uuid'] + '/' + row['ZFILENAME']
-                data = GetUncompressedData(row['data'])
-                text_content = ProcessNoteBodyBlob(data)
+                if row['encrypted']:
+                    text_content = ''
+                else:
+                    data = GetUncompressedData(row['data'])
+                    text_content = ProcessNoteBodyBlob(data)
                 note = Note(row['note_id'], row['folderName'], row['title'], row['snippet'], text_content, row['att_uuid'], att_path,
                             row['acc_name'], row['acc_identifier'], '', 
                             CommonFunctions.ReadMacAbsoluteTime(row['created']), CommonFunctions.ReadMacAbsoluteTime(row['modified']),
-                            'NoteStore', user, source, row['ZTYPEUTI'], row['ZSUMMARY'], row['ZURLSTRING'], row['ZTITLE'])
+                            'NoteStore', row['encrypted'], user, source, row['ZTYPEUTI'], row['ZSUMMARY'], row['ZURLSTRING'], row['ZTITLE'])
                 notes.append(note)
             except sqlite3.Error:
                 log.exception('Error fetching row data')
@@ -265,7 +269,12 @@ def ReadNotes(db, notes, source, user):
         ReadNotesHighSierraAndAbove(db, notes, source, user)
         return
 
-    query1 = " SELECT n.Z_12FOLDERS as folder_id , n.Z_9NOTES as note_id, d.ZDATA as data, " \
+    if CommonFunctions.ColumnExists(db, 'ZICCLOUDSYNCINGOBJECT', 'ZISPASSWORDPROTECTED'):
+        enc_possible = True
+    else:
+        enc_possible = False
+
+    query1 = " SELECT n.Z_12FOLDERS as folder_id , n.Z_9NOTES as note_id, d.ZDATA as data, " + ("c1.ZISPASSWORDPROTECTED as encrypted, " if enc_possible else "") + \
             " c2.ZTITLE2 as folder, c2.ZDATEFORLASTTITLEMODIFICATION as folder_title_modified, " \
             " c1.ZCREATIONDATE as created, c1.ZMODIFICATIONDATE1 as modified, c1.ZSNIPPET as snippet, c1.ZTITLE1 as title, c1.ZACCOUNT2 as acc_id, " \
             " c5.ZACCOUNTTYPE as acc_type, c5.ZIDENTIFIER as acc_identifier, c5.ZNAME as acc_name, " \
@@ -279,7 +288,7 @@ def ReadNotes(db, notes, source, user):
             " LEFT JOIN ZICCLOUDSYNCINGOBJECT as c4 ON c3.ZMEDIA = c4.Z_PK " \
             " LEFT JOIN ZICCLOUDSYNCINGOBJECT as c5 ON c5.Z_PK = c1.ZACCOUNT2 " \
             " ORDER BY note_id "
-    query2 = " SELECT n.Z_11FOLDERS as folder_id , n.Z_8NOTES as note_id, d.ZDATA as data, " \
+    query2 = " SELECT n.Z_11FOLDERS as folder_id , n.Z_8NOTES as note_id, d.ZDATA as data, "  + ("c1.ZISPASSWORDPROTECTED as encrypted, " if enc_possible else "") + \
             " c2.ZTITLE2 as folder, c2.ZDATEFORLASTTITLEMODIFICATION as folder_title_modified, " \
             " c1.ZCREATIONDATE as created, c1.ZMODIFICATIONDATE1 as modified, c1.ZSNIPPET as snippet, c1.ZTITLE1 as title, c1.ZACCOUNT2 as acc_id, " \
             " c5.ZACCOUNTTYPE as acc_type, c5.ZIDENTIFIER as acc_identifier, c5.ZNAME as acc_name, " \
@@ -295,26 +304,29 @@ def ReadNotes(db, notes, source, user):
             " ORDER BY note_id "
     cursor, error1 = ExecuteQuery(db, query1)
     if cursor:
-        ReadQueryResults(cursor, notes, user, source)
+        ReadQueryResults(cursor, notes, enc_possible, user, source)
     else: # Try query2
         cursor, error2 = ExecuteQuery(db, query2)
         if cursor:
-            ReadQueryResults(cursor, notes, user, source)
+            ReadQueryResults(cursor, notes, enc_possible, user, source)
         else:
             log.error('Query execution failed.\n Query 1 error: {}\n Query 2 error: {}'.format(error1, error2))
 
-def ReadQueryResults(cursor, notes, user, source):
+def ReadQueryResults(cursor, notes, enc_possible, user, source):
     for row in cursor:
         try:
             att_path = ''
             if row['media_id'] != None:
                 att_path = row['ZFILENAME']
-            data = GetUncompressedData(row['data'])
-            text_content = ProcessNoteBodyBlob(data)
+            if enc_possible and row['encrypted'] == 1:
+                text_content = ''
+            else:
+                data = GetUncompressedData(row['data'])
+                text_content = ProcessNoteBodyBlob(data)
             note = Note(row['note_id'], row['folder'], row['title'], row['snippet'], text_content, row['att_uuid'], att_path,
                         row['acc_name'], row['acc_identifier'], '', 
                         CommonFunctions.ReadMacAbsoluteTime(row['created']), CommonFunctions.ReadMacAbsoluteTime(row['modified']),
-                        'NoteStore', user, source)
+                        'NoteStore', row['encrypted'] if enc_possible else 0, user, source)
             notes.append(note)
         except sqlite3.Error:
             log.exception('Error fetching row data')
