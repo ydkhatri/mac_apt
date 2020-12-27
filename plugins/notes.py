@@ -14,16 +14,18 @@
    Export attachments contained within individual notes.
 '''
 
+import binascii
+import logging
 import os
+import sqlite3
+import struct
+import zlib
+
+from biplist import *
+
 from plugins.helpers.common import CommonFunctions
 from plugins.helpers.macinfo import *
 from plugins.helpers.writer import *
-import logging
-from biplist import *
-import binascii
-import sqlite3
-import zlib
-import struct
 
 __Plugin_Name = "NOTES"
 __Plugin_Friendly_Name = "Notes"
@@ -32,7 +34,7 @@ __Plugin_Description = "Reads Notes databases"
 __Plugin_Author = "Yogesh Khatri"
 __Plugin_Author_Email = "yogesh@swiftforensics.com"
 
-__Plugin_Modes = "MACOS,ARTIFACTONLY"
+__Plugin_Modes = "MACOS,ARTIFACTONLY,IOS"
 __Plugin_ArtifactOnly_Usage = 'Provide one or more Notes sqlite databases as input to process. These are typically '\
                             'located at ~/Library/Containers/com.apple.Notes/Data/Library/Notes/  or '\
                             '~/Library/Group Containers/group.com.apple.notes/'
@@ -44,7 +46,7 @@ log = logging.getLogger('MAIN.' + __Plugin_Name) # Do not rename or remove this 
 class Note:
 
     def __init__(self, id, folder, title, snippet, data, att_id, att_path, acc_desc, acc_identifier, acc_username, \
-                created, edited, version, encrypted, user, source, embed_type='', embed_summary='', embed_url='', embed_title=''):
+                created, edited, version, encrypted, pw_hint, user, source, embed_type='', embed_summary='', embed_url='', embed_title=''):
         self.note_id = id
         self.folder = folder
         self.title = title
@@ -59,6 +61,7 @@ class Note:
         self.date_edited = edited
         self.version = version
         self.encrypted = encrypted
+        self.password_hint = pw_hint
         self.user = user
         self.source_file = source
         #self.folder_title_modified = folder_title_modified
@@ -70,7 +73,8 @@ class Note:
 def PrintAll(notes, output_params):
 
     note_info = [ ('ID',DataType.INTEGER),('Title',DataType.TEXT),('Snippet',DataType.TEXT),('Folder',DataType.TEXT),
-                    ('Created',DataType.DATE),('LastModified',DataType.DATE),('Encrypted',DataType.INTEGER),('Data', DataType.TEXT),
+                    ('Created',DataType.DATE),('LastModified',DataType.DATE),
+                    ('Encrypted',DataType.INTEGER),('Password Hint', DataType.TEXT),('Data', DataType.TEXT),
                     ('AttachmentID',DataType.TEXT),('AttachmentPath',DataType.TEXT),
                     ('EmbedType',DataType.TEXT),('EmbedSummary',DataType.TEXT),('EmbedURL',DataType.TEXT),('EmbedTitle',DataType.TEXT),
                     ('AccountDescription',DataType.TEXT),('AccountIdentifier', DataType.TEXT),('AccountUsername', DataType.TEXT),
@@ -81,7 +85,8 @@ def PrintAll(notes, output_params):
     notes_list = []
     for note in notes:
         note_items = [note.note_id, note.title, note.snippet, note.folder, 
-                      note.date_created, note.date_edited, note.encrypted, note.data,
+                      note.date_created, note.date_edited, 
+                      note.encrypted, note.password_hint, note.data,
                       note.attachment_id, note.attachment_path, 
                       note.embed_type, note.embed_summary, note.embed_url, note.embed_title,
                       note.account, note.account_identifier, note.account_username, 
@@ -135,7 +140,7 @@ def ReadNotesV2_V4_V6(db, notes, version, source, user):
                 note = Note(row['note_id'], row['folder'], row['title'], '', row['data'], row['att_id'], att_path,
                             row['acc_desc'], row['email'], row['username'], 
                             CommonFunctions.ReadMacAbsoluteTime(row['created']), CommonFunctions.ReadMacAbsoluteTime(row['edited']),
-                            version, 0, user, source)
+                            version, 0, '', user, source)
                 notes.append(note)
             except (sqlite3.Error, KeyError):
                 log.exception('Error fetching row data')
@@ -197,44 +202,76 @@ def ProcessNoteBodyBlob(blob):
         log.exception('Error processing note data blob')
     return data
 
-def ReadNotesHighSierraAndAbove(db, notes, source, user):
+def ReadNotesHighSierraAndAbove(db, notes, source, user, is_ios):
     '''Read Notestore.sqlite'''
-    ### embed_type='', embed_summary='', embed_url='', embed_title='')
+    
     try:
-        query = " SELECT n.Z_PK, n.ZNOTE as note_id, n.ZDATA as data, c1.ZISPASSWORDPROTECTED as encrypted, " \
-                " c3.ZFILESIZE, "\
-                " c4.ZFILENAME, c4.ZIDENTIFIER as att_uuid,  "\
-                " c1.ZTITLE1 as title, c1.ZSNIPPET as snippet, c1.ZIDENTIFIER as noteID, "\
-                " c1.ZCREATIONDATE1 as created, c1.ZLASTVIEWEDMODIFICATIONDATE, c1.ZMODIFICATIONDATE1 as modified, "\
-                " c2.ZACCOUNT3, c2.ZTITLE2 as folderName, c2.ZIDENTIFIER as folderID, "\
-                " c5.ZNAME as acc_name, c5.ZIDENTIFIER as acc_identifier, c5.ZACCOUNTTYPE, "\
-                " c3.ZSUMMARY, c3.ZTITLE, c3.ZURLSTRING, c3.ZTYPEUTI "\
-                " FROM ZICNOTEDATA as n "\
-                " LEFT JOIN ZICCLOUDSYNCINGOBJECT as c1 ON c1.ZNOTEDATA = n.Z_PK  "\
-                " LEFT JOIN ZICCLOUDSYNCINGOBJECT as c2 ON c2.Z_PK = c1.ZFOLDER "\
-                " LEFT JOIN ZICCLOUDSYNCINGOBJECT as c3 ON c3.ZNOTE= n.ZNOTE "\
-                " LEFT JOIN ZICCLOUDSYNCINGOBJECT as c4 ON c4.ZATTACHMENT1= c3.Z_PK "\
-                " LEFT JOIN ZICCLOUDSYNCINGOBJECT as c5 ON c5.Z_PK = c1.ZACCOUNT2  "\
-                " ORDER BY note_id  "
+        query_1 = \
+        """
+        SELECT n.Z_PK, n.ZNOTE as note_id, n.ZDATA as data, c1.ZISPASSWORDPROTECTED as encrypted, c1.ZPASSWORDHINT, 
+        c3.ZFILESIZE,  c4.ZFILENAME, c4.ZIDENTIFIER as att_uuid, 
+        c1.ZTITLE1 as title, c1.ZSNIPPET as snippet, c1.ZIDENTIFIER as noteID, 
+        c1.ZCREATIONDATE1 as created, c1.ZLASTVIEWEDMODIFICATIONDATE, c1.ZMODIFICATIONDATE1 as modified,
+        c2.ZACCOUNT3, c2.ZTITLE2 as folderName, c2.ZIDENTIFIER as folderID, 
+        c5.ZNAME as acc_name, c5.ZIDENTIFIER as acc_identifier, c5.ZACCOUNTTYPE, 
+        c3.ZSUMMARY, c3.ZTITLE, c3.ZURLSTRING, c3.ZTYPEUTI  FROM ZICNOTEDATA as n 
+        LEFT JOIN ZICCLOUDSYNCINGOBJECT as c1 ON c1.ZNOTEDATA = n.Z_PK 
+        LEFT JOIN ZICCLOUDSYNCINGOBJECT as c2 ON c2.Z_PK = c1.ZFOLDER 
+        LEFT JOIN ZICCLOUDSYNCINGOBJECT as c3 ON c3.ZNOTE= n.ZNOTE 
+        LEFT JOIN ZICCLOUDSYNCINGOBJECT as c4 ON c4.ZATTACHMENT1= c3.Z_PK 
+        LEFT JOIN ZICCLOUDSYNCINGOBJECT as c5 ON c5.Z_PK = c1.ZACCOUNT2 
+        ORDER BY note_id
+        """
+        query_2 = \
+        """
+        SELECT n.Z_PK, n.ZNOTE as note_id, n.ZDATA as data, c1.ZISPASSWORDPROTECTED as encrypted, c1.ZPASSWORDHINT, 
+        c3.ZFILESIZE,  c4.ZFILENAME, c4.ZIDENTIFIER as att_uuid,  
+        c1.ZTITLE1 as title, c1.ZSNIPPET as snippet, c1.ZIDENTIFIER as noteID, 
+        c1.ZCREATIONDATE1 as created, c1.ZLASTVIEWEDMODIFICATIONDATE, c1.ZMODIFICATIONDATE1 as modified,
+        c2.ZACCOUNT4, c2.ZTITLE2 as folderName, c2.ZIDENTIFIER as folderID, 
+        c5.ZNAME as acc_name, c5.ZIDENTIFIER as acc_identifier, c5.ZACCOUNTTYPE,  
+        c3.ZSUMMARY, c3.ZTITLE, c3.ZURLSTRING, c3.ZTYPEUTI  FROM ZICNOTEDATA as n 
+        LEFT JOIN ZICCLOUDSYNCINGOBJECT as c1 ON c1.ZNOTEDATA = n.Z_PK 
+        LEFT JOIN ZICCLOUDSYNCINGOBJECT as c2 ON c2.Z_PK = c1.ZFOLDER 
+        LEFT JOIN ZICCLOUDSYNCINGOBJECT as c3 ON c3.ZNOTE= n.ZNOTE 
+        LEFT JOIN ZICCLOUDSYNCINGOBJECT as c4 ON c4.ZATTACHMENT1= c3.Z_PK 
+        LEFT JOIN ZICCLOUDSYNCINGOBJECT as c5 ON c5.Z_PK = c1.ZACCOUNT3   
+        ORDER BY note_id
+        """
+        if CommonFunctions.ColumnExists(db, 'ZICCLOUDSYNCINGOBJECT', 'ZACCOUNT4'):
+            query = query_2
+        else:
+            query = query_1
+
+        # ZACCOUNTTYPE - 1=iCloud, 3=local
         db.row_factory = sqlite3.Row
         cursor = db.execute(query)
         for row in cursor:
             try:
                 att_path = ''
-                if row['att_uuid'] != None:
-                    if user:
-                        att_path = '/Users/' + user + '/Library/Group Containers/group.com.apple.notes/Media/' + row['att_uuid'] + '/' + row['ZFILENAME']
-                    else:
-                        att_path = 'Media/' + row['att_uuid'] + '/' + row['ZFILENAME']
                 if row['encrypted']:
                     text_content = ''
+                    pw_hint = row['ZPASSWORDHINT']
                 else:
+                    pw_hint = ''
                     data = GetUncompressedData(row['data'])
                     text_content = ProcessNoteBodyBlob(data)
+                if row['att_uuid'] != None:
+                    try:
+                        if is_ios:
+                            base_path, _ = os.path.split(source)
+                            att_path = base_path + '/Accounts/' + row['acc_identifier'] + '/Media/' + row['att_uuid'] + '/' + (row['ZFILENAME'] if row['ZFILENAME'] is not None else row['att_uuid'])
+                        elif user:
+                            att_path = '/Users/' + user + '/Library/Group Containers/group.com.apple.notes/Media/' + row['att_uuid'] + '/' + row['ZFILENAME']
+                        else:
+                            att_path = 'Media/' + row['att_uuid'] + '/' + row['ZFILENAME']
+                    except TypeError as ex:
+                        log.error('Error computing att path for row ' + str(row['note_id']) + ' Error was ' + str(ex))
+
                 note = Note(row['note_id'], row['folderName'], row['title'], row['snippet'], text_content, row['att_uuid'], att_path,
                             row['acc_name'], row['acc_identifier'], '', 
                             CommonFunctions.ReadMacAbsoluteTime(row['created']), CommonFunctions.ReadMacAbsoluteTime(row['modified']),
-                            'NoteStore', row['encrypted'], user, source, row['ZTYPEUTI'], row['ZSUMMARY'], row['ZURLSTRING'], row['ZTITLE'])
+                            'NoteStore', row['encrypted'], pw_hint, user, source, row['ZTYPEUTI'], row['ZSUMMARY'], row['ZURLSTRING'], row['ZTITLE'])
                 notes.append(note)
             except sqlite3.Error:
                 log.exception('Error fetching row data')
@@ -263,10 +300,10 @@ def ExecuteQuery(db, query):
         #log.debug('Exception:{}'.format(error))
     return None, error
 
-def ReadNotes(db, notes, source, user):
+def ReadNotes(db, notes, source, user, is_ios):
     '''Read Notestore.sqlite'''
     if IsHighSierraOrAboveDb(db):
-        ReadNotesHighSierraAndAbove(db, notes, source, user)
+        ReadNotesHighSierraAndAbove(db, notes, source, user, is_ios)
         return
 
     if CommonFunctions.ColumnExists(db, 'ZICCLOUDSYNCINGOBJECT', 'ZISPASSWORDPROTECTED'):
@@ -274,7 +311,7 @@ def ReadNotes(db, notes, source, user):
     else:
         enc_possible = False
 
-    query1 = " SELECT n.Z_12FOLDERS as folder_id , n.Z_9NOTES as note_id, d.ZDATA as data, " + ("c1.ZISPASSWORDPROTECTED as encrypted, " if enc_possible else "") + \
+    query1 = " SELECT n.Z_12FOLDERS as folder_id , n.Z_9NOTES as note_id, d.ZDATA as data, " + ("c1.ZISPASSWORDPROTECTED as encrypted, c1.ZPASSWORDHINT, " if enc_possible else "") + \
             " c2.ZTITLE2 as folder, c2.ZDATEFORLASTTITLEMODIFICATION as folder_title_modified, " \
             " c1.ZCREATIONDATE as created, c1.ZMODIFICATIONDATE1 as modified, c1.ZSNIPPET as snippet, c1.ZTITLE1 as title, c1.ZACCOUNT2 as acc_id, " \
             " c5.ZACCOUNTTYPE as acc_type, c5.ZIDENTIFIER as acc_identifier, c5.ZNAME as acc_name, " \
@@ -288,7 +325,7 @@ def ReadNotes(db, notes, source, user):
             " LEFT JOIN ZICCLOUDSYNCINGOBJECT as c4 ON c3.ZMEDIA = c4.Z_PK " \
             " LEFT JOIN ZICCLOUDSYNCINGOBJECT as c5 ON c5.Z_PK = c1.ZACCOUNT2 " \
             " ORDER BY note_id "
-    query2 = " SELECT n.Z_11FOLDERS as folder_id , n.Z_8NOTES as note_id, d.ZDATA as data, "  + ("c1.ZISPASSWORDPROTECTED as encrypted, " if enc_possible else "") + \
+    query2 = " SELECT n.Z_11FOLDERS as folder_id , n.Z_8NOTES as note_id, d.ZDATA as data, "  + ("c1.ZISPASSWORDPROTECTED as encrypted, c1.ZPASSWORDHINT, " if enc_possible else "") + \
             " c2.ZTITLE2 as folder, c2.ZDATEFORLASTTITLEMODIFICATION as folder_title_modified, " \
             " c1.ZCREATIONDATE as created, c1.ZMODIFICATIONDATE1 as modified, c1.ZSNIPPET as snippet, c1.ZTITLE1 as title, c1.ZACCOUNT2 as acc_id, " \
             " c5.ZACCOUNTTYPE as acc_type, c5.ZIDENTIFIER as acc_identifier, c5.ZNAME as acc_name, " \
@@ -320,13 +357,15 @@ def ReadQueryResults(cursor, notes, enc_possible, user, source):
                 att_path = row['ZFILENAME']
             if enc_possible and row['encrypted'] == 1:
                 text_content = ''
+                pw_hint = row['ZPASSWORDHINT']
             else:
+                pw_hint = ''
                 data = GetUncompressedData(row['data'])
                 text_content = ProcessNoteBodyBlob(data)
             note = Note(row['note_id'], row['folder'], row['title'], row['snippet'], text_content, row['att_uuid'], att_path,
                         row['acc_name'], row['acc_identifier'], '', 
                         CommonFunctions.ReadMacAbsoluteTime(row['created']), CommonFunctions.ReadMacAbsoluteTime(row['modified']),
-                        'NoteStore', row['encrypted'] if enc_possible else 0, user, source)
+                        'NoteStore', row['encrypted'] if enc_possible else 0, pw_hint, user, source)
             notes.append(note)
         except sqlite3.Error:
             log.exception('Error fetching row data')
@@ -354,7 +393,7 @@ def OpenDbFromImage(mac_info, inputPath, user):
         log.exception ("Failed to open database, is it a valid Notes DB?")
     return None, None
 
-def ProcessNotesDbFromPath(mac_info, notes, source_path, user, version=''):
+def ProcessNotesDbFromPath(mac_info, notes, source_path, user, version='', is_ios=False):
     if mac_info.IsValidFilePath(source_path):
         mac_info.ExportFile(source_path, __Plugin_Name, user + "_")
         db, wrapper = OpenDbFromImage(mac_info, source_path, user)
@@ -362,7 +401,7 @@ def ProcessNotesDbFromPath(mac_info, notes, source_path, user, version=''):
             if version:
                 ReadNotesV2_V4_V6(db, notes, version, source_path, user)
             else:
-                ReadNotes(db, notes, source_path, user)
+                ReadNotes(db, notes, source_path, user, is_ios)
             db.close()
 
 def Plugin_Start(mac_info):
@@ -393,12 +432,20 @@ def Plugin_Start(mac_info):
         ProcessNotesDbFromPath(mac_info, notes, source_path, user.user_name, 'V7')
 
         source_path = notes_path.format(user.home_dir)
-        ProcessNotesDbFromPath(mac_info, notes, source_path, user.user_name)
+        ProcessNotesDbFromPath(mac_info, notes, source_path, user.user_name, '', False)
 
     if len(notes) > 0:
         PrintAll(notes, mac_info.output_params)
     else:
         log.info('No notes found')
+
+def find_notes_folder(apps):
+    for app in apps:
+        if app.bundle_identifier == 'com.apple.mobilenotes':
+            for container in app.app_group_containers:
+                if container.id == 'group.com.apple.notes':
+                    return container.path
+    return ''
 
 def Plugin_Start_Standalone(input_files_list, output_params):
     log.info("Module Started as standalone")
@@ -419,7 +466,7 @@ def Plugin_Start_Standalone(input_files_list, output_params):
             elif filename.find('V7') > 0:
                 ReadNotesV2_V4_V6(db, notes, 'V7', input_path, '')
             elif filename.find('NoteStore') >= 0:
-                ReadNotes(db, notes, input_path, '')
+                ReadNotes(db, notes, input_path, '', False)
             else:
                 log.info('Unknown database type, not a recognized file name')
             db.close()
@@ -427,6 +474,25 @@ def Plugin_Start_Standalone(input_files_list, output_params):
             PrintAll(notes, output_params)
         else:
             log.info('No notes found in {}'.format(input_path))
+
+def Plugin_Start_Ios(ios_info):
+    '''Entry point for ios_apt plugin'''
+    notes = []
+    notes_folder = find_notes_folder(ios_info.apps)
+    if notes_folder:
+        source_path = notes_folder + '/NoteStore.sqlite'
+        if ios_info.IsValidFilePath(source_path):
+            ios_info.ExportFile(source_path, __Plugin_Name, '')
+            ProcessNotesDbFromPath(ios_info, notes, source_path, 'mobile', '', True)
+        else:
+            log.error(f'DB not found - {source_path}')
+    else:
+        log.error('Could not find notes folder :(')
+
+    if len(notes) > 0:
+        PrintAll(notes, ios_info.output_params)
+    else:
+        log.info('No notes found')
 
 if __name__ == '__main__':
     print ("This plugin is a part of a framework and does not run independently on its own!")
