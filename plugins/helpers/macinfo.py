@@ -1709,8 +1709,22 @@ class ApplicationInfo:
         self.bundle_version = '' # CFBundleShortVersionString
         self.hidden = False # SBAppTags
 
-        self.source = ''
+        self.install_date = None # From deserialized BundleMetadata.plist located one level above <bundle_path>
 
+        self.source = ''
+        self.extensions = []
+        self.app_groups = []
+        self.sys_groups = []
+
+        self.app_group_containers = []
+        self.sys_group_containers = []
+        self.ext_group_containers = []
+
+class ContainerInfo:
+    def __init__(self, identifier, uuid, path):
+        self.path = path
+        self.id = identifier
+        self.uuid = uuid
 
 class MountedIosInfo(MountedMacInfo):
     def __init__(self, root_folder_path, output_params):
@@ -1818,7 +1832,10 @@ class MountedIosInfo(MountedMacInfo):
                                             if app_info.sandbox_path:
                                                 app_info.data_uuid = UUID(os.path.basename(app_info.sandbox_path))
                                             self._ReadInfoPlist(app_info, app_info.bundle_path + '/Info.plist')
-                                            app_info.source += ',' + app_info.bundle_path + '/Info.plist'
+                                            bundle_root, _ = os.path.split(app_info.bundle_path)
+                                            if bundle_root != '/Applications':
+                                                self._ReadBundleMetadataPlist(app_info, bundle_root + '/BundleMetadata.plist')
+                                                app_info.source += ', ' + app_info.bundle_path + '/Info.plist' + ', ' + bundle_root + '/BundleMetadata.plist'
                                         else:
                                             log.error(f'Failed to read "compatibilityInfo" for {ai}. {error}')
                                         temp_file.close()
@@ -1830,18 +1847,155 @@ class MountedIosInfo(MountedMacInfo):
                                     pass
                                 else:
                                     self.apps.append(app)
-                            return True
                         except sqlite3.Error as ex:
                             log.exception("Db cursor error while reading file " + app_state_db)
+                            conn.close()
+                            return False
                     except sqlite3.Error as ex:
                         log.error ("Sqlite error - \nError details: \n" + str(ex))
+                        conn.close()
+                        return False
                     conn.close()
+                    self._GetAppGroupDetails(self.apps)
+                    self._ResolveAppSysGroupFolders(self.apps)
+                    return True
             except sqlite3.Error as ex:
                 log.error ("Failed to open {}, is it a valid DB? Error details: ".format(os.path.basename(app_state_db)) + str(ex))
                 return False
         else:
             log.error(f'Could not find {app_state_db}, cannot get Application information!')
         return False
+    
+    def _GetAppGroupDetails(self, apps):
+        '''Get Appgroup information'''
+        containers_db_path = '/private/var/root/Library/MobileContainerManager/containers.sqlite3'
+        if self.IsValidFilePath(containers_db_path):
+            self.ExportFile(containers_db_path, 'APPS')
+            try:
+                sqlite = SqliteWrapper(self)
+                conn = sqlite.connect(containers_db_path)
+                if conn:
+                    log.debug ("Opened DB {} successfully".format(os.path.basename(containers_db_path)))
+                    try:
+                        conn.row_factory = sqlite3.Row
+                        query = \
+                        """
+                        SELECT b.data, code_signing_id_text as app, extensions FROM (
+                            SELECT code_signing_info.id, code_signing_id_text,  group_concat(child_code_signing_id_text) as extensions
+                            FROM code_signing_info LEFT JOIN child_bundles ON child_bundles.parent_id = code_signing_info.id
+                            WHERE code_signing_info.data_container_class=2
+                            GROUP BY code_signing_id_text
+                            ORDER BY code_signing_id_text, child_code_signing_id_text
+                            ) a LEFT JOIN code_signing_data b on a.id=b.cs_info_id
+                        WHERE b.data LIKE "%com.apple.security.application-groups%" or
+                        b.data LIKE "%com.apple.security.system-groups%"
+                        """
+                        cursor = conn.execute(query)
+                        try:
+                            for row in cursor:
+                                app_name = row['app']
+                                exts = [] if row['extensions'] is None else row['extensions'].split(',')
+                                plist_data = row['data']
+                                target_app = None
+                                for app in apps:
+                                    if app.bundle_identifier == app_name:
+                                        target_app = app
+                                        break
+                                if target_app is None:
+                                    target_app = ApplicationInfo(app_name)
+                                    apps.append(target_app)
+                                    log.info(f"App was not found in applist - {app_name}")
+                                target_app.extensions = exts
+                                # read plist
+                                temp_file = BytesIO(plist_data)
+                                success, plist, error = CommonFunctions.ReadPlist(temp_file)
+                                if success:
+                                    entitlements = plist.get('com.apple.MobileContainerManager.Entitlements', None)
+                                    if entitlements:
+                                        target_app.app_groups = entitlements.get('com.apple.security.application-groups', [])
+                                        target_app.sys_groups = entitlements.get('com.apple.security.system-groups', [])
+                                        if target_app.source:
+                                            target_app.source += ', ' + containers_db_path
+                                        else:
+                                            target_app.source = containers_db_path
+                                    else:
+                                        log.error(f'Entitlements not found in plist for {app_name}')
+                                else:
+                                    log.error(f'Failed to read plist for {app_name}. {error}')
+                                temp_file.close()
+                        except sqlite3.Error as ex:
+                            log.exception("Db cursor error while reading file " + containers_db_path)
+                    except sqlite3.Error as ex:
+                        log.error ("Sqlite error - \nError details: \n" + str(ex))
+                    conn.close()
+            except sqlite3.Error as ex:
+                log.error ("Failed to open {}, is it a valid DB? Error details: ".format(os.path.basename(containers_db_path)) + str(ex))
+        else:
+            log.error(f'Could not find {containers_db_path}, cannot get Container information!')
+
+    def _ResolveAppSysGroupFolders(self, apps):
+        '''Get all UUID and path information from AppGroup folders'''
+        app_groups_path = '/private/var/mobile/Containers/Shared/AppGroup'
+        self._ResolveGroupFolders(apps, app_groups_path, 'Shared AppGroup')
+
+        sys_groups_path = '/private/var/containers/Shared/SystemGroup'
+        self._ResolveGroupFolders(apps, sys_groups_path, 'Shared SystemGroup')
+
+        pluginkits_path = '/private/var/mobile/Containers/Data/PluginKitPlugin'
+        self._ResolveGroupFolders(apps, pluginkits_path, 'PluginKitPlugin')
+      
+
+    def _ResolveGroupFolders(self, apps, groups_path, groups_name):
+        '''Get UUID and path information from AppGroup/SystemGroup folders'''    
+        if self.IsValidFolderPath(groups_path):
+            log.info('Resolving App Group folders')
+            folder_items = self.ListItemsInFolder(groups_path, types_to_fetch=EntryType.FOLDERS, include_dates=False)
+            for item in folder_items:
+                uuid = item['name']
+                plist_path = groups_path + '/' + uuid + '/.com.apple.mobile_container_manager.metadata.plist'
+                if self.IsValidFilePath(plist_path):
+                    success, plist, error = self.ReadPlist(plist_path)
+                    if success:
+                        identifier = plist.get('MCMMetadataIdentifier', '')
+                        found = False
+                        for app in apps:
+                            for group in app.app_groups:
+                                if group == identifier:
+                                    container = ContainerInfo(identifier, uuid, groups_path + '/' + uuid)
+                                    app.app_group_containers.append(container)
+                                    found = True
+                                    break
+                            if found: break
+                            for group in app.sys_groups:
+                                if group == identifier:
+                                    container = ContainerInfo(identifier, uuid, groups_path + '/' + uuid)
+                                    app.sys_group_containers.append(container)
+                                    found = True
+                                    break
+                            if found: break
+                            for group in app.extensions:
+                                if group == identifier:
+                                    container = ContainerInfo(identifier, uuid, groups_path + '/' + uuid)
+                                    app.ext_group_containers.append(container)
+                                    found = True
+                                    break
+                            if found: break
+                    else:
+                        log.error(f'Failed to read {plist_path}. {error}')
+                else:
+                    log.error(f'File not found: {plist_path}')
+        else:
+            log.error(f'{groups_name} not parsed - path not found - {groups_path}')
+
+    def _ReadBundleMetadataPlist(self, app_info, plist_path):
+        if self.IsValidFilePath(plist_path):
+            success, plist, error = self.ReadPlist(plist_path, deserialize=True)
+            if success:
+                app_info.install_date = plist.get('installDate', '')
+            else:
+                log.error(f'Failed to read {plist_path}. {error}')
+        else:
+            log.error(f'File not found: {plist_path}')
 
     def _ReadInfoPlist(self, app_info, plist_path):
         if self.IsValidFilePath(plist_path):
