@@ -19,9 +19,12 @@ def get_columns_with_data(db, bundle_id, table_name, columns_info):
     cols_with_data = []
     select_items = ''
 
-    for c in columns_info:
+    for c, c_type in columns_info.items():
         if c == bundle_id: continue
-        select_items += f'max("{c}") "{c}",'
+        if c_type == 'INTEGER':
+            select_items += f'total("{c}") "{c}",'
+        else: # c_type == 'TEXT':
+            select_items += f'max("{c}") "{c}",'
 
     select_items = select_items.rstrip(',')
 
@@ -31,7 +34,7 @@ def get_columns_with_data(db, bundle_id, table_name, columns_info):
         for c in columns_info:
             if c == bundle_id: continue
             data = row[c]
-            if (data is None) or (data == 0) or (data == '') or \
+            if (data is None) or (data == 0.0) or (data == '') or \
                (data == '0' and c == "Parent_ID_hex"): # EMPTY col
                 pass
             else:
