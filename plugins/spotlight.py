@@ -87,7 +87,7 @@ def ProcessStoreItems(store_items, id_as_hex=False):
 
 def Get_Column_Info(store):
     '''Returns a list of columns with data types for use with writer''' 
-    if store.is_ios_or_user_user_store:
+    if store.is_ios_store:
         data_info = [ ('ID_hex',DataType.TEXT),('ID_hex_reversed',DataType.TEXT),('Flags',DataType.INTEGER),
                       ('Parent_ID_hex',DataType.TEXT),('Date_Updated',DataType.TEXT) ]
     else:
@@ -191,7 +191,7 @@ def ProcessStoreDb(input_file_path, input_file, output_path, output_params, item
         with open(output_path_data, 'wb') as output_file:
             output_paths_file = None
             store = spotlight_parser.SpotlightStore(input_file)
-            if store.is_ios_or_user_user_store: # The properties, categories and indexes must be stored in external files
+            if store.is_ios_store: # The properties, categories and indexes must be stored in external files
                 input_folder = os.path.dirname(input_file_path)
                 try:
                     prop_map_data, prop_map_offsets,prop_map_header = GetMapDataOffsetHeader(input_folder, 1, user)
@@ -233,11 +233,11 @@ def ProcessStoreDb(input_file_path, input_file, output_path, output_params, item
             if total_items_parsed == 0:
                 log.debug('Nothing was parsed from this file!')
             # create Views in ios/user style db
-            if store.is_ios_or_user_user_store and (total_items_parsed > 0):
+            if store.is_ios_store and (total_items_parsed > 0):
                 create_views_for_ios_db(writer.sql_writer.filepath, writer.sql_writer.table_name)
             
             # Write Paths db as csv
-            if (not store.is_ios_or_user_user_store) and (not no_path_file):
+            if (not store.is_ios_store) and (not no_path_file):
                 path_type_info = [ ('ID',DataType.INTEGER),('FullPath',DataType.TEXT) ]
                 fullpath_writer = DataWriter(out_params, "Spotlight-" + file_name_prefix + '-paths', path_type_info, input_file_path)
                 with open(output_path_full_paths, 'wb') as output_paths_file:

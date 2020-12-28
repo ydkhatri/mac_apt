@@ -500,7 +500,7 @@ class SpotlightStore:
         self.indexes_2 = {}
         self.block0 = None
 
-        self.is_ios_or_user_user_store = self.index_blocktype_11 == 0
+        self.is_ios_store = self.index_blocktype_11 == 0
 
     def GetFileSize(self, file):
         '''Return size from an open file handle'''
@@ -847,7 +847,7 @@ class SpotlightStore:
                 count += 1
 
             if process_items_func:
-                process_items_func(items_in_block, self.is_ios_or_user_user_store)
+                process_items_func(items_in_block, self.is_ios_store)
 
             for md_item in items_in_block:
                 md_item.Print(output_file)
@@ -972,7 +972,7 @@ def ProcessStoreDb(input_file_path, output_path, file_name_prefix='store'):
         f = open(input_file_path, 'rb')
 
         store = SpotlightStore(f)
-        if store.is_ios_or_user_user_store: #store.flags & 0x00010000 == 0x00010000:
+        if store.is_ios_store: #store.flags & 0x00010000 == 0x00010000:
             create_full_paths_output_file = False
             log.info('This appears to be either an iOS spotlight db or a user spotlight db. '\
                 "File inode numbers are not stored here, and hence full_path file won't be created!")
