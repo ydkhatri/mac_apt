@@ -64,7 +64,7 @@ try:
 except ImportError:
     print("liblzfse not found. Won't decompress lzfse/lzvn streams")
 
-__VERSION__ = '0.9.1'
+__VERSION__ = '0.9.2'
 
 log = logging.getLogger('SPOTLIGHT_PARSER')
 
