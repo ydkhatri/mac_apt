@@ -20,7 +20,7 @@ mac_apt is a DFIR (Digital Forensics and Incident Response) tool to process Mac 
 
 #### Latest
 :heavy_check_mark: Support for macOS Big Sur Sealed volumes (11.0)  
-:heavy_check_mark: Introducing **ios_apt** for processing iOS/ipadOS images
+:heavy_check_mark: Introducing **ios_apt** for processing iOS/ipadOS images  
 :heavy_check_mark: FAST mode :hourglass_flowing_sand:   
 :heavy_check_mark: Encrypted :lock: APFS images can now be processed using password/recovery-key :key:   
 :heavy_check_mark: macOS Catalina (10.15) separately mounted SYSTEM & DATA volumes now supported  
