@@ -1,4 +1,4 @@
-Updates in 20201227 (v0.9):
+Updates in 20201228 (v0.9):
 
 + Introducing ios_apt - parses ios full disk images
 + ios_apt plugins - APPS, BASICINFO, FSEVENTS, INETACOUNTS, NETUSAGE, NETWORKING, SAFARI, SCREENTIME, SPOTLIGHT, TERMSESSIONS, WIFI
