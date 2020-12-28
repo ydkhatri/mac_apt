@@ -1,4 +1,36 @@
-Updates in 20200426 (v0.6):
+Updates in 20201227 (v0.9):
+
++ Introducing ios_apt - parses ios full disk images
++ ios_apt plugins - APPS, BASICINFO, FSEVENTS, INETACOUNTS, NETUSAGE, NETWORKING, SAFARI, SCREENTIME, SPOTLIGHT, TERMSESSIONS, WIFI
++ Support for ios 14 artifacts
++ Improved support for Big Sur (macOS 11) Sealed volumes
++ Python 3.8 compiled libraries for windows available
++ Adds full support for decrypting FileVault when HFS upgraded to APFS
++ Safari binarycookie parsing for Big Sur (new location)
++ Add views for Spotlight ios/user db output removing empty columns
++ Hex in ID col + reverse id col for ios spotlight
+
+! Optimization in file metadata lookup
+! Detect encrypted NOTES properly + query fixes
+! Fixed chrome Session parsing, fixed bad timestamps
+! Fix ExportedFiles db having double entries
+! Fix for file writing exception, add utf8 for log
+! Fix edge case apfs parsing symlink
+
+Updates in 20200917 (v0.7):
+
++ New Plugins - SAVEDSTATE, CHROME, ARD, SUDOLASTRUN, DOCUMENTREVISIONS
++ Support for Big Sur (macOS 11) Sealed volumes
++ Support for Big Sur changed/new artifact locations and ZSH sessions
++ Add .sh_history parsing for normal users
+
+! Add workaround for an issue with MOUNTED mode on Xways Forensics mounted disks
+! Fixes to deserializer and ccl_bplist (for edge cases on newer macOS)
+! Fixes to MOUNTEDMODE
+! BugFix - BGRA to RGBA for thumbnails on 10.15
+! Some encryption bugs squashed
+
+Updates in 20200529 (v0.6):
 
 + APFS encryption support added, encrypted volumes can be processed by providing password/recovery-key
 + FAST mode, which skips plugins IDEVICEBACKUPS, SPOTLIGHT, UNIFIEDLOGS
@@ -7,6 +39,7 @@ Updates in 20200426 (v0.6):
 + Support for Maquisition created AFF4 images
 + Export_log is now an sqlite db instead of CSV file
 + FSEVENTS plugin is now a lot faster
++ Better exception handling, script should halt on Ctrl-C now
 
 ! Bugfixes, improvements in other plugins - QUICKLOOK, IMESSAGE, COOKIES
 

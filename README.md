@@ -1,8 +1,8 @@
 # mac_apt - macOS Artifact Parsing Tool   
-[![Latest version](https://img.shields.io/badge/version-v0.7-blue)](https://github.com/ydkhatri/mac_apt/releases/tag/v0.7)
+[![Latest version](https://img.shields.io/badge/version-v0.9-blue)](https://github.com/ydkhatri/mac_apt/releases/tag/v0.9)
 [![status](https://img.shields.io/badge/status-stable-green)]()
 
-[![Latest version](https://img.shields.io/badge/version-v0.9-blue)](https://github.com/ydkhatri/mac_apt/releases/tag/v0.9)
+[![Latest version](https://img.shields.io/badge/version-v0.9.dev-blue)](https://github.com/ydkhatri/mac_apt/releases/tag/v0.9.dev)
 [![status](https://img.shields.io/badge/status-development-orange)]()
 
 mac_apt is a DFIR (Digital Forensics and Incident Response) tool to process Mac computer full disk images (**or _live_ machines**) and extract data/metadata useful for forensic investigation. It is a python based framework, which has plugins to process individual artifacts (such as Safari internet history, Network interfaces, Recently accessed files & volumes, ..)
@@ -19,13 +19,12 @@ mac_apt is a DFIR (Digital Forensics and Incident Response) tool to process Mac 
 * Reads the Spotlight database and Unified Logging (tracev3) files
 
 #### Latest
-:heavy_check_mark: Support for macOS Big Sur (11.0)  
-:heavy_check_mark: Basic iOS/ipadOS support 
+:heavy_check_mark: Support for macOS Big Sur Sealed volumes (11.0)  
+:heavy_check_mark: Introducing **ios_apt** for processing iOS/ipadOS images
 :heavy_check_mark: FAST mode :hourglass_flowing_sand:   
 :heavy_check_mark: Encrypted :lock: APFS images can now be processed using password/recovery-key :key:   
-:heavy_check_mark: macOS Catalina (10.15) images can be parsed now  
 :heavy_check_mark: macOS Catalina (10.15) separately mounted SYSTEM & DATA volumes now supported  
-:heavy_check_mark: AFF4 images (including macquisition created) now supported
+:heavy_check_mark: AFF4 images (including macquisition created) are supported
 
 Available Plugins (artifacts parsed) | Description 
 ------------------ | ---------------
