@@ -84,7 +84,7 @@ for plugin in plugins:
 
 plugins_info += "\n    " + "-"*76 + "\n" +\
                  " "*4 + "ALL" + " "*17 + "Runs all plugins"
-arg_parser = argparse.ArgumentParser(description='ios_apt is a framework to process forensic artifacts on a mounted iOS physical image\n'\
+arg_parser = argparse.ArgumentParser(description='ios_apt is a framework to process forensic artifacts on a mounted iOS full file system image\n'\
                                                  'You are running {} version {}'.format(__PROGRAMNAME, __VERSION),
                                     epilog=plugins_info, formatter_class=argparse.RawTextHelpFormatter)
 arg_parser.add_argument('-i', '--input_path', help='Path to root folder of ios image') # Not optional !
