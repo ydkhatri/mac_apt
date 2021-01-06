@@ -19,6 +19,7 @@ from plugins.helpers.common import *
 from biplist import *
 import logging
 import os
+import time
 
 __Plugin_Name = "IDEVICEBACKUPS"
 __Plugin_Friendly_Name = "iDevice Backup Info"
@@ -118,15 +119,17 @@ def ReadBackups(mac_info, export_folder_path, info_plist_path, status_plist_path
     # Try exporting files
     base_folder = os.path.dirname(info_plist_path)
     log.debug('Lets try to export files now from {}'.format(base_folder))
+
+    slash = '\\' if (os.name == 'nt') else '/'
     files_exported = 0
-    import time
+    
     time_processing_started = time.time()
     folders = mac_info.ListItemsInFolder(base_folder, EntryType.FOLDERS, False)
     for folder in folders:
         path = base_folder + '/' + folder['name']
         files = mac_info.ListItemsInFolder(path, EntryType.FILES, False)
         for item in files:
-            mac_info.ExportFile(path + '/' + item['name'], export_folder_path, '', False)
+            mac_info.ExportFile(path + '/' + item['name'], export_folder_path + slash + folder['name'], '', False)
             files_exported += 1
 
     time_processing_ended = time.time()
