@@ -7,6 +7,7 @@
    
 '''
 
+import io
 import os
 import biplist
 import sys
@@ -17,13 +18,14 @@ import plugins.helpers.ccl_bplist as ccl_bplist
 from biplist import *
 from enum import IntEnum
 from plugins.helpers.common import CommonFunctions
+from plugins.helpers.deserializer import process_nsa_plist
 from plugins.helpers.macinfo import *
 from plugins.helpers.writer import *
 
 
 __Plugin_Name = "SAFARI"
 __Plugin_Friendly_Name = "Internet history, downloaded file information, cookies and more from Safari caches"
-__Plugin_Version = "1.0"
+__Plugin_Version = "2.0"
 __Plugin_Description = "Gets internet history, downloaded file information, cookies and more from Safari caches"
 __Plugin_Author = "Yogesh Khatri"
 __Plugin_Author_Email = "yogesh@swiftforensics.com"
@@ -44,6 +46,8 @@ log = logging.getLogger('MAIN.' + __Plugin_Name) # Do not rename or remove this 
   TopSites.plist <-- [BannedURLStrings] , DisplayedSitesLastModified, TopSites\[xx][TopSiteTitle & TopSiteURLString]
   Extensions\Extensions.plist <-- Installed Extensions\[xx][Archive File Name & Enabled]
   ReadingListArchives/<UUID>/Page.webarchive <-- Plist, get WebResourceURL
+  BrowserState.db
+  CloudTabs.db
 '''
 
 class SafariItemType(IntEnum):
@@ -59,6 +63,9 @@ class SafariItemType(IntEnum):
     HISTORYDOMAINS = 9
     TOPSITE_BANNED = 10
     FREQUENTLY_VISITED = 11 # From com.apple.safari.plist
+    CLOUDTAB = 12
+    TAB = 13 # From BrowserState
+    TABHISTORY = 14 # Tab session history from BrowserState
 
     def __str__(self):
         return self.name
@@ -168,12 +175,93 @@ def ReadHistoryDb(conn, safari_items, source_path, user):
         cursor = conn.execute("select title, url, load_successful, visit_time as time_utc from "
                               "history_visits left join history_items on history_visits.history_item = history_items.id")
         try:
-            rowcount = 0
             for row in cursor:
                 try:
                     si = SafariItem(SafariItemType.HISTORY, row['url'], row['title'], 
                                     CommonFunctions.ReadMacAbsoluteTime(row['time_utc']),'', user, source_path)
                     safari_items.append(si)
+                except sqlite3.Error as ex:
+                    log.exception ("Error while fetching row data")
+        except sqlite3.Error as ex:
+            log.exception ("Db cursor error while reading file " + source_path)
+        conn.close()
+    except sqlite3.Error as ex:
+        log.exception ("Sqlite error")
+
+def GetItemFromCloudDbPlist(plist, item_name):
+    for dic_item in plist:
+        for k, v in dic_item.items():
+            if k == item_name:
+                return v
+    return None
+
+def ReadCloudTabsDb(conn, safari_items, source_path, user):
+    try:
+        conn.row_factory = sqlite3.Row
+        cursor = conn.execute(
+            """SELECT device_name, tab_uuid, t.system_fields, title, url, is_showing_reader, is_pinned
+                FROM cloud_tabs t LEFT JOIN cloud_tab_devices d on d.device_uuid=t.device_uuid
+                ORDER BY device_name""")
+        try:
+            for row in cursor:
+                try:
+                    pinned = row['is_pinned']
+                    system_fields = row['system_fields']
+                    created = ''
+                    modified = ''
+                    if system_fields:
+                        serialized_plist_file_obj = io.BytesIO(system_fields)
+                        try:
+                            deserialized_plist = process_nsa_plist('', serialized_plist_file_obj)
+                            created = GetItemFromCloudDbPlist(deserialized_plist, 'RecordCtime')
+                            modified = GetItemFromCloudDbPlist(deserialized_plist, 'RecordMtime')
+                        except (biplist.NotBinaryPlistException, biplist.InvalidPlistException, 
+                                ccl_bplist.BplistError, ValueError, TypeError, OSError, OverflowError) as ex:
+                            log.exception('plist deserialization error')
+                             
+                    si = SafariItem(SafariItemType.CLOUDTAB, row['url'], row['title'], created,
+                                    f'Modified={modified}' + (' pinned=1' if pinned else ''),
+                                    user, source_path)
+                    safari_items.append(si)
+                except sqlite3.Error as ex:
+                    log.exception ("Error while fetching row data")
+        except sqlite3.Error as ex:
+            log.exception ("Db cursor error while reading file " + source_path)
+        conn.close()
+    except sqlite3.Error as ex:
+        log.exception ("Sqlite error")
+
+def ReadBrowserStateDb(conn, safari_items, source_path, user):
+    try:
+        conn.row_factory = sqlite3.Row
+        cursor = conn.execute(
+            """SELECT t.id, url, title, session_data, t.uuid
+                FROM tabs t LEFT JOIN tab_sessions s on s.tab_uuid=t.uuid""")
+        try:
+            for row in cursor:
+                try:
+                    si = SafariItem(SafariItemType.TAB, row['url'], row['title'], '',
+                                    f'Tab UUID={row["uuid"]}', user, source_path)
+                    safari_items.append(si)
+                    plist_data = row['session_data']
+                    if plist_data and len(plist_data) > 10:
+                        try:
+                            plist = biplist.readPlistFromString(plist_data[4:])
+                            history = plist.get('SessionHistory', None)
+                            if history:
+                                #current_session = history.get('SessionHistoryCurrentIndex', 0)
+                                entries = history.get('SessionHistoryEntries', [])
+                                for index, entry in enumerate(entries):
+                                    url = entry.get('SessionHistoryEntryURL', '')
+                                    title = entry.get('SessionHistoryEntryTitle', '')
+                                    if url == row['url']:
+                                        continue # same as current tab, skip it
+                                    si = SafariItem(SafariItemType.TABHISTORY, url, title, '', 
+                                                    f'Tab UUID={row["uuid"]} index={index}', user, source_path)
+                                    safari_items.append(si)
+                        except (biplist.InvalidPlistException, TypeError, ValueError) as ex:
+                            log.error(f'Failed to read plist for tab {row["uuid"]}, {row["id"]}')
+                     
                 except sqlite3.Error as ex:
                     log.exception ("Error while fetching row data")
         except sqlite3.Error as ex:
@@ -367,19 +455,20 @@ def ProcessSafariFolder(mac_info, folder_path, user, safari_items):
         else:
             log.debug('Safari File not found : {}'.format(source_path))
     # Yosemite onwards there is History.db
-    ReadHistoryDbFromImage(mac_info, folder_path, user, safari_items)
+    ReadDbFromImage(mac_info, folder_path + '/History.db', user, safari_items, ReadHistoryDb, 'safari history')
+    ReadDbFromImage(mac_info, folder_path + '/CloudTabs.db', user, safari_items, ReadCloudTabsDb, 'safari CloudTabs')
+    ReadDbFromImage(mac_info, folder_path + '/BrowserState.db', user, safari_items, ReadBrowserStateDb, 'safari BrowserState')    
 
-def ReadHistoryDbFromImage(mac_info, folder_path, user, safari_items):
-    source_path = folder_path + '/History.db'
+def ReadDbFromImage(mac_info, source_path, user, safari_items, processing_func, description):
     if mac_info.IsValidFilePath(source_path) and mac_info.GetFileSize(source_path, 0) > 0:
         mac_info.ExportFile(source_path, __Plugin_Name, user + "_")
         try:
             sqlite = SqliteWrapper(mac_info)
             conn = sqlite.connect(source_path)
             if conn:
-                ReadHistoryDb(conn, safari_items, source_path, user)
+                processing_func(conn, safari_items, source_path, user)
         except (sqlite3.Error, OSError) as ex:
-            log.exception ("Failed to open safari history database '{}', is it a valid SQLITE DB?".format(source_path))
+            log.exception ("Failed to open {} database '{}', is it a valid SQLITE DB?".format(description, source_path))
 
 def Plugin_Start(mac_info):
     '''Main Entry point function for plugin'''
@@ -445,8 +534,24 @@ def Plugin_Start_Standalone(input_files_list, output_params):
                 ReadHistoryDb(conn, safari_items, input_path, '')
             except (sqlite3.Error, OSError) as ex:
                 log.exception ("Failed to open database, is it a valid SQLITE DB?")
+        elif input_path.endswith('CloudTabs.db'):
+            log.info ("Processing file " + input_path)
+            try:
+                conn = CommonFunctions.open_sqlite_db_readonly(input_path)
+                log.debug ("Opened database successfully")
+                ReadCloudTabsDb(conn, safari_items, input_path, '')
+            except (sqlite3.Error, OSError) as ex:
+                log.exception ("Failed to open database, is it a valid SQLITE DB?")
+        elif input_path.endswith('BrowserState.db'):
+            log.info ("Processing file " + input_path)
+            try:
+                conn = CommonFunctions.open_sqlite_db_readonly(input_path)
+                log.debug ("Opened database successfully")
+                ReadBrowserStateDb(conn, safari_items, input_path, '')
+            except (sqlite3.Error, OSError) as ex:
+                log.exception ("Failed to open database, is it a valid SQLITE DB?")
         else:
-            log.error('Input file {} is not a plist!'.fromat(input_path))
+            log.error('Input file {} is not a recognized name of a Safari artifact!'.fromat(input_path))
         if len(safari_items) > 0:
             PrintAll(safari_items, output_params, input_path)
         else:
@@ -465,8 +570,9 @@ def Plugin_Start_Ios(ios_info):
             break
     source_path = '/private/var/mobile/Library/Safari'
     if ios_info.IsValidFolderPath(source_path):
-        ReadHistoryDbFromImage(ios_info, source_path, 'mobile', safari_items)
-
+        ReadDbFromImage(ios_info, source_path + '/History.db', 'mobile', safari_items, ReadHistoryDb, 'safari History')
+        ReadDbFromImage(ios_info, folder_path + '/CloudTabs.db', 'mobile', safari_items, ReadCloudTabsDb, 'safari CloudTabs')
+        ReadDbFromImage(ios_info, folder_path + '/BrowserState.db', 'mobile', safari_items, ReadBrowserStateDb, 'safari BrowserState')
     if len(safari_items) > 0:
         PrintAll(safari_items, ios_info.output_params, '')
     else:
