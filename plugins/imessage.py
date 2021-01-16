@@ -91,9 +91,11 @@ def OpenDb(inputPath):
 
 def ReadiMessages(db, imessages, source, user):
     try:
+        dest_id_exists = CommonFunctions.ColumnExists(db, 'message', 'destination_called_id')
         query = "SELECT m.rowid as msg_id, m.handle_id, m.text ,c.chat_identifier as contact, "\
                 " (case when m.is_from_me == 0 then '->' when m.is_from_me == 1 then '<-' end ) as direction, "\
-                " m.account, m.destination_caller_id, m.date, m.date_read, m.date_delivered, m.is_from_me, m.is_read, "\
+                " m.account, m.date, m.date_read, m.date_delivered, m.is_from_me, m.is_read, "\
+                + "m.destination_caller_id, " if dest_id_exists else "" + \
                 " a.filename as att_path, a.transfer_name as att_name, a.total_bytes as att_size"\
                 " from message as m "\
                 " LEFT JOIN message_attachment_join as ma on ma.message_id = m.rowid "\
@@ -107,8 +109,9 @@ def ReadiMessages(db, imessages, source, user):
             if att_path != None:
                 pass
             account = row['account']
-            if account.find(row['destination_caller_id']) == -1:
-                account = row['destination_caller_id'] + "(" + account + ")"
+            if dest_id_exists and row['destination_caller_id']:
+                if account.find(row['destination_caller_id']) == -1:
+                    account = row['destination_caller_id'] + "(" + account + ")"
             imsg = IMessage(row['msg_id'], row['handle_id'], row['text'], row['contact'], row['direction'], account,
                             CommonFunctions.ReadMacAbsoluteTime(row['date']),
                             CommonFunctions.ReadMacAbsoluteTime(row['date_read']),
