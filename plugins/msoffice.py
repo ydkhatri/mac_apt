@@ -7,17 +7,17 @@
 
 '''
 
+
+import logging
+import sqlite3
+import struct
+
+from os import path
+from plistutils.alias import AliasParser
 from plugins.helpers.common import CommonFunctions
 from plugins.helpers.macinfo import *
 from plugins.helpers.writer import *
 from plugins.helpers.bookmark import *
-from plistutils.alias import AliasParser
-from os import path
-
-import biplist
-import logging
-import sqlite3
-import struct
 
 __Plugin_Name = "MSOFFICE"
 __Plugin_Friendly_Name = "MSOffice"
@@ -412,25 +412,24 @@ def Plugin_Start_Standalone(input_files_list, output_params):
         office_items = []
         office_reg_items = []
         if input_path.endswith('com.microsoft.office.plist'):
-            try:
-                plist = biplist.readPlist(input_path)
+            success, plist, error = CommonFunctions.ReadPlist(input_path)
+            if success:
                 ProcessOfficePlist(plist, office_items, '', input_path)
-            except biplist.InvalidPlistException as ex:
-                log.exception('Failed to read file: {}'.format(input_path))
+            else:
+                log.error('Failed to read file: {}. {}'.format(input_path, error))
         else:
             basename = path.basename(input_path)
             if basename.startswith('com.microsoft.') and basename.endswith('.plist'):
-                try:
-                    plist = biplist.readPlist(input_path)
-                    #basename_len = len(basename)
+                success, plist, error = CommonFunctions.ReadPlist(input_path)
+                if success:
                     if basename.endswith('securebookmarks.plist'):                    
                         app_name = basename[14:-22]
                         ProcessOfficeAppSecureBookmarksPlist(plist, office_items, app_name, '', input_path)
                     else:
                         app_name = basename[14:-6]
                         ProcessOfficeAppPlist(plist, office_items, app_name, '', input_path)
-                except biplist.InvalidPlistException as ex:
-                    log.exception('Failed to read file: {}'.format(input_path))
+                else:
+                    log.error('Failed to read file: {}. {}'.format(input_path, error))
 
             elif input_path.endswith('MicrosoftRegistrationDB.reg'):
                 conn = OpenDb(input_path)

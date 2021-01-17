@@ -9,7 +9,7 @@
 
 import os
 import logging
-import biplist
+from plugins.helpers.common import CommonFunctions
 from plugins.helpers.macinfo import *
 from plugins.helpers.writer import *
 
@@ -61,11 +61,11 @@ def ReadInstallHistoryPlist(plist, history):
 
 def ParseInstallHistoryFile(input_file):
     history = []
-    try:
-        plist = readPlist(input_file)
+    success, plist, error = CommonFunctions.ReadPlist(input_path)
+    if success:
         ReadInstallHistoryPlist(plist, history)
-    except InvalidPlistException as e:
-        log.error ("Could not open plist, error was : " + str(e) )
+    else:
+        log.error("Could not open plist, error was : " + error)
     return history
 
 def PrintAll(history, output_params, source_path):

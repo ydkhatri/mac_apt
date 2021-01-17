@@ -9,7 +9,7 @@
 
 import os
 import logging
-import biplist
+from plugins.helpers.common import CommonFunctions
 from plugins.helpers.macinfo import *
 from plugins.helpers.writer import *
 
@@ -77,7 +77,7 @@ def Plugin_Start_Standalone(input_files_list, output_params):
     log.info("Module Started as standalone")
     for input_path in input_files_list:
         log.debug("Trying to read plist : " + input_path)
-        success, plist, error = CommonFunctions.ReadPlist.readPlist(input_path)
+        success, plist, error = CommonFunctions.ReadPlist(input_path)
         if success:
             ProcessActiveDirectoryPlist(input_path, plist)
             WriteList('domain details', 'Domain_ActiveDirectory', ad_details, ad_info, mac_info.output_params, input_path)

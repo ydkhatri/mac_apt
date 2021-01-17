@@ -12,7 +12,7 @@
 '''
 
 import logging
-from biplist import *
+from plugins.helpers.common import CommonFunctions
 from plugins.helpers.macinfo import *
 from plugins.helpers.writer import *
 
@@ -139,11 +139,11 @@ def Plugin_Start(mac_info):
         log.info('No dock items found')
 
 def ReadDockPlistFile(input_file, docks):
-    try:
-        plist = readPlist(input_file)
+    success, plist, error = CommonFunctions.ReadPlist(input_file)
+    if success:
         ParseDockItemsPlist(plist, docks, '', input_file)
-    except InvalidPlistException as e:
-        log.error ("Could not open plist, error was : " + str(e) )
+    else:
+        log.error ("Could not open plist, error was : " + error)
 
 def Plugin_Start_Standalone(input_files_list, output_params):
     log.info("Module Started as standalone")

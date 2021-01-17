@@ -10,13 +10,15 @@
 import biplist
 import datetime
 import logging
+import nska_deserialize as nd
 import os
+import plistlib
 import re
 import sqlite3
+import sys
 #import pytz
 from enum import IntEnum
 from io import BytesIO
-from plugins.helpers.deserializer import process_nsa_plist
 from sqlite3 import Error as sqlite3Error
 #from tzlocal import get_localzone
 
@@ -240,6 +242,7 @@ class CommonFunctions:
         #log.debug("Trying to open plist file : " + path)
         error = ''
         path = ''
+        plist = None
         f = None
         if isinstance(path_or_file, str):
             path = path_or_file
@@ -251,38 +254,46 @@ class CommonFunctions:
             f = path_or_file
 
         if f:
-            try:
-                plist = biplist.readPlist(f)
-                if deserialize:
-                    try:
-                        f.seek(0)
-                        plist = process_nsa_plist('', f)
-                        return (True, plist, '')
-                    except Exception as ex:
-                        error = 'Could not read deserialized plist: ' + path + " Error was : " + str(ex)
-                return (True, plist, '')
-            except biplist.InvalidPlistException as ex:
+            if deserialize:
                 try:
-                    # Perhaps this is manually edited or incorrectly formatted by a non-Apple utility  
-                    # that has left whitespaces at the start of file before <?xml tag
-                    f.seek(0)
-                    data = f.read().decode('utf8', 'ignore')
-                    data = data.lstrip(" \r\n\t").encode('utf8', 'backslashreplace')
-                    if deserialize:
-                        try:
-                            temp_file = BytesIO(data)
-                            plist = process_nsa_plist('', temp_file)
-                            temp_file.close()
-                            return (True, plist, '')
-                        except Exception as ex:
-                            error = 'Could not read deserialized plist: ' + path + " Error was : " + str(ex)
-                    else:
-                        plist = biplist.readPlistFromString(data)                        
-                        return (True, plist, '')
-                    plist = biplist.readPlistFromString(data)
+                    plist = nd.deserialize_plist(f)
+                    f.close()
                     return (True, plist, '')
-                except biplist.InvalidPlistException as ex:
-                    error = 'Could not read plist: ' + path + " Error was : " + str(ex)
-            except OSError as ex:
-                error = 'OSError while reading plist: ' + path + " Error was : " + str(ex)
+                except (nd.DeserializeError, nd.biplist.NotBinaryPlistException, nd.biplist.InvalidPlistException,
+                        plistlib.InvalidFileException, nd.ccl_bplist.BplistError, ValueError, TypeError, 
+                        OSError, OverflowError) as ex:
+                    error = 'Error deserializing plist: ' + path + " Error was : " + str(ex)
+                    f.close()
+                    return (False, plist, error)
+            else:
+                try:
+                    if sys.version_info >= (3, 9):
+                        plist = plistlib.load(f)
+                    else:
+                        plist = biplist.readPlist(f)
+                    return (True, plist, '')
+                except (biplist.InvalidPlistException, plistlib.InvalidFileException) as ex:
+                    try:
+                        # Check for XML format
+                        f.seek(0)
+                        file_start_bytes = f.read(10)
+                        if file_start_bytes.find(b'?xml') > 0:
+                            # Perhaps this is manually edited or incorrectly formatted  
+                            # that has left whitespaces at the start of file before <?xml tag
+                            # Or it's a bigSur (11.0) plist with hex integers
+                            f.seek(0)
+                            data = f.read().decode('utf8', 'ignore')
+                            f.close()
+                            data = CommonFunctions.replace_all_hex_int_with_int(data) # Fix for BigSur plists with hex ints
+                            data = data.lstrip(" \r\n\t").encode('utf8', 'backslashreplace')
+
+                            if sys.version_info >= (3, 9):
+                                plist = plistlib.loads(data, fmt=plistlib.FMT_XML)
+                            else:
+                                plist = biplist.readPlistFromString(data)
+                            return (True, plist, '')
+                        else:
+                            error = 'Not a plist! ' + path + " Error was : " + str(ex)
+                    except (biplist.InvalidPlistException, ValueError, plistlib.InvalidFileException) as ex:
+                        error = 'Could not read plist: ' + path + " Error was : " + str(ex)
         return (False, None, error)

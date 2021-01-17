@@ -8,13 +8,12 @@
 '''
 
 import os
-import biplist
 import sys
 import logging
 
-from biplist import *
 from enum import IntEnum
 from binascii import unhexlify
+from plugins.helpers.common import CommonFunctions
 from plugins.helpers.macinfo import *
 from plugins.helpers.writer import *
 
@@ -146,11 +145,11 @@ def PrintAll(networks, output_params, source_path):
 
 def ParseWifi(input_file):
     networks = []
-    try:
-        plist = readPlist(input_file)
+    success, plist, error = CommonFunctions.ReadPlist(input_path)
+    if success:
         ReadAirportPrefPlist(plist, networks)
-    except (OSError, InvalidPlistException) as e:
-        log.error ("Could not open plist, error was : " + str(e) )
+    else:
+        log.error ("Could not open plist, error was : " + error)
     return networks
 
 def ProcessOlderAirportPrefPlist(plist, networks, version):

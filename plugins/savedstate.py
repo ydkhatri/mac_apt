@@ -17,7 +17,6 @@ from plugins.helpers.macinfo import *
 from plugins.helpers.writer import *
 
 import logging
-import biplist
 
 __Plugin_Name = "SAVEDSTATE"
 __Plugin_Friendly_Name = "Saved State"

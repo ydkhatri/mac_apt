@@ -8,12 +8,11 @@
 '''
 
 import os
-import biplist
 import sys
 import logging
 import struct
 
-from biplist import *
+from plugins.helpers.common import CommonFunctions
 from plugins.helpers.macinfo import *
 from plugins.helpers.writer import *
 
@@ -39,11 +38,11 @@ def PrintAll(shortcut_items, output_params, source_path):
     WriteList("spotlight shortcut information", "SpotlightShortcuts", shortcut_items, shortcut_info, output_params, source_path)
     
 def ParseShortcutFile(input_file, shortcuts):
-    try:
-        plist = readPlist(input_file)
+    success, plist, error = CommonFunctions.ReadPlist(input_path)
+    if success:
         ReadShortcutPlist(plist, shortcuts, input_file)
-    except InvalidPlistException as e:
-        log.error ("Could not open plist, error was : " + str(e) )
+    else:
+        log.error("Could not open plist, error was : " + error)
 
 def ReadSingleShortcutEntry(entry, value, shortcuts, uses_path, source, user):
     sc = { 'User':user, 'Source':source, 'UserTyped':entry }

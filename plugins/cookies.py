@@ -14,7 +14,7 @@
 import logging
 import plugins.helpers.common
 import struct
-from biplist import *
+from plugins.helpers.common import CommonFunctions
 from plugins.helpers.macinfo import *
 from plugins.helpers.writer import *
 
@@ -204,11 +204,11 @@ def Plugin_Start(mac_info):
         log.info('No cookies found')
 
 def read_hsts_plist_file(input_file, cookies):
-    try:
-        plist = readPlist(input_file)
+    success, plist, error = CommonFunctions.ReadPlist(input_file)
+    if success:
         parse_hsts_plist(plist, cookies, '', input_file)
-    except (InvalidPlistException, OSError):
-        log.exception("Could not open/process plist")
+    else:
+        log.error(f"Could not open/process plist. {error}")
 
 def Plugin_Start_Standalone(input_files_list, output_params):
     log.info("Module Started as standalone")

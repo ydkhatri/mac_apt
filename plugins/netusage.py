@@ -7,12 +7,12 @@
 
 '''
 
+import logging
+import sqlite3
+
 from plugins.helpers.common import CommonFunctions
 from plugins.helpers.macinfo import *
 from plugins.helpers.writer import *
-from biplist import *
-import logging
-import sqlite3
 
 __Plugin_Name = "NETUSAGE"
 __Plugin_Friendly_Name = "Net Usage"

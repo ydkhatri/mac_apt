@@ -3,6 +3,7 @@ installation folder under Lib\site-packages\
 
 This is specific for Python version (3.7/3.8) and will not work with 
 other versions. It is also specific to your platform (32/64 bits). 
+Python 3.9 onwards, only the 64 bit library will be available.
 
 The 32-bit versions are located in the 32bit_ folder. 
 The 64-bit versions are located in the 64bit_ folder. 

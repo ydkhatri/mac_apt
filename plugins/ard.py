@@ -14,8 +14,9 @@
 import logging
 import plugins.helpers.common
 import struct
-from biplist import *
+
 from datetime import timedelta
+from plugins.helpers.common import CommonFunctions
 from plugins.helpers.macinfo import *
 from plugins.helpers.writer import *
 from time import gmtime, strftime
@@ -189,11 +190,11 @@ def Plugin_Start(mac_info):
         log.info('No ARD app usage info found in RemoteManagement cache')
 
 def read_plist_file(input_file):
-    try:
-        plist = readPlist(input_file)
+    success, plist, error = CommonFunctions.ReadPlist(input_file)
+    if success:
         return plist
-    except (InvalidPlistException, OSError):
-        log.exception("Could not open/process plist")
+    else:
+        log.error(error)
     return None
 
 def Plugin_Start_Standalone(input_files_list, output_params):

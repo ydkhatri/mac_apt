@@ -11,13 +11,13 @@
    full text content of terminal window.
 '''
 
-import biplist
 import io
 import logging
+import nska_deserialize as nd
 import os
 import struct
 from Crypto.Cipher import AES
-from plugins.helpers.deserializer import process_nsa_plist
+from plugins.helpers.common import CommonFunctions
 from plugins.helpers.macinfo import *
 from plugins.helpers.writer import *
 
@@ -76,8 +76,11 @@ def get_decoded_plist_data(data):
 
         f = io.BytesIO(nsa_plist)
         try:
-            deserialized_plist = process_nsa_plist("", f)
-        except Exception as ex:
+            deserialized_plist = nd.deserialize_plist(f)
+        except (nd.DeserializeError, nd.biplist.NotBinaryPlistException, 
+                nd.biplist.InvalidPlistException,plistlib.InvalidFileException,
+                nd.ccl_bplist.BplistError, ValueError, TypeError, 
+                OSError, OverflowError) as ex:
             log.exception("")
             f.close()
             return (name, None)
@@ -86,14 +89,6 @@ def get_decoded_plist_data(data):
     else:
         log.warning('Plist seems empty!')
     return (name, None)
-
-def read_plist(plist_file_path):
-    try:
-        plist = biplist.readPlist(plist_file_path)
-        return plist
-    except (NotBinaryPlistException, InvalidPlistException):
-        log.exception("Error reading plist")
-    return None
 
 def get_key_for_window_id(plist, ns_window_id):
     key = None
@@ -144,11 +139,13 @@ def ParseTerminalPlist_NSWindow(plist):
     return (title, working_dir, contents)
 
 def ProcessFile(windows_plist_file_path, data_file_path, terminals):
-    windows_plist = read_plist(windows_plist_file_path)
-    if windows_plist:
+    success, windows_plist, error = CommonFunctions.ReadPlist(windows_plist_file_path)
+    if success:
         with open(data_file_path, 'rb') as f:
             all_data = f.read() # Should be a small file
             Process(windows_plist, all_data, terminals, '', data_file_path)
+    else:
+        log.error(f"Error reading plist - {windows_plist_file_path}. Error={error}")
 
 def AddUnique(terminal_info, terminals):
     duplicate_found = False

@@ -14,11 +14,12 @@
 
 '''
 
+import logging
+import re
+
+from plugins.helpers.common import CommonFunctions
 from plugins.helpers.macinfo import *
 from plugins.helpers.writer import *
-import logging
-from biplist import *
-import re
 
 __Plugin_Name = "BLUETOOTH"
 __Plugin_Friendly_Name = "Bluetooth Parser"
@@ -316,11 +317,11 @@ def Plugin_Start(mac_info):
 def Plugin_Start_Standalone(input_files_list, output_params):
     for input_file in input_files_list:
         cache_list = []
-        try:
-            plist = readPlist(input_file)
+        success, plist, error = CommonFunctions.ReadPlist(input_file)
+        if success:
             cache_list = ReadBluetoothPlist(plist)
-        except (OSError, InvalidPlistException) as e:
-            log.error ("Could not open plist, error was : " + str(e) )
+        else:
+            log.error(error)
 
         if len(cache_list) > 0:
             PrintAll(cache_list, output_params, input_file)

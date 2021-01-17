@@ -10,16 +10,14 @@
    This plugin will scan for connected iDevices from /Users/<USER>/Library/Preferences/com.apple.iPod.plist
 '''
 
-from __future__ import print_function
-from __future__ import unicode_literals
+import logging
+import os
 
+from enum import Enum
+from plugins.helpers.common import CommonFunctions
 from plugins.helpers.macinfo import *
 from plugins.helpers.writer import *
 from plugins.helpers.common import *
-from biplist import *
-import logging
-import os
-from enum import Enum
 
 __Plugin_Name = "IDEVICEINFO"
 __Plugin_Friendly_Name = "iDevice Info"
@@ -38,44 +36,44 @@ log = logging.getLogger('MAIN.' + __Plugin_Name) # Do not rename or remove this 
 
 
 
-'''Enum to convert country codes'''
-class Country(Enum):
-    Egypt_OR_United_Arab_Emirates_OR_Jordan_OR_Saudi_Arabia = "AB"
-    Ireland_OR_UK = "B"
-    Canada = "C"
-    China = "CH"
-    Czech_Republic = "CZ"
-    Austria_OR_Germany_OR_Netherlands = "DN"
-    Mexico = "E"
-    Estonia = "EE"
-    Luxembourg = "FB"
-    Austria_OR_Liechtenstein_OR_Switzerland = "FD"
-    Greece = "GN"
-    India = "HN"
-    Japan = "J"
-    Norway = "KN"
-    Finland_OR_Sweeded = "KS"
-    Colombia_OR_Ecuador_OR_El_Salvador_OR_Guatamela_OR_Honduras_OR_Peru = "LA"
-    Argentina = "LE"
-    United_States = "LL"
-    Chile_OR_Uruguay_OR_Paraguay = "LZ"
-    Hungary = "MG"
-    Belgium_OR_Luxembourg_OR_France = "NF"
-    Poland = "PL"
-    Portugal = "PO"
-    Philippines = "PP"
-    Romania = "RO"
-    Russia = "RS"
-    Slovakia = "SL"
-    South_Africa = "SO"
-    Italy = "T"
-    Taiwan = "TA"
-    Turkey = "TU"
-    Australia_OR_New_Zealand = "X"
-    Spain = "Y"
-    Singapore = "ZA"
-    Hong_Kong_OR_Macao = "ZP"
-
+'''Dict to convert country codes'''
+Country = {
+    "AB":"Egypt_OR_United_Arab_Emirates_OR_Jordan_OR_Saudi_Arabia",
+    "B" :"Ireland_OR_UK",
+    "C" :"Canada",
+    "CH":"China",
+    "CZ":"Czech_Republic",
+    "DN":"Austria_OR_Germany_OR_Netherlands",
+    "E" :"Mexico",
+    "EE":"Estonia",
+    "FB":"Luxembourg",
+    "FD":"Austria_OR_Liechtenstein_OR_Switzerland",
+    "GN":"Greece",
+    "HN":"India",
+    "J" :"Japan",
+    "KN":"Norway",
+    "KS":"Finland_OR_Sweeded",
+    "LA":"Colombia_OR_Ecuador_OR_El_Salvador_OR_Guatamela_OR_Honduras_OR_Peru",
+    "LE":"Argentina",
+    "LL":"United_States",
+    "LZ":"Chile_OR_Uruguay_OR_Paraguay",
+    "MG":"Hungary",
+    "NF":"Belgium_OR_Luxembourg_OR_France",
+    "PL":"Poland",
+    "PO":"Portugal",
+    "PP":"Philippines",
+    "RO":"Romania",
+    "RS":"Russia",
+    "SL":"Slovakia",
+    "SO":"South_Africa",
+    "T" :"Italy",
+    "TA":"Taiwan",
+    "TU":"Turkey",
+    "X" :"Australia_OR_New_Zealand",
+    "Y" :"Spain",
+    "ZA":"Singapore",
+    "ZP":"Hong_Kong_OR_Macao"
+}
 
 class iDeviceInfo:
     def __init__(self, Username, Device_Class, Serial_Num, Use_Count, Last_Connected, Firmware_Ver_String, Product_Type, ID, IMEI, Build_Version,
@@ -126,11 +124,7 @@ def deviceReader(devicePlist, userDevicePath, user_name, devices):
             parsedCode = rawCode[0:rawCode.find("/")]
         else:
             parsedCode = rawCode
-        try:
-            parsedCode = str(Country(parsedCode))
-            parsedCode= parsedCode[8:]
-        except ValueError: # The country code is not present in our list
-            pass
+        parsedCode = Country.get(parsedCode, parsedCode)
     else:
         parsedCode = rawCode
 
@@ -157,15 +151,12 @@ def deviceReader(devicePlist, userDevicePath, user_name, devices):
 def deviceFinder(userDevicePath, user_name, devices, standalone, mac_info = None):
     '''Opens com.apple.iPod.plist dependant on standalone flag'''
     if standalone:
-        try:
-            devicePlist = readPlist(userDevicePath)
-        except InvalidPlistException as ex:
-            log.exception("Could not read plist: " + userDevicePath + " Exception was: " + str(ex))
+        success, devicePlist, error = CommonFunctions.ReadPlist(userDevicePath)
     else:
         success, devicePlist, error = mac_info.ReadPlist(userDevicePath)
-        if not success:
-            devicePlist = {}
-            log.error('Error reading Info.plist - ' + error)
+    if not success:
+        devicePlist = {}
+        log.error('Error reading Info.plist - ' + error)
 
     allDevices = devicePlist.get('Devices', {})
     for d in allDevices:

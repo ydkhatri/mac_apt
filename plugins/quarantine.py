@@ -7,13 +7,13 @@
 
 '''
 
-from biplist import *
+import logging
+import sqlite3
+
+from plugins.helpers.bookmark import *
 from plugins.helpers.common import CommonFunctions
 from plugins.helpers.macinfo import *
 from plugins.helpers.writer import *
-from plugins.helpers.bookmark import *
-import logging
-import sqlite3
 
 __Plugin_Name = "QUARANTINE"
 __Plugin_Friendly_Name = "Quarantine"
@@ -209,11 +209,11 @@ def Plugin_Start_Standalone(input_files_list, output_params):
     for input_path in input_files_list:
         log.debug("Input file passed was: " + input_path)
         if input_path.endswith('.LastGKReject'):
-            try:
-                plist = readPlist(input_path)
+            success, plist, error = CommonFunctions.ReadPlist(input_path)
+            if success:
                 ReadLastGKRejectPlist(plist)
-            except (NotBinaryPlistException, InvalidPlistException, OSError) as ex:
-                log.exception('Failed to read file: {}'.format(input_path))
+            else:
+                log.error('Failed to read file: {}. {}'.format(input_path, error))
         elif input_path.endswith('QuarantineEventsV2'):
             quarantined = []
             db = OpenDb(input_path)

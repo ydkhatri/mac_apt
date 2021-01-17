@@ -8,11 +8,12 @@
 '''
 
 import ast
-import biplist
 import logging
+import nska_deserialize as nd
 import os
-import random
+import plistlib
 import pytsk3
+import random
 import shutil
 import stat
 import string
@@ -26,7 +27,6 @@ from io import BytesIO
 from uuid import UUID
 from plugins.helpers.apfs_reader import *
 from plugins.helpers.darwin_path_generator import GetDarwinPath, GetDarwinPath2
-from plugins.helpers.deserializer import process_nsa_plist
 from plugins.helpers.hfs_alt import HFSVolume
 from plugins.helpers.common import *
 from plugins.helpers.structs import *
@@ -500,62 +500,21 @@ class MacInfo:
             log.info("Failed to export '" + artifact_path + "' to '" + export_path + "'")
         return False
 
-    def DeserializeNsKeyedPlist(self, plist_file):
-        '''Returns a deserialized version of an NSKeyedArchive plist'''
-        deserialised_plist = process_nsa_plist('', plist_file)
-        return deserialised_plist
-
     def ReadPlist(self, path, deserialize=False):
-        '''Safely open and read a plist; returns tuple (True/False, plist/None, "error_message")'''
+        '''Safely open and read a plist; returns tuple (True/False, plist/None, "error_message")
+            If deserialize=True, returns a deserialized version of an NSKeyedArchive plist. 
+        '''
         log.debug("Trying to open plist file : " + path)
         error = ''
+        plist = None
         try:
             f = self.Open(path)
             if f != None:
-                try:
-                    log.debug("Trying to read plist file : " + path)
-                    plist = biplist.readPlist(f)
-                    if deserialize:
-                        try:
-                            f.seek(0)
-                            plist = self.DeserializeNsKeyedPlist(f)
-                            f.close()
-                            return (True, plist, '')
-                        except Exception as ex:
-                            f.close()
-                            error = 'Could not read deserialized plist: ' + path + " Error was : " + str(ex)  
-                    else:
-                        f.close()
-                        return (True, plist, '')
-                except biplist.InvalidPlistException as ex:
-                    try:
-                        # Perhaps this is manually edited or incorrectly formatted by a non-Apple utility  
-                        # that has left whitespaces at the start of file before <?xml tag
-                        # Or it's a bigSur (11.0) plist with hex integers
-                        # This is assuming XML format!
-                        f.seek(0)
-                        data = f.read().decode('utf8', 'ignore')
-                        f.close()
-                        data = CommonFunctions.replace_all_hex_int_with_int(data) # Fix for BigSur plists with hex ints
-                        data = data.lstrip(" \r\n\t").encode('utf8', 'backslashreplace')
-                        if deserialize:
-                            try:
-                                temp_file = BytesIO(data)
-                                plist = self.DeserializeNsKeyedPlist(temp_file)
-                                temp_file.close()
-                                return (True, plist, '')
-                            except Exception as ex:
-                                error = 'Could not read deserialized plist: ' + path + " Error was : " + str(ex)
-                        else:
-                            plist = biplist.readPlistFromString(data)                        
-                            return (True, plist, '')
-                    except (biplist.InvalidPlistException, biplist.NotBinaryPlistException, ValueError) as ex:
-                        error = 'Could not read plist: ' + path + " Error was : " + str(ex)
-                except OSError as ex:
-                    error = 'OSError while reading plist: ' + path + " Error was : " + str(ex)
+                log.debug("Trying to read plist file : " + path)
+                return CommonFunctions.ReadPlist(f)
             else:
                 error = 'Failed to open file'
-        except Exception as ex:
+        except OSError as ex:
             error = 'Exception from ReadPlist, trying to open file. Exception=' + str(ex)
         return (False, None, error)
 
@@ -882,24 +841,26 @@ class MacInfo:
                     target_user._source = folder_path
 
     def _ReadPasswordPolicyData(self, password_policy_data, target_user):
-        try:
-            plist2 = biplist.readPlistFromString(password_policy_data[0])
+        f = BytesIO(password_policy_data[0])
+        success, plist2, error = CommonFunctions.ReadPlist(f)
+        if success:
             target_user.failed_login_count = plist2.get('failedLoginCount', 0)
             target_user.failed_login_timestamp = plist2.get('failedLoginTimestamp', None)
             target_user.last_login_timestamp = plist2.get('lastLoginTimestamp', None)
             target_user.password_last_set_time = plist2.get('passwordLastSetTime', None)
-        except (biplist.InvalidPlistException, biplist.NotBinaryPlistException):
-            log.exception('Error reading password_policy_data embedded plist')
+        else:
+            log.exception(f'Error reading password_policy_data embedded plist for user {target_user}')
 
     def _ReadAccountPolicyData(self, account_policy_data, target_user):
-        try:
-            plist2 = biplist.readPlistFromString(account_policy_data[0])
+        f = BytesIO(account_policy_data[0])
+        success, plist2, error = CommonFunctions.ReadPlist(f)
+        if success:
             target_user.creation_time = CommonFunctions.ReadUnixTime(plist2.get('creationTime', None))
             target_user.failed_login_count = plist2.get('failedLoginCount', 0)
             target_user.failed_login_timestamp = CommonFunctions.ReadUnixTime(plist2.get('failedLoginTimestamp', None))
             target_user.password_last_set_time = CommonFunctions.ReadUnixTime(plist2.get('passwordLastSetTime', None))
-        except (biplist.InvalidPlistException, biplist.NotBinaryPlistException):
-            log.exception('Error reading password_policy_data embedded plist')     
+        else:
+            log.exception(f'Error reading password_policy_data embedded plist for user {target_user}')     
 
     def _GetUserInfo(self):
         '''Populates user info from plists under: /private/var/db/dslocal/nodes/Default/users/'''
@@ -913,8 +874,8 @@ class MacInfo:
                     f = self.Open(user_plist_path)
                     if f!= None:
                         self.ExportFile(user_plist_path, 'USERS', '', False)
-                        try:
-                            plist = biplist.readPlist(f)
+                        success, plist, error = CommonFunctions.ReadPlist(f)
+                        if success:
                             home_dir = self.GetArrayFirstElement(plist.get('home', ''))
                             if home_dir != '':
                                 #log.info('{} :  {}'.format(plist_meta['name'], home_dir))
@@ -944,8 +905,8 @@ class MacInfo:
                                         self._ReadAccountPolicyData(account_policy_data, target_user)
                             else:
                                 log.error('Did not find \'home\' in ' + plist_meta['name'])
-                        except (biplist.InvalidPlistException, biplist.NotBinaryPlistException):
-                            log.exception("biplist failed to read plist " + user_plist_path)
+                        else:
+                            log.error("failed to read plist " + user_plist_path + " Error was : " + error)
                             self._CheckFileContents(f)
                         f.close()
                 except (OSError, KeyError, ValueError, IndexError, TypeError):
@@ -989,8 +950,8 @@ class MacInfo:
             log.debug("Trying to get system version from /System/Library/CoreServices/SystemVersion.plist")
             f = self.Open('/System/Library/CoreServices/SystemVersion.plist')
             if f != None:
-                try:
-                    plist = biplist.readPlist(f)
+                success, plist, error = CommonFunctions.ReadPlist(f)
+                if success:
                     self.os_version = plist.get('ProductVersion', '')
                     self.os_build = plist.get('ProductBuildVersion', '')
                     if self.os_version != '':
@@ -1015,8 +976,8 @@ class MacInfo:
                     log.info ('macOS version detected is: {} ({}) Build={}'.format(self.os_friendly_name, self.os_version, self.os_build))
                     f.close()
                     return True
-                except (biplist.InvalidPlistException, biplist.NotBinaryPlistException) as ex:
-                    log.error ("Could not get ProductVersion from plist. Is it a valid xml plist? Error=" + str(ex))
+                else:
+                    log.error("Could not get ProductVersion from plist. Is it a valid xml plist? Error=" + error)
                 f.close()
             else:
                 log.error("Could not open plist to get system version info!")
@@ -1079,16 +1040,19 @@ class ApfsMacInfo(MacInfo):
                 else:
                     plist_path = uuid_folders[0] +  "/var/db/CryptoUserInfo.plist"
                     if preboot_vol.DoesFileExist(plist_path):
-                        plist_raw_data = preboot_vol.open(plist_path).readAll()
-                        plist_data = biplist.readPlistFromString(plist_raw_data)
-                        decryption_key = decryptor.EncryptedVol(vol, plist_data, self.password).decryption_key
-                        if decryption_key is None:
-                            log.error(f"No decryption key found. Did you enter the right password? Volume '{vol.volume_name}' cannot be decrypted!")
+                        plist_f = preboot_vol.open(plist_path)
+                        success, plist, error = CommonFunctions.ReadPlist(plist_f)
+                        if success:
+                            decryption_key = decryptor.EncryptedVol(vol, plist_data, self.password).decryption_key
+                            if decryption_key is None:
+                                log.error(f"No decryption key found. Did you enter the right password? Volume '{vol.volume_name}' cannot be decrypted!")
+                            else:
+                                log.debug(f"Starting decryption of filesystem, VEK={decryption_key.hex().upper()}")
+                                vol.encryption_key = decryption_key
+                                apfs_parser = ApfsFileSystemParser(vol, self.apfs_db)
+                                apfs_parser.read_volume_records()
                         else:
-                            log.debug(f"Starting decryption of filesystem, VEK={decryption_key.hex().upper()}")
-                            vol.encryption_key = decryption_key
-                            apfs_parser = ApfsFileSystemParser(vol, self.apfs_db)
-                            apfs_parser.read_volume_records()
+                            log.error(f"Failed to read {plist_path}. Error was : {error}")
             else:
                 apfs_parser = ApfsFileSystemParser(vol, self.apfs_db)
                 apfs_parser.read_volume_records()
@@ -1753,16 +1717,16 @@ class MountedIosInfo(MountedMacInfo):
             log.debug("Trying to get system version from /System/Library/CoreServices/SystemVersion.plist")
             f = self.Open('/System/Library/CoreServices/SystemVersion.plist')
             if f != None:
-                try:
-                    plist = biplist.readPlist(f)
+                success, plist, error = CommonFunctions.ReadPlist(f)
+                if success:
                     self.os_version = plist.get('ProductVersion', '')
                     self.os_build = plist.get('ProductBuildVersion', '')
                     self.os_friendly_name = plist.get('ProductName', '')
                     log.info ('iOS version detected is: {} ({}) Build={}'.format(self.os_friendly_name, self.os_version, self.os_build))
                     f.close()
                     return True
-                except (biplist.InvalidPlistException, biplist.NotBinaryPlistException) as ex:
-                    log.error ("Could not get ProductVersion from plist. Is it a valid xml plist? Error=" + str(ex))
+                else:
+                    log.error("Could not get ProductVersion from plist. Is it a valid xml plist? Error=" + error)
                 f.close()
             else:
                 log.error("Could not open plist to get system version info!")

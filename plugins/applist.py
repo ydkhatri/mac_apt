@@ -12,8 +12,7 @@
 '''
 
 import logging
-from biplist import *
-from plugins.helpers.deserializer import process_nsa_plist
+import nska_deserialize as nd
 from plugins.helpers.macinfo import *
 from plugins.helpers.writer import *
 
@@ -85,7 +84,7 @@ def Plugin_Start(mac_info):
             mac_info.ExportFile(source_path, __Plugin_Name, user_name + "_", False)
             f = mac_info.Open(source_path)
             if f != None:
-                deserialized_plist = process_nsa_plist(source_path, f)
+                deserialized_plist = nd.deserialize_plist(f)
                 if deserialized_plist:
                     parse_appList_plist(deserialized_plist, apps, user_name, source_path)
             else:
@@ -99,9 +98,12 @@ def Plugin_Start(mac_info):
 def read_appList_plist_file(input_file, apps):
     try:
         with open(input_file, 'rb') as f:
-            deserialized_plist = process_nsa_plist(input_file, f)
+            deserialized_plist = nd.deserialize_plist(f)
             parse_appList_plist(deserialized_plist, apps, '', input_file)
-    except (InvalidPlistException, ValueError, KeyError, IndexError, OSError):
+    except (nd.DeserializeError, nd.biplist.NotBinaryPlistException, 
+            nd.biplist.InvalidPlistException,plistlib.InvalidFileException,
+            nd.ccl_bplist.BplistError, TypeError, 
+            OverflowError, ValueError, KeyError, IndexError, OSError):
         log.exception("Could not open/process plist")
 
 def Plugin_Start_Standalone(input_files_list, output_params):

@@ -21,8 +21,7 @@ import sqlite3
 import struct
 import zlib
 
-from biplist import *
-
+from io import BytesIO
 from plugins.helpers.common import CommonFunctions
 from plugins.helpers.macinfo import *
 from plugins.helpers.writer import *
@@ -97,15 +96,16 @@ def PrintAll(notes, output_params):
 
 def ReadAttPathFromPlist(plist_blob):
     '''For NotesV2, read plist and get path'''
-    try:
-        plist = readPlistFromString(plist_blob)
+    f = BytesIO(plist_blob)
+    success, plist, error = CommonFunctions.ReadPlist(f)
+    if success:
         try:
             path = plist['$objects'][2]
             return path
         except (KeyError, IndexError):
             log.exception('Could not fetch attachment path from plist')
-    except (InvalidPlistException, OSError) as e:
-        log.error ("Invalid plist in table." + str(e) )
+    else:
+        log.error("Invalid plist in table. " + error)
     return ''
 
 def GetUncompressedData(compressed):

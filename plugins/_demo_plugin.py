@@ -18,7 +18,6 @@ from plugins.helpers.macinfo import *
 from plugins.helpers.writer import *
 
 import logging
-import biplist
 
 __Plugin_Name = "DEMOPLUGIN1" # Cannot have spaces, and must be all caps!
 __Plugin_Friendly_Name = "Demo Plugin 1"

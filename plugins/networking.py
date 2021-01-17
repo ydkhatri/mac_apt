@@ -7,16 +7,14 @@
    
 '''
 
-
+import binascii
+import logging
 import os
 import re
-from plugins.helpers.macinfo import *
-from plugins.helpers.writer import *
-import logging
-import biplist
-import binascii
 import sys
 
+from plugins.helpers.macinfo import *
+from plugins.helpers.writer import *
 
 __Plugin_Name = "NETWORKING"
 __Plugin_Friendly_Name = "Networking"

@@ -4,13 +4,14 @@
 from __future__ import unicode_literals
 
 import binascii
+import biplist
 import lz4.block
 import ipaddress
+import plistlib
 import re
 import struct
+import sys
 from uuid import UUID
-
-import biplist
 
 import plugins.helpers.UnifiedLog.data_format as data_format
 import plugins.helpers.UnifiedLog.dsc_file as dsc_file
@@ -1174,7 +1175,10 @@ class TraceV3(data_format.BinaryDataFormat):
                     data = buffer[pos + pos2 : pos + pos2 + data_len]
                     if data_type == 1: # plist  # serialized NS/CF object [Apple]
                         try:
-                            plist = biplist.readPlistFromString(data)
+                            if sys.version_info >= (3, 9):
+                                plist = plistlib.loads(data)
+                            else:
+                                plist = biplist.readPlistFromString(data)
                             log_msg = str(plist)
                         except:
                             logger.exception('Problem reading plist from log @ 0x{:X} ct={}'.format(log_file_pos, ct))

@@ -8,19 +8,17 @@
 '''
 
 import os
-import biplist
 import sys
 import logging
-import struct
+import nska_deserialize as nd
+import plistlib
 import plugins.helpers.ccl_bplist as ccl_bplist
+import struct
 
-from biplist import *
 from enum import IntEnum
 from binascii import unhexlify
 from plugins.helpers.macinfo import *
-from plugins.helpers.plist_deserializer import *
 from plugins.helpers.writer import *
-
 
 __Plugin_Name = "RECENTITEMS"
 __Plugin_Friendly_Name = "Recently accessed Servers, Documents, Hosts, Volumes & Applications"
@@ -375,8 +373,8 @@ def ParseRecentFile(input_file):
         except (OSError) as ex:
             log.exception('Failed to open file: {}'.format(input_file))
     elif basename.endswith('.plist'):
-        try:
-            plist = readPlist(input_file)
+        success, plist, error = CommonFunctions.ReadPlist(input_path)
+        if success:
             if input_file.endswith('.GlobalPreferences.plist'):
                 ReadGlobalPrefPlist(plist, recent_items, input_file)
             elif input_file.endswith('com.apple.finder.plist'):
@@ -385,8 +383,8 @@ def ParseRecentFile(input_file):
                 ReadSidebarListsPlist(plist, recent_items, input_file)
             else:
                 ReadRecentPlist(plist, recent_items, input_file)
-        except (OSError, InvalidPlistException):
-            log.exception ("Could not open plist {}".format(input_file))
+        else:
+            log.error("Could not open/read plist {}. {}".format(input_file, error))
     elif basename == 'known_hosts':
         try:
             with open(input_file, 'rb') as f:
@@ -601,7 +599,7 @@ def ReadRecentPlist(plist, recent_items, source='', user=''):
 def ReadSFL2Plist(file_handle, recent_items, source, user=''):
     basename = os.path.basename(source).lower()
     try:
-        plist = DeserializeNSKeyedArchive(file_handle)
+        plist = nd.deserialize_plist(file_handle)
         for item in plist['items']:
             name = item.get('Name', '')
             uuid = item.get('uuid', '')
@@ -622,7 +620,8 @@ def ReadSFL2Plist(file_handle, recent_items, source, user=''):
                         ri.ReadBookmark(data)
                 else:
                     ri.ReadBookmark(data)
-    except(KeyError, ValueError, ccl_bplist.BplistError):
+    except(KeyError, nd.DeserializeError, nd.biplist.NotBinaryPlistException, nd.biplist.InvalidPlistException,
+            plistlib.InvalidFileException,nd.ccl_bplist.BplistError, ValueError, TypeError, OSError, OverflowError):
         log.exception('Error reading SFL2 plist')
 
 def ReadSFLPlist(file_handle, recent_items, source, user=''):

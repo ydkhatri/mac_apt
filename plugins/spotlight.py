@@ -13,7 +13,6 @@ import struct
 from plugins.helpers import spotlight_parser as spotlight_parser
 from plugins.helpers.spotlight_filter import create_views_for_ios_db
 
-from biplist import *
 from plugins.helpers.macinfo import *
 from plugins.helpers.writer import *
 

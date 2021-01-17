@@ -9,19 +9,16 @@
 
 import io
 import os
-import biplist
-import sys
 import logging
-import struct
+import nska_deserialize as nd
 import plugins.helpers.ccl_bplist as ccl_bplist
+import struct
+import sys
 
-from biplist import *
 from enum import IntEnum
 from plugins.helpers.common import CommonFunctions
-from plugins.helpers.deserializer import process_nsa_plist
 from plugins.helpers.macinfo import *
 from plugins.helpers.writer import *
-
 
 __Plugin_Name = "SAFARI"
 __Plugin_Friendly_Name = "Internet history, downloaded file information, cookies and more from Safari caches"
@@ -212,11 +209,12 @@ def ReadCloudTabsDb(conn, safari_items, source_path, user):
                     if system_fields:
                         serialized_plist_file_obj = io.BytesIO(system_fields)
                         try:
-                            deserialized_plist = process_nsa_plist('', serialized_plist_file_obj)
+                            deserialized_plist = nd.deserialize_plist(serialized_plist_file_obj)
                             created = GetItemFromCloudDbPlist(deserialized_plist, 'RecordCtime')
                             modified = GetItemFromCloudDbPlist(deserialized_plist, 'RecordMtime')
-                        except (biplist.NotBinaryPlistException, biplist.InvalidPlistException, 
-                                ccl_bplist.BplistError, ValueError, TypeError, OSError, OverflowError) as ex:
+                        except (nd.DeserializeError, nd.biplist.NotBinaryPlistException, 
+                                nd.biplist.InvalidPlistException, plistlib.InvalidFileException,
+                                nd.ccl_bplist.BplistError, ValueError, TypeError, OSError, OverflowError) as ex:
                             log.exception('plist deserialization error')
                              
                     si = SafariItem(SafariItemType.CLOUDTAB, row['url'], row['title'], created,
@@ -245,8 +243,9 @@ def ReadBrowserStateDb(conn, safari_items, source_path, user):
                     safari_items.append(si)
                     plist_data = row['session_data']
                     if plist_data and len(plist_data) > 10:
-                        try:
-                            plist = biplist.readPlistFromString(plist_data[4:])
+                        f = io.BytesIO(plist_data[4:])
+                        success, plist, error = CommonFunctions.ReadPlist(f)
+                        if success:
                             history = plist.get('SessionHistory', None)
                             if history:
                                 #current_session = history.get('SessionHistoryCurrentIndex', 0)
@@ -259,8 +258,8 @@ def ReadBrowserStateDb(conn, safari_items, source_path, user):
                                     si = SafariItem(SafariItemType.TABHISTORY, url, title, '', 
                                                     f'Tab UUID={row["uuid"]} index={index}', user, source_path)
                                     safari_items.append(si)
-                        except (biplist.InvalidPlistException, TypeError, ValueError) as ex:
-                            log.error(f'Failed to read plist for tab {row["uuid"]}, {row["id"]}')
+                        else:
+                            log.error(f'Failed to read plist for tab {row["uuid"]}, {row["id"]}. {error}')
                      
                 except sqlite3.Error as ex:
                     log.exception ("Error while fetching row data")

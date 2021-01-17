@@ -9,15 +9,15 @@
 
 import codecs
 import sqlite3
-import sys
-import os
-import biplist
-from biplist import *
 import logging
+import os
+import sys
 import uuid
+
+from io import BytesIO
+from plugins.helpers.common import *
 from plugins.helpers.macinfo import *
 from plugins.helpers.writer import *
-from plugins.helpers.common import *
 
 __Plugin_Name = "NOTIFICATIONS" # Cannot have spaces, and must be all caps!
 __Plugin_Friendly_Name = "Notifications"
@@ -142,8 +142,8 @@ def Parse_ver_17_Db(conn, inputPath, user, timezone, screentime_strings_dict):
                 title    = ''
                 subtitle = ''
                 message  = ''
-                try:
-                    plist = readPlistFromString(row['data'])
+                success, plist, error = CommonFunctions.ReadPlist(BytesIO(row['data']))
+                if success:
                     try:
                         req = plist['req']
                         app = plist.get('app', '')
@@ -157,8 +157,8 @@ def Parse_ver_17_Db(conn, inputPath, user, timezone, screentime_strings_dict):
                     try:
                         log.debug('Unknown field orig = {}'.format(plist['orig']))
                     except (KeyError, ValueError): pass
-                except InvalidPlistException as e:
-                    log.error ("Invalid plist in table." + str(e) )
+                else:
+                    log.error("Invalid plist in table." + error)
 
                 notifications.append([user, CommonFunctions.ReadMacAbsoluteTime(row['delivered_date']) , 
                                         row['presented'], row['app'], '', GetText(row['uuid']), 
@@ -187,8 +187,8 @@ def ParseDb(conn, inputPath, user, timezone, screentime_strings_dict):
                 title    = ''
                 subtitle = ''
                 message  = ''
-                try:
-                    plist = readPlistFromString(row['dataPlist'])
+                success, plist, error = CommonFunctions.ReadPlist(BytesIO(row['dataPlist']))
+                if success:
                     title_index = 2 # by default
                     subtitle_index = -1 # mostly absent!
                     text_index = 3 # by default
@@ -210,8 +210,8 @@ def ParseDb(conn, inputPath, user, timezone, screentime_strings_dict):
                     try:
                         message = RemoveTabsNewLines(plist['$objects'][text_index])
                     except KeyError: pass
-                except (InvalidPlistException, ValueError) as e:
-                    log.error ("Invalid plist in table." + str(e) )
+                else:
+                    log.error("Invalid plist in table." + error)
 
                 notifications.append([user, CommonFunctions.ReadMacAbsoluteTime(row['time_utc']) , 
                                     row['shown'], row['bundle'], row['appPath'], GetText(row['uuid']), 

@@ -11,7 +11,6 @@ import os
 import logging
 import struct
 
-from biplist import *
 from plugins.helpers.common import CommonFunctions
 from plugins.helpers.macinfo import *
 from plugins.helpers.writer import *
@@ -61,11 +60,11 @@ def PrintAll(accounts, output_params, source_path):
     WriteList("internet account information", "InternetAccounts", account_items, account_info, output_params, source_path)
     
 def ParseAccountFile(input_file, accounts):
-    try:
-        plist = readPlist(input_file)
+    success, plist, error = CommonFunctions.ReadPlist(input_file)
+    if success:
         ReadMobileMeAccountPlist(plist, accounts, input_file)
-    except InvalidPlistException as e:
-        log.error ("Could not open plist, error was : " + str(e) )
+    else:
+        log.error("Could not open plist, error was : " + error)
 
 def ReadMobileMeAccountPlist(plist, accounts, source='', user=''):
     user_accounts = plist.get('Accounts', None)
