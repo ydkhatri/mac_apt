@@ -167,7 +167,7 @@ class CommonFunctions:
     def open_sqlite_db_readonly(path):
         '''Opens an sqlite db in read-only mode, so original db (and -wal/journal are intact)'''
         path = os.path.abspath(path)
-        if path.find('\\'): # windows path
+        if path.find('\\') >= 0: # windows path
             if path.startswith('\\\\?\\UNC\\'): # UNC long path
                 path = "%5C%5C%3F%5C" + path[4:]
             elif path.startswith('\\\\?\\'):    # normal long path
