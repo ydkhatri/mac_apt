@@ -424,23 +424,18 @@ class ApfsFileSystemParser:
         self.RecurseReadTree(self.volume.root_block_num, root_block, my_root, False, self.volume.root_tree_oid, 0, 0)
         log.debug(RenderTree(my_root))
         inode_tree = self.create_obj_id_tree(my_root)
-        block_nums = {node for node in anytree.PreOrderIter(inode_tree, filter_=lambda n: n.is_leaf==True)} # TODO:Need to add error checking for block_number
+        log.debug(RenderTree(inode_tree))
+
+        # Create a set of all block numbers that are present in the inode_tree
+        nodes_with_block_nums = {node for node in anytree.PreOrderIter(inode_tree, filter_=lambda n: n.is_leaf==True)}
         
         if self.volume.is_sealed: # Extents are stored in fext_tree
-            self.read_selected_volume_blocks(block_nums, noheader=self.volume.is_sealed) # Read all entries
+            self.read_selected_volume_blocks(nodes_with_block_nums, noheader=self.volume.is_sealed) # Read all entries (extents absent here)
             extents_tree = self.container.read_block(self.volume.fext_tree_oid)
+            # In fext tree, OID=Obj_id (CNID) and XID=extent offset. For now, just use old approach to read entire tree
             self.read_entries(self.volume.fext_tree_oid, extents_tree, False, self.volume.root_tree_oid, 0, 0)
         else:
-            self.read_selected_volume_blocks(block_nums, noheader=self.volume.is_sealed) # Read all entries
-        #TODO - read fext_tree for sealed vol extents. Here in tree, OID=Obj_id (CNID) and XID=extent offset
-        #TODO - only read objects that are within the inode_tree, instead of later validation,
-        #       For fext_tree too, only read items which belong to inode_tree, don't forget the attrib ones (different cnids)..
-
-        """         self.read_entries(self.volume.root_block_num, root_block, False, self.volume.root_tree_oid, 0, 0)
-
-        if self.volume.is_sealed: # Extents are stored in fext_tree
-            extents_tree = self.container.read_block(self.volume.fext_tree_oid)
-            self.read_entries(self.volume.fext_tree_oid, extents_tree, False, self.volume.root_tree_oid, 0, 0) """
+            self.read_selected_volume_blocks(nodes_with_block_nums, noheader=self.volume.is_sealed) # Read all entries
 
         # write remaining records to db
         if self.num_records_read_batch > 0:
@@ -454,14 +449,16 @@ class ApfsFileSystemParser:
 
     def read_selected_volume_blocks(self, nodes, noheader):
         for node in nodes:
-            #TODO: check encrypted block reading
-            block = self.volume.read_vol_block(node.block_number, self.encryption_key, noheader=noheader)
-            self.read_entries_for_block(node.block_number, block, noheader, node.name, node.xid)
+            block_number = node.block_number
+            if block_number != 0:
+                block = self.volume.read_vol_block(block_number, self.encryption_key, noheader=noheader)
+                self.read_entries_for_block(block_number, block, noheader, node.name, node.xid)
+            else:
+                log.error('Block number was 0 (invalid), cannot read!')
 
     def create_obj_id_tree(self, my_root):
         p_root = Node('x')
         self.RecurseAddNodes(my_root, p_root, self.volume.root_tree_oid)
-        log.debug(RenderTree(p_root))
         return p_root
 
     def RecurseAddNodes(self, my_root, x_root, oid):
@@ -479,7 +476,11 @@ class ApfsFileSystemParser:
                     self.RecurseAddNodes(my_root, x, x.name)
                 else: # level=1 OR for very small volumes, level=0 (we populated for BTNODE_ROOT & BTNODE_LEAF)
                     x_nodes = self.find_nodes_in_tree(x.name, my_root, True)
-                    x.block_number = x_nodes[0].name #[x_node.name for x_node in x_nodes]
+                    try:
+                        x.block_number = x_nodes[0].name #[x_node.name for x_node in x_nodes]
+                    except IndexError:
+                        x.block_number = 0
+                        log.error(f'Could not retrieve blocknumber for OID={x.name}')
                     x.xid = node.xid
 
     def RecurseReadTree(self, block_num, block, my_root, no_blk_hdr_force_subtype_fstree=False, root_oid=0, sealed_oid=0, sealed_xid=0, debug_parent_list=list()):
@@ -560,7 +561,7 @@ class ApfsFileSystemParser:
         return found_nodes
 
     def validate_db_entries(self):
-        '''Set the Valid flag in db tables for the entries with highest XID (others are stale/old)'''
+        '''Set the Valid flag in db tables for the entries with highest XID (others are stale/old). Unused now'''
         query = "UPDATE \"{0}_Attributes\" SET Valid=1 "\
                 "WHERE DB_ID IN (SELECT DB_ID FROM ("\
                 " SELECT DB_ID, MAX(XID) FROM \"{0}_Attributes\" "\
@@ -1674,10 +1675,6 @@ class ApfsContainer:
             self.volumes.append(volume)
             if volume.role == 16: # Preboot
                 self.preboot_volume = volume
-            elif volume.role == 8: # VM
-                self.vm_volume = volume
-            elif volume.role == 1: # SYSTEM
-                self.system_volume = volume
             index += 1
 
     def close(self):
