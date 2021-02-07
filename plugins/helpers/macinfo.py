@@ -1043,7 +1043,7 @@ class ApfsMacInfo(MacInfo):
                         plist_f = preboot_vol.open(plist_path)
                         success, plist, error = CommonFunctions.ReadPlist(plist_f)
                         if success:
-                            decryption_key = decryptor.EncryptedVol(vol, plist_data, self.password).decryption_key
+                            decryption_key = decryptor.EncryptedVol(vol, plist, self.password).decryption_key
                             if decryption_key is None:
                                 log.error(f"No decryption key found. Did you enter the right password? Volume '{vol.volume_name}' cannot be decrypted!")
                             else:
