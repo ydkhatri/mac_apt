@@ -74,21 +74,23 @@ def Plugin_Start(mac_info):
     '''Main Entry point function for plugin'''
     sudo_logs = []
     source_path = '/private/var/db/sudo/ts'
+    if mac_info.IsValidFolderPath(source_path):
+        files_list = mac_info.ListItemsInFolder(source_path, EntryType.FILES, include_dates=False)
+        for file_entry in files_list:
+            if file_entry['size'] > 0:
+                file_path = source_path + '/' + file_entry['name']
+                mac_info.ExportFile(file_path, __Plugin_Name, '', False)
+                f = mac_info.Open(file_path)
+                if f:
+                    ProcessTsFile(f, file_entry['name'], file_path, file_entry['size'], sudo_logs)
+                    f.close()
 
-    files_list = mac_info.ListItemsInFolder(source_path, EntryType.FILES, include_dates=False)
-    for file_entry in files_list:
-        if file_entry['size'] > 0:
-            file_path = source_path + '/' + file_entry['name']
-            mac_info.ExportFile(file_path, __Plugin_Name, '', False)
-            f = mac_info.Open(file_path)
-            if f:
-                ProcessTsFile(f, file_entry['name'], file_path, file_entry['size'], sudo_logs)
-                f.close()
-
-    if len(sudo_logs) > 0:
-        PrintAll(sudo_logs, mac_info.output_params, '')
+        if len(sudo_logs) > 0:
+            PrintAll(sudo_logs, mac_info.output_params, '')
+        else:
+            log.info('No sudo timestamp files were found!')
     else:
-        log.info('No sudo timestamp files were found!')
+        log.info(f'{source_path} does not exist.')
 
 
 def Plugin_Start_Standalone(input_files_list, output_params):
