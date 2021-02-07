@@ -272,7 +272,7 @@ class CommonFunctions:
                     else:
                         plist = biplist.readPlist(f)
                     return (True, plist, '')
-                except (biplist.InvalidPlistException, plistlib.InvalidFileException) as ex:
+                except (biplist.InvalidPlistException, plistlib.InvalidFileException, ValueError) as ex:
                     try:
                         # Check for XML format
                         f.seek(0)
