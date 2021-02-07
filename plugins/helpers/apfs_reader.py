@@ -152,7 +152,6 @@ class ApfsFileSystemParser:
         self.dir_records = []
         self.attr_records = []
         self.dir_stats_records = []
-        self.tree_recs_records = []
         
         self.hardlink_info = collections.OrderedDict([('OID',DataType.INTEGER),('XID',DataType.INTEGER),('CNID',DataType.INTEGER), ('Parent_CNID',DataType.INTEGER), 
                                                     ('Name',DataType.TEXT),('Valid',DataType.INTEGER),('DBG_BLK_PATH',DataType.TEXT),('DB_ID',(DataType.INTEGER,"PRIMARY KEY AUTOINCREMENT"))])
@@ -180,8 +179,6 @@ class ApfsFileSystemParser:
         self.paths_info = collections.OrderedDict([('CNID',DataType.INTEGER),('Path',DataType.TEXT)])
         self.dir_stats_info = collections.OrderedDict([('OID',DataType.INTEGER),('XID',DataType.INTEGER),('CNID',DataType.INTEGER),('NumChildren',DataType.INTEGER),('TotalSize',DataType.INTEGER),('Counter',DataType.INTEGER),
                                                     ('Valid',DataType.INTEGER),('DBG_BLK_PATH',DataType.TEXT),('DB_ID',(DataType.INTEGER,"PRIMARY KEY AUTOINCREMENT"))]) 
-        self.tree_recs_info = collections.OrderedDict([('OID',DataType.INTEGER),('XID',DataType.INTEGER),('CNID',DataType.INTEGER),('item_kind',DataType.INTEGER),('Tree_Level',DataType.INTEGER),('Location_OID',DataType.INTEGER),
-                                                    ('Valid',DataType.INTEGER),('DBG_BLK_PATH',DataType.TEXT),('DB_ID',(DataType.INTEGER,"PRIMARY KEY AUTOINCREMENT"))])
         ## Optimization for search
         self.blocks_read = set()
 
@@ -234,7 +231,6 @@ class ApfsFileSystemParser:
         inodes_columns = ','.join([x for x in self.inode_info][:-1])
         dir_entries_columns = ','.join([x for x in self.dir_info][:-1])
         dir_stats_columns = ','.join([x for x in self.dir_stats_info][:-1])
-        #tree_recs_columns = ','.join([x for x in self.tree_recs][:-1])
         compressed_files_columns = ','.join([x for x in self.compressed_info][:-1])
         paths_columns = ','.join([x for x in self.paths_info])
 
@@ -292,8 +288,6 @@ class ApfsFileSystemParser:
             self.dbo.WriteRows(self.dir_records, self.name + '_DirEntries')
         if self.dir_stats_records:
             self.dbo.WriteRows(self.dir_stats_records, self.name + '_DirStats')
-        if self.tree_recs_records:
-            self.dbo.WriteRows(self.tree_recs_records, self.name + '_TreeRecs')
 
     def create_tables(self):
         self.dbo.CreateTable(self.hardlink_info, self.name + '_Hardlinks')
@@ -302,7 +296,6 @@ class ApfsFileSystemParser:
         self.dbo.CreateTable(self.inode_info, self.name + '_Inodes')
         self.dbo.CreateTable(self.dir_info, self.name + '_DirEntries')
         self.dbo.CreateTable(self.dir_stats_info, self.name + '_DirStats')
-        self.dbo.CreateTable(self.tree_recs_info, self.name + '_TreeRecs')
         self.dbo.CreateTable(self.compressed_info, self.name + '_Compressed_Files')
         self.dbo.CreateTable(self.paths_info, self.name + '_Paths')
 
@@ -313,7 +306,6 @@ class ApfsFileSystemParser:
         self.dir_records = []
         self.attr_records = []
         self.dir_stats_records = []
-        self.tree_recs_records = []
     
     def create_indexes(self):
         '''Create indexes on cnid and path in database'''
@@ -761,25 +753,12 @@ class ApfsFileSystemParser:
         if no_blk_hdr_force_subtype_fs_tree or \
            (block.header.subtype == self.container_type_files) or \
            ((block.header.subtype == self.container_type_fext_tree) and (block.body.level == 0)): # fstree objects or ext objects
-            if block.body.level > 0: # not leaf nodes
-                debug_parent_str = ','.join(debug_parent_list) + ','  # Disabled, this is only for debugging
-                # If reading non-leaf nodes, then if Sealed Volume, oid (pointer) += sealed_oid, as oid here is relative (referred as child_oid)
-                if no_blk_hdr_force_subtype_fs_tree:
-                    for _, entry in enumerate(block.body.entries):
-                        debug_parent_listing_str = debug_parent_str + f'_{_}' # Disabled, this is only for debugging
-                        self.tree_recs_records.append([oid, xid, entry.key.obj_id, entry.key.type_entry, block.body.level, entry.data + root_oid, 0, debug_parent_listing_str, None])
-                else:
-                    for _, entry in enumerate(block.body.entries):
-                        debug_parent_listing_str = debug_parent_str + f'_{_}' # Disabled, this is only for debugging
-                        self.tree_recs_records.append([oid, xid, entry.key.obj_id, entry.key.type_entry, block.body.level, entry.data, 0, debug_parent_listing_str, None])
-                debug_parent_list.pop()
-                return
             # For sealed vol
             if block.header.subtype == self.container_type_fext_tree:
-                debug_parent_str = ','.join(debug_parent_list) + ','  # Disabled, this is only for debugging
+                #debug_parent_str = ','.join(debug_parent_list) + ','  # Disabled, this is only for debugging
                 entry_type = self.sealed_extent
                 for _, entry in enumerate(block.body.entries):
-                    debug_parent_listing_str = debug_parent_str + f'_{_}' # Disabled, this is only for debugging
+                    debug_parent_listing_str = '' #debug_parent_str + f'_{_}' # Disabled, this is only for debugging
                     self.AddToStats(entry_type)
                     self.num_records_read_batch += 1
                     self.num_records_read_total += 1
@@ -792,7 +771,7 @@ class ApfsFileSystemParser:
                 debug_parent_list.pop()
                 return
             # For Others
-            debug_parent_str = ','.join(debug_parent_list) + ','  # Disabled, this is only for debugging
+            #debug_parent_str = ','.join(debug_parent_list) + ','  # Disabled, this is only for debugging
             if no_blk_hdr_force_subtype_fs_tree:
                 oid = sealed_oid
                 xid = sealed_xid
@@ -800,7 +779,7 @@ class ApfsFileSystemParser:
                 if type(entry.data) == self.ptr_type: #apfs.Apfs.PointerRecord: 
                     log.debug('Skipping pointer record..')
                     continue
-                debug_parent_listing_str = debug_parent_str + f'_{_}' # Disabled, this is only for debugging
+                debug_parent_listing_str = '' # debug_parent_str + f'_{_}' # Disabled, this is only for debugging
                 entry_type = entry.key.type_entry
                 self.AddToStats(entry_type)
                 if entry_type == self.file_ext_type: #container.apfs.EntryType.file_extent.value:
