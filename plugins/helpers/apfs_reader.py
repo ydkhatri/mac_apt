@@ -9,11 +9,13 @@
 
 from kaitaistruct import __version__ as ks_version, KaitaiStream, BytesIO
 import plugins.helpers.apfs as apfs
+import anytree
 import collections
 import logging
 import liblzfse
 import struct
 import zlib
+from anytree import Node, RenderTree
 from uuid import UUID
 from plugins.helpers.writer import DataType
 from plugins.helpers.common import *
@@ -150,33 +152,36 @@ class ApfsFileSystemParser:
         self.dir_records = []
         self.attr_records = []
         self.dir_stats_records = []
+        self.tree_recs_records = []
         
-        self.hardlink_info = collections.OrderedDict([('XID',DataType.INTEGER),('CNID',DataType.INTEGER), ('Parent_CNID',DataType.INTEGER), 
+        self.hardlink_info = collections.OrderedDict([('OID',DataType.INTEGER),('XID',DataType.INTEGER),('CNID',DataType.INTEGER), ('Parent_CNID',DataType.INTEGER), 
                                                     ('Name',DataType.TEXT),('Valid',DataType.INTEGER),('DBG_BLK_PATH',DataType.TEXT),('DB_ID',(DataType.INTEGER,"PRIMARY KEY AUTOINCREMENT"))])
-        self.extent_info = collections.OrderedDict([('XID',DataType.INTEGER),('CNID',DataType.INTEGER), ('Offset',DataType.INTEGER), 
+        self.extent_info = collections.OrderedDict([('OID',DataType.INTEGER),('XID',DataType.INTEGER),('CNID',DataType.INTEGER), ('Offset',DataType.INTEGER), 
                                                     ('Size',DataType.INTEGER), ('Block_Num',DataType.INTEGER),
                                                     ('Valid',DataType.INTEGER),('DBG_BLK_PATH',DataType.TEXT),('DB_ID',(DataType.INTEGER,"PRIMARY KEY AUTOINCREMENT"))])
-        self.attr_info = collections.OrderedDict([('XID',DataType.INTEGER),('CNID',DataType.INTEGER), ('Name',DataType.TEXT),
+        self.attr_info = collections.OrderedDict([('OID',DataType.INTEGER),('XID',DataType.INTEGER),('CNID',DataType.INTEGER), ('Name',DataType.TEXT),
                                                     ('Flags',DataType.INTEGER),('Data',DataType.BLOB),
                                                     ('Logical_uncompressed_size',DataType.INTEGER),('Extent_CNID',DataType.INTEGER),
                                                     ('Valid',DataType.INTEGER),('DBG_BLK_PATH',DataType.TEXT),('DB_ID',(DataType.INTEGER,"PRIMARY KEY AUTOINCREMENT"))])
-        self.inode_info = collections.OrderedDict([('XID',DataType.INTEGER),('CNID',DataType.INTEGER), ('Parent_CNID',DataType.INTEGER),
+        self.inode_info = collections.OrderedDict([('OID',DataType.INTEGER),('XID',DataType.INTEGER),('CNID',DataType.INTEGER), ('Parent_CNID',DataType.INTEGER),
                                                      ('Extent_CNID',DataType.INTEGER), ('Name',DataType.TEXT), ('Created',DataType.INTEGER), 
                                                      ('Modified',DataType.INTEGER), ('Changed',DataType.INTEGER), ('Accessed',DataType.INTEGER), 
                                                      ('Flags',DataType.INTEGER), ('Links_or_Children',DataType.INTEGER), ('BSD_flags',DataType.INTEGER), 
                                                      ('UID',DataType.INTEGER), ('GID',DataType.INTEGER), ('Mode',DataType.INTEGER), 
                                                      ('Logical_Size',DataType.INTEGER), ('Physical_Size',DataType.INTEGER),('UncompressedSize',DataType.INTEGER),
                                                      ('Valid',DataType.INTEGER),('DBG_BLK_PATH',DataType.TEXT),('DB_ID',(DataType.INTEGER,"PRIMARY KEY AUTOINCREMENT"))])
-        self.dir_info = collections.OrderedDict([('XID',DataType.INTEGER),('CNID',DataType.INTEGER), ('Parent_CNID',DataType.INTEGER),
+        self.dir_info = collections.OrderedDict([('OID',DataType.INTEGER),('XID',DataType.INTEGER),('CNID',DataType.INTEGER), ('Parent_CNID',DataType.INTEGER),
                                                     ('DateAdded',DataType.INTEGER),('ItemType',DataType.INTEGER), 
                                                     ('Name',DataType.TEXT),('Valid',DataType.INTEGER),('DBG_BLK_PATH',DataType.TEXT),('DB_ID',(DataType.INTEGER,"PRIMARY KEY AUTOINCREMENT"))])
-        self.compressed_info = collections.OrderedDict([('XID',DataType.INTEGER),('CNID',DataType.INTEGER),('Data',DataType.BLOB),('Uncompressed_size',DataType.INTEGER),
+        self.compressed_info = collections.OrderedDict([('OID',DataType.INTEGER),('XID',DataType.INTEGER),('CNID',DataType.INTEGER),('Data',DataType.BLOB),('Uncompressed_size',DataType.INTEGER),
                                                     ('Extent_CNID',DataType.INTEGER),('fpmc_in_extent',DataType.INTEGER),('Extent_Logical_Size',DataType.INTEGER),
                                                     ('Valid',DataType.INTEGER),('DB_ID',(DataType.INTEGER,"PRIMARY KEY AUTOINCREMENT"))]) 
                                                     #TODO: Remove fpmc_in_extent, this can be detected by checking Data == None
         self.paths_info = collections.OrderedDict([('CNID',DataType.INTEGER),('Path',DataType.TEXT)])
-        self.dir_stats_info = collections.OrderedDict([('XID',DataType.INTEGER),('CNID',DataType.INTEGER),('NumChildren',DataType.INTEGER),('TotalSize',DataType.INTEGER),('Counter',DataType.INTEGER),
+        self.dir_stats_info = collections.OrderedDict([('OID',DataType.INTEGER),('XID',DataType.INTEGER),('CNID',DataType.INTEGER),('NumChildren',DataType.INTEGER),('TotalSize',DataType.INTEGER),('Counter',DataType.INTEGER),
                                                     ('Valid',DataType.INTEGER),('DBG_BLK_PATH',DataType.TEXT),('DB_ID',(DataType.INTEGER,"PRIMARY KEY AUTOINCREMENT"))]) 
+        self.tree_recs_info = collections.OrderedDict([('OID',DataType.INTEGER),('XID',DataType.INTEGER),('CNID',DataType.INTEGER),('item_kind',DataType.INTEGER),('Tree_Level',DataType.INTEGER),('Location_OID',DataType.INTEGER),
+                                                    ('Valid',DataType.INTEGER),('DBG_BLK_PATH',DataType.TEXT),('DB_ID',(DataType.INTEGER,"PRIMARY KEY AUTOINCREMENT"))])
         ## Optimization for search
         self.blocks_read = set()
 
@@ -229,6 +234,7 @@ class ApfsFileSystemParser:
         inodes_columns = ','.join([x for x in self.inode_info][:-1])
         dir_entries_columns = ','.join([x for x in self.dir_info][:-1])
         dir_stats_columns = ','.join([x for x in self.dir_stats_info][:-1])
+        #tree_recs_columns = ','.join([x for x in self.tree_recs][:-1])
         compressed_files_columns = ','.join([x for x in self.compressed_info][:-1])
         paths_columns = ','.join([x for x in self.paths_info])
 
@@ -286,6 +292,8 @@ class ApfsFileSystemParser:
             self.dbo.WriteRows(self.dir_records, self.name + '_DirEntries')
         if self.dir_stats_records:
             self.dbo.WriteRows(self.dir_stats_records, self.name + '_DirStats')
+        if self.tree_recs_records:
+            self.dbo.WriteRows(self.tree_recs_records, self.name + '_TreeRecs')
 
     def create_tables(self):
         self.dbo.CreateTable(self.hardlink_info, self.name + '_Hardlinks')
@@ -294,6 +302,7 @@ class ApfsFileSystemParser:
         self.dbo.CreateTable(self.inode_info, self.name + '_Inodes')
         self.dbo.CreateTable(self.dir_info, self.name + '_DirEntries')
         self.dbo.CreateTable(self.dir_stats_info, self.name + '_DirStats')
+        self.dbo.CreateTable(self.tree_recs_info, self.name + '_TreeRecs')
         self.dbo.CreateTable(self.compressed_info, self.name + '_Compressed_Files')
         self.dbo.CreateTable(self.paths_info, self.name + '_Paths')
 
@@ -304,6 +313,7 @@ class ApfsFileSystemParser:
         self.dir_records = []
         self.attr_records = []
         self.dir_stats_records = []
+        self.tree_recs_records = []
     
     def create_indexes(self):
         '''Create indexes on cnid and path in database'''
@@ -344,7 +354,7 @@ class ApfsFileSystemParser:
         # available for listing, without having to go and read an extent.
 
         #Copy all decmpfs-Type2 attributes to table, where no resource forks <-- Nothing to do, just copy
-        type2_no_rsrc_query = "INSERT INTO \"{0}_Compressed_Files\" select b.XID, b.CNID, b.Data, "\
+        type2_no_rsrc_query = "INSERT INTO \"{0}_Compressed_Files\" select b.OID, b.XID, b.CNID, b.Data, "\
                 " b.logical_uncompressed_size, 0 as extent_cnid, 0 as fpmc_in_extent, 0 as Extent_Logical_Size, 0, NULL"\
                 " from \"{0}_Attributes\" as b "\
                 " left join \"{0}_Attributes\" as a on (a.cnid = b.cnid and a.Name = 'com.apple.ResourceFork' and a.XID=b.XID) "\
@@ -354,7 +364,7 @@ class ApfsFileSystemParser:
 
         #Add all decmpfs-Type2 attributes where resource forks exist, rsrc's extent_cnid is used
         type2_rsrc_query = "INSERT INTO \"{0}_Compressed_Files\" "\
-                "SELECT b.XID, b.CNID, b.Data, b.logical_uncompressed_size, a.extent_cnid as extent_cnid, 0 as fpmc_in_extent, "\
+                "SELECT b.OID, b.XID, b.CNID, b.Data, b.logical_uncompressed_size, a.extent_cnid as extent_cnid, 0 as fpmc_in_extent, "\
                 " a.logical_uncompressed_size as Extent_Logical_Size, 0, NULL FROM \"{0}_Attributes\" as b "\
                 " left join \"{0}_Attributes\" as a on (a.cnid = b.cnid and a.Name = 'com.apple.ResourceFork' and a.XID=b.XID)"\
                 " where b.Name='com.apple.decmpfs' and (b.Flags & 2)=2 and a.cnid is not null".format(self.name)
@@ -367,7 +377,7 @@ class ApfsFileSystemParser:
         #                       0        1                  2                                  3
         type1_query = "select b.XID, b.CNID, b.extent_cnid as decmpfs_ext_cnid,  b.logical_uncompressed_size, "\
                 "e.Block_Num as decmpfs_first_ext_Block_num, a.extent_cnid as rsrc_extent_cnid , er.Block_Num as rsrc_first_extent_Block_num, "\
-                " a.logical_uncompressed_size as Extent_Logical_Size from \"{0}_Attributes\" as b "\
+                " a.logical_uncompressed_size as Extent_Logical_Size, b.OID from \"{0}_Attributes\" as b "\
                 " left join \"{0}_Attributes\" as a on (a.cnid = b.cnid and a.Name = 'com.apple.ResourceFork' and a.XID=b.XID) "\
                 " left join \"{0}_Extents\" as e on e.cnid=b.extent_cnid "\
                 " left join \"{0}_Extents\" as er on er.cnid=a.extent_cnid "\
@@ -393,12 +403,12 @@ class ApfsFileSystemParser:
                 if row[5] == None:
                     # No resource fork , data must be in decmpfs_extent
                     if logical_size <= 32: # If < 32 bytes, write to db, else leave in extent
-                        to_write.append([row[0], row[1], decmpfs, uncompressed_size, 0, 0, 0, 0, None])
+                        to_write.append([row[8], row[0], row[1], decmpfs, uncompressed_size, 0, 0, 0, 0, None])
                     else:
-                        to_write.append([row[0], row[1], None, uncompressed_size, row[2], 1, logical_size, 0, None])
+                        to_write.append([row[8], row[0], row[1], None, uncompressed_size, row[2], 1, logical_size, 0, None])
                 else: 
                     # resource fork has data
-                    to_write.append([row[0], row[1], decmpfs, uncompressed_size, row[5], 0, row[7], 0, None])
+                    to_write.append([row[8], row[0], row[1], decmpfs, uncompressed_size, row[5], 0, row[7], 0, None])
             if to_write:
                 try:
                     self.dbo.WriteRows(to_write, self.name + '_Compressed_Files')
@@ -418,11 +428,27 @@ class ApfsFileSystemParser:
             self.volume.SetupDecryption(self.encryption_key)
 
         root_block = self.container.read_block(self.volume.root_block_num)
-        self.read_entries(self.volume.root_block_num, root_block, False, 0)
+        my_root = Node('my_root', oid=root_block.header.oid, xid=root_block.header.xid)
+        self.RecurseReadTree(self.volume.root_block_num, root_block, my_root, False, self.volume.root_tree_oid, 0, 0)
+        log.debug(RenderTree(my_root))
+        inode_tree = self.create_obj_id_tree(my_root)
+        block_nums = {node for node in anytree.PreOrderIter(inode_tree, filter_=lambda n: n.is_leaf==True)} # TODO:Need to add error checking for block_number
+        
+        if self.volume.is_sealed: # Extents are stored in fext_tree
+            self.read_selected_volume_blocks(block_nums, noheader=self.volume.is_sealed) # Read all entries
+            extents_tree = self.container.read_block(self.volume.fext_tree_oid)
+            self.read_entries(self.volume.fext_tree_oid, extents_tree, False, self.volume.root_tree_oid, 0, 0)
+        else:
+            self.read_selected_volume_blocks(block_nums, noheader=self.volume.is_sealed) # Read all entries
+        #TODO - read fext_tree for sealed vol extents. Here in tree, OID=Obj_id (CNID) and XID=extent offset
+        #TODO - only read objects that are within the inode_tree, instead of later validation,
+        #       For fext_tree too, only read items which belong to inode_tree, don't forget the attrib ones (different cnids)..
+
+        """         self.read_entries(self.volume.root_block_num, root_block, False, self.volume.root_tree_oid, 0, 0)
 
         if self.volume.is_sealed: # Extents are stored in fext_tree
             extents_tree = self.container.read_block(self.volume.fext_tree_oid)
-            self.read_entries(self.volume.fext_tree_oid, extents_tree, False, 0)
+            self.read_entries(self.volume.fext_tree_oid, extents_tree, False, self.volume.root_tree_oid, 0, 0) """
 
         # write remaining records to db
         if self.num_records_read_batch > 0:
@@ -433,6 +459,113 @@ class ApfsFileSystemParser:
 
         self.create_other_tables_and_indexes()
         self.PrintStats()
+
+    def read_selected_volume_blocks(self, nodes, noheader):
+        for node in nodes:
+            #TODO: check encrypted block reading
+            block = self.volume.read_vol_block(node.block_number, self.encryption_key, noheader=noheader)
+            self.read_entries_for_block(node.block_number, block, noheader, node.name, node.xid)
+
+    def create_obj_id_tree(self, my_root):
+        p_root = Node('x')
+        self.RecurseAddNodes(my_root, p_root, self.volume.root_tree_oid)
+        log.debug(RenderTree(p_root))
+        return p_root
+
+    def RecurseAddNodes(self, my_root, x_root, oid):
+        nodes = self.find_nodes_in_tree(oid, my_root, True)
+        if not nodes:
+            log.error(f'ERROR, no nodes found for oid={oid}!')
+        if len(nodes) > 1:
+            log.debug(f'node count was {len(nodes)} for oid={oid}')
+        for node in nodes:
+            n = node.payload
+            level = n.name
+            for obj_node in n.children:
+                x = Node(obj_node.name, parent=x_root, obj_id=obj_node.obj_id, kind=obj_node.kind)
+                if level > 1:
+                    self.RecurseAddNodes(my_root, x, x.name)
+                else: # level=1 OR for very small volumes, level=0 (we populated for BTNODE_ROOT & BTNODE_LEAF)
+                    x_nodes = self.find_nodes_in_tree(x.name, my_root, True)
+                    x.block_number = x_nodes[0].name #[x_node.name for x_node in x_nodes]
+                    x.xid = node.xid
+
+    def RecurseReadTree(self, block_num, block, my_root, no_blk_hdr_force_subtype_fstree=False, root_oid=0, sealed_oid=0, sealed_xid=0, debug_parent_list=list()):
+        debug_parent_list.append(str(block_num))
+        if (block.header.subtype == self.container_type_location): # omap
+            for _, entry in enumerate(block.body.entries):
+                try:
+                    oid = entry.key.oid
+                    xid = entry.key.xid
+                    if block.body.level > 0:
+                        new_block_num = entry.data.pointer
+                        newblock = self.container.read_block(new_block_num) # Pointers are not encrypted blocks
+                        force_fstree = no_blk_hdr_force_subtype_fstree
+                    else:
+                        new_block_num = entry.data.paddr.value
+                        if entry.data.flags & 1: #OMAP_VAL_DELETED
+                            log.debug("Deleted OMAP block found, block={}".format(new_block_num))
+
+                        noheader_is_set = ((entry.data.flags & 8) == 8) # OMAP_VAL_NOHEADER
+                        force_fstree = noheader_is_set
+                        if ( entry.data.flags & 4 ) == 4: # ENCRYPTED FLAG
+                            newblock = self.volume.read_vol_block(new_block_num, self.encryption_key, noheader=noheader_is_set)
+                        else:
+                            newblock = self.volume.read_vol_block(new_block_num, noheader=noheader_is_set)
+
+                    debug_parent_list.append(f'_{_}')
+                    my_node = Node(new_block_num, parent=my_root, oid=oid, xid=xid)
+                    self.RecurseReadTree(new_block_num, newblock, my_node, force_fstree, root_oid, oid, xid, debug_parent_list)
+                    debug_parent_list.pop()
+                except (ValueError, EOFError, OSError):
+                    log.exception('Exception trying to read block {}'.format(entry.data.pointer))
+        elif (block.header.subtype == self.container_type_files) or no_blk_hdr_force_subtype_fstree: # fs tree
+            if block.body.level > 0:
+                my_root.payload = Node(block.body.level)
+                for _, entry in enumerate(block.body.entries):
+                    location_oid = entry.data + (root_oid if no_blk_hdr_force_subtype_fstree else 0)
+                    my_node = Node(location_oid, parent=my_root.payload, obj_id=entry.key.obj_id, kind=entry.key.type_entry)
+            elif block.body.node_type == 3: # BTNODE_ROOT & BTNODE_LEAF (and level=0) This is for very small volumes!
+                # We won't parse the entire data here, just parse first entry to get obj_id & kind, then return
+                log.debug("BTNODE_ROOT & BTNODE_LEAF")
+                my_root.payload = Node(block.body.level)
+                entry = block.body.entries[0]
+                my_node = Node(block.header.oid, parent=my_root.payload, obj_id=entry.key.obj_id, kind=entry.key.type_entry)
+
+        debug_parent_list.pop()
+
+    def find_nodes_in_tree(self, oid, root, consider_lesser=False):
+        """Recurse my_root and find leaf nodes that satisfy oid and closest xid.
+           Find leaf nodes matching given oid, they might be in same or lesser oid branches.
+           consider_lesser is used to search all node.oid < oid even if an equal is found
+            Will throw AttributeError if 'oid' attribute is not present on object
+           Returns list of nodes.
+        """
+        last_lesser_node = None
+        equal_nodes = []
+        found_nodes = []
+
+        for node in root.children:
+            if node.oid < oid:
+                last_lesser_node = node
+            elif node.oid == oid:
+                if node.is_leaf:
+                    equal_nodes.append(node)
+                else:
+                    equal_nodes.extend(self.find_nodes_in_tree(oid, node, consider_lesser=False))
+                if not consider_lesser:
+                    last_lesser_node = None
+            else: # greater
+                break
+
+        if last_lesser_node:
+            if last_lesser_node.is_leaf:
+                pass # not found here
+            else:
+                found_nodes.extend(self.find_nodes_in_tree(oid, last_lesser_node, consider_lesser))
+        if equal_nodes:
+            found_nodes.extend(equal_nodes)
+        return found_nodes
 
     def validate_db_entries(self):
         '''Set the Valid flag in db tables for the entries with highest XID (others are stale/old)'''
@@ -479,7 +612,7 @@ class ApfsFileSystemParser:
         '''Populate paths table in db, create compressed_files table and create indexes for faster queries'''
 
         self.populate_compressed_files_table()
-        self.validate_db_entries()
+        #self.validate_db_entries() # Not needed now
         
         insert_query = "INSERT INTO \"{0}_Paths\" SELECT * FROM " \
                         "( WITH RECURSIVE " \
@@ -489,7 +622,7 @@ class ApfsFileSystemParser:
                         "    SELECT under_root.path || '/' || \"{0}_DirEntries\".name, " \
                         "\"{0}_DirEntries\".name, \"{0}_DirEntries\".cnid " \
                         "       FROM \"{0}_DirEntries\" JOIN under_root ON " \
-                        "       \"{0}_DirEntries\".parent_cnid=under_root.cnid WHERE \"{0}_DirEntries\".Valid=1 " \
+                        "       \"{0}_DirEntries\".parent_cnid=under_root.cnid " \
                         "   ORDER BY 1 " \
                         ") SELECT CNID, Path FROM under_root);"
                         
@@ -520,79 +653,63 @@ class ApfsFileSystemParser:
                 cnids_to_remove.extend(all_cnids)
             if cnids_to_remove:
                 cnids_str = ','.join(cnids_to_remove)
+                log.debug("Removing CNIDS: " + cnids_str)
                 for table_type in ('Attributes','Hardlinks','Extents','Inodes','DirEntries','DirStats','Compressed_Files','Paths'):
                     remove_query = 'DELETE FROM "{0}_{1}" WHERE CNID IN ({2})'.format(self.name, table_type, cnids_str)
-                    self.run_query(remove_query, True, table_name=self.name + "_" + table_type)
+                    #self.run_query(remove_query, True, table_name=self.name + "_" + table_type) # REMOVE , temp disabled
         else:
             log.error('Error executing query : Query was {}, Error was {}'.format(query, error))
             
         self.create_indexes()
 
-    def read_entries(self, block_num, block, no_blk_hdr_force_subtype_omap=False, sealed_xid=0, debug_parent_list=list()):
-        '''Read file system entries(inodes) and add to database'''
-        if block_num in self.blocks_read: return # block already processed
-        else: self.blocks_read.add(block_num)
+    def read_entries_for_block(self, block_num, block, no_blk_hdr_force_subtype_fs_tree=False, sealed_oid=0, sealed_xid=0):
+        '''Read file system entries(inodes) from leaf nodes ONLY and add to database. Only pass leaf nodes here'''
+        if no_blk_hdr_force_subtype_fs_tree:
+            oid = sealed_oid
+            xid = sealed_xid
+        else:
+            oid = block.header.oid
+            xid = block.header.xid
         
-        debug_parent_list.append(str(block_num))
-
-        xid = block.header.xid
-
-        if no_blk_hdr_force_subtype_omap or \
-           (block.header.subtype == self.container_type_files) or \
-           ((block.header.subtype == self.container_type_fext_tree) and (block.body.level == 0)):
-            if block.body.level > 0: # not leaf nodes
-                debug_parent_list.pop()
-                return
-            # For sealed vol
-            if block.header.subtype == self.container_type_fext_tree:
-                #debug_parent_str = ','.join(debug_parent_list) + ','  # Disabled, this is only for debugging
-                for _, entry in enumerate(block.body.entries):
-                    debug_parent_listing_str = ''# debug_parent_str + f'_{_}' # Disabled, this is only for debugging
-                    entry_type = self.sealed_extent
-                    self.AddToStats(entry_type)
-                    self.num_records_read_batch += 1
-                    self.num_records_read_total += 1
-                    self.extent_records.append([xid, entry.key.private_id, entry.key.logical_addr, entry.data.size, entry.data.phys_block_num, 0, debug_parent_listing_str, None])
-                if self.num_records_read_batch > 400000:
-                    self.num_records_read_batch = 0
-                    # write to db / file
-                    self.write_records()
-                    self.clear_records() # Clear the data once written
-                debug_parent_list.pop()
-                return
-            # For Others
-            #debug_parent_str = ','.join(debug_parent_list) + ','  # Disabled, this is only for debugging
-            if no_blk_hdr_force_subtype_omap:
+        if block.header.subtype == self.container_type_fext_tree: # For sealed vol
+            entry_type = self.sealed_extent
+            for _, entry in enumerate(block.body.entries):
+                self.AddToStats(entry_type)
+                self.num_records_read_batch += 1
+                self.num_records_read_total += 1
+                self.extent_records.append([oid, xid, entry.key.private_id, entry.key.logical_addr, entry.data.size, entry.data.phys_block_num, 0, '', None])
+        elif (block.header.subtype == self.container_type_files) or no_blk_hdr_force_subtype_fs_tree: # fstree
+            if no_blk_hdr_force_subtype_fs_tree:
+                oid = sealed_oid
                 xid = sealed_xid
             for _, entry in enumerate(block.body.entries):
                 if type(entry.data) == self.ptr_type: #apfs.Apfs.PointerRecord: 
-                    log.debug('Skipping pointer record..')
+                    log.error('Skipping pointer record..Err, should not be here')
                     continue
-                debug_parent_listing_str = ''#debug_parent_str + f'_{_}' # Disabled, this is only for debugging
                 entry_type = entry.key.type_entry
                 self.AddToStats(entry_type)
                 if entry_type == self.file_ext_type: #container.apfs.EntryType.file_extent.value:
                     self.num_records_read_batch += 1
                     self.num_records_read_total += 1
-                    self.extent_records.append([xid, entry.key.obj_id, entry.key.content.offset, entry.data.size, entry.data.phys_block_num, 0, debug_parent_listing_str, None])
+                    self.extent_records.append([oid, xid, entry.key.obj_id, entry.key.content.offset, entry.data.size, entry.data.phys_block_num, 0, '', None])
                 elif entry_type == self.dir_rec_type: #container.apfs.EntryType.dir_rec.value:  
                     self.num_records_read_batch += 1
                     self.num_records_read_total += 1
                     rec = entry.data
-                    self.dir_records.append([xid, rec.node_id, entry.key.obj_id, rec.date_added, rec.type_item.value, entry.key.content.name, 0, debug_parent_listing_str, None])
+                    self.dir_records.append([oid, xid, rec.node_id, entry.key.obj_id, rec.date_added, rec.type_item.value, entry.key.content.name, 0, '', None])
                 elif entry_type == self.inode_type: #container.apfs.EntryType.inode.value:
                     self.num_records_read_batch += 1
                     self.num_records_read_total += 1
                     rec = entry.data
-                    self.inode_records.append([xid, entry.key.obj_id, rec.parent_id, rec.node_id, rec.name, rec.creation_timestamp, rec.modified_timestamp, rec.changed_timestamp, rec.accessed_timestamp, rec.flags, rec.nchildren_or_nlink, rec.bsdflags, rec.owner_id, rec.group_id, rec.mode, rec.logical_size, rec.physical_size, rec.uncompressed_size, 0, debug_parent_listing_str, None])
+                    self.inode_records.append([oid, xid, entry.key.obj_id, rec.parent_id, rec.node_id, rec.name, rec.creation_timestamp, rec.modified_timestamp, rec.changed_timestamp, rec.accessed_timestamp, rec.flags, rec.nchildren_or_nlink, rec.bsdflags, rec.owner_id, rec.group_id, rec.mode, rec.logical_size, rec.physical_size, rec.uncompressed_size, 0, '', None])
                 elif entry_type == self.hard_type: #container.apfs.EntryType.sibling_link.value:
                     self.num_records_read_batch += 1
                     self.num_records_read_total += 1
-                    self.hardlink_records.append([xid, entry.key.obj_id, entry.data.parent_id, entry.data.name, 0, debug_parent_listing_str, None])
+                    self.hardlink_records.append([oid, xid, entry.key.obj_id, entry.data.parent_id, entry.data.name, 0, '', None])
                 elif entry_type == self.dir_stats_type: #container.apfs.EntryType.dir_stats.value:
                     self.num_records_read_batch += 1
                     self.num_records_read_total += 1
-                    self.dir_stats_records.append([xid, entry.data.chained_key, entry.data.num_children, entry.data.total_size, entry.data.gen_count, 0, debug_parent_listing_str, None])
+                    self.dir_stats_records.append([oid, xid, entry.data.chained_key, entry.data.num_children, entry.data.total_size, entry.data.gen_count, 0, '', None])
                 elif entry_type == self.attr_type: #container.apfs.EntryType.xattr.value:
                     self.num_records_read_batch += 1
                     self.num_records_read_total += 1
@@ -608,7 +725,122 @@ class ApfsFileSystemParser:
                         if entry.key.content.name == 'com.apple.decmpfs':
                             #magic, compression_type, uncompressed_size = struct.unpack('<IIQ', decmpfs[1][0:16])
                             logical_size = struct.unpack('<Q', data[8:16])[0] # uncompressed data size
-                    self.attr_records.append([xid, entry.key.obj_id, entry.key.content.name, rec.flags, data, logical_size, rsrc_extent_cnid, 0, debug_parent_listing_str, None])
+                    self.attr_records.append([oid, xid, entry.key.obj_id, entry.key.content.name, rec.flags, data, logical_size, rsrc_extent_cnid, 0, '', None])
+                elif entry_type == 6: # dstream_id
+                    pass # this just has refcnts
+                elif entry_type == 7: #crypto_state
+                    pass
+                elif entry_type in (0xc, 0xd) : # sibling_map, file_info
+                    pass # TODO: Maybe process these later
+                elif entry_type >= 0xe:
+                    log.warning('Unknown entry_type 0x{:X} block_num={}'.format(entry_type, block_num))
+                else:
+                    log.debug('Got entry_type 0x{:X} block_num={}'.format(entry_type, block_num))
+        else:
+            log.warning("unexpected entry type=0x{:X} subtype={} in block {}".format(block.header.type_block.value, repr(block.header.subtype), block_num))
+
+        if self.num_records_read_batch > 400000:
+            self.num_records_read_batch = 0
+            # write to db / file
+            self.write_records()
+            self.clear_records() # Clear the data once written
+
+    def read_entries(self, block_num, block, no_blk_hdr_force_subtype_fs_tree=False, root_oid=0, sealed_oid=0, sealed_xid=0, debug_parent_list=list()):
+        '''Read file system entries(inodes) and add to database'''
+        if block_num in self.blocks_read: return # block already processed
+        else: self.blocks_read.add(block_num)
+        
+        debug_parent_list.append(str(block_num))
+        if no_blk_hdr_force_subtype_fs_tree:
+            oid = sealed_oid
+            xid = sealed_xid
+        else:
+            oid = block.header.oid
+            xid = block.header.xid
+
+        if no_blk_hdr_force_subtype_fs_tree or \
+           (block.header.subtype == self.container_type_files) or \
+           ((block.header.subtype == self.container_type_fext_tree) and (block.body.level == 0)): # fstree objects or ext objects
+            if block.body.level > 0: # not leaf nodes
+                debug_parent_str = ','.join(debug_parent_list) + ','  # Disabled, this is only for debugging
+                # If reading non-leaf nodes, then if Sealed Volume, oid (pointer) += sealed_oid, as oid here is relative (referred as child_oid)
+                if no_blk_hdr_force_subtype_fs_tree:
+                    for _, entry in enumerate(block.body.entries):
+                        debug_parent_listing_str = debug_parent_str + f'_{_}' # Disabled, this is only for debugging
+                        self.tree_recs_records.append([oid, xid, entry.key.obj_id, entry.key.type_entry, block.body.level, entry.data + root_oid, 0, debug_parent_listing_str, None])
+                else:
+                    for _, entry in enumerate(block.body.entries):
+                        debug_parent_listing_str = debug_parent_str + f'_{_}' # Disabled, this is only for debugging
+                        self.tree_recs_records.append([oid, xid, entry.key.obj_id, entry.key.type_entry, block.body.level, entry.data, 0, debug_parent_listing_str, None])
+                debug_parent_list.pop()
+                return
+            # For sealed vol
+            if block.header.subtype == self.container_type_fext_tree:
+                debug_parent_str = ','.join(debug_parent_list) + ','  # Disabled, this is only for debugging
+                entry_type = self.sealed_extent
+                for _, entry in enumerate(block.body.entries):
+                    debug_parent_listing_str = debug_parent_str + f'_{_}' # Disabled, this is only for debugging
+                    self.AddToStats(entry_type)
+                    self.num_records_read_batch += 1
+                    self.num_records_read_total += 1
+                    self.extent_records.append([oid, xid, entry.key.private_id, entry.key.logical_addr, entry.data.size, entry.data.phys_block_num, 0, debug_parent_listing_str, None])
+                if self.num_records_read_batch > 400000:
+                    self.num_records_read_batch = 0
+                    # write to db / file
+                    self.write_records()
+                    self.clear_records() # Clear the data once written
+                debug_parent_list.pop()
+                return
+            # For Others
+            debug_parent_str = ','.join(debug_parent_list) + ','  # Disabled, this is only for debugging
+            if no_blk_hdr_force_subtype_fs_tree:
+                oid = sealed_oid
+                xid = sealed_xid
+            for _, entry in enumerate(block.body.entries):
+                if type(entry.data) == self.ptr_type: #apfs.Apfs.PointerRecord: 
+                    log.debug('Skipping pointer record..')
+                    continue
+                debug_parent_listing_str = debug_parent_str + f'_{_}' # Disabled, this is only for debugging
+                entry_type = entry.key.type_entry
+                self.AddToStats(entry_type)
+                if entry_type == self.file_ext_type: #container.apfs.EntryType.file_extent.value:
+                    self.num_records_read_batch += 1
+                    self.num_records_read_total += 1
+                    self.extent_records.append([oid, xid, entry.key.obj_id, entry.key.content.offset, entry.data.size, entry.data.phys_block_num, 0, debug_parent_listing_str, None])
+                elif entry_type == self.dir_rec_type: #container.apfs.EntryType.dir_rec.value:  
+                    self.num_records_read_batch += 1
+                    self.num_records_read_total += 1
+                    rec = entry.data
+                    self.dir_records.append([oid, xid, rec.node_id, entry.key.obj_id, rec.date_added, rec.type_item.value, entry.key.content.name, 0, debug_parent_listing_str, None])
+                elif entry_type == self.inode_type: #container.apfs.EntryType.inode.value:
+                    self.num_records_read_batch += 1
+                    self.num_records_read_total += 1
+                    rec = entry.data
+                    self.inode_records.append([oid, xid, entry.key.obj_id, rec.parent_id, rec.node_id, rec.name, rec.creation_timestamp, rec.modified_timestamp, rec.changed_timestamp, rec.accessed_timestamp, rec.flags, rec.nchildren_or_nlink, rec.bsdflags, rec.owner_id, rec.group_id, rec.mode, rec.logical_size, rec.physical_size, rec.uncompressed_size, 0, debug_parent_listing_str, None])
+                elif entry_type == self.hard_type: #container.apfs.EntryType.sibling_link.value:
+                    self.num_records_read_batch += 1
+                    self.num_records_read_total += 1
+                    self.hardlink_records.append([oid, xid, entry.key.obj_id, entry.data.parent_id, entry.data.name, 0, debug_parent_listing_str, None])
+                elif entry_type == self.dir_stats_type: #container.apfs.EntryType.dir_stats.value:
+                    self.num_records_read_batch += 1
+                    self.num_records_read_total += 1
+                    self.dir_stats_records.append([oid, xid, entry.data.chained_key, entry.data.num_children, entry.data.total_size, entry.data.gen_count, 0, debug_parent_listing_str, None])
+                elif entry_type == self.attr_type: #container.apfs.EntryType.xattr.value:
+                    self.num_records_read_batch += 1
+                    self.num_records_read_total += 1
+                    rec = entry.data
+                    data = rec.xdata
+                    rsrc_extent_cnid = 0
+                    logical_size = 0
+                    rec_type = rec.flags
+                    if rec_type & 1: # Extent based record
+                        #rsrc_extent_cnid, logical_size, physical_size = struct.unpack('<QQQ', rsrc[1][0:24]) # True for all Type 1
+                        rsrc_extent_cnid, logical_size = struct.unpack('<QQ', data[0:16])
+                    elif rec_type & 2: # BLOB type
+                        if entry.key.content.name == 'com.apple.decmpfs':
+                            #magic, compression_type, uncompressed_size = struct.unpack('<IIQ', decmpfs[1][0:16])
+                            logical_size = struct.unpack('<Q', data[8:16])[0] # uncompressed data size
+                    self.attr_records.append([oid, xid, entry.key.obj_id, entry.key.content.name, rec.flags, data, logical_size, rsrc_extent_cnid, 0, debug_parent_listing_str, None])
                 elif entry_type == 6: # dstream_id
                     pass # this just has refcnts
                 elif entry_type == 7: #crypto_state
@@ -629,7 +861,7 @@ class ApfsFileSystemParser:
                         if not entry.data.pointer in self.blocks_read:
                             newblock = self.container.read_block(entry.data.pointer) # Pointers are not encrypted blocks
                             debug_parent_list.append(f'_{_}')
-                            self.read_entries(entry.data.pointer, newblock, False, 0, debug_parent_list)
+                            self.read_entries(entry.data.pointer, newblock, False, root_oid, 0, 0, debug_parent_list)
                             debug_parent_list.pop()
                     except (ValueError, EOFError, OSError):
                         log.exception('Exception trying to read block {}'.format(entry.data.pointer))
@@ -644,7 +876,7 @@ class ApfsFileSystemParser:
                         else:
                             newblock = self.volume.read_vol_block(entry.data.paddr.value, noheader=noheader_is_set)
                         debug_parent_list.append(f'_{_}')
-                        self.read_entries(entry.data.paddr.value, newblock, noheader_is_set, entry.key.xid, debug_parent_list)
+                        self.read_entries(entry.data.paddr.value, newblock, noheader_is_set, root_oid, entry.key.oid, entry.key.xid, debug_parent_list)
                         debug_parent_list.pop()
                     except (ValueError, EOFError, OSError):
                         log.exception('Exception trying to read block {}'.format(entry.data.paddr.value))
@@ -734,7 +966,7 @@ class ApfsExtendedAttribute:
 class ApfsVolume:
     def __init__(self, apfs_container, name=""):
         self.container = apfs_container
-        self.root_dir_block_id = 0 # unused?
+        self.root_tree_oid = 0
         self.omap_oid = 0
         self.root_block_num = 0
         # volume basic info
@@ -811,7 +1043,7 @@ class ApfsVolume:
         # get volume superblock
         super_block = self.container.read_block(volume_super_block_num)
         self.omap_oid = super_block.body.omap_oid  # mapping omap
-        self.root_dir_block_id = super_block.body.root_tree_oid 
+        self.root_tree_oid = super_block.body.root_tree_oid 
 
         self.volume_name = super_block.body.volume_name
         self.name += '_' + self.volume_name.replace(' ', '_').replace("'", "''") # Replace spaces with underscore and single quotes with doubles, this is for the db
@@ -830,7 +1062,7 @@ class ApfsVolume:
         self.linked_data_uuid = self.ReadUUID(super_block.body.data_uuid)
 
         #log.debug("%s (volume, Mapping-omap: %d, Rootdir-Block_ID: %d)" % (
-        #    super_block.body.volume_name, self.omap_oid, self.root_dir_block_id))
+        #    super_block.body.volume_name, self.omap_oid, self.root_tree_oid))
         log.debug(" -- Volume information:")
         log.debug("  Vol name  = %s" % super_block.body.volume_name)
         log.debug("  Num files = %d" % super_block.body.num_files)
@@ -1463,6 +1695,10 @@ class ApfsContainer:
             self.volumes.append(volume)
             if volume.role == 16: # Preboot
                 self.preboot_volume = volume
+            elif volume.role == 8: # VM
+                self.vm_volume = volume
+            elif volume.role == 1: # SYSTEM
+                self.system_volume = volume
             index += 1
 
     def close(self):
