@@ -30,6 +30,7 @@ import time
 import traceback
 from plugins.helpers.aff4_helper import EvidenceImageStream
 from plugins.helpers.apfs_reader import ApfsContainer, ApfsDbInfo
+from plugins.helpers.apple_sparse_image import AppleSparseImage
 from plugins.helpers.writer import *
 from plugins.helpers.disk_report import *
 from plugin import *
@@ -50,7 +51,7 @@ def IsItemPresentInList(collection, item):
 
 def CheckInputType(input_type):
     input_type = input_type.upper()
-    return input_type in ['AFF4','E01','DD','DMG','VMDK','MOUNTED']
+    return input_type in ['AFF4','E01','DD','DMG','VMDK','MOUNTED','SPARSE']
 
 ######### FOR HANDLING E01 file ###############
 class ewf_Img_Info(pytsk3.Img_Info):
@@ -169,6 +170,34 @@ def GetImgInfoObjectForAff4(path):
     return img_info
 
 ####### End special handling for AFF4 #########
+
+##### FOR HANDLING Apple .sparseimage file ####
+class sparse_Img_Info(pytsk3.Img_Info):
+  def __init__(self, sparse_image):
+    self._sparse_image = sparse_image
+    super(sparse_Img_Info, self).__init__(
+        url="", type=pytsk3.TSK_IMG_TYPE_EXTERNAL)
+
+  def close(self):
+    self._sparse_image.close()
+
+  def read(self, offset, size):
+    return self._sparse_image.read(offset, size)
+
+  #def seek(self, offset):
+  #  pass
+
+  def get_size(self):
+    return self._sparse_image.size
+
+# Call this function instead of pytsk3.Img_Info() for .sparseimage files
+def GetImgInfoObjectForSparse(path):
+    sparse_image = AppleSparseImage()
+    sparse_image.open(path)
+    img_info = sparse_Img_Info(sparse_image)
+    return img_info
+
+#### End special handling for .sparseimage ####
 
 def FindMacOsFiles(mac_info):
     if mac_info.IsValidFilePath('/System/Library/CoreServices/SystemVersion.plist'):
@@ -382,7 +411,7 @@ arg_parser = argparse.ArgumentParser(description='mac_apt is a framework to proc
                                                  f'You are running {__PROGRAMNAME} version {__VERSION}\n\n'\
                                                  'Note: The default output is now sqlite, no need to specify it now',
                                     epilog=plugins_info, formatter_class=argparse.RawTextHelpFormatter)
-arg_parser.add_argument('input_type', help='Specify Input type as either E01, DD, DMG, VMDK, AFF4 or MOUNTED')
+arg_parser.add_argument('input_type', help='Specify Input type as either DD, DMG, E01, VMDK, AFF4, SPARSE or MOUNTED')
 arg_parser.add_argument('input_path', help='Path to macOS image/volume')
 arg_parser.add_argument('-o', '--output_path', help='Path where output files will be created')
 arg_parser.add_argument('-x', '--xlsx', action="store_true", help='Save output in Excel spreadsheet')
@@ -485,6 +514,9 @@ try:
         mac_info = macinfo.MacInfo(output_params)
     elif args.input_type.upper() == 'AFF4':
         img = GetImgInfoObjectForAff4(args.input_path)
+        mac_info = macinfo.MacInfo(output_params)
+    elif args.input_type.upper() == 'SPARSE':
+        img = GetImgInfoObjectForSparse(args.input_path)
         mac_info = macinfo.MacInfo(output_params)
     elif args.input_type.upper() in ('DD', 'DMG'):
         img = pytsk3.Img_Info(args.input_path) # Works for split dd images too! Works for DMG too, if no compression/encryption is used!

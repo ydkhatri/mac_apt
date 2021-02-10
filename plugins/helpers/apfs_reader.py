@@ -349,7 +349,7 @@ class ApfsFileSystemParser:
         type2_no_rsrc_query = "INSERT INTO \"{0}_Compressed_Files\" select b.OID, b.XID, b.CNID, b.Data, "\
                 " b.logical_uncompressed_size, 0 as extent_cnid, 0 as fpmc_in_extent, 0 as Extent_Logical_Size, 0, NULL"\
                 " from \"{0}_Attributes\" as b "\
-                " left join \"{0}_Attributes\" as a on (a.cnid = b.cnid and a.Name = 'com.apple.ResourceFork' and a.XID=b.XID) "\
+                " left join \"{0}_Attributes\" as a on (a.cnid = b.cnid and a.Name = 'com.apple.ResourceFork') "\
                 " where b.Name='com.apple.decmpfs' and (b.Flags & 2)=2 and a.cnid is null".format(self.name)
         if not self.run_query(type2_no_rsrc_query, True):
             return
@@ -358,7 +358,7 @@ class ApfsFileSystemParser:
         type2_rsrc_query = "INSERT INTO \"{0}_Compressed_Files\" "\
                 "SELECT b.OID, b.XID, b.CNID, b.Data, b.logical_uncompressed_size, a.extent_cnid as extent_cnid, 0 as fpmc_in_extent, "\
                 " a.logical_uncompressed_size as Extent_Logical_Size, 0, NULL FROM \"{0}_Attributes\" as b "\
-                " left join \"{0}_Attributes\" as a on (a.cnid = b.cnid and a.Name = 'com.apple.ResourceFork' and a.XID=b.XID)"\
+                " left join \"{0}_Attributes\" as a on (a.cnid = b.cnid and a.Name = 'com.apple.ResourceFork') "\
                 " where b.Name='com.apple.decmpfs' and (b.Flags & 2)=2 and a.cnid is not null".format(self.name)
         if not self.run_query(type2_rsrc_query, True):
             return
@@ -370,7 +370,7 @@ class ApfsFileSystemParser:
         type1_query = "select b.XID, b.CNID, b.extent_cnid as decmpfs_ext_cnid,  b.logical_uncompressed_size, "\
                 "e.Block_Num as decmpfs_first_ext_Block_num, a.extent_cnid as rsrc_extent_cnid , er.Block_Num as rsrc_first_extent_Block_num, "\
                 " a.logical_uncompressed_size as Extent_Logical_Size, b.OID from \"{0}_Attributes\" as b "\
-                " left join \"{0}_Attributes\" as a on (a.cnid = b.cnid and a.Name = 'com.apple.ResourceFork' and a.XID=b.XID) "\
+                " left join \"{0}_Attributes\" as a on (a.cnid = b.cnid and a.Name = 'com.apple.ResourceFork') "\
                 " left join \"{0}_Extents\" as e on e.cnid=b.extent_cnid "\
                 " left join \"{0}_Extents\" as er on er.cnid=a.extent_cnid "\
                 " where b.Name='com.apple.decmpfs' and (b.Flags & 1)=1"\
@@ -426,16 +426,13 @@ class ApfsFileSystemParser:
         inode_tree = self.create_obj_id_tree(my_root)
         log.debug(RenderTree(inode_tree))
 
-        # Create a set of all block numbers that are present in the inode_tree
-        nodes_with_block_nums = {node for node in anytree.PreOrderIter(inode_tree, filter_=lambda n: n.is_leaf==True)}
-        
         if self.volume.is_sealed: # Extents are stored in fext_tree
-            self.read_selected_volume_blocks(nodes_with_block_nums, noheader=self.volume.is_sealed) # Read all entries (extents absent here)
+            self.read_inode_volume_blocks(inode_tree, noheader=self.volume.is_sealed) # Read all entries (extents absent here)
             extents_tree = self.container.read_block(self.volume.fext_tree_oid)
             # In fext tree, OID=Obj_id (CNID) and XID=extent offset. For now, just use old approach to read entire tree
             self.read_entries(self.volume.fext_tree_oid, extents_tree, False, self.volume.root_tree_oid, 0, 0)
         else:
-            self.read_selected_volume_blocks(nodes_with_block_nums, noheader=self.volume.is_sealed) # Read all entries
+            self.read_inode_volume_blocks(inode_tree, noheader=self.volume.is_sealed) # Read all entries
 
         # write remaining records to db
         if self.num_records_read_batch > 0:
@@ -447,10 +444,16 @@ class ApfsFileSystemParser:
         self.create_other_tables_and_indexes()
         self.PrintStats()
 
-    def read_selected_volume_blocks(self, nodes, noheader):
-        for node in nodes:
+    def read_inode_volume_blocks(self, inode_tree, noheader):
+        processed_blocks = set()
+        for node in anytree.PreOrderIter(inode_tree, filter_=lambda n: n.is_leaf==True):  
             block_number = node.block_number
             if block_number != 0:
+                if block_number in processed_blocks:
+                    log.warning(f'This block ({block_number}) was already processed! Skipping it.')
+                    continue
+                else:
+                    processed_blocks.add(block_number)
                 block = self.volume.read_vol_block(block_number, self.encryption_key, noheader=noheader)
                 self.read_entries_for_block(block_number, block, noheader, node.name, node.xid)
             else:
@@ -465,9 +468,16 @@ class ApfsFileSystemParser:
         nodes = self.find_nodes_in_tree(oid, my_root, True)
         if not nodes:
             log.error(f'ERROR, no nodes found for oid={oid}!')
+            return
         if len(nodes) > 1:
-            log.debug(f'node count was {len(nodes)} for oid={oid}')
+            xids = [node.xid for node in nodes]
+            highest_xid = max(xids)
+            #log.debug(f'node count was {len(nodes)} for oid={oid}, xids={xids}, using {highest_xid}')
+        else: # == 1
+            highest_xid = nodes[0].xid
         for node in nodes:
+            if node.xid != highest_xid:
+                continue
             n = node.payload
             level = n.name
             for obj_node in n.children:
@@ -476,12 +486,18 @@ class ApfsFileSystemParser:
                     self.RecurseAddNodes(my_root, x, x.name)
                 else: # level=1 OR for very small volumes, level=0 (we populated for BTNODE_ROOT & BTNODE_LEAF)
                     x_nodes = self.find_nodes_in_tree(x.name, my_root, True)
-                    try:
-                        x.block_number = x_nodes[0].name #[x_node.name for x_node in x_nodes]
-                    except IndexError:
+                    if x_nodes:
+                        x_xids = [x_node.xid for x_node in x_nodes]
+                        largest_xid = max(x_xids)
+                        for x_node in x_nodes:
+                            if x_node.xid == largest_xid:
+                                x.block_number = x_node.name
+                                x.xid = x_node.xid
+                                break
+                    else:
                         x.block_number = 0
                         log.error(f'Could not retrieve blocknumber for OID={x.name}')
-                    x.xid = node.xid
+                        x.xid = node.xid
 
     def RecurseReadTree(self, block_num, block, my_root, no_blk_hdr_force_subtype_fstree=False, root_oid=0, sealed_oid=0, sealed_xid=0, debug_parent_list=list()):
         debug_parent_list.append(str(block_num))
@@ -522,8 +538,11 @@ class ApfsFileSystemParser:
                 # We won't parse the entire data here, just parse first entry to get obj_id & kind, then return
                 log.debug("BTNODE_ROOT & BTNODE_LEAF")
                 my_root.payload = Node(block.body.level)
-                entry = block.body.entries[0]
-                my_node = Node(block.header.oid, parent=my_root.payload, obj_id=entry.key.obj_id, kind=entry.key.type_entry)
+                if block.body.entry_count:
+                    entry = block.body.entries[0]
+                    my_node = Node(block.header.oid, parent=my_root.payload, obj_id=entry.key.obj_id, kind=entry.key.type_entry)
+                else:
+                    log.warning(f"Found BTNODE_ROOT & BTNODE_LEAF with 0 entries at block {block_num}, oid={block.header.oid}")
 
         debug_parent_list.pop()
 
@@ -623,36 +642,6 @@ class ApfsFileSystemParser:
         self.run_query(query, True)
         self.run_query("UPDATE \"{}_Paths\" SET path = '/' where cnid = 2;".format(self.name), True)
 
-        # Sometimes, there are still stale entries which can only be identified after paths are computed, so let's delete them too
-        # These are old XIDs that might still be there. These exist because of our imperfect method of reading APFS
-
-        cnids_query = """SELECT max(d.XID), c.cnid as good_cnid, group_concat(c.cnid) as all_cnids, c.path FROM 
-                (SELECT a.cnid, a.path FROM "{0}_Paths" a 
-                INNER JOIN (
-                    select Path from "{0}_Paths" 
-                    group by path having count(path) > 1
-                    order by path
-                    ) b ON a.Path=b.Path 
-                order by a.path, a.cnid) c 
-                LEFT JOIN "{0}_DirEntries" d on c.cnid=d.cnid
-                group by c.path"""
-        success, cursor, error = self.dbo.RunQuery(cnids_query.format(self.name), writing=False, return_named_objects=True)
-        cnids_to_remove = []
-        if success:
-            for row in cursor:
-                good_cnid = str(row['good_cnid'])
-                all_cnids = row['all_cnids'].split(',')
-                all_cnids.remove(good_cnid)
-                cnids_to_remove.extend(all_cnids)
-            if cnids_to_remove:
-                cnids_str = ','.join(cnids_to_remove)
-                log.debug("Removing CNIDS: " + cnids_str)
-                for table_type in ('Attributes','Hardlinks','Extents','Inodes','DirEntries','DirStats','Compressed_Files','Paths'):
-                    remove_query = 'DELETE FROM "{0}_{1}" WHERE CNID IN ({2})'.format(self.name, table_type, cnids_str)
-                    #self.run_query(remove_query, True, table_name=self.name + "_" + table_type) # REMOVE , temp disabled
-        else:
-            log.error('Error executing query : Query was {}, Error was {}'.format(query, error))
-            
         self.create_indexes()
 
     def read_entries_for_block(self, block_num, block, no_blk_hdr_force_subtype_fs_tree=False, sealed_oid=0, sealed_xid=0):
@@ -742,7 +731,7 @@ class ApfsFileSystemParser:
         '''Read file system entries(inodes) and add to database'''
         if block_num in self.blocks_read: return # block already processed
         else: self.blocks_read.add(block_num)
-        
+        #log.debug('Reading block {}'.format('/'.join(debug_parent_list)))
         debug_parent_list.append(str(block_num))
         if no_blk_hdr_force_subtype_fs_tree:
             oid = sealed_oid
@@ -2308,7 +2297,7 @@ class ApfsFileCompressed(ApfsFile):
             else:
                 decompressed = zlib.decompress(decmpfs[16:])
         elif compression_type in [4, 8, 12]: # types in ResourceFork
-            log.error (f"compression_type = {compression_type} in DecompressInline --> ERROR! Should not go here! data_size={len(decmpfs)}" + str(decmpfs))
+            log.error (f"compression_type = {compression_type} in DecompressInline --> ERROR! Should not go here! data_size={len(decmpfs)} " + str(decmpfs))
         elif compression_type == 7: # LZVN inline
             data = decmpfs[16:]
             if (uncompressed_size <= total_len - 16) and (data[0] == 0x06):
