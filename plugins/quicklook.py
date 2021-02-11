@@ -366,21 +366,26 @@ def parseDbNew(c, quicklook_array, source, path_to_thumbnails, export, user_name
             row_id = "N/A"
 
             # Format the inode_query for our specific iNode number so we can find the filename
-            apfs_query = inode_query.format(entries[0])
+            apfs_query = inode_query.format(inode)
 
             # Create cursor to the APFS db created by mac_apt
-            apfs_c = export.apfs_db.conn.cursor()
-
-            apfs_c.row_factory = sqlite3.Row
-            cursor = apfs_c.execute(apfs_query)
-            test_row = cursor.fetchone()
+            if hasattr(export, 'apfs_db'): # Check if this is from mounted disk
+                apfs_c = export.apfs_db.conn.cursor()
+                apfs_c.row_factory = sqlite3.Row
+                cursor = apfs_c.execute(apfs_query)
+                test_row = cursor.fetchone()
+                has_db = True
+            else:
+                has_db = False
+                test_row = None
             if test_row is None:
-                log.warning("No file matches iNode: " + str(inode) + "!!")
-                log.warning("This file will be outputted as Unknown" + str(unknown_count))
+                if has_db:
+                    log.warning("No file matches iNode: " + str(inode) + "!!")
+                    log.warning("This file will be outputted as Unknown" + str(unknown_count))
 
                 # Carve out thumbnails with no iNode
 
-                name = "Unknown" + str(unknown_count)
+                name = f"Unknown-{unknown_count}-{inode}"
 
                 log.debug("Carving an unknown thumbnail, this is unknown number: " + str(unknown_count))
                 carveThumb(bitmapdata_location, bitmapdata_length, thumbfile, name, width, height, export, user_name, True)
@@ -469,6 +474,8 @@ def Plugin_Start(mac_info):
             parseDb(c, quicklook_array, quicklook_db_path, thumbnail_file, mac_info, user)
         else:
             log.debug("QuickLook data from Mac OS 10.15+ found... Processing")
+            if not hasattr(mac_info, 'apfs_db'): # Check if this is from mounted disk
+                log.warning("Since the APFS database is not available (MOUNTED mode?), file inodes won't be resolved to paths.")
             parseDbNew(c, quicklook_array, quicklook_db_path, thumbnail_file, mac_info, user)
 
         # Close the index.sqlite
