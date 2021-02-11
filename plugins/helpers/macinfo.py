@@ -1627,11 +1627,11 @@ class MountedMacInfoSeperateSysData(MountedMacInfo):
         path = ''
         vol_folder = self.sys_volume_folder
         for index, folder_name in enumerate(path_parts):
-            log.debug("index={}, folder_name={}".format(index, folder_name))
+            #log.debug("index={}, folder_name={}".format(index, folder_name))
             if index >= self.max_firmlink_depth: 
                 break
             else:
-                log.debug("Searched for {}".format('/' + '/'.join(path_parts[:index + 1])))
+                #log.debug("Searched for {}".format('/' + '/'.join(path_parts[:index + 1])))
                 dest = self.firmlinks.get('/' + '/'.join(path_parts[:index + 1]), None)
                 if dest != None:
                     found_in_firmlink = True
