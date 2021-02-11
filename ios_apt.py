@@ -26,7 +26,7 @@ import time
 import textwrap
 from plugin import *
 
-__VERSION = "0.9.dev"
+__VERSION = "1.0"
 __PROGRAMNAME = "iOS Artifact Parsing Tool"
 __EMAIL = "yogesh@swiftforensics.com"
 
