@@ -1,8 +1,8 @@
 # mac_apt - macOS (and iOS) Artifact Parsing Tool  
-[![Latest version](https://img.shields.io/badge/version-v0.9-blue)](https://github.com/ydkhatri/mac_apt/releases/tag/v0.9)
+[![Latest version](https://img.shields.io/badge/version-v1.0-blue)](https://github.com/ydkhatri/mac_apt/releases/tag/v1.0)
 [![status](https://img.shields.io/badge/status-stable-green)]()
 
-[![Latest version](https://img.shields.io/badge/version-v0.9.dev-blue)](https://github.com/ydkhatri/mac_apt/releases/tag/v0.9.dev)
+[![Latest version](https://img.shields.io/badge/version-v1.1.dev-blue)](https://github.com/ydkhatri/mac_apt/releases/tag/v1.1.dev)
 [![status](https://img.shields.io/badge/status-development-orange)]()
 
 mac_apt is a DFIR (Digital Forensics and Incident Response) tool to process Mac computer full disk images (**or _live_ machines**) and extract data/metadata useful for forensic investigation. It is a python based framework, which has plugins to process individual artifacts (such as Safari internet history, Network interfaces, Recently accessed files & volumes, ..)
@@ -13,7 +13,7 @@ mac_apt now also includes **[ios_apt](https://swiftforensics.com/2020/12/introdu
 
 #### Features
 * Cross platform (no dependency on pyobjc)
-* Works on E01, VMDK, AFF4, DD, split-DD, DMG (no compression) & mounted images  
+* Works on E01, VMDK, AFF4, DD, split-DD, DMG (no compression), SPARSEIMAGE & mounted images  
 * XLSX, CSV, Sqlite outputs
 * Analyzed files/artifacts are exported for later review
 * zlib, lzvn, lzfse compressed files are supported!
@@ -21,6 +21,7 @@ mac_apt now also includes **[ios_apt](https://swiftforensics.com/2020/12/introdu
 * Reads the Spotlight database and Unified Logging (tracev3) files
 
 #### Latest
+:heavy_check_mark: Can read RECON created .sparseimage files  
 :heavy_check_mark: Support for macOS Big Sur Sealed volumes (11.0)  
 :heavy_check_mark: Introducing **ios_apt** for processing iOS/ipadOS images  
 :heavy_check_mark: FAST mode :hourglass_flowing_sand:   

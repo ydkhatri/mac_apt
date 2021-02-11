@@ -154,31 +154,31 @@ class ApfsFileSystemParser:
         self.dir_stats_records = []
         
         self.hardlink_info = collections.OrderedDict([('OID',DataType.INTEGER),('XID',DataType.INTEGER),('CNID',DataType.INTEGER), ('Parent_CNID',DataType.INTEGER), 
-                                                    ('Name',DataType.TEXT),('Valid',DataType.INTEGER),('DBG_BLK_PATH',DataType.TEXT),('DB_ID',(DataType.INTEGER,"PRIMARY KEY AUTOINCREMENT"))])
+                                                    ('Name',DataType.TEXT),('DBG_BLK_PATH',DataType.TEXT),('DB_ID',(DataType.INTEGER,"PRIMARY KEY AUTOINCREMENT"))])
         self.extent_info = collections.OrderedDict([('OID',DataType.INTEGER),('XID',DataType.INTEGER),('CNID',DataType.INTEGER), ('Offset',DataType.INTEGER), 
                                                     ('Size',DataType.INTEGER), ('Block_Num',DataType.INTEGER),
-                                                    ('Valid',DataType.INTEGER),('DBG_BLK_PATH',DataType.TEXT),('DB_ID',(DataType.INTEGER,"PRIMARY KEY AUTOINCREMENT"))])
+                                                    ('DBG_BLK_PATH',DataType.TEXT),('DB_ID',(DataType.INTEGER,"PRIMARY KEY AUTOINCREMENT"))])
         self.attr_info = collections.OrderedDict([('OID',DataType.INTEGER),('XID',DataType.INTEGER),('CNID',DataType.INTEGER), ('Name',DataType.TEXT),
                                                     ('Flags',DataType.INTEGER),('Data',DataType.BLOB),
                                                     ('Logical_uncompressed_size',DataType.INTEGER),('Extent_CNID',DataType.INTEGER),
-                                                    ('Valid',DataType.INTEGER),('DBG_BLK_PATH',DataType.TEXT),('DB_ID',(DataType.INTEGER,"PRIMARY KEY AUTOINCREMENT"))])
+                                                    ('DBG_BLK_PATH',DataType.TEXT),('DB_ID',(DataType.INTEGER,"PRIMARY KEY AUTOINCREMENT"))])
         self.inode_info = collections.OrderedDict([('OID',DataType.INTEGER),('XID',DataType.INTEGER),('CNID',DataType.INTEGER), ('Parent_CNID',DataType.INTEGER),
                                                      ('Extent_CNID',DataType.INTEGER), ('Name',DataType.TEXT), ('Created',DataType.INTEGER), 
                                                      ('Modified',DataType.INTEGER), ('Changed',DataType.INTEGER), ('Accessed',DataType.INTEGER), 
                                                      ('Flags',DataType.INTEGER), ('Links_or_Children',DataType.INTEGER), ('BSD_flags',DataType.INTEGER), 
                                                      ('UID',DataType.INTEGER), ('GID',DataType.INTEGER), ('Mode',DataType.INTEGER), 
                                                      ('Logical_Size',DataType.INTEGER), ('Physical_Size',DataType.INTEGER),('UncompressedSize',DataType.INTEGER),
-                                                     ('Valid',DataType.INTEGER),('DBG_BLK_PATH',DataType.TEXT),('DB_ID',(DataType.INTEGER,"PRIMARY KEY AUTOINCREMENT"))])
+                                                     ('DBG_BLK_PATH',DataType.TEXT),('DB_ID',(DataType.INTEGER,"PRIMARY KEY AUTOINCREMENT"))])
         self.dir_info = collections.OrderedDict([('OID',DataType.INTEGER),('XID',DataType.INTEGER),('CNID',DataType.INTEGER), ('Parent_CNID',DataType.INTEGER),
                                                     ('DateAdded',DataType.INTEGER),('ItemType',DataType.INTEGER), 
-                                                    ('Name',DataType.TEXT),('Valid',DataType.INTEGER),('DBG_BLK_PATH',DataType.TEXT),('DB_ID',(DataType.INTEGER,"PRIMARY KEY AUTOINCREMENT"))])
+                                                    ('Name',DataType.TEXT),('DBG_BLK_PATH',DataType.TEXT),('DB_ID',(DataType.INTEGER,"PRIMARY KEY AUTOINCREMENT"))])
         self.compressed_info = collections.OrderedDict([('OID',DataType.INTEGER),('XID',DataType.INTEGER),('CNID',DataType.INTEGER),('Data',DataType.BLOB),('Uncompressed_size',DataType.INTEGER),
                                                     ('Extent_CNID',DataType.INTEGER),('fpmc_in_extent',DataType.INTEGER),('Extent_Logical_Size',DataType.INTEGER),
-                                                    ('Valid',DataType.INTEGER),('DB_ID',(DataType.INTEGER,"PRIMARY KEY AUTOINCREMENT"))]) 
+                                                    ('DB_ID',(DataType.INTEGER,"PRIMARY KEY AUTOINCREMENT"))]) 
                                                     #TODO: Remove fpmc_in_extent, this can be detected by checking Data == None
         self.paths_info = collections.OrderedDict([('CNID',DataType.INTEGER),('Path',DataType.TEXT)])
         self.dir_stats_info = collections.OrderedDict([('OID',DataType.INTEGER),('XID',DataType.INTEGER),('CNID',DataType.INTEGER),('NumChildren',DataType.INTEGER),('TotalSize',DataType.INTEGER),('Counter',DataType.INTEGER),
-                                                    ('Valid',DataType.INTEGER),('DBG_BLK_PATH',DataType.TEXT),('DB_ID',(DataType.INTEGER,"PRIMARY KEY AUTOINCREMENT"))]) 
+                                                    ('DBG_BLK_PATH',DataType.TEXT),('DB_ID',(DataType.INTEGER,"PRIMARY KEY AUTOINCREMENT"))]) 
         ## Optimization for search
         self.blocks_read = set()
 
@@ -347,7 +347,7 @@ class ApfsFileSystemParser:
 
         #Copy all decmpfs-Type2 attributes to table, where no resource forks <-- Nothing to do, just copy
         type2_no_rsrc_query = "INSERT INTO \"{0}_Compressed_Files\" select b.OID, b.XID, b.CNID, b.Data, "\
-                " b.logical_uncompressed_size, 0 as extent_cnid, 0 as fpmc_in_extent, 0 as Extent_Logical_Size, 0, NULL"\
+                " b.logical_uncompressed_size, 0 as extent_cnid, 0 as fpmc_in_extent, 0 as Extent_Logical_Size, NULL"\
                 " from \"{0}_Attributes\" as b "\
                 " left join \"{0}_Attributes\" as a on (a.cnid = b.cnid and a.Name = 'com.apple.ResourceFork') "\
                 " where b.Name='com.apple.decmpfs' and (b.Flags & 2)=2 and a.cnid is null".format(self.name)
@@ -357,7 +357,7 @@ class ApfsFileSystemParser:
         #Add all decmpfs-Type2 attributes where resource forks exist, rsrc's extent_cnid is used
         type2_rsrc_query = "INSERT INTO \"{0}_Compressed_Files\" "\
                 "SELECT b.OID, b.XID, b.CNID, b.Data, b.logical_uncompressed_size, a.extent_cnid as extent_cnid, 0 as fpmc_in_extent, "\
-                " a.logical_uncompressed_size as Extent_Logical_Size, 0, NULL FROM \"{0}_Attributes\" as b "\
+                " a.logical_uncompressed_size as Extent_Logical_Size, NULL FROM \"{0}_Attributes\" as b "\
                 " left join \"{0}_Attributes\" as a on (a.cnid = b.cnid and a.Name = 'com.apple.ResourceFork') "\
                 " where b.Name='com.apple.decmpfs' and (b.Flags & 2)=2 and a.cnid is not null".format(self.name)
         if not self.run_query(type2_rsrc_query, True):
@@ -395,12 +395,12 @@ class ApfsFileSystemParser:
                 if row[5] == None:
                     # No resource fork , data must be in decmpfs_extent
                     if logical_size <= 32: # If < 32 bytes, write to db, else leave in extent
-                        to_write.append([row[8], row[0], row[1], decmpfs, uncompressed_size, 0, 0, 0, 0, None])
+                        to_write.append([row[8], row[0], row[1], decmpfs, uncompressed_size, 0, 0, 0, None])
                     else:
-                        to_write.append([row[8], row[0], row[1], None, uncompressed_size, row[2], 1, logical_size, 0, None])
+                        to_write.append([row[8], row[0], row[1], None, uncompressed_size, row[2], 1, logical_size, None])
                 else: 
                     # resource fork has data
-                    to_write.append([row[8], row[0], row[1], decmpfs, uncompressed_size, row[5], 0, row[7], 0, None])
+                    to_write.append([row[8], row[0], row[1], decmpfs, uncompressed_size, row[5], 0, row[7], None])
             if to_write:
                 try:
                     self.dbo.WriteRows(to_write, self.name + '_Compressed_Files')
@@ -579,52 +579,10 @@ class ApfsFileSystemParser:
             found_nodes.extend(equal_nodes)
         return found_nodes
 
-    def validate_db_entries(self):
-        '''Set the Valid flag in db tables for the entries with highest XID (others are stale/old). Unused now'''
-        query = "UPDATE \"{0}_Attributes\" SET Valid=1 "\
-                "WHERE DB_ID IN (SELECT DB_ID FROM ("\
-                " SELECT DB_ID, MAX(XID) FROM \"{0}_Attributes\" "\
-                " GROUP BY CNID, Name))".format(self.name)
-        self.run_query(query, True)
-
-        query = "UPDATE \"{0}_Extents\" SET Valid=1 "\
-                "WHERE DB_ID IN (SELECT DB_ID FROM ("\
-                " SELECT DB_ID, MAX(XID) FROM \"{0}_Extents\" "\
-                " GROUP BY CNID, Offset))".format(self.name)
-        self.run_query(query, True)
-
-        query = "UPDATE \"{0}_{1}\" SET Valid=1 "\
-                "WHERE DB_ID IN (SELECT DB_ID FROM ("\
-                " SELECT DB_ID, MAX(XID) FROM \"{0}_{1}\" "\
-                " GROUP BY CNID))"
-        for table_type in ['Hardlinks','Inodes','DirEntries','DirStats','Compressed_Files']:
-            self.run_query(query.format(self.name, table_type), True)
-
-        # Remove compressed table entries which are no longer compressed # not sure if this is useful !
-        query = "UPDATE \"{0}_Compressed_Files\" set valid=0 "\
-                "WHERE DB_ID IN ( "\
-                "SELECT c.db_id FROM \"{0}_Compressed_Files\" AS c "\
-                "LEFT JOIN \"{0}_Inodes\" AS i ON c.cnid = i.CNID and c.xid=i.xid "\
-                "WHERE i.Logical_Size > 0 AND i.xid IS NOT NULL)".format(self.name)
-        self.run_query(query, True, f'{self.name}_Compressed_Files', True)
-        # Remove compressed table entries from old invalidated inode XIDs
-        query = "UPDATE \"{0}_Compressed_Files\" set valid=0 "\
-                "WHERE DB_ID IN ( "\
-                "SELECT c.db_id FROM \"{0}_Compressed_Files\" as c  "\
-                "LEFT JOIN \"{0}_Inodes\" AS i ON c.cnid=i.CNID and c.xid=i.xid "\
-                "WHERE i.Valid=0)".format(self.name)
-        self.run_query(query, True)
-
-        #Now delete invalid entries
-        query = "DELETE FROM \"{0}_{1}\" WHERE Valid=0 "
-        for table_type in ['Attributes','Hardlinks','Extents','Inodes','DirEntries','DirStats','Compressed_Files']:
-            self.run_query(query.format(self.name, table_type), True, table_name=self.name + "_" + table_type)
-
     def create_other_tables_and_indexes(self):
         '''Populate paths table in db, create compressed_files table and create indexes for faster queries'''
 
         self.populate_compressed_files_table()
-        #self.validate_db_entries() # Not needed now
         
         insert_query = "INSERT INTO \"{0}_Paths\" SELECT * FROM " \
                         "( WITH RECURSIVE " \
@@ -659,7 +617,7 @@ class ApfsFileSystemParser:
                 self.AddToStats(entry_type)
                 self.num_records_read_batch += 1
                 self.num_records_read_total += 1
-                self.extent_records.append([oid, xid, entry.key.private_id, entry.key.logical_addr, entry.data.size, entry.data.phys_block_num, 0, '', None])
+                self.extent_records.append([oid, xid, entry.key.private_id, entry.key.logical_addr, entry.data.size, entry.data.phys_block_num, '', None])
         elif (block.header.subtype == self.container_type_files) or no_blk_hdr_force_subtype_fs_tree: # fstree
             if no_blk_hdr_force_subtype_fs_tree:
                 oid = sealed_oid
@@ -673,25 +631,25 @@ class ApfsFileSystemParser:
                 if entry_type == self.file_ext_type: #container.apfs.EntryType.file_extent.value:
                     self.num_records_read_batch += 1
                     self.num_records_read_total += 1
-                    self.extent_records.append([oid, xid, entry.key.obj_id, entry.key.content.offset, entry.data.size, entry.data.phys_block_num, 0, '', None])
+                    self.extent_records.append([oid, xid, entry.key.obj_id, entry.key.content.offset, entry.data.size, entry.data.phys_block_num, '', None])
                 elif entry_type == self.dir_rec_type: #container.apfs.EntryType.dir_rec.value:  
                     self.num_records_read_batch += 1
                     self.num_records_read_total += 1
                     rec = entry.data
-                    self.dir_records.append([oid, xid, rec.node_id, entry.key.obj_id, rec.date_added, rec.type_item.value, entry.key.content.name, 0, '', None])
+                    self.dir_records.append([oid, xid, rec.node_id, entry.key.obj_id, rec.date_added, rec.type_item.value, entry.key.content.name, '', None])
                 elif entry_type == self.inode_type: #container.apfs.EntryType.inode.value:
                     self.num_records_read_batch += 1
                     self.num_records_read_total += 1
                     rec = entry.data
-                    self.inode_records.append([oid, xid, entry.key.obj_id, rec.parent_id, rec.node_id, rec.name, rec.creation_timestamp, rec.modified_timestamp, rec.changed_timestamp, rec.accessed_timestamp, rec.flags, rec.nchildren_or_nlink, rec.bsdflags, rec.owner_id, rec.group_id, rec.mode, rec.logical_size, rec.physical_size, rec.uncompressed_size, 0, '', None])
+                    self.inode_records.append([oid, xid, entry.key.obj_id, rec.parent_id, rec.node_id, rec.name, rec.creation_timestamp, rec.modified_timestamp, rec.changed_timestamp, rec.accessed_timestamp, rec.flags, rec.nchildren_or_nlink, rec.bsdflags, rec.owner_id, rec.group_id, rec.mode, rec.logical_size, rec.physical_size, rec.uncompressed_size, '', None])
                 elif entry_type == self.hard_type: #container.apfs.EntryType.sibling_link.value:
                     self.num_records_read_batch += 1
                     self.num_records_read_total += 1
-                    self.hardlink_records.append([oid, xid, entry.key.obj_id, entry.data.parent_id, entry.data.name, 0, '', None])
+                    self.hardlink_records.append([oid, xid, entry.key.obj_id, entry.data.parent_id, entry.data.name, '', None])
                 elif entry_type == self.dir_stats_type: #container.apfs.EntryType.dir_stats.value:
                     self.num_records_read_batch += 1
                     self.num_records_read_total += 1
-                    self.dir_stats_records.append([oid, xid, entry.data.chained_key, entry.data.num_children, entry.data.total_size, entry.data.gen_count, 0, '', None])
+                    self.dir_stats_records.append([oid, xid, entry.data.chained_key, entry.data.num_children, entry.data.total_size, entry.data.gen_count, '', None])
                 elif entry_type == self.attr_type: #container.apfs.EntryType.xattr.value:
                     self.num_records_read_batch += 1
                     self.num_records_read_total += 1
@@ -707,7 +665,7 @@ class ApfsFileSystemParser:
                         if entry.key.content.name == 'com.apple.decmpfs':
                             #magic, compression_type, uncompressed_size = struct.unpack('<IIQ', decmpfs[1][0:16])
                             logical_size = struct.unpack('<Q', data[8:16])[0] # uncompressed data size
-                    self.attr_records.append([oid, xid, entry.key.obj_id, entry.key.content.name, rec.flags, data, logical_size, rsrc_extent_cnid, 0, '', None])
+                    self.attr_records.append([oid, xid, entry.key.obj_id, entry.key.content.name, rec.flags, data, logical_size, rsrc_extent_cnid, '', None])
                 elif entry_type == 6: # dstream_id
                     pass # this just has refcnts
                 elif entry_type == 7: #crypto_state
@@ -752,7 +710,7 @@ class ApfsFileSystemParser:
                     self.AddToStats(entry_type)
                     self.num_records_read_batch += 1
                     self.num_records_read_total += 1
-                    self.extent_records.append([oid, xid, entry.key.private_id, entry.key.logical_addr, entry.data.size, entry.data.phys_block_num, 0, debug_parent_listing_str, None])
+                    self.extent_records.append([oid, xid, entry.key.private_id, entry.key.logical_addr, entry.data.size, entry.data.phys_block_num, debug_parent_listing_str, None])
                 if self.num_records_read_batch > 400000:
                     self.num_records_read_batch = 0
                     # write to db / file
@@ -775,25 +733,25 @@ class ApfsFileSystemParser:
                 if entry_type == self.file_ext_type: #container.apfs.EntryType.file_extent.value:
                     self.num_records_read_batch += 1
                     self.num_records_read_total += 1
-                    self.extent_records.append([oid, xid, entry.key.obj_id, entry.key.content.offset, entry.data.size, entry.data.phys_block_num, 0, debug_parent_listing_str, None])
+                    self.extent_records.append([oid, xid, entry.key.obj_id, entry.key.content.offset, entry.data.size, entry.data.phys_block_num, debug_parent_listing_str, None])
                 elif entry_type == self.dir_rec_type: #container.apfs.EntryType.dir_rec.value:  
                     self.num_records_read_batch += 1
                     self.num_records_read_total += 1
                     rec = entry.data
-                    self.dir_records.append([oid, xid, rec.node_id, entry.key.obj_id, rec.date_added, rec.type_item.value, entry.key.content.name, 0, debug_parent_listing_str, None])
+                    self.dir_records.append([oid, xid, rec.node_id, entry.key.obj_id, rec.date_added, rec.type_item.value, entry.key.content.name, debug_parent_listing_str, None])
                 elif entry_type == self.inode_type: #container.apfs.EntryType.inode.value:
                     self.num_records_read_batch += 1
                     self.num_records_read_total += 1
                     rec = entry.data
-                    self.inode_records.append([oid, xid, entry.key.obj_id, rec.parent_id, rec.node_id, rec.name, rec.creation_timestamp, rec.modified_timestamp, rec.changed_timestamp, rec.accessed_timestamp, rec.flags, rec.nchildren_or_nlink, rec.bsdflags, rec.owner_id, rec.group_id, rec.mode, rec.logical_size, rec.physical_size, rec.uncompressed_size, 0, debug_parent_listing_str, None])
+                    self.inode_records.append([oid, xid, entry.key.obj_id, rec.parent_id, rec.node_id, rec.name, rec.creation_timestamp, rec.modified_timestamp, rec.changed_timestamp, rec.accessed_timestamp, rec.flags, rec.nchildren_or_nlink, rec.bsdflags, rec.owner_id, rec.group_id, rec.mode, rec.logical_size, rec.physical_size, rec.uncompressed_size, debug_parent_listing_str, None])
                 elif entry_type == self.hard_type: #container.apfs.EntryType.sibling_link.value:
                     self.num_records_read_batch += 1
                     self.num_records_read_total += 1
-                    self.hardlink_records.append([oid, xid, entry.key.obj_id, entry.data.parent_id, entry.data.name, 0, debug_parent_listing_str, None])
+                    self.hardlink_records.append([oid, xid, entry.key.obj_id, entry.data.parent_id, entry.data.name, debug_parent_listing_str, None])
                 elif entry_type == self.dir_stats_type: #container.apfs.EntryType.dir_stats.value:
                     self.num_records_read_batch += 1
                     self.num_records_read_total += 1
-                    self.dir_stats_records.append([oid, xid, entry.data.chained_key, entry.data.num_children, entry.data.total_size, entry.data.gen_count, 0, debug_parent_listing_str, None])
+                    self.dir_stats_records.append([oid, xid, entry.data.chained_key, entry.data.num_children, entry.data.total_size, entry.data.gen_count, debug_parent_listing_str, None])
                 elif entry_type == self.attr_type: #container.apfs.EntryType.xattr.value:
                     self.num_records_read_batch += 1
                     self.num_records_read_total += 1
@@ -809,7 +767,7 @@ class ApfsFileSystemParser:
                         if entry.key.content.name == 'com.apple.decmpfs':
                             #magic, compression_type, uncompressed_size = struct.unpack('<IIQ', decmpfs[1][0:16])
                             logical_size = struct.unpack('<Q', data[8:16])[0] # uncompressed data size
-                    self.attr_records.append([oid, xid, entry.key.obj_id, entry.key.content.name, rec.flags, data, logical_size, rsrc_extent_cnid, 0, debug_parent_listing_str, None])
+                    self.attr_records.append([oid, xid, entry.key.obj_id, entry.key.content.name, rec.flags, data, logical_size, rsrc_extent_cnid, debug_parent_listing_str, None])
                 elif entry_type == 6: # dstream_id
                     pass # this just has refcnts
                 elif entry_type == 7: #crypto_state
