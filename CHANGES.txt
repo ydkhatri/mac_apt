@@ -1,3 +1,12 @@
+Updates in 20210210 (v1.0):
+
++ Code updated for Python 3.9, windows dep. libs compiled for 3.9
++ RECON (by Sumuri) created .sparseimage files are now supported
++ Add CloudTabs, BrowserState.db parsing to SAFARI
++ Fixes exported folder structure for idevicebackups
++ Show imsg alias (if used)
++ Better APFS parsing
+
 Updates in 20201228 (v0.9):
 
 + Introducing ios_apt - parses ios full disk images
