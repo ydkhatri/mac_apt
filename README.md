@@ -78,6 +78,6 @@ For installation (to run from code) see https://github.com/ydkhatri/mac_apt/wiki
 To download, proceed here - https://github.com/ydkhatri/mac_apt/releases
 
 ## Bugs
-Feel free to send comments and feedback to yogesh AT swiftforensics DOT com, or open an [issue](https://github.com/ydkhatri/mac_apt/issues).  
+Feel free to send comments and feedback to yogesh@swiftforensics.com, or open an [issue](https://github.com/ydkhatri/mac_apt/issues).  
 
 [![Tweet](https://img.shields.io/twitter/url?style=social&url=https%3A%2F%2Ftwitter.com%2Fswiftforensics)](https://twitter.com/swiftforensics)
