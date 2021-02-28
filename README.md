@@ -21,7 +21,7 @@ mac_apt now also includes **[ios_apt](https://swiftforensics.com/2020/12/introdu
 * Reads the Spotlight database and Unified Logging (tracev3) files
 
 #### Latest
-:heavy_check_mark: Can read RECON created .sparseimage files  
+:heavy_check_mark: Can read [RECON](https://sumuri.com/software/recon-itr/) created .sparseimage files  
 :heavy_check_mark: Support for macOS Big Sur Sealed volumes (11.0)  
 :heavy_check_mark: Introducing **ios_apt** for processing iOS/ipadOS images  
 :heavy_check_mark: FAST mode :hourglass_flowing_sand:   
@@ -78,6 +78,6 @@ For installation (to run from code) see https://github.com/ydkhatri/mac_apt/wiki
 To download, proceed here - https://github.com/ydkhatri/mac_apt/releases
 
 ## Bugs
-Feel free to send comments and feedback to yogesh AT swiftforensics DOT com, or open an [issue](https://github.com/ydkhatri/mac_apt/issues).  
+Feel free to send comments and feedback to yogesh@swiftforensics.com, or open an [issue](https://github.com/ydkhatri/mac_apt/issues).  
 
 [![Tweet](https://img.shields.io/twitter/url?style=social&url=https%3A%2F%2Ftwitter.com%2Fswiftforensics)](https://twitter.com/swiftforensics)
