@@ -514,7 +514,7 @@ class ApfsFileSystemParser:
                         new_block_num = entry.data.paddr.value
                         if entry.data.flags & 1: #OMAP_VAL_DELETED
                             log.debug("Deleted OMAP block found, block={}".format(new_block_num))
-
+                            continue
                         noheader_is_set = ((entry.data.flags & 8) == 8) # OMAP_VAL_NOHEADER
                         force_fstree = noheader_is_set
                         if ( entry.data.flags & 4 ) == 4: # ENCRYPTED FLAG

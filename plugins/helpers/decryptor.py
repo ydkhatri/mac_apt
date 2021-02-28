@@ -206,7 +206,7 @@ class keybag_entry_kek(KaitaiStruct):
         self.key_keylen = self._io.read_u2le()
         self.padding = self._io.read_bytes(4)
 
-        if self.key_keylen == 148:
+        if self.key_keylen >= 148:
             self.valid = True
             # blob header
             self.unk = self._io.read_bytes(8)
@@ -228,13 +228,13 @@ class keybag_entry_kek(KaitaiStruct):
             self.iterations = self._io.read_bytes(3)
             self.tag_len_5 = self._io.read_bytes(2) # 85 10
             self.kek_salt = self._io.read_bytes(16)
-            self.padding2 = self._io.read_bytes(4)
         else:
             self.valid = False
-            _io.seek(start_pos + 24 + self.key_keylen)
-            pos = _io.pos()
-            if (pos - start_pos) % 16:
-                self.padding2 = self._io.read_bytes(16 - ((pos - start_pos) % 16))
+
+        _io.seek(start_pos + 24 + self.key_keylen)
+        pos = _io.pos()
+        if (pos - start_pos) % 16:
+            self.padding2 = self._io.read_bytes(16 - ((pos - start_pos) % 16))
 
 class kb_locker_kek(KaitaiStruct):
     def __init__(self, _io, _parent=None, _root=None):
