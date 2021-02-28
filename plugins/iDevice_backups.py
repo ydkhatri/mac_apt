@@ -13,6 +13,7 @@
    <YourOutputFolder>/Exports/IDEVICEBACKUPS/<USER>_<BACKUP_UUID>
 '''
 
+import io
 import logging
 import os
 import time
@@ -171,15 +172,16 @@ def ReadApps(applications_dict):
     #TODO- Get all app details
     apps = []
     for k, v in applications_dict.items():
-        plist_string = v.get('iTunesMetadata', None)
-        if plist_string:
-            try:
-                plist = readPlistFromString(plist_string)
+        plist_blob = v.get('iTunesMetadata', None)
+        if plist_blob:
+            f = io.BytesIO(plist_blob)
+            success, plist, error = CommonFunctions.ReadPlist(f)
+            if success:
                 app_name = plist.get('itemName', None)
                 if app_name:
                     apps.append(app_name)
-            except InvalidPlistException:
-                log.debug('Failed to read embedded plist for {}'.format(k))
+            else:
+                log.error(f"Failed to read iTunesMetadata embedded plist for {k}. Error was {error}")
     return apps
 
 def ReadBackupsStandalone(info_plist_path, status_plist_path, manifest_plist_path, backups, source):
