@@ -1045,7 +1045,8 @@ class ApfsMacInfo(MacInfo):
                         if success:
                             decryption_key = decryptor.EncryptedVol(vol, plist, self.password).decryption_key
                             if decryption_key is None:
-                                log.error(f"No decryption key found. Did you enter the right password? Volume '{vol.volume_name}' cannot be decrypted!")
+                                log.error(f"No decryption key found. Did you enter the right password? Volume '{vol.volume_name}' cannot be decrypted! " + \
+                                    "If the password contains special chars like ^ or \ or / use the password file option (-pf) instead.")
                                 if vol.role == vol.container.apfs.VolumeRoleType.data.value:
                                     sys.exit('Decryption failed for DATA volume, cannot proceed!')
                             else:

@@ -1,5 +1,7 @@
 Updates in 20210210 (v1.1):
 
++ Add option for specifying password in file (-pf), because passwords on command line that have special chars like \ or ^ have problems
+
 ! Fixed a bug that prevented APFS decryption in some disks
 ! Skip reading deleted apfs blocks to prevent stale/bad data
 ! Fixed a bug in iDeviceBackups plugin

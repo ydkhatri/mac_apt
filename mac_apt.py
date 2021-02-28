@@ -389,6 +389,14 @@ def SetupExportLogger(output_params):
     writer.CreateTable(column_info, 'ExportedFileInfo')
     output_params.export_log_sqlite = writer
 
+def ReadPasswordFromFile(path):
+    '''Open text file and read password. Assumes password is on the first line
+       followed by CRLF or LF or CR or EOF'''
+    f = open(path, 'r')
+    data = f.readline()
+    f.close()
+    return data.replace('\n', '').replace('\r', '')
+
 ## Main program ##
 
 plugins = []
@@ -417,7 +425,8 @@ arg_parser.add_argument('-o', '--output_path', help='Path where output files wil
 arg_parser.add_argument('-x', '--xlsx', action="store_true", help='Save output in Excel spreadsheet')
 arg_parser.add_argument('-c', '--csv', action="store_true", help='Save output as CSV files')
 arg_parser.add_argument('-l', '--log_level', help='Log levels: INFO, DEBUG, WARNING, ERROR, CRITICAL (Default is INFO)')#, choices=['INFO','DEBUG','WARNING','ERROR','CRITICAL'])
-arg_parser.add_argument('-p', '--password', help='Personal Recovery Key(PRK) or Password for any user (for decrypting encrypted volume). PRK must be exactly how it was shown to you')
+arg_parser.add_argument('-p', '--password', help='Personal Recovery Key(PRK) or Password for any user (for decrypting encrypted volume).')
+arg_parser.add_argument('-pf', '--password_file', help='Text file containing Personal Recovery Key(PRK) or Password')
 arg_parser.add_argument('-d', '--dont_decrypt', default=False, action="store_true", help='Don\'t decrypt as image is already decrypted!')
 #arg_parser.add_argument('-u', '--use_tsk', action="store_true", help='Use sleuthkit instead of native HFS+ parser (This is slower!)')
 arg_parser.add_argument('plugin', nargs="+", help="Plugins to run (space separated). FAST will run most plugins")
@@ -532,7 +541,13 @@ except Exception as ex:
     log.error("Failed to load image. Error Details are: " + str(ex))
     Exit()
 
-if args.password:
+if args.password_file:
+    try:
+        mac_info.password = ReadPasswordFromFile(args.password_file)
+    except OSError as ex:
+        log.error(f"Failed to read password from file {args.password_file}\n Error Details are: " + str(ex))
+        Exit()
+elif args.password:
     mac_info.password = args.password
 
 if args.input_type.upper() != 'MOUNTED':

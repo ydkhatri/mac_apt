@@ -319,6 +319,14 @@ def Exit(message=''):
     else:
         sys.exit(message)
 
+def ReadPasswordFromFile(path):
+    '''Open text file and read password. Assumes password is on the first line
+       followed by CRLF or LF or CR or EOF'''
+    f = open(path, 'r')
+    data = f.readline()
+    f.close()
+    return data.replace('\n', '').replace('\r', '')
+
 ## Main program ##
 
 log = None
@@ -415,7 +423,13 @@ except Exception as ex:
     log.error("Failed to load image. Error Details are: " + str(ex))
     Exit()
 
-if args.password:
+if args.password_file:
+    try:
+        mac_info.password = ReadPasswordFromFile(args.password_file)
+    except OSError as ex:
+        log.error(f"Failed to read password from file {args.password_file}\n Error Details are: " + str(ex))
+        Exit()
+elif args.password:
     mac_info.password = args.password
 mac_info.use_native_hfs_parser = True #False if args.use_tsk else True
 mac_info.dont_decrypt = True if args.dont_decrypt else False
