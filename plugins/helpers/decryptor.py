@@ -11,6 +11,7 @@
 
 '''
 
+import binascii
 import hashlib
 import logging
 import struct
@@ -24,11 +25,13 @@ log = logging.getLogger('MAIN.HELPERS.DECRYPTOR')
 
 APFS_FV_PERSONAL_RECOVERY_KEY_UUID = "EBC6C064-0000-11AA-AA11-00306543ECAC"
 KB_TAG_UNKNOWN = 0
-KB_TAG_WRAPPING_KEY = 1
+KB_TAG_RESERVED_1 = 1
 KB_TAG_VOLUME_KEY = 2
-KB_TAG_VOLUME_UNLOCK_RECORDS = 3
-KB_TAG_VOLUME_PASSPHRASE_HINT = 4
-KB_TAG_USER_PAYLOAD = 5
+KB_TAG_VOLUME_UNLOCK_RECORDS = 3 # volumeʼs keybag location is stored as an instance of prange_t; the data at that location is an instance of kb_locker_t
+KB_TAG_VOLUME_PASSPHRASE_HINT = 4 # valid only in a volumeʼs keybag
+KB_TAG_WRAPPING_M_KEY = 5 # iOS only
+KB_TAG_VOLUME_M_KEY = 6   # iOS only
+KB_TAG_RESERVED_F8 = 0xF8
 
 
 """CODE FROM: https://github.com/arthurdejong/python-pskc"""
@@ -152,6 +155,11 @@ class kb_locker_vek(KaitaiStruct):
         self.kl_nbytes = self._io.read_u4le()
         self.padding = self._io.read_bytes(8)
         self.kl_entries = [keybag_entry_vek] * (self.kl_nkeys)
+        ## For debug only
+        self.debug_pos = self._io.pos()
+        self.debug_raw_entries = self._io.read_bytes(self.kl_nbytes)
+        self._io.seek(self.debug_pos)
+        ## End debug
         for i in range(self.kl_nkeys):
             self.kl_entries[i] = keybag_entry_vek(self._io, self, self._root)
 
@@ -175,6 +183,7 @@ class media_keybag_t_vek(KaitaiStruct):
         self._root = _root if _root else self
         self.mk_obj = obj_phys_t(self._io, self, self._root)
         self.mk_locker = kb_locker_vek(self._io, self, self._root)
+        log.debug(f'media_keybag_t_vek mk_locker (kb_locker_vek) entries [{self.mk_locker.kl_nkeys}] =' + binascii.hexlify(self.mk_locker.debug_raw_entries).decode('utf8'))
         
 #######################################################################################################################
 ################## END VEK STRCUTURES #################################################################################
@@ -191,34 +200,41 @@ class keybag_entry_kek(KaitaiStruct):
         self._io = _io
         self._parent = _parent
         self._root = _root if _root else self
+        start_pos = _io.pos()
         self.UUID = self._io.read_bytes(16)
         self.KeyBag_Tags = self._io.read_u2le()
         self.key_keylen = self._io.read_u2le()
         self.padding = self._io.read_bytes(4)
 
-        #if self.key_keylen == 148:
-        # blob header
-        self.unk = self._io.read_bytes(8)
-        self.hmac = self._io.read_bytes(32)
-        self.unk2 = self._io.read_bytes(2) # 82 08
-        self.salt = self._io.read_bytes(8)
-        # blob follows
-        self.tag_len_hdr = self._io.read_bytes(2) # A3 60
-        self.tag_len_0 = self._io.read_bytes(2) # 80 01
-        self.unk3 = self._io.read_bytes(1) 
-        self.tag_len_1 = self._io.read_bytes(2) # 81 10
-        self.uuid = self._io.read_bytes(16)
-        self.tag_len_1 = self._io.read_bytes(2) # 82 08
-        self.enc_type = self._io.read_u4le() # determines 128 or 256 bit encryption key
-        self.unk4 = self._io.read_bytes(4) # 
-        self.tag_len_3 = self._io.read_bytes(2) # 83 28
-        self.bag_data = self._io.read_bytes(40)
-        self.tag_len_4 = self._io.read_bytes(2) # 84 03
-        self.iterations = self._io.read_bytes(3)
-        self.tag_len_5 = self._io.read_bytes(2) # 85 10
-        self.kek_salt = self._io.read_bytes(16)
-        self.padding2 = self._io.read_bytes(4)
-
+        if self.key_keylen == 148:
+            self.valid = True
+            # blob header
+            self.unk = self._io.read_bytes(8)
+            self.hmac = self._io.read_bytes(32)
+            self.unk2 = self._io.read_bytes(2) # 82 08
+            self.salt = self._io.read_bytes(8)
+            # blob follows
+            self.tag_len_hdr = self._io.read_bytes(2) # A3 60
+            self.tag_len_0 = self._io.read_bytes(2) # 80 01
+            self.unk3 = self._io.read_bytes(1) 
+            self.tag_len_1 = self._io.read_bytes(2) # 81 10
+            self.uuid = self._io.read_bytes(16)
+            self.tag_len_2 = self._io.read_bytes(2) # 82 08
+            self.enc_type = self._io.read_u4le() # determines 128 or 256 bit encryption key
+            self.unk4 = self._io.read_bytes(4) # 
+            self.tag_len_3 = self._io.read_bytes(2) # 83 28
+            self.bag_data = self._io.read_bytes(40)
+            self.tag_len_4 = self._io.read_bytes(2) # 84 03
+            self.iterations = self._io.read_bytes(3)
+            self.tag_len_5 = self._io.read_bytes(2) # 85 10
+            self.kek_salt = self._io.read_bytes(16)
+            self.padding2 = self._io.read_bytes(4)
+        else:
+            self.valid = False
+            _io.seek(start_pos + 24 + self.key_keylen)
+            pos = _io.pos()
+            if (pos - start_pos) % 16:
+                self.padding2 = self._io.read_bytes(16 - ((pos - start_pos) % 16))
 
 class kb_locker_kek(KaitaiStruct):
     def __init__(self, _io, _parent=None, _root=None):
@@ -230,6 +246,11 @@ class kb_locker_kek(KaitaiStruct):
         self.kl_nbytes = self._io.read_u4le()
         self.padding = self._io.read_bytes(8)
         self.kl_entries = [keybag_entry_kek] * (self.kl_nkeys)
+        ## For debug only
+        self.debug_pos = self._io.pos()
+        self.debug_raw_entries = self._io.read_bytes(self.kl_nbytes)
+        self._io.seek(self.debug_pos)
+        ## End debug
         for i in range(self.kl_nkeys):
             self.kl_entries[i] = keybag_entry_kek(self._io, self, self._root)
 
@@ -241,6 +262,7 @@ class media_keybag_t_kek(KaitaiStruct):
         self._root = _root if _root else self
         self.mk_obj = obj_phys_t(self._io, self, self._root)
         self.mk_locker = kb_locker_kek(self._io, self, self._root)
+        log.debug(f'media_keybag_t_kek mk_locker (kb_locker_kek) entries [{self.mk_locker.kl_nkeys}] =' + binascii.hexlify(self.mk_locker.debug_raw_entries).decode('utf8'))
 
 
 #######################################################################################################################
@@ -282,7 +304,7 @@ def convert_keybag_uuid_to_string(binary_uuid):
     return uuid.hex.upper()
 
 
-def find_wrapped_kek_from_vol_keybag(keybag, user_uuid=None):
+def find_wrapped_kek_from_vol_keybag(keybag, user_uuid):
 
     user_open_dir_uuid = user_uuid
     user_open_dir_uuid = user_open_dir_uuid.replace("-", "")
@@ -448,6 +470,7 @@ class EncryptedVol:
                 unwrapped_kek = unwrap(wrapped_kek[:24], user_password_key[:16])
             else:
                 unwrapped_kek = unwrap(wrapped_kek, user_password_key)
+            log.debug('KEK unwrapped successfully!')
             # VEK unwrapping
             if vek_enc_type == 2: # for 128 bit keys, when filevauled HFS upgraded to APFS
                 vek_first_half = unwrap(wrapped_vek[:24], unwrapped_kek)
@@ -455,7 +478,7 @@ class EncryptedVol:
                 vek = vek_first_half + vek_second_half
             else:
                 vek = unwrap(wrapped_vek, unwrapped_kek)
-
+            log.debug('VEK unwrapped successfully!')
             return vek
         except ValueError as ex: # Unwrap failed
             if str(ex).find("IV does not match") >= 0:

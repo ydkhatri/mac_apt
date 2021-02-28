@@ -419,7 +419,7 @@ if args.password:
     mac_info.password = args.password
 mac_info.use_native_hfs_parser = True #False if args.use_tsk else True
 mac_info.dont_decrypt = True if args.dont_decrypt else False
-log.debug('mac_info.dont_decrypt=' + 'TRUE' if mac_info.dont_decrypt else 'FALSE')
+log.debug('mac_info.dont_decrypt=' + ('TRUE' if mac_info.dont_decrypt else 'FALSE'))
 
 mac_info.pytsk_image = img
 if IsApfsContainer(img, 0):
