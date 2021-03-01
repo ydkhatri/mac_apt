@@ -388,7 +388,7 @@ def Plugin_Start(mac_info):
                                 continue
                         
                         mac_info.ExportFile(reg_path, __Plugin_Name, user_name, False)
-                        conn, wrapper = OpenDbFromImage(mac_info, reg_path, user)
+                        conn, wrapper = OpenDbFromImage(mac_info, reg_path, user_name)
                         if conn:
                             ParseRegistrationDB(conn, office_reg_items, user_name, reg_path)
                             conn.close()
