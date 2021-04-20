@@ -244,6 +244,7 @@ def ReadAirportPrefPlist(plist, networks):
 def Plugin_Start(mac_info):
     '''Main Entry point function for plugin'''
     airport_pref_plist_path = '/Library/Preferences/SystemConfiguration/com.apple.airport.preferences.plist'
+    airport_pref_backup_plist_path = '/Library/Preferences/SystemConfiguration/com.apple.airport.preferences.plist.backup'
     mac_info.ExportFile(airport_pref_plist_path, __Plugin_Name, '', False)
     success, plist, error = mac_info.ReadPlist(airport_pref_plist_path)
     if success:
@@ -256,7 +257,19 @@ def Plugin_Start(mac_info):
     else:
         log.error('Could not open plist ' + airport_pref_plist_path)
         log.error('Error was: ' + error)
-    
+    # Try reading backup now
+    success, plist, error = mac_info.ReadPlist(airport_pref_backup_plist_path)
+    if success:
+        networks = []
+        ReadAirportPrefPlist(plist, networks)
+        if len(networks) > 0:
+            PrintAll(networks, mac_info.output_params, airport_pref_backup_plist_path)
+        else:
+            log.info('No wifi networks found')
+    else:
+        log.error('Could not open plist ' + airport_pref_backup_plist_path)
+        log.error('Error was: ' + error)
+
 def Plugin_Start_Standalone(input_files_list, output_params):
     log.info("Module Started as standalone")
     for input_path in input_files_list:
