@@ -400,9 +400,17 @@ def ReadLastSessionPlist(plist, safari_items, source_path, user):
             selectedIndex = windows.get('SelectedTabIndex', None)
             index = 0
             for tab in windows.get('TabStates', []):
+                info = 'SELECTED WINDOW' if index == selectedIndex else ''
+                date_closed = tab.get('DateClosed', '')
+                log.debug(date_closed)
+                if date_closed:
+                    if info:
+                        info += ', TAB_CLOSED_DATE=' + str(date_closed)
+                    else:
+                        info = 'TAB_CLOSED_DATE=' + str(date_closed)
                 si = SafariItem(SafariItemType.LASTSESSION, tab.get('TabURL', ''), tab.get('TabTitle', ''), 
                                 CommonFunctions.ReadMacAbsoluteTime(tab.get('LastVisitTime', '')), 
-                                'SELECTED WINDOW' if index == selectedIndex else '', user, source_path) # Skipping SessionState(its encrypted) & TabIdentifier
+                                info, user, source_path) # Skipping SessionState(its encrypted) & TabIdentifier
                 safari_items.append(si)
                 index += 1
     except KeyError as ex:
