@@ -64,6 +64,13 @@ class Network:
         self.lastChannelHistory = ""
         self.ChannelHistory = ""
         self.BSSIDHistory = None
+        # com.apple.wifi.known-networks.plist additional
+        self.AddedAt = None
+        self.JoinedBySystemAt = None
+        self.JoinedByUserAt = None
+        self.UpdatedAt = None
+        #self.usage = None
+        self.Source = ''
     
     def ReadNetworkInfo(self, dictionary, net_type):
         self.Type = net_type
@@ -121,7 +128,9 @@ def PrintAll(networks, output_params, source_path):
                      ('Personal Hotspot',DataType.TEXT),('Possibly hidden network',DataType.TEXT),('Roaming profile type',DataType.TEXT),
                      ('SPRoaming',DataType.TEXT),('System mode',DataType.TEXT),('Temporarily disabled',DataType.TEXT),
                      ('Last connected channel',DataType.TEXT),('Other channel history',DataType.TEXT),
-                     ('BSSIDHistory',DataType.TEXT)
+                     ('BSSIDHistory',DataType.TEXT),('AddedAt',DataType.DATE),('JoinedBySystemAt',DataType.DATE),
+                     ('JoinedByUserAt',DataType.DATE),('UpdatedAt',DataType.DATE),('Source',DataType.TEXT)
+                     #,('Network_Usage',DataType.REAL)
                    ]
 
     log.info ("Found " + str(len(networks)) + " network(s)")
@@ -135,7 +144,8 @@ def PrintAll(networks, output_params, source_path):
                             wifi.RoamingProfileType,wifi.SPRoaming, wifi.SystemMode, wifi.TemporarilyDisabled, 
                             str(wifi.lastChannelHistory), 
                             str(wifi.ChannelHistory) if (wifi.ChannelHistory and len(wifi.ChannelHistory) > 0) else '',
-                            wifi.BSSIDHistory
+                            wifi.BSSIDHistory, wifi.AddedAt, wifi.JoinedBySystemAt, wifi.JoinedByUserAt,
+                            wifi.UpdatedAt, wifi.Source
                           ] )
 
     WriteList("wifi network information", "Wifi", data_list, network_info, output_params, source_path)
@@ -143,30 +153,35 @@ def PrintAll(networks, output_params, source_path):
     
 # # # MAIN PROGRAM BELOW # # # 
 
-def ParseWifi(input_file):
+def ParseWifi(input_path):
     networks = []
     success, plist, error = CommonFunctions.ReadPlist(input_path)
     if success:
-        ReadAirportPrefPlist(plist, networks)
+        if os.path.basename(input_path) == 'com.apple.wifi.known-networks.plist':
+            ReadKnownNetworksPlist(plist, networks, input_path)
+        else:
+            ReadAirportPrefPlist(plist, networks, input_path)
     else:
         log.error ("Could not open plist, error was : " + error)
     return networks
 
-def ProcessOlderAirportPrefPlist(plist, networks, version):
+def ProcessOlderAirportPrefPlist(plist, networks, version, source):
     try:
         rememberedNetworks = plist['RememberedNetworks']
         for network in rememberedNetworks:
             net = Network(version)
+            net.Source = source
             net.ReadNetworkInfo(network, NetType.KNOWN)
             networks.append(net)
     except KeyError:
         log.debug ('RememberedNetworks not found in plist')
 
-def ParseKnownNetworksAndPreferredOrder(known_networks, networks, preferred_order, version, net_type=NetType.KNOWN):
+def ParseKnownNetworksAndPreferredOrder(known_networks, networks, preferred_order, version, source, net_type=NetType.KNOWN):
     #Puts the list of Preferred order into a list and decode the names
     try:
         for network in known_networks:
             net = Network(version)
+            net.Source = source
             net.Name = GetReadableSSID(network, version)
             for name in preferred_order:
                 if name == net.Name:
@@ -201,7 +216,7 @@ def ParseKnownNetworksAndPreferredOrder(known_networks, networks, preferred_orde
     except Exception as e:
         log.exception('Error parsing and adding a known network to the final known network list')
 
-def ReadAirportPrefPlist(plist, networks):
+def ReadAirportPrefPlist(plist, networks, source):
     # Read version info (12=10.8, 14=10.9, 2200=10.10 & higher) Also seen 1900 and 2100
     # Version 1900 has BSSIDHistory (MAC address of AP & timestamp)
     # No version info in SnowLeopard (10.6) !
@@ -211,13 +226,13 @@ def ReadAirportPrefPlist(plist, networks):
     if wifi_plist_ver == 0:
         log.error ('Could not find com.apple.airport.preferences.plist version number')
     if wifi_plist_ver <= 14:
-        ProcessOlderAirportPrefPlist(plist, networks, wifi_plist_ver)
+        ProcessOlderAirportPrefPlist(plist, networks, wifi_plist_ver, source)
         return
     
     #parses known networks first
     preferred_order = [GetReadableSSID(x, wifi_plist_ver) for x in plist.get('PreferredOrder', [])]
     known_networks = plist.get('KnownNetworks', {})
-    ParseKnownNetworksAndPreferredOrder(known_networks, networks, preferred_order, wifi_plist_ver)
+    ParseKnownNetworksAndPreferredOrder(known_networks, networks, preferred_order, wifi_plist_ver, source)
 
     # UpdateHistory is a list, can have multiple elements
     for history_item in plist.get('UpdateHistory', []):
@@ -231,44 +246,96 @@ def ReadAirportPrefPlist(plist, networks):
         prevRemembered = previous.get('RememberedNetworks', [])
         for network in prevRemembered:
             net = Network(prev_version)
+            net.Source = source
             net.ReadNetworkInfo(network, NetType.PREVIOUSREMEMBERED)
             networks.append(net)
         
         prev_networks = []
         prev_preferred_order = [GetReadableSSID(x, prev_version) for x in previous.get('PreferredOrder', [])]
         prev_known_networks = previous.get('KnownNetworks', {})
-        ParseKnownNetworksAndPreferredOrder(prev_known_networks, prev_networks, prev_preferred_order, prev_version, NetType.PREVIOUSREMEMBERED)
+        ParseKnownNetworksAndPreferredOrder(prev_known_networks, prev_networks, prev_preferred_order, prev_version, source, NetType.PREVIOUSREMEMBERED)
         for network in prev_networks:
             networks.append(network)
+
+def ParseWifiFromImage(mac_info, path, networks):
+    if mac_info.IsValidFilePath(path):
+        mac_info.ExportFile(path, __Plugin_Name, '', False)
+        success, plist, error = mac_info.ReadPlist(path)
+        if success:
+            basename = os.path.basename(path)
+            if basename == 'com.apple.wifi.known-networks.plist':
+                ReadKnownNetworksPlist(plist, networks, path)
+            else:
+                ReadAirportPrefPlist(plist, networks, path)
+        else:
+            log.error('Could not open plist ' + path)
+            log.error('Error was: ' + error)
+
+def ReadKnownNetworksPlist(plist, networks, source):
+    '''Read com.apple.wifi.known-networks.plist'''
+
+    for name, network in plist.items():
+        net = Network(0)
+        net.Source = source
+        net.Type = NetType.KNOWN
+        net.Name = network.get('SSID', b'').decode('utf8', 'ignore')
+        net.SSIDString = net.Name
+        net.SecurityType = network.get('SupportedSecurityTypes', '')
+        net.SystemMode = network.get('SystemMode', '')
+        net.AddedAt = network.get('AddedAt', '')
+        net.JoinedBySystemAt = network.get('JoinedBySystemAt', '')
+        net.JoinedByUserAt = network.get('JoinedByUserAt', '')
+        net.LastConnected = max(net.JoinedByUserAt, net.JoinedBySystemAt)
+        net.UpdatedAt = network.get('UpdatedAt', '')
+        #net.usage = details.get('networkUsage', None) # only on ios?
+        details = network.get('__OSSpecific__', None)
+        if details:
+            bssids = []
+            for item in details.get('BSSIDList', []):
+                bssid = item.get('LEAKY_AP_BSSID', None)
+                if bssid:
+                    bssids.append(bssid)
+            if bssids:
+                net.BSSIDHistory = ','.join(bssids)
+            collocated_ssids = []
+            collocated_group_list = details.get('CollocatedGroup')
+            if collocated_group_list:
+                for item in collocated_group_list:
+                    if item.startswith('wifi.ssid.'):
+                        ssid = binascii.unhexlify(item[10:]).decode('utf8', 'ignore')
+                    else:
+                        log.warning(f'Format seems different for CollocatedGroup string {item}')
+                        ssid = item
+                    collocated_ssids.append(ssid)
+            if collocated_ssids:
+                net.CollocatedGroup = collocated_ssids
+            channel_history = []
+            for item in details.get('ChannelHistory', []):
+                channel = item.get('Channel', 0)
+                timestamp = item.get('Timestamp', '')
+                if timestamp:
+                    channel_history.append((str(timestamp), channel))
+            if channel_history:
+                net.ChannelHistory = channel_history
+            net.RoamingProfileType = details.get('RoamingProfileType', '')
+            net.Captive = details.get('CaptiveProfile', {}).get('CaptiveNetwork', False)
+            net.TemporarilyDisabled = details.get('TemporarilyDisabled', False)
+        networks.append(net)
 
 def Plugin_Start(mac_info):
     '''Main Entry point function for plugin'''
     airport_pref_plist_path = '/Library/Preferences/SystemConfiguration/com.apple.airport.preferences.plist'
     airport_pref_backup_plist_path = '/Library/Preferences/SystemConfiguration/com.apple.airport.preferences.plist.backup'
-    mac_info.ExportFile(airport_pref_plist_path, __Plugin_Name, '', False)
-    success, plist, error = mac_info.ReadPlist(airport_pref_plist_path)
-    if success:
-        networks = []
-        ReadAirportPrefPlist(plist, networks)
-        if len(networks) > 0:
-            PrintAll(networks, mac_info.output_params, airport_pref_plist_path)
-        else:
-            log.info('No wifi networks found')
+    known_networks_plist_path = '/Library/Preferences/com.apple.wifi.known-networks.plist'
+    networks = []
+    ParseWifiFromImage(mac_info, airport_pref_plist_path, networks)
+    ParseWifiFromImage(mac_info, airport_pref_backup_plist_path, networks)
+    ParseWifiFromImage(mac_info, known_networks_plist_path, networks)
+
+    if len(networks) > 0:
+        PrintAll(networks, mac_info.output_params, '')
     else:
-        log.error('Could not open plist ' + airport_pref_plist_path)
-        log.error('Error was: ' + error)
-    # Try reading backup now
-    success, plist, error = mac_info.ReadPlist(airport_pref_backup_plist_path)
-    if success:
-        networks = []
-        ReadAirportPrefPlist(plist, networks)
-        if len(networks) > 0:
-            PrintAll(networks, mac_info.output_params, airport_pref_backup_plist_path)
-        else:
-            log.info('No wifi networks found')
-    else:
-        log.error('Could not open plist ' + airport_pref_backup_plist_path)
-        log.error('Error was: ' + error)
+        log.info(f'No wifi networks found!')
 
 def Plugin_Start_Standalone(input_files_list, output_params):
     log.info("Module Started as standalone")
