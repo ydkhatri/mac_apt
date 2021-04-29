@@ -224,7 +224,8 @@ def ReadAirportPrefPlist(plist, networks, source):
     wifi_plist_ver = plist.get('Version', 0)
     log.debug ("com.apple.airport.preferences.plist version is {}".format(wifi_plist_ver))
     if wifi_plist_ver == 0:
-        log.error ('Could not find com.apple.airport.preferences.plist version number')
+        if not source.endswith('.backup'):
+            log.error ('Could not find com.apple.airport.preferences.plist version number')
     if wifi_plist_ver <= 14:
         ProcessOlderAirportPrefPlist(plist, networks, wifi_plist_ver, source)
         return
