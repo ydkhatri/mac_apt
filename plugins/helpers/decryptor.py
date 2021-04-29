@@ -420,13 +420,20 @@ class EncryptedVol:
             Block Count of the Wrapped Volume Keybag
             UUID
         """
+        volume_uuid = self.ApfsVolume.uuid
+        volume_uuid = volume_uuid.replace("-", "")
+        
         for kl_entry in container_keybag.mk_locker.kl_entries:
             if kl_entry.KeyBag_Tags == KB_TAG_VOLUME_UNLOCK_RECORDS:
-                # Returns the starting offset and the block count of the volume keybag if keylen is 16
-                if kl_entry.key_keylen == 16:
-                    log.debug(f"Found Wrapped Volume Keybag - Start Address: 0x{kl_entry.pr_start_paddr:X}" +
-                                f" Block Count: {kl_entry.pr_block_count}")
-                    return kl_entry.pr_start_paddr, kl_entry.pr_block_count, kl_entry.UUID
+                # Converts the UUID in the unwrapped keybag entry to GUID like format for comparisons
+                byte_uuid = kl_entry.UUID
+                readable_UUID = convert_keybag_uuid_to_string(byte_uuid)
+                if readable_UUID == volume_uuid:
+                    # Returns the starting offset and the block count of the volume keybag if keylen is 16
+                    if kl_entry.key_keylen == 16:
+                        log.debug(f"Found Wrapped Volume Keybag - Start Address: 0x{kl_entry.pr_start_paddr:X}" +
+                                    f" Block Count: {kl_entry.pr_block_count}")
+                        return kl_entry.pr_start_paddr, kl_entry.pr_block_count, kl_entry.UUID
 
     def find_wrapped_vek(self, container_keybag):
         """
