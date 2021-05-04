@@ -117,6 +117,8 @@ def Plugin_Start(mac_info):
     if mac_info.IsValidFilePath('/private/etc/kcpassword'):
         auto_password = GetAutoLoginPass(mac_info)
         auto_username = GetAutoLoginUser(mac_info)
+        if auto_username == '':
+            log.info(f'AUTOLOGIN username not found, password is {auto_password}')
         auto_login = True
 
     users = []
