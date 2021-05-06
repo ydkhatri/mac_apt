@@ -578,8 +578,8 @@ def Plugin_Start_Ios(ios_info):
     source_path = '/private/var/mobile/Library/Safari'
     if ios_info.IsValidFolderPath(source_path):
         ReadDbFromImage(ios_info, source_path + '/History.db', 'mobile', safari_items, ReadHistoryDb, 'safari History')
-        ReadDbFromImage(ios_info, folder_path + '/CloudTabs.db', 'mobile', safari_items, ReadCloudTabsDb, 'safari CloudTabs')
-        ReadDbFromImage(ios_info, folder_path + '/BrowserState.db', 'mobile', safari_items, ReadBrowserStateDb, 'safari BrowserState')
+        ReadDbFromImage(ios_info, source_path + '/CloudTabs.db', 'mobile', safari_items, ReadCloudTabsDb, 'safari CloudTabs')
+        ReadDbFromImage(ios_info, source_path + '/BrowserState.db', 'mobile', safari_items, ReadBrowserStateDb, 'safari BrowserState')
     if len(safari_items) > 0:
         PrintAll(safari_items, ios_info.output_params, '')
     else:
