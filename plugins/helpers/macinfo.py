@@ -1714,11 +1714,12 @@ class MountedIosInfo(MountedMacInfo):
     def _GetUserInfo(self):
         return NotImplementedError()
 
-    def _GetSystemInfo(self):
+    def _GetSystemInfo(self, plist_path):
         ''' Gets system version information'''
+        found_info = False
         try:
-            log.debug("Trying to get system version from /System/Library/CoreServices/SystemVersion.plist")
-            f = self.Open('/System/Library/CoreServices/SystemVersion.plist')
+            log.debug(f"Trying to get system version from {plist_path}")
+            f = self.Open(plist_path)
             if f != None:
                 success, plist, error = CommonFunctions.ReadPlist(f)
                 if success:
@@ -1854,8 +1855,8 @@ class MountedIosInfo(MountedMacInfo):
                             GROUP BY code_signing_id_text
                             ORDER BY code_signing_id_text, child_code_signing_id_text
                             ) a LEFT JOIN code_signing_data b on a.id=b.cs_info_id
-                        WHERE b.data LIKE "%com.apple.security.application-groups%" or
-                        b.data LIKE "%com.apple.security.system-groups%"
+                        WHERE INSTR(data, CAST("com.apple.security.application-groups" AS blob)) > 0 
+                        or INSTR(data, CAST("com.apple.security.system-groups" AS blob)) > 0
                         """
                         cursor = conn.execute(query)
                         try:
@@ -1924,29 +1925,19 @@ class MountedIosInfo(MountedMacInfo):
                     success, plist, error = self.ReadPlist(plist_path)
                     if success:
                         identifier = plist.get('MCMMetadataIdentifier', '')
-                        found = False
                         for app in apps:
                             for group in app.app_groups:
                                 if group == identifier:
                                     container = ContainerInfo(identifier, uuid, groups_path + '/' + uuid)
                                     app.app_group_containers.append(container)
-                                    found = True
-                                    break
-                            if found: break
                             for group in app.sys_groups:
                                 if group == identifier:
                                     container = ContainerInfo(identifier, uuid, groups_path + '/' + uuid)
                                     app.sys_group_containers.append(container)
-                                    found = True
-                                    break
-                            if found: break
                             for group in app.extensions:
                                 if group == identifier:
                                     container = ContainerInfo(identifier, uuid, groups_path + '/' + uuid)
                                     app.ext_group_containers.append(container)
-                                    found = True
-                                    break
-                            if found: break
                     else:
                         log.error(f'Failed to read {plist_path}. {error}')
                 else:
