@@ -1,4 +1,4 @@
-Updates in 20210429 (v1.2):
+Updates in 20210506 (v1.2):
 
 + Support for Graykey extracted filesystem (only /private/var)
 + Add parsing of com.apple.wifi.known-networks.plist
