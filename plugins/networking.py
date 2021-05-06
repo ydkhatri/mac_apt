@@ -224,10 +224,14 @@ def GetResolvConf(mac_info):
 
 def GetEtcHosts(mac_info):
     '''Reads hosts file'''
-    etc_hosts = GetFileContents(mac_info, '/private/etc/hosts')
-    mac_info.ExportFile('/private/etc/hosts', __Plugin_Name, '', False)
-    for line in etc_hosts:
-        log.info("/etc/hosts Content --> " + line)
+    etc_hosts_path = '/private/etc/hosts'
+    if mac_info.IsValidFilePath(etc_hosts_path):
+        etc_hosts = GetFileContents(mac_info, etc_hosts_path)
+        mac_info.ExportFile(etc_hosts_path, __Plugin_Name, '', False)
+        for line in etc_hosts:
+            log.info("/etc/hosts Content --> " + line)
+    else:
+        log.info("{} does not exist!".format(etc_hosts_path))
 
 def Plugin_Start(mac_info):
     '''Main Entry point function for plugin'''  
