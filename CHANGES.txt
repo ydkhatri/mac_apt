@@ -1,3 +1,13 @@
+Updates in 20210429 (v1.2):
+
++ Support for Graykey extracted filesystem (only /private/var)
++ Add parsing of com.apple.wifi.known-networks.plist
++ Add parsing of wifi backup plist com.apple.airport.preferences.plist.backup
++ Add tab closed date to Safari LastSession output
+
+! Fixed another bug that prevented APFS decryption in some disks due to not checking UUIDs when searching for Volume Keybag
+! Fixed minor bug with Safari plugin for ios
+
 Updates in 20210210 (v1.1):
 
 + Add option for specifying password in file (-pf), because passwords on command line that have special chars like \ or ^ have problems

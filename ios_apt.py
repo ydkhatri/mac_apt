@@ -44,8 +44,12 @@ def GetPlugin(name):
     return None
 
 def FindIosFiles(ios_info):
-    if ios_info.IsValidFilePath('/System/Library/CoreServices/SystemVersion.plist'):
-        return ios_info._GetSystemInfo()
+    plist_path_1 = '/System/Library/CoreServices/SystemVersion.plist'
+    plist_path_2 = '/private/var/containers/Shared/SystemGroup/systemgroup.com.apple.lsd.iconscache/Library/Caches/com.apple.IconsCache/__system_version_info__'
+    if ios_info.IsValidFilePath(plist_path_1):
+        return ios_info._GetSystemInfo(plist_path_1)
+    elif ios_info.IsValidFilePath(plist_path_2):
+        return ios_info._GetSystemInfo(plist_path_2)
     else:
         log.error("Could not find iOS system version!")
     return False
