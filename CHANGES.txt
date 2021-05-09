@@ -1,3 +1,7 @@
+Updates in 20210506 (v1.3):
+
++ New AXIOMZIP option to read Axiom created targeted collection (not full disk image)
+
 Updates in 20210506 (v1.2):
 
 + Support for Graykey extracted filesystem (only /private/var)

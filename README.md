@@ -1,8 +1,8 @@
 # mac_apt - macOS (and iOS) Artifact Parsing Tool  
-[![Latest version](https://img.shields.io/badge/version-v1.2-blue)](https://github.com/ydkhatri/mac_apt/releases/tag/v1.2)
+[![Latest version](https://img.shields.io/badge/version-v1.3-blue)](https://github.com/ydkhatri/mac_apt/releases/tag/v1.3)
 [![status](https://img.shields.io/badge/status-stable-green)]()
 
-[![Latest version](https://img.shields.io/badge/version-v1.3.dev-blue)](https://github.com/ydkhatri/mac_apt/releases/tag/v1.3.dev)
+[![Latest version](https://img.shields.io/badge/version-v1.4.dev-blue)](https://github.com/ydkhatri/mac_apt/releases/tag/v1.4.dev)
 [![status](https://img.shields.io/badge/status-development-orange)]()
 
 mac_apt is a DFIR (Digital Forensics and Incident Response) tool to process Mac computer full disk images (**or _live_ machines**) and extract data/metadata useful for forensic investigation. It is a python based framework, which has plugins to process individual artifacts (such as Safari internet history, Network interfaces, Recently accessed files & volumes, ..)
@@ -21,6 +21,7 @@ mac_apt now also includes **[ios_apt](https://swiftforensics.com/2020/12/introdu
 * Reads the Spotlight database and Unified Logging (tracev3) files
 
 #### Latest
+:heavy_check_mark: Can read Axiom created targeted collection zip files
 :heavy_check_mark: ios_apt can read GrayKey extracted file system
 :heavy_check_mark: Can read [RECON](https://sumuri.com/software/recon-itr/) created .sparseimage files  
 :heavy_check_mark: Support for macOS Big Sur Sealed volumes (11.0)  
