@@ -23,6 +23,7 @@ import sys
 import tempfile
 import time
 import traceback
+import zipfile
 from io import BytesIO
 from uuid import UUID
 from plugins.helpers.apfs_reader import *
@@ -911,6 +912,21 @@ class MacInfo:
                         f.close()
                 except (OSError, KeyError, ValueError, IndexError, TypeError):
                     log.exception ("Could not open/read plist " + user_plist_path)
+        if len(user_plists) == 0:
+            # Could not retrieve user plists, let's at least add root user
+            # other users will be retieved from /Users folder by _GetDomainUserInfo()
+            if self.IsValidFolderPath('/private/var/root'):
+                target_user = UserInfo()
+                self.users.append(target_user)
+                target_user.UID = '0'
+                target_user.GID = '0'
+                target_user.UUID = 'FFFFEEEE-DDDD-CCCC-BBBB-AAAA00000000'
+                target_user.home_dir = '/private/var/root'
+                target_user.user_name = 'root'
+                target_user.real_name = 'System Administrator'
+                target_user.DARWIN_USER_DIR = '/private/var/folders/zz/zyxvpxvq6csfxvn_n0000000000000/0'
+                target_user.DARWIN_USER_TEMP_DIR = '/private/var/folders/zz/zyxvpxvq6csfxvn_n0000000000000/T'
+                target_user.DARWIN_USER_CACHE_DIR = '/private/var/folders/zz/zyxvpxvq6csfxvn_n0000000000000/C'
         self._GetDomainUserInfo()
         self._GetDarwinFoldersInfo() # This probably does not apply to OSX < Mavericks !
 
@@ -961,6 +977,7 @@ class MacInfo:
                         elif self.os_version.startswith('10.13'): self.os_friendly_name = 'High Sierra'
                         elif self.os_version.startswith('10.14'): self.os_friendly_name = 'Mojave'
                         elif self.os_version.startswith('10.15'): self.os_friendly_name = 'Catalina'
+                        elif self.os_version.startswith('10.16'): self.os_friendly_name = 'Big Sur Beta'
                         elif self.os_version.startswith('10.0'): self.os_friendly_name = 'Cheetah'
                         elif self.os_version.startswith('10.1'): self.os_friendly_name = 'Puma'
                         elif self.os_version.startswith('10.2'): self.os_friendly_name = 'Jaguar'
@@ -1658,6 +1675,287 @@ class MountedMacInfoSeperateSysData(MountedMacInfo):
             log.exception("Exception details")
         log.debug("req={} final={}".format(path_in_image, full_path))
         return full_path
+
+class ZipMacInfo(MacInfo):
+    def __init__(self, zip_path, output_params):
+        super().__init__(output_params)
+        self.zip_path = zip_path
+        log.debug('Reading zip archive..')
+        self.zip_file = zipfile.ZipFile(zip_path)
+        log.debug('Generating list of file paths')
+        self.name_list = self.zip_file.namelist()
+        log.debug(f'Total files = {len(self.name_list)}')
+
+    #def BuildFullPath(self, path_in_image):
+    #    return path_in_image
+
+    def GetFileMACTimes(self, file_path, info=None):
+        '''Gets MAC timestamps for a file or folder.
+           Assumes file_path starts with / 
+        '''
+        times = { 'c_time':None, 'm_time':None, 'cr_time':None, 'a_time':None }
+        if info is None:
+            try:
+                info = self.zip_file.getinfo(file_path[1:])
+            except KeyError as ex:
+                # Perhaps this is a folder, and it doesn't end in /
+                file_path_folder = file_path
+                if file_path_folder[-1] != '/':
+                    file_path_folder += '/'
+                try:
+                    info = self.zip_file.getinfo(file_path_folder[1:])
+                except KeyError as ex:
+                    log.exception(f'Error trying to get MAC times for {file_path_folder}')
+        if info and len(info.extra) > 24:
+            timestamps = struct.unpack('<QQQ', info.extra[-24:])
+            times['m_time'] = CommonFunctions.ReadWindowsFileTime(timestamps[0])
+            times['cr_time'] = CommonFunctions.ReadWindowsFileTime(timestamps[2])
+            times['a_time'] = CommonFunctions.ReadWindowsFileTime(timestamps[1])
+        return times
+
+    def IsSymbolicLink(self, path):
+        # TODO 
+        return False
+
+    def IsValidFilePath(self, path):
+        try:
+            info = self.zip_file.getinfo(path[1:])
+            return not info.is_dir() # check if its not folder
+        except KeyError as ex:
+            pass
+        return False
+
+    def IsValidFolderPath(self, path):
+        try:
+            if path[-1] != '/': # For Axiom created zip files, folders have their own objects, which end in /
+                path += '/'
+            info = self.zip_file.getinfo(path[1:])
+            return info.is_dir() # check if its folder
+        except KeyError as ex:
+            pass
+        return False
+
+    def GetFileSize(self, full_path, error=None):
+        '''Gets file size'''
+        try:
+            info = self.zip_file.getinfo(full_path[1:])
+            return info.file_size
+        except KeyError as ex:
+            log.error("Exception in GetFileSize() : " + str(ex))
+        return error
+
+    def GetUserAndGroupIDForFile(self, path):
+        return self._GetUserAndGroupID(path)
+
+    def GetUserAndGroupIDForFolder(self, path):
+        return self._GetUserAndGroupID(path)
+
+    def _ListFilesInZipFolder(self, folder_path):
+        '''folder_path must begin with / '''
+        if folder_path[-1] != '/':
+            folder_path += '/'
+        
+        path_list = []
+        reg = re.compile(f'^{folder_path}[^/]+/?$')
+        for member in self.name_list:
+            # Typically zip members won't have / as first character, so add it
+            if reg.match('/' + member):
+                path_list.append('/' + member)
+        return path_list
+
+    def ListItemsInFolder(self, path='/', types_to_fetch=EntryType.FILES_AND_FOLDERS, include_dates=False):
+        ''' 
+        Returns a list of files and/or folders in a list
+        Format of list = [ {'name':'got.txt', 'type':EntryType.FILES, 'size':10}, .. ]
+        'path' should be linux style using forward-slash like '/var/db/xxyy/file.tdc'
+        and starting at root / 
+        '''
+        items = [] # List of dictionaries
+        if path[-1] != '/':
+            path += '/'
+        try:
+            info = self.zip_file.getinfo(path[1:])
+        except KeyError:
+            log.error(f'Folder {path} not present in archive')
+            return items
+
+        dir = self._ListFilesInZipFolder(path)
+        for entry in dir:
+            info = self.zip_file.getinfo(entry[1:]) # removing initial / as it's not in zip, we added it
+            entry_type = EntryType.FOLDERS if (entry[-1] == '/') else EntryType.FILES
+            if entry[-1] == '/':
+                name = os.path.basename(entry[0:-1])
+            else:
+                name = os.path.basename(entry)
+            item = { 'name':name, 'type':entry_type, 'size':info.file_size}
+            if include_dates: 
+                item['dates'] = self.GetFileMACTimes(entry, info)
+            if types_to_fetch == EntryType.FILES_AND_FOLDERS:
+                items.append( item )
+            elif types_to_fetch == EntryType.FILES and entry_type == EntryType.FILES:
+                items.append( item )
+            elif types_to_fetch == EntryType.FOLDERS and entry_type == EntryType.FOLDERS:
+                items.append( item )
+
+        return items
+
+    def ReadSymLinkTargetPath(self, path):
+        '''Returns the target file/folder's path from the sym link path provided'''
+        #TODO
+        target_path = ''
+        # try:
+        #     if not self.is_windows:
+        #         target_path = os.readlink(self.BuildFullPath(path))
+        #     else:
+        #         target_path = super().ReadSymLinkTargetPath(path)
+        # except:
+        #     log.exception("Error resolving symlink : " + path)
+        return target_path
+
+    def Open(self, path):
+        try:
+            log.debug("Trying to open file : " + path)
+            file = self.zip_file.open(path[1:])
+            return file
+        except (KeyError, RuntimeError, OSError) as ex:
+            log.exception("Error opening file : " + path)
+        return None
+
+    def ExtractFile(self, path_in_image, destination_path):
+        #TODO - replace with self.zip_file.extract(..)
+        source_file = self.Open(path_in_image)
+        if source_file:
+            size = self.GetFileSize(path_in_image)
+
+            BUFF_SIZE = 20 * 1024 * 1024
+            offset = 0
+            try:
+                with open(destination_path, 'wb') as f:
+                    while offset < size:
+                        available_to_read = min(BUFF_SIZE, size - offset)
+                        data = source_file.read(available_to_read)
+                        if not data: break
+                        offset += len(data)
+                        f.write(data)
+                    f.flush()
+            except (OSError) as ex:
+                log.exception ("Failed to create file for writing at " + destination_path)
+                source_file.close()
+                return False
+            source_file.close()
+            return True
+        return False
+
+    def _GetUserAndGroupID(self, path):
+        '''
+            Returns tuple (success, UID, GID) for object identified by path.
+            UID & GID are returned as strings.
+            If failed to get values, success=False
+        '''
+        success, uid, gid = False, 0, 0
+        log.error('_GetUserAndGroupID not present in zip files')
+        return success, uid, gid
+
+    def _GetDarwinFoldersInfo(self):
+        '''Gets DARWIN_*_DIR paths '''
+
+        for user in self.users:
+            if user.UUID != '' and user.UID not in ('', '-2', '1', '201'): # Users nobody, daemon, guest don't have one
+                darwin_path = '/private/var/folders/' + GetDarwinPath2(user.UUID, user.UID)
+                if not self.IsValidFolderPath(darwin_path):
+                    darwin_path = '/private/var/folders/' + GetDarwinPath(user.UUID, user.UID)
+                    if not self.IsValidFolderPath(darwin_path):
+                        if user.user_name.startswith('_') and user.UUID.upper().startswith('FFFFEEEE'):
+                            pass
+                        else:
+                            log.warning(f'Could not find DARWIN_PATH for user {user.user_name}, uid={user.UID}, uuid={user.UUID}')
+                        continue
+                user.DARWIN_USER_DIR       = darwin_path + '/0'
+                user.DARWIN_USER_CACHE_DIR = darwin_path + '/C'
+                user.DARWIN_USER_TEMP_DIR  = darwin_path + '/T'
+
+    def _GetDomainUserInfo(self):
+        log.debug('Trying to get domain profiles from /Users/')
+        domain_users = []
+        users_folder = self.ListItemsInFolder('/Users/', EntryType.FOLDERS)
+        for folder in users_folder:
+            folder_name = folder['name']
+            if folder_name in ('Shared', 'root'):
+                continue
+            found_user = False
+            for user in self.users:
+                if user.user_name == folder_name:
+                    found_user = True # Existing local user
+                    break
+            if found_user: continue
+            else:
+                log.info(f'Found a domain user {folder_name} or deleted user?')
+                target_user = UserInfo()
+                domain_users.append(target_user)
+                target_user.home_dir = '/Users/' + folder_name
+                target_user.user_name = folder_name
+                target_user.real_name = folder_name
+                target_user._source = '/Users/' + folder_name
+        if domain_users:
+            known_darwin_paths = set()
+            for user in self.users:
+                if user.UID and user.UUID and not user.UID.startswith('-'):
+                    known_darwin_paths.add('/private/var/folders/' + GetDarwinPath(user.UUID, user.UID)) # They haven't been populated yet in user!
+                    known_darwin_paths.add('/private/var/folders/' + GetDarwinPath2(user.UUID, user.UID))
+            # try to get darwin_cache folders
+            var_folders = self.ListItemsInFolder('/private/var/folders', EntryType.FOLDERS)
+            for level_1 in var_folders:
+                name_1 = level_1['name']
+                var_folders_level_2 = self.ListItemsInFolder(f'/private/var/folders/{name_1}', EntryType.FOLDERS)
+                for level_2 in var_folders_level_2:
+                    darwin_path = f'/private/var/folders/{name_1}/' + level_2['name']
+                    if darwin_path in known_darwin_paths:
+                        continue
+                    else:
+                        matched_darwin_path_to_user = False
+                        font_reg_db = darwin_path + '/C/com.apple.FontRegistry/fontregistry.user'
+                        if self.IsValidFilePath(font_reg_db):
+                            try:
+                                sqlite_wrapper = SqliteWrapper(self)
+                                db = sqlite_wrapper.connect(font_reg_db)
+                                if db:
+                                    cursor = db.cursor()
+                                    cursor.execute('SELECT path_column from dir_table WHERE domain_column=1')
+                                    user_path = ''
+                                    for row in cursor:
+                                        user_path = row[0]
+                                        break
+                                    cursor.close()
+                                    db.close()
+                                    if user_path:
+                                        if user_path.startswith('/Users/'):
+                                            username = user_path.split('/')[2]
+                                            for dom_user in domain_users:
+                                                if dom_user.user_name == username:
+                                                    dom_user.DARWIN_USER_DIR = darwin_path + '/0'
+                                                    dom_user.DARWIN_USER_TEMP_DIR = darwin_path + '/T'
+                                                    dom_user.DARWIN_USER_CACHE_DIR = darwin_path + '/C'
+                                                    log.debug(f'Found darwin path for user {username}')
+                                                    matched_darwin_path_to_user = True
+                                                    # Try to get uid now.
+                                                    if self.IsValidFolderPath(dom_user.DARWIN_USER_DIR + '/com.apple.LaunchServices.dv'):
+                                                        for item in self.ListItemsInFolder(dom_user.DARWIN_USER_DIR + '/com.apple.LaunchServices.dv', EntryType.FILES):
+                                                            name = item['name']
+                                                            if name.startswith('com.apple.LaunchServices.trustedsignatures-') and name.endswith('.db'):
+                                                                dom_user.UID = name[43:-3]
+                                                                break
+                                                    break
+                                        else:
+                                            log.error(f'user profile path was non-standard - {user_path}')
+                                    else:
+                                        log.error('Query did not yield any output!')
+                                    if not matched_darwin_path_to_user:
+                                        log.error(f'Could not find mapping for darwin folder {darwin_path} to user')
+                            except sqlite3.Error:
+                                log.exception(f'Error reading {font_reg_db}, Cannot map darwin folder to user profile!')
+                        else:
+                            log.error(f'Could not find {font_reg_db}, Cannot map darwin folder to user profile!')
+            self.users.extend(domain_users)
 
 class ApplicationInfo:
     def __init__(self, app_identifier):

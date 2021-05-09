@@ -36,7 +36,7 @@ from plugins.helpers.disk_report import *
 from plugin import *
 from uuid import UUID
 
-__VERSION = "1.2"
+__VERSION = "1.3"
 __PROGRAMNAME = "macOS Artifact Parsing Tool"
 __EMAIL = "yogesh@swiftforensics.com"
 
@@ -51,7 +51,7 @@ def IsItemPresentInList(collection, item):
 
 def CheckInputType(input_type):
     input_type = input_type.upper()
-    return input_type in ['AFF4','E01','DD','DMG','VMDK','MOUNTED','SPARSE']
+    return input_type in ['AFF4','E01','DD','DMG','VMDK','MOUNTED','SPARSE','AXIOMZIP']
 
 ######### FOR HANDLING E01 file ###############
 class ewf_Img_Info(pytsk3.Img_Info):
@@ -419,7 +419,7 @@ arg_parser = argparse.ArgumentParser(description='mac_apt is a framework to proc
                                                  f'You are running {__PROGRAMNAME} version {__VERSION}\n\n'\
                                                  'Note: The default output is now sqlite, no need to specify it now',
                                     epilog=plugins_info, formatter_class=argparse.RawTextHelpFormatter)
-arg_parser.add_argument('input_type', help='Specify Input type as either DD, DMG, E01, VMDK, AFF4, SPARSE or MOUNTED')
+arg_parser.add_argument('input_type', help='Specify Input type as either DD, DMG, E01, VMDK, AFF4, SPARSE, AXIOMZIP or MOUNTED')
 arg_parser.add_argument('input_path', help='Path to macOS image/volume')
 arg_parser.add_argument('-o', '--output_path', help='Path where output files will be created')
 arg_parser.add_argument('-x', '--xlsx', action="store_true", help='Save output in Excel spreadsheet')
@@ -536,6 +536,12 @@ try:
             found_macos = FindMacOsFiles(mac_info)
         else:
             Exit("Exiting -> Cannot browse mounted image at " + args.input_path)
+    elif args.input_type.upper() == 'AXIOMZIP':
+        if os.path.isfile(args.input_path):
+            mac_info = macinfo.ZipMacInfo(args.input_path, output_params)
+            found_macos = FindMacOsFiles(mac_info)
+        else:
+            Exit("Exiting -> Cannot read Axiom Targeted collection zip image at " + args.input_path)
     log.info("Opened image " + args.input_path)
 except Exception as ex:
     log.error("Failed to load image. Error Details are: " + str(ex))
@@ -550,7 +556,7 @@ if args.password_file:
 elif args.password:
     mac_info.password = args.password
 
-if args.input_type.upper() != 'MOUNTED':
+if args.input_type.upper() not in ('MOUNTED','AXIOMZIP'):
     mac_info.pytsk_image = img
     mac_info.use_native_hfs_parser = True #False if args.use_tsk else True
     mac_info.dont_decrypt = True if args.dont_decrypt else False
