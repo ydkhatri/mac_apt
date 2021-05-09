@@ -474,8 +474,8 @@ def Plugin_Start(mac_info):
             parseDb(c, quicklook_array, quicklook_db_path, thumbnail_file, mac_info, user)
         else:
             log.debug("QuickLook data from Mac OS 10.15+ found... Processing")
-            if not hasattr(mac_info, 'apfs_db'): # Check if this is from mounted disk
-                log.warning("Since the APFS database is not available (MOUNTED mode?), file inodes won't be resolved to paths.")
+            if not hasattr(mac_info, 'apfs_db') or isinstance(mac_info, ZipMacInfo): # Check if this is from mounted disk or zip file
+                log.warning("Since the APFS database is not available (MOUNTED/ZIP mode?), file inodes won't be resolved to paths.")
             parseDbNew(c, quicklook_array, quicklook_db_path, thumbnail_file, mac_info, user)
 
         # Close the index.sqlite

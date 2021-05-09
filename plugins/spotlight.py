@@ -473,6 +473,11 @@ def Plugin_Start(mac_info):
     spotlight_base_path = '/.Spotlight-V100'
     if mac_info.IsValidFolderPath(spotlight_base_path):
         ProcessVolumeStore(mac_info, spotlight_base_path)
+    else:
+        # For live/zip volume, Data may need to be accessed here:
+        spotlight_base_path = '/System/Volumes/Data/.Spotlight-V100'
+        if mac_info.IsValidFolderPath(spotlight_base_path):
+            ProcessVolumeStore(mac_info, spotlight_base_path, 'DataVolume')
     # For catalina's read-only volume
     spotlight_base_path = '/private/var/db/Spotlight-V100/BootVolume'
     if mac_info.IsValidFolderPath(spotlight_base_path):
