@@ -1,3 +1,7 @@
+Updates in 20210512 (v1.3.1):
+
++ Fixes small compilation issue in ios_apt.exe (no actual code changes) which caused some issues when the EXE was run
+
 Updates in 20210506 (v1.3):
 
 + New AXIOMZIP option to read Axiom created targeted collection (not full disk image)

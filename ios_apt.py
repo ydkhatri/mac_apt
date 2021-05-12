@@ -26,7 +26,7 @@ import time
 import textwrap
 from plugin import *
 
-__VERSION = "1.3"
+__VERSION = "1.3.1"
 __PROGRAMNAME = "iOS Artifact Parsing Tool"
 __EMAIL = "yogesh@swiftforensics.com"
 
@@ -53,6 +53,13 @@ def FindIosFiles(ios_info):
     else:
         log.error("Could not find iOS system version!")
     return False
+
+def Exit(message=''):
+    if log and (len(message) > 0):
+        log.info(message)
+        sys.exit()
+    else:
+        sys.exit(message)
 
 def SetupExportLogger(output_params):
     '''Creates the csv writer for logging files exported'''
