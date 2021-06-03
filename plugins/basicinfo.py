@@ -1,10 +1,10 @@
 '''
-   Copyright (c) 2017 Yogesh Khatri 
+   Copyright (c) 2017 Yogesh Khatri
 
    This file is part of mac_apt (macOS Artifact Parsing Tool).
-   Usage or distribution of this software/code is subject to the 
+   Usage or distribution of this software/code is subject to the
    terms of the MIT License.
-   
+
 '''
 
 import logging
@@ -15,7 +15,7 @@ from plugins.helpers.disk_report import Disk_Info
 from plugins.helpers.macinfo import *
 from plugins.helpers.writer import *
 
-__Plugin_Name = "BASICINFO" 
+__Plugin_Name = "BASICINFO"
 __Plugin_Friendly_Name = "Basic system and OS configuration"
 __Plugin_Version = "0.1"
 __Plugin_Description = "Gets basic system and OS configuration like SN, timezone, device name, last logged in user, FS info, etc.."
@@ -102,7 +102,7 @@ def ReadSerialFromDb(mac_info, source):
                             break
                     except sqlite3.Error as ex:
                         log.exception("Db cursor error while reading file " + source)
-                    
+
                 except sqlite3.Error as ex:
                     log.error ("Sqlite error - \nError details: \n" + str(ex))
                 conn.close()
@@ -135,7 +135,7 @@ def GetMacSerialNum(mac_info):
                 basic_data.append(['HARDWARE', 'Mac Serial Number', serial_num,'Hardware Serial Number', sn_source3])
                 mac_info.ExportFile(sn_source3, __Plugin_Name, '')
 
-# Sources - /private/etc/localtime and /Library/Preferences/.GlobalPreferences.plist 
+# Sources - /private/etc/localtime and /Library/Preferences/.GlobalPreferences.plist
 def GetTimezone(mac_info):
     global_pref_plist_path = '/Library/Preferences/.GlobalPreferences.plist'
     mac_info.ExportFile(global_pref_plist_path, __Plugin_Name, '', False)
@@ -149,7 +149,7 @@ def GetTimezone(mac_info):
                 num_items_read += 1
             except KeyError: pass
         mac_version_dict = mac_info.GetVersionDictionary()
-        if num_items_read < 2 and (mac_version_dict['major'] == 10) and (mac_version_dict['minor'] < 12): # Not seen in later versions! 
+        if num_items_read < 2 and (mac_version_dict['major'] == 10) and (mac_version_dict['minor'] < 12): # Not seen in later versions!
             log.info('Only read {} items from TimeZone.SelectedCity, this does not seem right!'.format(num_items_read))
     else:
         log.error('Failed to read plist ' + global_pref_plist_path + " Error was : " + error_message)
@@ -200,7 +200,16 @@ def GetLastLoggedInUser(mac_info):
                     continue
                 elif item == 'AccountInfo':
                     for k, v in value.items():
-                        basic_data.append(['USER-LOGIN', item + '.' +  k, str(v), '?', loginwindow_plist_path])
+                        if k == 'FirstLogins':
+                            for username in v.keys():
+                                basic_data.append(['USER-LOGIN', item + '.' +  k, str(username), 'Logged in user once', loginwindow_plist_path])
+                        elif k == 'MaximumUsers':
+                            basic_data.append(['USER-LOGIN', item + '.' +  k, str(v), 'Maximum number of Fast User Switching (FUS) users at the same time', loginwindow_plist_path])
+                        elif k == 'OnConsole':
+                            for username in v.keys():
+                                basic_data.append(['USER-LOGIN', item + '.' +  k, str(username), 'Logged in user once by Fast User Switching (FUS)', loginwindow_plist_path])
+                        else:
+                            basic_data.append(['USER-LOGIN', item + '.' +  k, str(v), '?', loginwindow_plist_path])
                 else:
                     basic_data.append(['USER-LOGIN', item, str(value), 'unknown', loginwindow_plist_path])
         except ValueError as ex:
@@ -215,11 +224,11 @@ def GetModelAndHostNameFromPreference(mac_info, preference_plist_path):
     mac_info.ExportFile(preference_plist_path, __Plugin_Name, '', False)
     success, plist, error_message = mac_info.ReadPlist(preference_plist_path)
     if success:
-        try: 
+        try:
             model = plist['Model']
             basic_data.append(['HARDWARE', 'Model', model, 'Mac Hardware Model', preference_plist_path])
         except KeyError: pass
-        try: 
+        try:
             hostname = plist['System']['System']['HostName']
             basic_data.append(['SYSTEM', 'HostName', hostname, 'Host Name', preference_plist_path])
         except KeyError: log.info('/System/System/HostName not found in ' + preference_plist_path)
@@ -233,7 +242,7 @@ def GetModelAndHostNameFromPreference(mac_info, preference_plist_path):
                 basic_data.append(['SYSTEM', k, v, '', preference_plist_path])
         except KeyError: log.info('/System/Network/HostNames not found in ' + preference_plist_path)
     else:
-        log.error('Failed to read plist ' + preference_plist_path + " Error was : " + error_message)    
+        log.error('Failed to read plist ' + preference_plist_path + " Error was : " + error_message)
     return
 
 def GetMacOSVersion(mac_info):
@@ -262,7 +271,7 @@ def Plugin_Start_Standalone(input_files_list, output_params):
 def GetIOSVersion(ios_info):
     basic_data.append(['SYSTEM', 'iOS Version', ios_info.os_version, ios_info.os_friendly_name, '/System/Library/CoreServices/SystemVersion.plist'])
     basic_data.append(['SYSTEM', 'iOS Build Version', ios_info.os_build, ios_info.os_friendly_name, '/System/Library/CoreServices/SystemVersion.plist'])
-        
+
 def GetLastWipeDate(ios_info):
     pass #TODO
 
@@ -276,9 +285,9 @@ def GetDiskUsageAndSyncInfo(ios_info):
         if disk_usage:
             disk_size = disk_usage.get('_PhysicalSize', '')
             free_size = disk_usage.get('_FreeSize', '')
-            basic_data.append(['DISKUSAGE', 'Total Physical Size', f'{disk_size} bytes', 
+            basic_data.append(['DISKUSAGE', 'Total Physical Size', f'{disk_size} bytes',
                 '{:.2f} GB'.format(disk_size/ (1024 * 1024 * 1024)), plist_path])
-            basic_data.append(['DISKUSAGE', 'Total Free Size', f'{free_size} bytes', 
+            basic_data.append(['DISKUSAGE', 'Total Free Size', f'{free_size} bytes',
                 '{:.2f} GB'.format(free_size/ (1024 * 1024 * 1024)), plist_path])
             for k, v in disk_usage.items():
                 if not isinstance(v, dict):
@@ -324,7 +333,7 @@ def GetLastFacetimeId(ios_info):
             basic_data.append(['FACETIME', 'Last known Facetime Caller ID', facetime_id, '', tel_utilities_plist])
         else:
             log.error(f'Error reading {tel_utilities_plist} : {error}')
-    
+
 def GetPreviousRestoreDate(ios_info):
     prev_restore_date = None
     last_update_plist = '/private/var/MobileSoftwareUpdate/last_update_result.plist'
@@ -335,7 +344,7 @@ def GetPreviousRestoreDate(ios_info):
             prev_restore_date = plist.get('PreviousRestoreDate', None)
         else:
             log.error(f'Error reading {last_update_plist} : {error}')
-    
+
     basic_data.append(['SYSTEM', 'iOS Previous Restore Date', prev_restore_date, '', last_update_plist])
 
 def Plugin_Start_Ios(ios_info):
@@ -344,8 +353,8 @@ def Plugin_Start_Ios(ios_info):
     GetModelAndHostNameFromPreference(ios_info, '/private/var/Preferences/SystemConfiguration/preferences.plist')
     GetPreviousRestoreDate(ios_info)
     GetLastFacetimeId(ios_info)
-    GetDiskUsageAndSyncInfo(ios_info)      
-      
+    GetDiskUsageAndSyncInfo(ios_info)
+
     WriteList("basic device info", "Basic_Info", basic_data, basic_data_info, ios_info.output_params)
 
 if __name__ == '__main__':
