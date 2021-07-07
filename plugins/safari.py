@@ -428,7 +428,7 @@ def ReadRecentlyClosedTabsPlist(plist, safari_items, source_path, user):
         for tab in tabs:
             state_type = tab.get('PersistentStateType', None)
             if state_type not in [0, 1]: 
-                log.warning('Unknown PersistentStateType: {}'.format(PersistentStateType))
+                log.warning('Unknown PersistentStateType: {}'.format(state_type))
             state = tab.get('PersistentState', None)
             if state:
                 date_closed = state.get('DateClosed', None)

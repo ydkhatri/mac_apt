@@ -286,7 +286,11 @@ def ReadKnownNetworksPlist(plist, networks, source):
         net.AddedAt = network.get('AddedAt', '')
         net.JoinedBySystemAt = network.get('JoinedBySystemAt', '')
         net.JoinedByUserAt = network.get('JoinedByUserAt', '')
-        net.LastConnected = max(net.JoinedByUserAt, net.JoinedBySystemAt)
+        try:
+            net.LastConnected = max(net.JoinedByUserAt, net.JoinedBySystemAt)
+        except Exception as ex:
+            net.LastConnected = ''
+            log.debug("Exception determining last connected time " + str(ex))
         net.UpdatedAt = network.get('UpdatedAt', '')
         #net.usage = details.get('networkUsage', None) # only on ios?
         details = network.get('__OSSpecific__', None)
