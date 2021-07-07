@@ -373,7 +373,7 @@ def ParseRecentFile(input_file):
         except (OSError) as ex:
             log.exception('Failed to open file: {}'.format(input_file))
     elif basename.endswith('.plist'):
-        success, plist, error = CommonFunctions.ReadPlist(input_path)
+        success, plist, error = CommonFunctions.ReadPlist(input_file)
         if success:
             if input_file.endswith('.GlobalPreferences.plist'):
                 ReadGlobalPrefPlist(plist, recent_items, input_file)
