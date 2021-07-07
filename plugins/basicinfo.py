@@ -162,7 +162,7 @@ def GetTimezone(mac_info):
         elif tz_symlink_path.startswith('/var/db/timezone/zoneinfo/'): # on HighSierra
             tz_symlink_path = tz_symlink_path[26:]
         basic_data.append(['TIMEZONE', 'TimeZone Set', tz_symlink_path, 'Timezone on machine', '/private/etc/localtime'])
-    except (IndexError, ValueError) as ex:
+    except (IndexError, ValueError, TypeError) as ex:
         log.error('Error trying to read timezone information - ' + str(ex))
 
     # f = mac_info.Open('/private/etc/localtime')
