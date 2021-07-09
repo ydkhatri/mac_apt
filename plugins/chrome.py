@@ -19,6 +19,7 @@ import json
 import logging
 import os
 import sqlite3
+import re
 
 __Plugin_Name = "CHROME"
 __Plugin_Friendly_Name = "Chrome"
@@ -28,7 +29,7 @@ __Plugin_Author = "Yogesh Khatri"
 __Plugin_Author_Email = "yogesh@swiftforensics.com"
 
 __Plugin_Modes = "MACOS,ARTIFACTONLY"
-__Plugin_ArtifactOnly_Usage = 'Provide the path to "/Chrome/Default" folder as argument'
+__Plugin_ArtifactOnly_Usage = 'Provide the path to "/Chrome/<Profile Name>" folder as argument'
 
 log = logging.getLogger('MAIN.' + __Plugin_Name) # Do not rename or remove this ! This is the logger object
 
@@ -444,7 +445,8 @@ def OpenLocalFileAndRead(chrome_artifacts, user, file_path, file_size, parser_fu
 def Plugin_Start(mac_info):
     '''Main Entry point function for plugin'''
     chrome_artifacts = []
-    chrome_profile_path = '{}/Library/Application Support/Google/Chrome/Default'
+    chrome_profile_base_path = '{}/Library/Application Support/Google/Chrome/'
+    chrome_profile_regex = '(Default|Profile \d+|Guest Profile)'
     processed_paths = []
     for user in mac_info.users:
         user_name = user.user_name
@@ -452,28 +454,32 @@ def Plugin_Start(mac_info):
         elif user.home_dir == '/private/var/root': user_name = 'root' # Some other users use the same root folder, we will list all such users as 'root', as there is no way to tell
         if user.home_dir in processed_paths: continue # Avoid processing same folder twice (some users have same folder! (Eg: root & daemon))
         processed_paths.append(user.home_dir)
-        source_path = chrome_profile_path.format(user.home_dir)
-        if mac_info.IsValidFolderPath(source_path):
-            files_list = mac_info.ListItemsInFolder(source_path, EntryType.FILES_AND_FOLDERS, include_dates=False)
-            for file_entry in files_list:
-                if file_entry['type'] == EntryType.FILES:
-                    if file_entry['size'] == 0: 
-                        continue
-                    if file_entry['name'] == 'Top Sites':
-                        ExtractAndReadDb(mac_info, chrome_artifacts, user_name, source_path + '/Top Sites', file_entry['size'], ReadTopSitesDb)
-                    elif file_entry['name'] == 'History':
-                        ExtractAndReadDb(mac_info, chrome_artifacts, user_name, source_path + '/History', file_entry['size'], ReadHistoryDb)
-                    elif file_entry['name'] == 'Last Tabs':
-                        ExtractAndReadFile(mac_info, chrome_artifacts, user_name, source_path + '/Last Tabs', file_entry['size'], ReadTabsFile)
-                    elif file_entry['name'] == 'Current Tabs':
-                        ExtractAndReadFile(mac_info, chrome_artifacts, user_name, source_path + '/Current Tabs', file_entry['size'], ReadTabsFile)
-                    elif file_entry['name'] == 'Last Session':
-                        ExtractAndReadFile(mac_info, chrome_artifacts, user_name, source_path + '/Last Session', file_entry['size'], ReadTabsFile)
-                    elif file_entry['name'] == 'Current Session':
-                        ExtractAndReadFile(mac_info, chrome_artifacts, user_name, source_path + '/Current Session', file_entry['size'], ReadTabsFile)
-                else: # Folder
-                    if file_entry['name'] == 'Extensions':
-                        ProcessExtensions(mac_info, chrome_artifacts, user_name, source_path + '/Extensions')
+        folders_list = mac_info.ListItemsInFolder(chrome_profile_base_path.format(user.home_dir), EntryType.FOLDERS, include_dates=False)
+        chrome_profile_names = [folder_item['name'] for folder_item in folders_list if re.match(chrome_profile_regex, folder_item['name'])]
+        for chrome_profile_name in chrome_profile_names:
+            source_path = os.path.join(chrome_profile_base_path.format(user.home_dir), chrome_profile_name)
+            if mac_info.IsValidFolderPath(source_path):
+                files_list = mac_info.ListItemsInFolder(source_path, EntryType.FILES_AND_FOLDERS, include_dates=False)
+                user_profile_name = user_name + '_' + chrome_profile_name.replace(' ', '_')
+                for file_entry in files_list:
+                    if file_entry['type'] == EntryType.FILES:
+                        if file_entry['size'] == 0: 
+                            continue
+                        if file_entry['name'] == 'Top Sites':
+                            ExtractAndReadDb(mac_info, chrome_artifacts, user_profile_name, source_path + '/Top Sites', file_entry['size'], ReadTopSitesDb)
+                        elif file_entry['name'] == 'History':
+                            ExtractAndReadDb(mac_info, chrome_artifacts, user_profile_name, source_path + '/History', file_entry['size'], ReadHistoryDb)
+                        elif file_entry['name'] == 'Last Tabs':
+                            ExtractAndReadFile(mac_info, chrome_artifacts, user_profile_name, source_path + '/Last Tabs', file_entry['size'], ReadTabsFile)
+                        elif file_entry['name'] == 'Current Tabs':
+                            ExtractAndReadFile(mac_info, chrome_artifacts, user_profile_name, source_path + '/Current Tabs', file_entry['size'], ReadTabsFile)
+                        elif file_entry['name'] == 'Last Session':
+                            ExtractAndReadFile(mac_info, chrome_artifacts, user_profile_name, source_path + '/Last Session', file_entry['size'], ReadTabsFile)
+                        elif file_entry['name'] == 'Current Session':
+                            ExtractAndReadFile(mac_info, chrome_artifacts, user_profile_name, source_path + '/Current Session', file_entry['size'], ReadTabsFile)
+                    else: # Folder
+                        if file_entry['name'] == 'Extensions':
+                            ProcessExtensions(mac_info, chrome_artifacts, user_profile_name, source_path + '/Extensions')
 
     if len(chrome_artifacts) > 0:
         PrintAll(chrome_artifacts, mac_info.output_params, '')
