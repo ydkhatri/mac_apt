@@ -12,8 +12,6 @@ import os
 import logging
 import nska_deserialize as nd
 import plugins.helpers.ccl_bplist as ccl_bplist
-import struct
-import sys
 
 from enum import IntEnum
 from plugins.helpers.common import CommonFunctions
@@ -480,7 +478,8 @@ def ReadDbFromImage(mac_info, source_path, user, safari_items, processing_func, 
 def Plugin_Start(mac_info):
     '''Main Entry point function for plugin'''
     safari_items = []
-    user_safari_plist_path = '{}/Library/Preferences/com.apple.safari.plist'
+    user_safari_plist_paths = ('{}/Library/Preferences/com.apple.safari.plist',\
+                            '{}/Library/Containers/com.apple.Safari/Data/Library/Preferences/com.apple.Safari.plist')
     user_safari_path = '{}/Library/Safari'
     processed_paths = []
     for user in mac_info.users:
@@ -489,13 +488,14 @@ def Plugin_Start(mac_info):
         elif user.home_dir == '/private/var/root': user_name = 'root' # Some other users use the same root folder, we will list such all users as 'root', as there is no way to tell
         if user.home_dir in processed_paths: continue # Avoid processing same folder twice (some users have same folder! (Eg: root & daemon))
         processed_paths.append(user.home_dir)
-        source_path = user_safari_plist_path.format(user.home_dir)
-        if mac_info.IsValidFilePath(source_path):
-            ProcessSafariPlist(mac_info, source_path, user_name, safari_items, ReadSafariPlist)
-        else:
-            if not user_name.startswith('_'):
-                log.debug('File not found: {}'.format(source_path))
-        
+        for user_safari_plist_path in user_safari_plist_paths:
+            source_path = user_safari_plist_path.format(user.home_dir)
+            if mac_info.IsValidFilePath(source_path):
+                ProcessSafariPlist(mac_info, source_path, user_name, safari_items, ReadSafariPlist)
+            #else:
+            #    if not user_name.startswith('_'):
+            #        log.debug('File not found: {}'.format(source_path))
+
         source_path = user_safari_path.format(user.home_dir)
         if mac_info.IsValidFolderPath(source_path):
             ProcessSafariFolder(mac_info, source_path, user_name, safari_items)
@@ -512,7 +512,7 @@ def Plugin_Start_Standalone(input_files_list, output_params):
         safari_items = []
         if input_path.endswith('.plist'):
             try:
-                plist = readPlist(input_path)
+                plist = CommonFunctions.ReadPlist(input_path)
                 if input_path.lower().endswith('com.apple.safari.plist'):
                     ReadSafariPlist(plist, safari_items, input_path, '')
                 elif input_path.endswith('History.plist'):
