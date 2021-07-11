@@ -10,6 +10,7 @@
 import logging
 import os
 import posixpath
+import ccl_bplist
 from plistutils.alias import AliasParser
 from plugins.helpers.macinfo import *
 from plugins.helpers.writer import *
@@ -84,6 +85,139 @@ def process_loginitems_plist(mac_info, plist_path, user, uid, persistent_program
             persistent_programs.append(program)
     else:
         log.error("Problem reading plist for {} - ".format(plist_path, error))
+
+def parse_bookmark_data(data):
+    # Parses data according to the url below:
+    # https://michaellynn.github.io/2015/10/24/apples-bookmarkdata-exposed/
+
+    name = ''
+    path = ''
+
+    # BookmarkData Header
+    magic, data_length, version, data_offset = struct.unpack_from('<4sIII', data, 0)
+    log.debug('-' * 50)
+
+    if magic != b'book':
+        log.debug('[Error] magic is not \'book\': {}'.format(magic.decode('utf-8')))
+        return False
+
+    log.debug('Magic: {}'.format(magic.decode('utf-8')))
+    log.debug('Data Length: {}'.format(hex(data_length)))
+    log.debug('Version: {}'.format(hex(version)))
+    log.debug('Data Offset: {}'.format(hex(data_offset)))
+
+    # BookmarkData Data
+    toc_offset = struct.unpack_from('<I', data, data_offset)[0]
+    log.debug('First TOC Offset: {}'.format(hex(toc_offset)))
+
+    while True:
+        # BookmarkData TOC
+        # TOC Header
+        toc_data_length, toc_record_type, flags = struct.unpack_from('<IHH', data, data_offset + toc_offset)
+        log.debug('=' * 50)
+        log.debug('TOC Data Length: {}'.format(hex(toc_data_length)))
+        log.debug('TOC Record Type: {}'.format(hex(toc_record_type)))
+        log.debug('Flags: {}'.format(hex(flags)))
+
+        # TOC Data
+        level, next_toc_offset, record_num = struct.unpack_from('<III', data, data_offset + toc_offset + (4 + 2 + 2))
+        log.debug('Level: {}'.format(hex(level)))
+        log.debug('Offset of Next TOC: {}'.format(hex(next_toc_offset)))
+        log.debug('Number of Records: {}'.format(record_num))
+
+        for record_count in list(range(record_num)):
+            # TOC Data Record
+            record_count += 1
+            toc_data_record_record_type, toc_data_record_flags, record_data_offset = struct.unpack_from('<HHQ', data, data_offset + toc_offset + (4 + 2 + 2) + ((4 + 4 + 4) * record_count))
+            log.debug('TOC Data Record Record Type: {}'.format(hex(toc_data_record_record_type)))
+            log.debug('TOC Data Record Flags: {}'.format(hex(toc_data_record_flags)))
+            log.debug('TOC Data Record Offset of Record Data: {}'.format(hex(record_data_offset)))
+
+            # Standard Data Record
+            sdr_data_length, sdr_data_type = struct.unpack_from('<II', data, data_offset + record_data_offset)
+            log.debug('Standard Data Record Length of Data: {}'.format(hex(sdr_data_length)))
+            log.debug('Standard Data Record Data Type: {}'.format(hex(sdr_data_type)))
+
+            # Standard Data Record Data
+            sdr_data = struct.unpack_from('<{}s'.format(sdr_data_length), data, data_offset + record_data_offset + (4 + 4))[0]
+            log.debug('Standard Data Record Record Data: {}'.format(sdr_data))
+
+            if toc_data_record_record_type == 0xf017 and sdr_data_type == 0x101:
+                name = sdr_data.decode('utf-8')
+            # elif toc_data_record_record_type == 0xf080 and sdr_data_type == 0x201:
+            #     path = sdr_data.decode('utf-8').split(';')[-1].replace('\x00', '')
+            elif toc_data_record_record_type == 0x1004 and sdr_data_type == 0x601:
+                path_array = list()
+                path_str_offset_array = sdr_data
+                while path_str_offset_array != b'':
+                    path_part_offset = struct.unpack_from('<I', path_str_offset_array, 0)[0]
+                    log.debug('path_part_offset: {}'.format(hex(path_part_offset)))
+
+                    path_part_str_length, unknown_data = struct.unpack_from('<II', data, data_offset + path_part_offset)
+                    log.debug('path_part_str_length: {}'.format(hex(path_part_str_length)))
+
+                    path_part_str = struct.unpack_from('<%ds' % path_part_str_length, data, data_offset + path_part_offset + 4 + 4)[0]
+                    log.debug('path_part_str: {}'.format(path_part_str.decode('utf-8')))
+
+                    path_array.append(path_part_str.decode('utf-8'))
+                    log.debug('path_arry: {}'.format(path_array))
+
+                    path_str_offset_array = path_str_offset_array[4:]
+                path = '/' + '/'.join(path_array)
+            log.debug('*' * 50)
+
+        if next_toc_offset > 0:
+            toc_offset = next_toc_offset
+        else:
+            if name or path:
+                return {'name': name, 'path': path}
+            else:
+                return False
+
+# Several plist libraries (plistlib, plistutils, nska_deserialize) will be crashed if they loads backgrounditems.btm, why I don't know.
+# Therefore, ccl_bplist is used here instead of using them.
+def process_backgrounditems_btm(mac_info, btm_path, user, uid, persistent_programs):
+    mac_info.ExportFile(btm_path, __Plugin_Name, user + "_", False)
+    try:
+        # with open(btm_path, 'rb') as fp:
+        fp = mac_info.Open(btm_path)
+        plist = ccl_bplist.load(fp)
+        ns_keyed_archiver_obj = ccl_bplist.deserialise_NsKeyedArchiver(plist, parse_whole_structure=True)
+        ccl_bplist.set_object_converter(ccl_bplist.NSKeyedArchiver_common_objects_convertor)
+        btm_login_items_entries = ns_keyed_archiver_obj['root']['backgroundItems']['allContainers']
+
+        for item_num in list(range(len(btm_login_items_entries))):
+            if type(btm_login_items_entries[item_num]['internalItems'][0]['bookmark']['data']) == bytes:
+                login_item = parse_bookmark_data(btm_login_items_entries[item_num]['internalItems'][0]['bookmark']['data'])
+            elif type(btm_login_items_entries[item_num]['internalItems'][0]['bookmark']['data']) == ccl_bplist.NsKeyedArchiverDictionary:
+                login_item = parse_bookmark_data(btm_login_items_entries[item_num]['internalItems'][0]['bookmark']['data']['NS.data'])
+
+            if login_item:
+                if not login_item['name']:
+                    name = os.path.basename(login_item['path'])
+                path = login_item['path']
+                program = PersistentProgram(btm_path, name, path, 'Background Task Management Agent', user, uid, '', path)
+                program.start_when = 'Run at Login'
+                persistent_programs.append(program)
+
+        # Use plistutils parser, if the bug is fixed. See: https://github.com/strozfriedberg/plistutils/issues/1
+        # for item_num in list(range(len(btm_login_items_entries))):
+        #     if type(btm_login_items_entries[item_num]['internalItems'][0]['bookmark']['data']) == bytes:
+        #         bookmark_data = btm_login_items_entries[item_num]['internalItems'][0]['bookmark']['data']
+        #     elif type(btm_login_items_entries[item_num]['internalItems'][0]['bookmark']['data']) == ccl_bplist.NsKeyedArchiverDictionary:
+        #         bookmark_data = btm_login_items_entries[item_num]['internalItems'][0]['bookmark']['data']['NS.data']
+
+        #     idx = 0
+        #     name = ''
+        #     for bookmark_record in BookmarkParser.parse_bookmark(btm_path, idx, name, bookmark_data):
+        #         name = bookmark_record.get('name', os.path.basename(bookmark_record['path']))
+        #         path = bookmark_record['path']
+        #         program = PersistentProgram(btm_path, name, path, 'Background Task Management Agent', user, uid, '', path)
+        #         program.start_when = 'Run at Login'
+        #         persistent_programs.append(program)
+
+    except Exception as error:
+        log.error("Problem reading btm for {} - ".format(btm_path, error))
 
 def process_kernel_extensions(mac_info, path, persistent_programs):
     folder_list = mac_info.ListItemsInFolder(path, EntryType.FOLDERS, False)
@@ -225,6 +359,7 @@ def ProcessLoginRestartApps(mac_info, persistent_programs):
                             bundle_id = item.get('BundleID', '')
                             bundle_path = item.get('Path', '')
                             program = PersistentProgram(full_path, bundle_id, file_name, "Apps To Relaunch At Login", user_name, user.UID, '', bundle_path)
+                            program.start_when = 'Run at Login'
                             persistent_programs.append(program)
                     else:
                         log.error("Problem reading plist {} - {}".format(full_path, error))
@@ -292,6 +427,11 @@ def Plugin_Start(mac_info):
         loginitems_plist_path = '{}/Library/Preferences/com.apple.loginitems.plist'.format(user.home_dir)
         if mac_info.IsValidFilePath(loginitems_plist_path) and mac_info.GetFileSize(loginitems_plist_path) > 70:
             process_loginitems_plist(mac_info, loginitems_plist_path, user_name, user.UID, persistent_programs)
+
+        # process backgrounditems.btm
+        backgrounditems_btm_path = '{}/Library/Application Support/com.apple.backgroundtaskmanagementagent/backgrounditems.btm'.format(user.home_dir)
+        if mac_info.IsValidFilePath(backgrounditems_btm_path):
+            process_backgrounditems_btm(mac_info, backgrounditems_btm_path, user_name, user.UID, persistent_programs)
 
     # system overrides
     override_plist_path = '/private/var/db/launchd.db/com.apple.launchd/overrides.plist'
