@@ -174,7 +174,7 @@ def parse_bookmark_data(data):
             else:
                 return False
 
-# Several plist libraries (plistlib, plistutils, nska_deserialize) will be crashed if they loads backgrounditems.btm, why I don't know.
+# Several plist libraries (plistlib, plistutils) will be crashed if they loads backgrounditems.btm, why I don't know.
 # Therefore, ccl_bplist is used here instead of using them.
 def process_backgrounditems_btm(mac_info, btm_path, user, uid, persistent_programs):
     mac_info.ExportFile(btm_path, __Plugin_Name, user + "_", False)
