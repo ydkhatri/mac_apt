@@ -7,7 +7,7 @@
 
    utmpx.py
    ---------------
-   This plugin parses /private/var/run/utmpx and extracts username, terminal name, timestamp, and so on.
+   This plugin parses /private/var/run/utmpx and extracts username, terminal name, date, and so on.
    utmpx has been DEPRECATED on macOS, but we can still take advantage of it.
    Ref 1 : https://github.com/log2timeline/plaso/blob/main/plaso/parsers/utmpx.py
    Ref 2 : https://github.com/jjarava/mac-osx-forensics/blob/master/utmpx.py
@@ -45,8 +45,8 @@ UtmpxEntry = Struct(
     "terminal" / PaddedString(32, "ascii"),
     "pid" / Int32ul,
     "type" / Int32ul,
-    "timestamp" / Int32ul,
-    "timestamp_microseconds" / Int32ul,
+    "date" / Int32ul,
+    "date_microseconds" / Int32ul,
     "hostname" / PaddedString(256, "utf8"),
     Padding(64)
 )
@@ -66,14 +66,14 @@ UtmpxType = {
 
 
 class UtmpxItem:
-    def __init__(self, user, terminal_id, terminal, pid, type, timestamp, timestamp_microseconds, hostname):
+    def __init__(self, user, terminal_id, terminal, pid, type, date, date_microseconds, hostname):
         self.user = user
         self.terminal_id = terminal_id
         self.terminal = terminal
         self.pid = pid
         self.type = type
-        self.timestamp = timestamp
-        self.timestamp_microseconds = timestamp_microseconds
+        self.date = date
+        self.date_microseconds = date_microseconds
         self.hostname = hostname
 
 
@@ -99,7 +99,7 @@ def ReadUtmpxEntry(utmpx_file):
     if not hostname:
         hostname = 'localhost'
 
-    return UtmpxItem(user, entry.terminal_id, terminal, entry.pid, entry.type, entry.timestamp, entry.timestamp_microseconds, hostname)
+    return UtmpxItem(user, entry.terminal_id, terminal, entry.pid, entry.type, entry.date, entry.date_microseconds, hostname)
 
 
 def ProcessUtmpx(mac_info, utmpx_artifacts, file_path):
@@ -149,16 +149,16 @@ def ProcessUtmpxStandalone(utmpx_artifacts, file_path):
 
 def PrintAll(utmpx_artifacts, output_params, source_path):
     utmpx_info = [('User', DataType.TEXT), ('Terminal_ID', DataType.INTEGER), ('Terminal', DataType.TEXT), ('PID', DataType.INTEGER),
-                  ('Type', DataType.INTEGER), ('Type_Name', DataType.TEXT), ('Timestamp', DataType.DATE), ('Hostname', DataType.TEXT)]
+                  ('Type', DataType.INTEGER), ('Type_Name', DataType.TEXT), ('Date', DataType.DATE), ('Hostname', DataType.TEXT)]
 
     data_list = []
     log.info(f"{len(utmpx_artifacts)} utmpx artifact(s) found")
     for item in utmpx_artifacts:
         type_name = UtmpxType.get(item.type, 'N/A')
-        timestamp = "{}.{:0>6}".format(time.strftime("%Y-%m-%d %H:%M:%S", time.gmtime(item.timestamp)), item.timestamp_microseconds)
-        data_list.append([item.user, item.terminal_id, item.terminal, item.pid, item.type, type_name, timestamp, item.hostname])
+        date = "{}.{:0>6}".format(time.strftime("%Y-%m-%d %H:%M:%S", time.gmtime(item.date)), item.date_microseconds)
+        data_list.append([item.user, item.terminal_id, item.terminal, item.pid, item.type, type_name, date, item.hostname])
 
-    WriteList("utmpx entry", "utmpx", data_list, utmpx_info, output_params, source_path)
+    WriteList("utmpx entry", "Utmpx", data_list, utmpx_info, output_params, source_path)
 
 
 def Plugin_Start(mac_info):
