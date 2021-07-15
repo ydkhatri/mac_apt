@@ -100,17 +100,23 @@ FlagValues = {
     0x80000000: '0x80000000'
 }
 
+data_writer = ChunkedDataWriter()
+out_params = None
+total_logs_processed = 0
+
 # [log_id, log_event_flag, log_filepath, log_file_id, source_date, source]
-def PrintAll(logs, output_params):
+def PrintAll(logs):
     global FlagValues
     global TypeValues
+    global data_writer
+    global out_params
     fsevent_info = [ ('LogID',DataType.TEXT),
                      ('EventFlagsHex',DataType.TEXT),('EventType',DataType.TEXT),('EventFlags',DataType.TEXT),
                      ('Filepath',DataType.TEXT),
                      ('File_ID',DataType.INTEGER),('SourceModDate',DataType.DATE),('Source',DataType.TEXT)
                    ]
 
-    log.info (str(len(logs)) + " fsevent(s) found")
+    log.info ("Writing " + str(len(logs)) + " fsevent(s)")
     fsevent_list = []
     for x in logs:
         e_item =  [ "{:016X}".format(x[0]), 
@@ -119,7 +125,7 @@ def PrintAll(logs, output_params):
                     x[3], x[4], x[5]
                   ]
         fsevent_list.append(e_item)
-    WriteList("fsevents information", "FsEvents", fsevent_list, fsevent_info, output_params, '')
+    data_writer.WriteListPartial("fsevents information", "FsEvents", fsevent_list, fsevent_info, out_params, '')
 
 def GetEventFlagsString(flags, flag_values):
     '''Get string names of all flags set'''
@@ -147,6 +153,7 @@ def ReadCString(buffer, buffer_size, start_pos):
 
 def ParseData(buffer, logs, source_date, source):
     '''Process buffer to extract log data and return number of logs processed'''
+    global total_logs_processed
     num_logs_processed = 0
     buffer_size = len(buffer)
     if buffer_size < 12:
@@ -183,6 +190,10 @@ def ParseData(buffer, logs, source_date, source):
                 logs.append([log_id, log_event_flag, log_filepath, None, source_date, source])
     except (ValueError, IndexError, struct.error):
         log.exception('Error processing stream from file {}, stream pos was {}'.format(source, pos))
+    if len(logs) > 500000:
+        PrintAll(logs)
+        logs.clear()
+    total_logs_processed += num_logs_processed
     return num_logs_processed
 
 def ProcessFile(file_name, f, logs, source_date, source):
@@ -249,6 +260,10 @@ def ProcessFsevents(logs, folder_path, file_list, mac_info):
 
 def Plugin_Start(mac_info):
     '''Main Entry point function for plugin'''
+    global data_writer
+    global total_logs_processed
+    global out_params
+    out_params = mac_info.output_params
     logs = []
 
     file_list = mac_info.ListItemsInFolder('/.fseventsd', EntryType.FILES, True)
@@ -262,16 +277,25 @@ def Plugin_Start(mac_info):
         ProcessFsevents(logs, '/System/Volumes/Data/.fseventsd', file_list, mac_info)
     
     if len(logs) > 0:
-        PrintAll(logs, mac_info.output_params)
+        PrintAll(logs)
+    if total_logs_processed > 0:
+        log.info(f'{total_logs_processed} logs found')
+        data_writer.FinishWrites()
     else:
         log.info('No fsevents found')
 
 
 def Plugin_Start_Standalone(input_files_list, output_params):
+    global data_writer
+    global out_params
+    global total_logs_processed
+    out_params = output_params
     log.info("Module Started as standalone")
     for input_path in input_files_list:
         log.debug("Input folder passed was: " + input_path)
         logs = []
+        data_writer = ChunkedDataWriter()
+        total_logs_processed = 0
         files_list = os.listdir(input_path)
         for file_name in files_list:
             if file_name == 'fseventsd-uuid':
@@ -287,13 +311,21 @@ def Plugin_Start_Standalone(input_files_list, output_params):
             PrintAll(logs, output_params)
             log.info("The source_date field on the fsevents are from the individual file modified date "\
                      "(metadata not data)! This may have changed if you are not on a live or read-only image.")
+        if total_logs_processed > 0:
+            log.info(f'{total_logs_processed} logs found')
+            data_writer.FinishWrites()
         else:
             log.info('No fsevents found')
 
 def Plugin_Start_Ios(ios_info):
     '''Entry point for ios_apt plugin'''
-    logs = []
+    global out_params
+    global total_logs_processed
+    global data_writer
 
+    out_params = ios_info.output_params
+    logs = []
+ 
     file_list = ios_info.ListItemsInFolder('/.fseventsd', EntryType.FILES, True)
     ProcessFsevents(logs, '/.fseventsd', file_list, ios_info)
 
@@ -301,7 +333,10 @@ def Plugin_Start_Ios(ios_info):
     ProcessFsevents(logs, '/private/var/.fseventsd', file_list, ios_info)
 
     if len(logs) > 0:
-        PrintAll(logs, ios_info.output_params)
+        PrintAll(logs)
+    if total_logs_processed > 0:
+        log.info(f'{total_logs_processed} logs found')
+        data_writer.FinishWrites()
     else:
         log.info('No fsevents found')
 
