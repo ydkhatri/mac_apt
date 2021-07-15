@@ -149,7 +149,7 @@ class DataWriter:
                 if self.cols_with_blobs:
                     row_copy = list(list_to_write)
                     for col_name, index in self.cols_with_blobs:
-                        row_copy[index] = bytes(row_copy[index])
+                        row_copy[index] = bytes(row_copy[index]) if row_copy[index] else b''
                     self.sql_writer.WriteRow(row_copy)
                 else: self.sql_writer.WriteRow(list_to_write)
             if self.csv or self.xlsx:
@@ -177,7 +177,7 @@ class DataWriter:
                     rows_copy = [list(k) for k in rows]
                     for row_copy in rows_copy:
                         for col_name, index in self.cols_with_blobs:
-                            row_copy[index] = bytes(row_copy[index]) if row_copy[index] else ''
+                            row_copy[index] = bytes(row_copy[index]) if row_copy[index] else b''
                     self.sql_writer.WriteRows(rows_copy)
                 else:
                     self.sql_writer.WriteRows(rows)
@@ -671,33 +671,80 @@ def WriteList(data_description, data_name, data_list, data_type_info, output_par
         log.error ("Failed to initilize data writer")
         log.exception ("Error details")
 
+class ChunkedDataWriter:
+    '''Plugins should use this class when writing millions of rows to avoid MemoryError situations.
+       Ideally write no more than 500K rows at a time. Syntax is the same as WriteList() function.
+       Call the WriteListPartial(...) to write in batches as many times.
+       Just remember to call FinishWrites() at the end of all writing.
+    '''
+    def __init__(self) -> None:
+        self.writer = None
+
+    # Plugins should call this function to write out data formatted as a spreadsheet/table
+    def WriteListPartial(self, data_description, data_name, data_list, data_type_info, output_params, source_file=''):
+        '''
+        Writes a list (of either lists or dicts) provided, output types defined by output_params
+        Parameters include -
+        data_description : String describing what data is provided
+        data_name        : Name for file or db table
+        data_list        : List of (list or dict)
+        data_type_info   : Ordered dict describing columns as needed by DataWriter()
+        output_params    : OutputParams object
+        source_file      : Source file(s) where data was extracted from
+
+        Returns True or False
+        '''
+        ret = False
+        if len(data_list) == 0: 
+            log.info("No " + data_description + " was retrieved!")
+            return True
+        try:
+            log.debug (f"Trying to write out {len(data_list)} " + data_description)
+            if self.writer == None:
+                self.writer = DataWriter(output_params, data_name, data_type_info, source_file)
+            try:
+                self.writer.WriteRows(data_list)
+                ret = True
+            except (OSError, xlsxwriter.exceptions.XlsxWriterException, sqlite3.Error) as ex:
+                log.error ("Failed to write row data")
+                log.exception ("Error details")
+                self.writer.FinishWrites()
+        except (OSError, xlsxwriter.exceptions.XlsxWriterException, sqlite3.Error) as ex:
+            log.error ("Failed to initilize data writer")
+            log.exception ("Error details")
+        return True
+    
+    def FinishWrites(self):
+        if self.writer:
+            self.writer.FinishWrites()
+
+
 if __name__ == '__main__': # TESTING ONLY
 
     print("Testing mac HFS+ time : " + str(CommonFunctions.ReadMacHFSTime(0xD4DA7B9F)))
     
     try:
         import datetime
-        from macinfo import * # OutputParams
+        from plugins.helpers.macinfo import * # OutputParams
 
         op = OutputParams()
         op.write_csv = True
         op.write_sql = True
         op.write_xlsx = True
-        op.output_path = "C:\\temp\\out"
+        op.output_path = "/Users/ykhatri/Desktop/code/test" #"C:\\temp\\out"
         op.output_db_path = SqliteWriter.CreateSqliteDb(os.path.join(op.output_path, "TESTINGWRITER.db"))
         op.xlsx_writer = ExcelWriter()
         op.xlsx_writer.CreateXlsxFile(os.path.join(op.output_path, "TESTINGWRITER.xlsx"))
         columns = collections.OrderedDict([('ID',DataType.INTEGER), ('NAME',DataType.TEXT), ('Path',DataType.TEXT),
                                              ('BLOB',DataType.BLOB),('S_Date',DataType.DATE)])
-        writer = DataWriter(op, 'TESTINGWRITER', columns, '/var/folders/none/unknown.db')
-
         d = datetime.datetime(2016,11,10,9,20,45,9)
+        writer = DataWriter(op, 'TESTINGWRITER', columns, '/var/folders/none/unknown.db')
         writer.WriteRow([1, "Joe", '/Users/JoeSmith', b'\xdb]\xccY\x00\x00\x00\x00P\x87\x044\x00\x00\x00\x00', d])
         #writer.WriteRow([datetime.datetime.now(), "Moe", '/Users/MoePo', b'\x38\x39', d])# incorret
         writer.WriteRow({'NAME':'Bill', 'ID':3, 'Path':'/users/coby', 'BLOB':b'\xdb]\xccY\x00\x00\x38\x39'})
         writer.WriteRow({'NAME':'OBoy', 'Path':'/users/piy', 'BLOB':b'\x38\x39', 'S_Date':d})
         writer.WriteRow({'NAME':'Bad', 'ID':44 })
-        writer.WriteRows([[4,'Four','/four/', b'\xdb]\xccY\x00\x00\x38\x39', d],[5,"Five",'/five/', '\x38\x39', None]])
+        writer.WriteRows([[4,'Four','/four/', b'\xdb]\xccY\x00\x00\x38\x39', d],[5,"Five",'/five/', b'\x38\x39', None]])
 
         writer2 = DataWriter(op, 'TESTINGWRITER', columns, '/var/folders/none/unknown.db')
 
@@ -708,6 +755,15 @@ if __name__ == '__main__': # TESTING ONLY
         writer.FinishWrites()
         writer2.FinishWrites()
 
+        # test partial writer
+        writer = ChunkedDataWriter()
+        data_list = [[4,'Four','/four/', b'\xdb]\xccY\x00\x00\x38\x39', d],[5,"Five",'/five/', b'\x38\x39', None]]
+        writer.WriteListPartial('desc', 'Partial data_list', data_list, columns, op, 'blah')
+        data_list = [[6,'Six','/six/', b'\xdb]\xccY\x00\x00\x38\x39', d],[7,"7",'/7/', b'\x38\x39', None]]
+        writer.WriteListPartial('desc', 'Partial data_list', data_list, columns, op, 'blah')
+        writer.FinishWrites()
+        op.xlsx_writer.CommitAndCloseFile()
+       
     except Exception as ex:
         print (ex)
         import traceback
