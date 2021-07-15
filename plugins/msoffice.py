@@ -9,6 +9,7 @@
 
 
 import logging
+import posixpath
 import sqlite3
 import struct
 
@@ -71,7 +72,7 @@ def GetStringValueType(valuetype):
     elif valuetype == 9: s = "REG_FULL_RESOURCE_DESCRIPTOR"
     elif valuetype == 10: s = "REG_RESOURCE_REQUIREMENTS_LIST"
     else:
-        s = str(value)
+        s = str(valuetype)
     return s
 
 def GetUint64Value(value):
@@ -329,7 +330,7 @@ def ProcessAppPlists(mac_info, home_dir, office_items, user, source):
                 app_name = name[14:]
                 plist_path = path_partial + '/' + name + '/Data/Library/Preferences/' + name + '.plist'
                 if mac_info.IsValidFilePath(plist_path):
-                    mac_info.ExportFile(plist_path, __Plugin_Name, user_name, False)
+                    mac_info.ExportFile(plist_path, __Plugin_Name, user, False)
                     success, plist, error = mac_info.ReadPlist(plist_path)
                     if success:
                         ProcessOfficeAppPlist(plist, office_items, app_name, user, source)
@@ -338,7 +339,7 @@ def ProcessAppPlists(mac_info, home_dir, office_items, user, source):
                 #securebookmarks
                 plist_path = path_partial + '/' + name + '/Data/Library/Preferences/' + name + '.securebookmarks.plist'
                 if mac_info.IsValidFilePath(plist_path):
-                    mac_info.ExportFile(plist_path, __Plugin_Name, user_name, False)
+                    mac_info.ExportFile(plist_path, __Plugin_Name, user, False)
                     success, plist, error = mac_info.ReadPlist(plist_path)
                     if success:
                         ProcessOfficeAppSecureBookmarksPlist(plist, office_items, app_name, user, source)
