@@ -1,3 +1,17 @@
+Updates in 20210716 (v1.3.2):
+
+Many contributions from Minoru Kobayashi (@mnrkbys) in this release.
+
++ Improved parsing of AccountInfo key in com.apple.loginwindow.plist 
++ Added missing locations for Safari plists - AppExtensions & WebExtensions 
++ Add parsing of /Users/*/Library/Application Support/com.apple.backgroundtaskmanagementagent/backgrounditems.btm to AUTOSTART
++ Add new plugins UTMPX, FILESHARING, CFURL_CACHE
++ Add ChunkedDataWriter for plugins that need to write millions of rows (faster and memory efficient now)
+
+! Reading fsevents in the several millions now does not consume all your memory
+! Now reading fsevents from /System/Volumes/Data for all disks
+! Fix bugs in plugins - Safari, Wifi, BasicInfo, RecentItems
+
 Updates in 20210512 (v1.3.1):
 
 + Fixes small compilation issue in ios_apt.exe (no actual code changes) which caused some issues when the EXE was run

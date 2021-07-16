@@ -7,6 +7,7 @@
 * Jack Farley (@JackFarley248) - Added Encryption support and plugins - IDEVICE_BACKUPS, IDEVICE_INFO, PRINTJOBS, IMESSAGE, SCREENTIME, QUICKLOOK
 * Michael Geyer - Wrote the WIFI plugin
 * Nicole Ibrahim (@nicoleibrahim) - Wrote the DOCUMENTREVISIONS plugin
+* Minoru Kobayashi (@mnrkbys) - Bugfixes, parsers, and writing the UTMPX, CFURL_CACHE, FILESHARING plugins
 * Brandon Mignini - Wrote the AUTOSTART plugin
 * Noah Sidall (@noah_sidd) - Wrote the INSTALLHISTORY plugin
 * Austin Truax - Wrote the proof of concept parsing wifi information from airport plist
