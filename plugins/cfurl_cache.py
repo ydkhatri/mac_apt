@@ -7,7 +7,7 @@
 
    cfurl_cache.py
    ---------------
-   This plugin parses CFURL cache and extract timestamp, URL, request,
+   This plugin parses CFURL cache and extract date, URL, request,
    response, and received data.
 '''
 
@@ -24,7 +24,7 @@ import logging
 __Plugin_Name = "CFURLCACHE" # Cannot have spaces, and must be all caps!
 __Plugin_Friendly_Name = "CFURL cache"
 __Plugin_Version = "1.0"
-__Plugin_Description = "Parses CFURL cache and extract timestamp, URL, request, response, and received data."
+__Plugin_Description = "Parses CFURL cache and extract date, URL, request, response, and received data."
 __Plugin_Author = "Minoru Kobayashi"
 __Plugin_Author_Email = "unknownbit@gmail.com"
 
@@ -39,8 +39,8 @@ log = logging.getLogger('MAIN.' + __Plugin_Name) # Do not rename or remove this 
 #---- Do not change the variable names in above section ----#
 
 class CfurlCacheItem:
-    def __init__(self, timestamp, url, method, req_header, http_status, resp_header, isDataOnFS, received_data, username, app_bundle_id, source):
-        self.timestamp = timestamp
+    def __init__(self, date, url, method, req_header, http_status, resp_header, isDataOnFS, received_data, username, app_bundle_id, source):
+        self.date = date
         self.url = url
         self.method = method
         self.req_header = req_header
@@ -159,16 +159,16 @@ def OpenAndReadCFURLCache(cfurl_cache_artifacts, username, app_bundle_id, folder
 
 
 def PrintAll(cfurl_cache_artifacts, output_params, source_path):
-    cfurl_cache_info = [('Timestamp', DataType.DATE), ('URL', DataType.TEXT), ('Method', DataType.TEXT), ('Request_Header', DataType.TEXT), 
+    cfurl_cache_info = [('Date', DataType.DATE), ('URL', DataType.TEXT), ('Method', DataType.TEXT), ('Request_Header', DataType.TEXT), 
                         ('HTTP_Status', DataType.TEXT), ('Response_Header', DataType.TEXT), ('isDataOnFS', DataType.INTEGER), ('Received_Data', DataType.BLOB), 
                         ('User', DataType.TEXT), ('App_Bundle_ID', DataType.TEXT), ('Source', DataType.TEXT)]
 
     data_list = []
     log.info(f"{len(cfurl_cache_artifacts)} CFURL cache artifact(s) found")
     for item in cfurl_cache_artifacts:
-        data_list.append([item.timestamp, item.url, item.method, item.req_header, item.http_status, item.resp_header, item.isDataOnFS, item.received_data, item.username, item.app_bundle_id, item.source])
+        data_list.append([item.date, item.url, item.method, item.req_header, item.http_status, item.resp_header, item.isDataOnFS, item.received_data, item.username, item.app_bundle_id, item.source])
 
-    WriteList("CFURL cache", "cfurl_cache", data_list, cfurl_cache_info, output_params, source_path)
+    WriteList("CFURL cache", "CFURL_Cache", data_list, cfurl_cache_info, output_params, source_path)
 
 def Plugin_Start(mac_info):
     '''Main Entry point function for plugin'''
