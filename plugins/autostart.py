@@ -8,9 +8,9 @@
 '''
 
 import logging
+import nska_deserialize as nd
 import os
 import posixpath
-import ccl_bplist
 from plugins.helpers.bookmark import *
 from plistutils.alias import AliasParser
 from plugins.helpers.macinfo import *
@@ -89,51 +89,59 @@ def process_loginitems_plist(mac_info, plist_path, user, uid, persistent_program
 
 def process_backgrounditems_btm(mac_info, btm_path, user, uid, persistent_programs):
     mac_info.ExportFile(btm_path, __Plugin_Name, user + "_", False)
-    try:
-        fp = mac_info.Open(btm_path)
-        plist = ccl_bplist.load(fp)
-        ns_keyed_archiver_obj = ccl_bplist.deserialise_NsKeyedArchiver(plist, parse_whole_structure=True)
-        ccl_bplist.set_object_converter(ccl_bplist.NSKeyedArchiver_common_objects_convertor)
-        btm_login_items_entries = ns_keyed_archiver_obj['root']['backgroundItems']['allContainers']
 
-        for item_num in list(range(len(btm_login_items_entries))):
-            if type(btm_login_items_entries[item_num]['internalItems'][0]['bookmark']['data']) == bytes:
-                bm = Bookmark.from_bytes(btm_login_items_entries[item_num]['internalItems'][0]['bookmark']['data'])
-            elif type(btm_login_items_entries[item_num]['internalItems'][0]['bookmark']['data']) == ccl_bplist.NsKeyedArchiverDictionary:
-                bm = Bookmark.from_bytes(btm_login_items_entries[item_num]['internalItems'][0]['bookmark']['data']['NS.data'])
+    success, plist, error = mac_info.ReadPlist(btm_path, deserialize=True)
+    if success:
+        all_containers = plist.get('backgroundItems', {}).get('allContainers', {})
+        for container in all_containers:
+            try:
+                bm = container['internalItems'][0]['bookmark']['data']
+            except (KeyError, ValueError, TypeError) as ex:
+                log.error('Error fetching bookmark data ' + str(ex))
+                continue
+            if isinstance(bm, bytes):
+                bm = Bookmark.from_bytes(bm)
+            elif isinstance(bm, dict):
+                try:
+                    bm = Bookmark.from_bytes(bm['NS.data'])
+                except (KeyError, ValueError, TypeError):
+                    log.exception("Failed to read NS.data as bookmark")
+                    continue
+            try:
+                # record type 0xf017 means an item name
+                name = bm.tocs[0][1].get(0xf017, '')
 
-            # record type 0xf017 means an item name
-            name = bm.tocs[0][1].get(0xf017, '')
+                # Get full file path
+                vol_path = bm.tocs[0][1].get(BookmarkKey.VolumePath, '')
+                file_path = bm.tocs[0][1].get(BookmarkKey.Path, [])
+                file_path = '/' + '/'.join(file_path)
+                if vol_path and (not file_path.startswith(vol_path)):
+                    file_path = vol_path + file_path
 
-            # Get full file path
-            vol_path = bm.tocs[0][1].get(BookmarkKey.VolumePath, '')
-            file_path = bm.tocs[0][1].get(BookmarkKey.Path, [])
-            file_path = '/' + '/'.join(file_path)
-            if vol_path and (not file_path.startswith(vol_path)):
-                file_path = vol_path + file_path
-
-            # If file is on a mounted volume (dmg), get the dmg file details too
-            orig_vol_bm = bm.tocs[0][1].get(BookmarkKey.VolumeBookmark, None)
-            if orig_vol_bm:
-                filtered = list(filter(lambda x: x[0]==orig_vol_bm, bm.tocs))
-                if filtered:
-                    orig_vol_toc = filtered[0][1]
-                    orig_vol_path = orig_vol_toc.get(BookmarkKey.Path, '')
-                    orig_vol_creation_date = orig_vol_toc.get(BookmarkKey.VolumeCreationDate, '')
-                    if orig_vol_path:
-                        orig_vol_path = '/' + '/'.join(orig_vol_path)
-                        log.info
-                else:
-                    print ("Error, tid {} not found ".format(orig_vol_bm))
+                # If file is on a mounted volume (dmg), get the dmg file details too
+                orig_vol_bm = bm.tocs[0][1].get(BookmarkKey.VolumeBookmark, None)
+                if orig_vol_bm:
+                    filtered = list(filter(lambda x: x[0]==orig_vol_bm, bm.tocs))
+                    if filtered:
+                        orig_vol_toc = filtered[0][1]
+                        orig_vol_path = orig_vol_toc.get(BookmarkKey.Path, '')
+                        orig_vol_creation_date = orig_vol_toc.get(BookmarkKey.VolumeCreationDate, '')
+                        if orig_vol_path:
+                            orig_vol_path = '/' + '/'.join(orig_vol_path)
+                            log.info
+                    else:
+                        print ("Error, tid {} not found ".format(orig_vol_bm))
+            except (TypeError, KeyError, ValueError) as ex:
+                log.exception('Problem reading btm bookmark')
+                continue
 
             if not name:
                 name = os.path.basename(file_path)
             program = PersistentProgram(btm_path, name, file_path, 'Background Task Management Agent', user, uid, '', file_path)
             program.start_when = 'Run at Login'
             persistent_programs.append(program)
-
-    except Exception as error:
-        log.error("Problem reading btm for {} - {}".format(btm_path, error))
+    else:
+        log.error('Failed to read btm file, Error was ' + error)
 
 def process_kernel_extensions(mac_info, path, persistent_programs):
     folder_list = mac_info.ListItemsInFolder(path, EntryType.FOLDERS, False)
