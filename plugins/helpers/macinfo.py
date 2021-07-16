@@ -512,7 +512,7 @@ class MacInfo:
             f = self.Open(path)
             if f != None:
                 log.debug("Trying to read plist file : " + path)
-                return CommonFunctions.ReadPlist(f)
+                return CommonFunctions.ReadPlist(f, deserialize)
             else:
                 error = 'Failed to open file'
         except OSError as ex:
