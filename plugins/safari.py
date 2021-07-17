@@ -11,6 +11,7 @@ import io
 import os
 import logging
 import nska_deserialize as nd
+from plugins.helpers import macinfo
 import plugins.helpers.ccl_bplist as ccl_bplist
 
 from enum import IntEnum
@@ -281,7 +282,22 @@ def ReadExtensionsPlist(plist, safari_items, source_path, user):
                             None, info, user, source_path)
             safari_items.append(si)
     except KeyError:
-        log.error('Installed Extensions not found')
+        pass
+
+    '''Safari 14 extension plist parser'''
+    try:
+        for ext_name, ext in plist.items():
+            info = ''
+            enabled = ext.get('Enabled', '')
+            if enabled != '':
+                info += 'Enabled:' + str(info)
+            for key, val in plist.get('WebsiteAccess', {}).items():
+                info += f', {key}:{val}'
+            si = SafariItem(SafariItemType.EXTENSION, '', ext_name, 
+                            None, info, user, source_path)
+            safari_items.append(si)
+    except (KeyError, ValueError, TypeError) as ex:
+        log.error("Error reading extensions plist: " + source_path)
 
 def ReadHistoryPlist(plist, safari_items, source_path, user):
     try:
@@ -481,6 +497,8 @@ def Plugin_Start(mac_info):
     user_safari_plist_paths = ('{}/Library/Preferences/com.apple.safari.plist',\
                             '{}/Library/Containers/com.apple.Safari/Data/Library/Preferences/com.apple.Safari.plist')
     user_safari_path = '{}/Library/Safari'
+    user_safari_extensions = ('{}/Library/Containers/com.apple.Safari/Data/Library/Safari/AppExtensions/Extensions.plist',\
+                            '{}/Library/Containers/com.apple.Safari/Data/Library/Safari/WebExtensions/Extensions.plist')
     processed_paths = []
     for user in mac_info.users:
         user_name = user.user_name
@@ -499,6 +517,11 @@ def Plugin_Start(mac_info):
         source_path = user_safari_path.format(user.home_dir)
         if mac_info.IsValidFolderPath(source_path):
             ProcessSafariFolder(mac_info, source_path, user_name, safari_items)
+        
+        for ext_path in user_safari_extensions:
+            source_path = ext_path.format(user.home_dir)
+            if mac_info.IsValidFilePath(source_path):
+                ProcessSafariPlist(mac_info, source_path, user_name, safari_items, ReadExtensionsPlist)
 
     if len(safari_items) > 0:
         PrintAll(safari_items, mac_info.output_params, '')
