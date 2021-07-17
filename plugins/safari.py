@@ -290,8 +290,8 @@ def ReadExtensionsPlist(plist, safari_items, source_path, user):
             info = ''
             enabled = ext.get('Enabled', '')
             if enabled != '':
-                info += 'Enabled:' + str(info)
-            for key, val in plist.get('WebsiteAccess', {}).items():
+                info += 'Enabled:' + str(enabled)
+            for key, val in ext.get('WebsiteAccess', {}).items():
                 info += f', {key}:{val}'
             si = SafariItem(SafariItemType.EXTENSION, '', ext_name, 
                             None, info, user, source_path)
