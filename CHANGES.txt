@@ -1,3 +1,7 @@
+Updates in 20210717 (v1.4.0):
+
++ Add parsing of Safari WebExtensions and AppExtensions plist
+
 Updates in 20210716 (v1.3.2):
 
 Many contributions from Minoru Kobayashi (@mnrkbys) in this release.
