@@ -2103,7 +2103,7 @@ class MountedIosInfo(MountedMacInfo):
                                                 self._ReadBundleMetadataPlist(app_info, bundle_root + '/BundleMetadata.plist')
                                                 app_info.source += ', ' + app_info.bundle_path + '/Info.plist' + ', ' + bundle_root + '/BundleMetadata.plist'
                                         else:
-                                            log.error(f'Failed to read "compatibilityInfo" for {ai}. {error}')
+                                            log.error(f'Failed to read "compatibilityInfo" for {app}. {error}')
                                         temp_file.close()
                             conn.close()
                             for app in apps: # add app to main list if properties are not empty
