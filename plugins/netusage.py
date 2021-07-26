@@ -23,7 +23,8 @@ __Plugin_Author_Email = "yogesh@swiftforensics.com"
 
 __Plugin_Modes = "MACOS,ARTIFACTONLY,IOS"
 __Plugin_ArtifactOnly_Usage = 'Provide one or more netusage sqlite databases as input to process. This is '\
-                            'located at /private/var/networkd/netusage.sqlite'
+                            'located at /private/var/networkd/netusage.sqlite (<= macOS 10.15)'\
+                            'or /private/var/networkd/db/netusage.sqlite (>= macOS 11)'
 
 log = logging.getLogger('MAIN.' + __Plugin_Name) # Do not rename or remove this ! This is the logger object
 
@@ -148,8 +149,19 @@ def ProcessDbFromPath(mac_info, netusage_items, source_path):
 def Plugin_Start(mac_info):
     '''Main Entry point function for plugin'''
     netusage_items = []
-    netusage_path  = '/private/var/networkd/netusage.sqlite'
-    
+    netusage_base_path  = '/private/var/networkd'
+    netusage_db_name = 'netusage.sqlite'
+
+    version_info = mac_info.GetVersionDictionary()
+    if version_info['major'] == 10:
+        netusage_path = os.path.join(netusage_base_path, netusage_db_name)
+    elif version_info['major'] == 11:
+        netusage_path = os.path.join(netusage_base_path, 'db', netusage_db_name)
+    else:
+        log.error('Cannot determine OS version.')
+        return
+
+    log.info('OS version: {}.{}.{}'.format(version_info['major'], version_info['minor'], version_info['micro']))
     ProcessDbFromPath(mac_info, netusage_items, netusage_path)
 
     if len(netusage_items) > 0:
@@ -161,6 +173,7 @@ def Plugin_Start_Standalone(input_files_list, output_params):
     log.info("Module Started as standalone")
     for input_path in input_files_list:
         log.debug("Input file passed was: " + input_path)
+        netusage_items = []
         db = OpenDb(input_path)
         if db != None:
             ReadNetUsageDb(db, netusage_items, input_path)
