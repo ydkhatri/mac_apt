@@ -61,7 +61,7 @@ def ReadInstallHistoryPlist(plist, history):
 
 def ParseInstallHistoryFile(input_file):
     history = []
-    success, plist, error = CommonFunctions.ReadPlist(input_path)
+    success, plist, error = CommonFunctions.ReadPlist(input_file)
     if success:
         ReadInstallHistoryPlist(plist, history)
     else:

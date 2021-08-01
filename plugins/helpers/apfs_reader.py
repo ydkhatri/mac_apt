@@ -636,7 +636,7 @@ class ApfsFileSystemParser:
                     self.num_records_read_batch += 1
                     self.num_records_read_total += 1
                     rec = entry.data
-                    self.dir_records.append([oid, xid, rec.node_id, entry.key.obj_id, rec.date_added, rec.type_item.value, entry.key.content.name, '', None])
+                    self.dir_records.append([oid, xid, rec.node_id, entry.key.obj_id, rec.date_added, rec.type_item, entry.key.content.name, '', None])
                 elif entry_type == self.inode_type: #container.apfs.EntryType.inode.value:
                     self.num_records_read_batch += 1
                     self.num_records_read_total += 1
@@ -1186,9 +1186,7 @@ class ApfsVolume:
         return self.GetFileMetadata(where_clause)
 
     def GetFilePathFromCnid(self, cnid):
-        apfs_file_meta = self.GetApfsFileMeta(path)
-        if not apfs_file_meta:
-            apfs_file_meta = self.GetFileMetadataByCnid(cnid)
+        apfs_file_meta = self.GetFileMetadataByCnid(cnid)
         return apfs_file_meta.path
 
     def GetFileMetadata(self, where_clause):

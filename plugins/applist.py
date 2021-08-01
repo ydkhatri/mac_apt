@@ -88,7 +88,7 @@ def Plugin_Start(mac_info):
                 if deserialized_plist:
                     parse_appList_plist(deserialized_plist, apps, user_name, source_path)
             else:
-                log.error('Could not open file {}'.format(path))
+                log.error('Could not open file {}'.format(source_path))
 
     if len(apps) > 0:
         PrintAll(apps, mac_info.output_params, '')

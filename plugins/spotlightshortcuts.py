@@ -7,10 +7,7 @@
    
 '''
 
-import os
-import sys
 import logging
-import struct
 
 from plugins.helpers.common import CommonFunctions
 from plugins.helpers.macinfo import *
@@ -38,7 +35,7 @@ def PrintAll(shortcut_items, output_params, source_path):
     WriteList("spotlight shortcut information", "SpotlightShortcuts", shortcut_items, shortcut_info, output_params, source_path)
     
 def ParseShortcutFile(input_file, shortcuts):
-    success, plist, error = CommonFunctions.ReadPlist(input_path)
+    success, plist, error = CommonFunctions.ReadPlist(input_file)
     if success:
         ReadShortcutPlist(plist, shortcuts, input_file)
     else:
