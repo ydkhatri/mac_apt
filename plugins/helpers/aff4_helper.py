@@ -43,7 +43,7 @@ class EvidenceImageStream():
 
         while data:
             hasher.update(data)
-            data = img.read(unit)
+            data = self.read(unit)
             if data:
                 pos += len(data)
                 print(f'Read {pos/(1024*1024)} MB, {pos} bytes')

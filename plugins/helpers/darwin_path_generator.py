@@ -23,6 +23,7 @@
 #                under /var/folders/
 #
 
+import struct
 
 def GetDarwinPath(uuid, uid):
     '''Returns DARWIN_USER_FOLDER path constructed from UUID and UID for 

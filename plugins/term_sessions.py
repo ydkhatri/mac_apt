@@ -8,7 +8,6 @@
 '''
 
 
-import os
 import binascii
 import logging
 from plugins.helpers.macinfo import *

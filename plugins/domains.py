@@ -80,7 +80,7 @@ def Plugin_Start_Standalone(input_files_list, output_params):
         success, plist, error = CommonFunctions.ReadPlist(input_path)
         if success:
             ProcessActiveDirectoryPlist(input_path, plist)
-            WriteList('domain details', 'Domain_ActiveDirectory', ad_details, ad_info, mac_info.output_params, input_path)
+            WriteList('domain details', 'Domain_ActiveDirectory', ad_details, ad_info, output_params, input_path)
         else:
             log.error("Failed to read plist " + input_path + " Error was: " + error)
 

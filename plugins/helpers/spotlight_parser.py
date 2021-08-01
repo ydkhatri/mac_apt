@@ -363,7 +363,7 @@ class FileMetaDataListing:
                                         if len(all_translations) > 2:
                                             log.warning('Encountered more than one control sequence in single translation'
                                                         'string.')
-                                            log.debug('Found this list: {}', other)
+                                            #log.debug('Found this list: {}', other)
                                         value = all_translations[0].decode('utf8', 'backslashreplace')
                                         break # only get first, rest are language variants!
                         elif prop_type & 0x2 == 0x2: #== 0x4A: # ContentTypeTree ItemUserTags
