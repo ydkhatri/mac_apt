@@ -321,7 +321,7 @@ class HFSVolume(object):
 
     def getXattrByPath(self, path, name):
         file_id = self.getCnidForPath(path)
-        return self.getXattr(fileID, name)
+        return self.getXattr(file_id, name)
 
     '''	Compression type in Xattr as per apple:
         Source: https://opensource.apple.com/source/copyfile/copyfile-138/copyfile.c.auto.html

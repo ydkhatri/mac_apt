@@ -97,7 +97,7 @@ def ReadNetUsageDb(db, netusage_items, source):
                 "p.ztimestamp as last_seen_date, "\
                 " lu.ztimestamp as usage_since, "\
                 "lu.zwifiin, lu.zwifiout,lu.zwiredin,lu.zwiredout,lu.zwwanin,lu.zwwanout  "\
-                "FROM zliveusage lu LEFT JOIN zprocess p ON p.z_pk = lu.zhasprocess  "\
+                "FROM zprocess p LEFT JOIN zliveusage lu ON p.z_pk = lu.zhasprocess  "\
                 "LEFT JOIN z_primarykey pk ON p.z_ent = pk.z_ent  "\
                 "ORDER BY process_name"
         db.row_factory = sqlite3.Row

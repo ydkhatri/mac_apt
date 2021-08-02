@@ -7,7 +7,6 @@
    
 '''
 
-import os
 import logging
 from plugins.helpers.macinfo import *
 from plugins.helpers.writer import *

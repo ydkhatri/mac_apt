@@ -100,7 +100,7 @@ def Plugin_Start_Standalone(input_files_list, output_params):
     for input_path in input_files_list:
         log.debug("Input file passed was: " + input_path)
         ## Process the input file here ##
-        f = open(file_path)
+        f = open(input_path)
         if f:
             ProcessTsFile(f, os.path.basename(input_path), input_path, os.path.getsize(input_path), sudo_logs)
             f.close()

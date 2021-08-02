@@ -50,7 +50,9 @@ class CommonFunctions:
             try:
                 if isinstance(mac_abs_time, str):
                     mac_abs_time = float(mac_abs_time)
-                if mac_abs_time > 0xFFFFFFFF: # more than 32 bits, this should be nano-second resolution timestamp (seen only in HighSierra)
+                if mac_abs_time in (-63114076800, -63114076800000000000) : # MS & Python considers -63113904000 as 01-01-0001, Apple considers -63114076800
+                    return datetime.datetime(1,1,1)
+                if abs(mac_abs_time) > 0xFFFFFFFF: # more than 32 bits, this should be nano-second resolution timestamp (seen only in HighSierra)
                     return datetime.datetime(2001, 1, 1) + datetime.timedelta(seconds=mac_abs_time/1000000000.)
                 return datetime.datetime(2001, 1, 1) + datetime.timedelta(seconds=mac_abs_time)
             except (ValueError, OverflowError, TypeError) as ex:

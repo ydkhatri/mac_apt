@@ -141,7 +141,7 @@ class Apfs(KaitaiStruct):
         integrity_meta = 0x1e
         fext_tree = 0x1f
 
-    class ItemType(Enum):
+    class ItemType(Enum): # Not used in DrecHashedRecord as there it is used a flag, which can sometimes be combined
         unknown = 0
         fifo_named_pipe = 1
         character_special_file = 2
@@ -566,7 +566,7 @@ class Apfs(KaitaiStruct):
             self._root = _root if _root else self
             self.node_id = self._io.read_u8le()
             self.date_added = self._io.read_s8le()
-            self.type_item = self._root.ItemType(self._io.read_u2le() & 0xF) #DREC_TYPE_MASK = 0x000f
+            self.type_item = self._io.read_u2le() & 0xF #DREC_TYPE_MASK = 0x000f
             self.xfields = {}
             if _parent.header.data_length > 18:  # extended fields exist!
                 xf_num_exts = self._io.read_u2le()
@@ -936,15 +936,6 @@ class Apfs(KaitaiStruct):
             self.x_type = self._io.read_u1()
             self.x_flags = self._io.read_u1()
             self.length = self._io.read_u2le()
-
-
-    class XfName(KaitaiStruct):
-        __slots__ = ['_io', '_parent', '_root', 'name']
-        def __init__(self, _io, _parent=None, _root=None):
-            self._io = _io
-            self._parent = _parent
-            self._root = _root if _root else self
-            self.xf_name = (KaitaiStream.bytes_terminate(self._io.read_bytes(name_len), 0, False)).decode("UTF-8", "backslashreplace")
 
 
     class DStream(KaitaiStruct):
