@@ -484,7 +484,7 @@ elif platform.system() in ('Linux', 'Darwin'):
         except ValueError as err:
             Exit('Cannot set file descriptor limit.')
 else:
-    Exit('Cannot determine OS.')
+    Exit('Cannot determine the platform system.')
 
 # Check inputs
 if not CheckInputType(args.input_type): 
