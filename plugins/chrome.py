@@ -454,7 +454,10 @@ def Plugin_Start(mac_info):
         elif user.home_dir == '/private/var/root': user_name = 'root' # Some other users use the same root folder, we will list all such users as 'root', as there is no way to tell
         if user.home_dir in processed_paths: continue # Avoid processing same folder twice (some users have same folder! (Eg: root & daemon))
         processed_paths.append(user.home_dir)
-        folders_list = mac_info.ListItemsInFolder(chrome_profile_base_path.format(user.home_dir), EntryType.FOLDERS, include_dates=False)
+        chrome_path = chrome_profile_base_path.format(user.home_dir)
+        if not mac_info.IsValidFolderPath(chrome_path):
+            continue
+        folders_list = mac_info.ListItemsInFolder(chrome_path, EntryType.FOLDERS, include_dates=False)
         chrome_profile_names = [folder_item['name'] for folder_item in folders_list if re.match(chrome_profile_regex, folder_item['name'])]
         for chrome_profile_name in chrome_profile_names:
             source_path = os.path.join(chrome_profile_base_path.format(user.home_dir), chrome_profile_name)
