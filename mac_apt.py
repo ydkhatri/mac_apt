@@ -28,7 +28,6 @@ import sys
 import textwrap
 import time
 import traceback
-import platform
 from plugins.helpers.aff4_helper import EvidenceImageStream
 from plugins.helpers.apfs_reader import ApfsContainer, ApfsDbInfo
 from plugins.helpers.apple_sparse_image import AppleSparseImage
@@ -463,28 +462,6 @@ log.info("Started {}, version {}".format(__PROGRAMNAME, __VERSION))
 log.info("Dates and times are in UTC unless the specific artifact being parsed saves it as local time!")
 log.debug(' '.join(sys.argv))
 LogLibraryVersions(log)
-
-# Set the limit of file descriptors
-new_limit = 2048
-if platform.system() == 'Windows':
-    import ctypes
-    if ctypes.cdll.msvcrt._getmaxstdio() < new_limit:
-        log.debug('Current the maximum number of file handlers: {}'.format(ctypes.cdll.msvcrt._getmaxstdio()))
-        if ctypes.cdll.msvcrt._setmaxstdio(new_limit) < 0:
-            Exit('Cannot set the maximum number of file handlers.')
-        log.debug('Set the maximum number of file handlers: {}'.format(new_limit))
-elif platform.system() in ('Linux', 'Darwin'):
-    import resource
-    soft_limit, hard_limit = resource.getrlimit(resource.RLIMIT_NOFILE)
-    log.debug('Current file descriptor limit: Soft Limit = {}, Hard Limit = {}'.format(soft_limit, hard_limit))
-    if soft_limit < new_limit:
-        try:
-            resource.setrlimit(resource.RLIMIT_NOFILE, (new_limit, hard_limit))
-            log.debug('Set file descriptor limit: Soft Limit = {}, Hard Limit = {}'.format(new_limit, hard_limit))
-        except ValueError as err:
-            Exit('Cannot set file descriptor limit.')
-else:
-    Exit('Cannot determine the platform system.')
 
 # Check inputs
 if not CheckInputType(args.input_type): 

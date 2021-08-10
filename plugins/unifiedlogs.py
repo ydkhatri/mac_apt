@@ -17,6 +17,7 @@ from plugins.helpers.writer import *
 import logging
 import os
 import posixpath
+import platform
 
 __Plugin_Name = "UNIFIEDLOGS"
 __Plugin_Friendly_Name = "UnifiedLogs"
@@ -208,11 +209,41 @@ def CreateSqliteDb(output_path, out_params):
         log.exception('Exception occurred when trying to create Sqlite db')
     return False
 
+def SetFileDescriptorLimit():
+    new_limit = 2048
+    if platform.system() == 'Windows':
+        import ctypes
+        if ctypes.cdll.msvcrt._getmaxstdio() < new_limit:
+            log.debug('Current the maximum number of file handlers: {}'.format(ctypes.cdll.msvcrt._getmaxstdio()))
+            if ctypes.cdll.msvcrt._setmaxstdio(new_limit) < 0:
+                log.error('Cannot set the maximum number of file handlers.')
+                return False
+            log.debug('Set the maximum number of file handlers: {}'.format(new_limit))
+    elif platform.system() in ('Linux', 'Darwin'):
+        import resource
+        soft_limit, hard_limit = resource.getrlimit(resource.RLIMIT_NOFILE)
+        log.debug('Current file descriptor limit: Soft Limit = {}, Hard Limit = {}'.format(soft_limit, hard_limit))
+        if soft_limit < new_limit:
+            try:
+                resource.setrlimit(resource.RLIMIT_NOFILE, (new_limit, hard_limit))
+                log.debug('Set file descriptor limit: Soft Limit = {}, Hard Limit = {}'.format(new_limit, hard_limit))
+            except ValueError as err:
+                log.error('Cannot set file descriptor limit.')
+                return False
+    else:
+        log.error('Cannot determine the platform system.')
+        return False
+
+    return True
+
 def Plugin_Start(mac_info):
     '''Main Entry point function for plugin'''
     global writer
     global files_processed
     global total_logs_processed
+
+    if not SetFileDescriptorLimit():
+        return
 
     version_info = mac_info.GetVersionDictionary()
     if version_info['major'] == 10:
