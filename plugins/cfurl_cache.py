@@ -174,9 +174,16 @@ def Plugin_Start(mac_info):
     '''Main Entry point function for plugin'''
     cfurl_cache_artifacts = []
     cfurl_cache_base_path = '{}/Library/Caches/'
+    processed_paths = set()
 
     for user in mac_info.users:
-        cache_folder_list = mac_info.ListItemsInFolder(cfurl_cache_base_path.format(user.home_dir), EntryType.FOLDERS, include_dates=False)
+        if user.home_dir in processed_paths: 
+            continue # Avoid processing same folder twice (some users have same folder! (Eg: root & daemon))
+        processed_paths.add(user.home_dir)
+        base_path = cfurl_cache_base_path.format(user.home_dir)
+        if not mac_info.IsValidFolderPath(base_path):
+            continue
+        cache_folder_list = mac_info.ListItemsInFolder(base_path, EntryType.FOLDERS, include_dates=False)
         app_bundle_ids = [folder_item['name'] for folder_item in cache_folder_list]
         for app_bundle_id in app_bundle_ids:
             cache_folder_path = os.path.join(cfurl_cache_base_path.format(user.home_dir), app_bundle_id)
