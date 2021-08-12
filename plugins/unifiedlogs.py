@@ -209,8 +209,7 @@ def CreateSqliteDb(output_path, out_params):
         log.exception('Exception occurred when trying to create Sqlite db')
     return False
 
-def SetFileDescriptorLimit():
-    new_limit = 2048
+def SetFileDescriptorLimit(new_limit=2048):
     if platform.system() == 'Windows':
         import ctypes
         if ctypes.cdll.msvcrt._getmaxstdio() < new_limit:
