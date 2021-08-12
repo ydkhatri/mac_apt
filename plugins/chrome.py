@@ -252,7 +252,7 @@ def ReadHistoryDb(chrome_artifacts, db, file_size, user, source):
                 path = row['current_path']
             downloaded_file_name = os.path.basename(path)
             item = ChromeItem(ChromeItemType.DOWNLOAD, row['url'], downloaded_file_name, 
-                            start_time, end_time, row['referrer'], path, 
+                            start_time, end_time, path, row['referrer'], 
                             f"Received Bytes = {row['received_bytes']}/{row['total_bytes']}", 
                             user, source)
             chrome_artifacts.append(item)
