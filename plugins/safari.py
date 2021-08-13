@@ -535,25 +535,28 @@ def Plugin_Start_Standalone(input_files_list, output_params):
         safari_items = []
         if input_path.endswith('.plist'):
             try:
-                plist = CommonFunctions.ReadPlist(input_path)
-                if input_path.lower().endswith('com.apple.safari.plist'):
-                    ReadSafariPlist(plist, safari_items, input_path, '')
-                elif input_path.endswith('History.plist'):
-                    ReadHistoryPlist(plist, safari_items, input_path, '')
-                elif input_path.endswith('Downloads.plist'):
-                    ReadDownloadsPlist(plist, safari_items, input_path, '')
-                elif input_path.endswith('Bookmarks.plist'):
-                    ReadBookmarksPlist(plist, safari_items, input_path, '')
-                elif input_path.endswith('TopSites.plist'):
-                    ReadTopSitesPlist(plist, safari_items, input_path, '')
-                elif input_path.endswith('LastSession.plist'):
-                    ReadLastSessionPlist(plist, safari_items, input_path, '')
-                elif input_path.endswith('Extensions.plist'):
-                    ReadExtensionsPlist(plist, safari_items, input_path, '')
-                elif input_path.endswith('RecentlyClosedTabs.plist'):
-                    ReadRecentlyClosedTabsPlist(plist, safari_items, input_path, '')
+                success, plist, error = CommonFunctions.ReadPlist(input_path)
+                if success:
+                    if input_path.lower().endswith('com.apple.safari.plist'):
+                        ReadSafariPlist(plist, safari_items, input_path, '')
+                    elif input_path.endswith('History.plist'):
+                        ReadHistoryPlist(plist, safari_items, input_path, '')
+                    elif input_path.endswith('Downloads.plist'):
+                        ReadDownloadsPlist(plist, safari_items, input_path, '')
+                    elif input_path.endswith('Bookmarks.plist'):
+                        ReadBookmarksPlist(plist, safari_items, input_path, '')
+                    elif input_path.endswith('TopSites.plist'):
+                        ReadTopSitesPlist(plist, safari_items, input_path, '')
+                    elif input_path.endswith('LastSession.plist'):
+                        ReadLastSessionPlist(plist, safari_items, input_path, '')
+                    elif input_path.endswith('Extensions.plist') and not input_path.endswith('KnownExtensions.plist'):
+                        ReadExtensionsPlist(plist, safari_items, input_path, '')
+                    elif input_path.endswith('RecentlyClosedTabs.plist'):
+                        ReadRecentlyClosedTabsPlist(plist, safari_items, input_path, '')
+                    else:
+                        log.error("Unknown plist type encountered: {}".format(os.path.basename(input_path)))
                 else:
-                    log.error("Unknown plist type encountered: {}".format(os.path.basename(input_path)))
+                    log.error(f'Failed to read plist: {os.path.basename(input_path)} : {error}')
             except ValueError as ex:
                 log.exception('Failed to open file: {}'.format(input_path))
         elif input_path.endswith('History.db'):
@@ -581,7 +584,7 @@ def Plugin_Start_Standalone(input_files_list, output_params):
             except (sqlite3.Error, OSError) as ex:
                 log.exception ("Failed to open database, is it a valid SQLITE DB?")
         else:
-            log.error('Input file {} is not a recognized name of a Safari artifact!'.fromat(input_path))
+            log.error('Input file {} is not a recognized name of a Safari artifact!'.format(input_path))
         if len(safari_items) > 0:
             PrintAll(safari_items, output_params, input_path)
         else:
