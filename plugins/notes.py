@@ -262,9 +262,9 @@ def ReadNotesHighSierraAndAbove(db, notes, source, user, is_ios):
                             base_path, _ = os.path.split(source)
                             att_path = base_path + '/Accounts/' + row['acc_identifier'] + '/Media/' + row['att_uuid'] + '/' + (row['ZFILENAME'] if row['ZFILENAME'] is not None else row['att_uuid'])
                         elif user:
-                            att_path = '/Users/' + user + '/Library/Group Containers/group.com.apple.notes/Media/' + row['att_uuid'] + '/' + row['ZFILENAME']
+                            att_path = '/Users/' + user + '/Library/Group Containers/group.com.apple.notes/Media/' + row['att_uuid'] + '/' + (row['ZFILENAME'] if row['ZFILENAME'] is not None else row['att_uuid'])
                         else:
-                            att_path = 'Media/' + row['att_uuid'] + '/' + row['ZFILENAME']
+                            att_path = 'Media/' + row['att_uuid'] + '/' + (row['ZFILENAME'] if row['ZFILENAME'] is not None else row['att_uuid'])
                     except TypeError as ex:
                         log.error('Error computing att path for row ' + str(row['note_id']) + ' Error was ' + str(ex))
 

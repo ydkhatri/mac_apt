@@ -253,6 +253,8 @@ def ProcessFsevents(logs, folder_path, file_list, mac_info):
             if file_name == 'fseventsd-uuid':
                 uuid = ReadUuid(f)
                 log.info("fseventsd-uuid={}".format(uuid))
+            elif file_name == 'no_log':
+                log.info("'no_log' file found, so no logs will be here!")
             else:
                 ProcessFile(file_name, f, logs, item['dates']['m_time'], path)
         else:
