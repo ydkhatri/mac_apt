@@ -165,11 +165,11 @@ def Plugin_Start(mac_info):
     utmpx_artifacts = []
     utmpx_path = '/private/var/run/utmpx'
 
-    if ProcessUtmpx(mac_info, utmpx_artifacts, utmpx_path):
-        if len(utmpx_artifacts) > 0:
-            PrintAll(utmpx_artifacts, mac_info.output_params, '')
-        else:
-            log.info('No utmpx artifacts were found!')
+    ProcessUtmpx(mac_info, utmpx_artifacts, utmpx_path)
+    if len(utmpx_artifacts) > 0:
+        PrintAll(utmpx_artifacts, mac_info.output_params, '')
+    else:
+        log.info('No utmpx artifacts were found!')
 
 def Plugin_Start_Standalone(input_files_list, output_params):
     '''Main entry point function when used on single artifacts (mac_apt_singleplugin), not on a full disk image'''
