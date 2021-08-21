@@ -149,20 +149,11 @@ def ProcessDbFromPath(mac_info, netusage_items, source_path):
 def Plugin_Start(mac_info):
     '''Main Entry point function for plugin'''
     netusage_items = []
-    netusage_base_path  = '/private/var/networkd'
-    netusage_db_name = 'netusage.sqlite'
+    netusage_paths = (  '/private/var/networkd/netusage.sqlite',    # macos <= 10
+                        '/private/var/networkd/db/netusage.sqlite') # macos 11
 
-    version_info = mac_info.GetVersionDictionary()
-    if version_info['major'] == 10:
-        netusage_path = os.path.join(netusage_base_path, netusage_db_name)
-    elif version_info['major'] == 11:
-        netusage_path = os.path.join(netusage_base_path, 'db', netusage_db_name)
-    else:
-        log.error('Cannot determine OS version.')
-        return
-
-    log.info('OS version: {}.{}.{}'.format(version_info['major'], version_info['minor'], version_info['micro']))
-    ProcessDbFromPath(mac_info, netusage_items, netusage_path)
+    for netusage_path in netusage_paths:
+        ProcessDbFromPath(mac_info, netusage_items, netusage_path)
 
     if len(netusage_items) > 0:
         PrintAll(netusage_items, mac_info.output_params)
