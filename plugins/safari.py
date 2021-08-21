@@ -281,6 +281,7 @@ def ReadExtensionsPlist(plist, safari_items, source_path, user):
             si = SafariItem(SafariItemType.EXTENSION, '', item.get('Archive File Name', ''), 
                             None, info, user, source_path)
             safari_items.append(si)
+        return
     except KeyError:
         pass
 
