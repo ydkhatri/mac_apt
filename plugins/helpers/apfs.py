@@ -429,7 +429,7 @@ class Apfs(KaitaiStruct):
             if (self._parent.node_type & BTNODE_LEAF) == 0: # non-leaf nodes
                 if _on == 2: #extent
                     self._m_data = self._io.read_u8le() # paddr ?
-                elif _on in (3, 4, 5, 6, 8, 9, 10, 12, 13):
+                elif _on in (3, 4, 5, 6, 7, 8, 9, 10, 12, 13):
                     self._m_data = self._io.read_u8le() # unknown val
                     #log.debug("In non-leaf node, got kind 0x{:X}, treetype={}".format(_on, self._parent._parent.header.subtype))
                 else:
