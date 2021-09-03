@@ -439,7 +439,7 @@ class StoreBlock:
         self.pos = 0
         self.signature = struct.unpack("<I", data[0:4])[0]
         if self.signature != 0x64627032:  # 2pbd (most blocks)
-            raise Exception("Unknown signature {:X} in block! Can't parse".format(self.signature))
+            raise ValueError("Unknown signature {:X} in block! Can't parse".format(self.signature))
         self.physical_size = struct.unpack("<I", data[4:8])[0]
         self.logical_size  = struct.unpack("<I", data[8:12])[0]
         self.block_type    = struct.unpack("<I", data[12:16])[0]
@@ -753,9 +753,14 @@ class SpotlightStore:
                 continue
             self.Seek(seek_offset)
             block_data = self.ReadFromFile(self.block_size)
-            compressed_block = StoreBlock(block_data)
-            if compressed_block.block_type & 0xFF != BlockType.METADATA:
-                raise Exception('Expected METADATA block, Unknown block type encountered: 0x{:X}'.format(compressed_block.block_type))
+            try:
+                compressed_block = StoreBlock(block_data)
+                if compressed_block.block_type & 0xFF != BlockType.METADATA:
+                    log.error('Expected METADATA block, Unknown block type encountered: 0x{:X}'.format(compressed_block.block_type))
+                    continue
+            except ValueError as ex:
+                log.error('Block read error : ' + str(ex))
+                continue
             log.debug ("Trying to decompress compressed block @ 0x{:X}".format(index[1] * 0x1000 + 20))
 
             try:
@@ -863,14 +868,14 @@ class SpotlightStore:
         block_data = self.ReadFromFile(self.block_size)
         block = StoreBlock(block_data)
         if block.block_type != type:
-            raise Exception('Not the right block type, got {} instead of {} !!'.format(block.block_type, type))
+            raise ValueError('Not the right block type, got {} instead of {} !!'.format(block.block_type, type))
         self.ProcessBlock(block, dictionary)
         while block.next_block_index != 0:
             self.Seek(block.next_block_index * 0x1000)
             block_data = self.ReadFromFile(self.block_size)
             block = StoreBlock(block_data)
             if block.block_type != type:
-                raise Exception('Not the right block type, got {} instead of {} !!'.format(block.block_type, type))
+                raise ValueError('Not the right block type, got {} instead of {} !!'.format(block.block_type, type))
             self.ProcessBlock(block, dictionary)
 
     def ReadPageIndexesAndOtherDefinitions(self, only_read_block_0=False):
@@ -901,7 +906,7 @@ class SpotlightStore:
             block = StoreBlock(block_data)
             self.ProcessBlock(block)
             if block.physical_size != self.block_size:
-                raise Exception("Block size mismatch!")
+                raise ValueError("Block size mismatch!")
             self.Seek(self.pos + self.block_size)
         
 def RecursiveGetFullPath(item, items_list):
