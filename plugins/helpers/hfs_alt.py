@@ -106,14 +106,17 @@ class HFSFile(object):
             if extent.blockCount > blocks_max:
                 counter = blocks_max
                 remaining_blocks = extent.blockCount
+                start_address = extent.startBlock * bs
                 while remaining_blocks > 0:
                     num_blocks_to_read = min(blocks_max, remaining_blocks)
-                    data = self.volume.read(extent.startBlock * bs, num_blocks_to_read * bs)
+                    size = num_blocks_to_read * bs
+                    data = self.volume.read(start_address, size)
                     if output_file:
                         output_file.write(data)
                     elif self.logicalSize < 209715200: # 200MiB
                         r += data
                     remaining_blocks -= num_blocks_to_read
+                    start_address += size
             else:
                 data = self.volume.read(extent.startBlock * bs, bs * extent.blockCount)
                 if output_file:
