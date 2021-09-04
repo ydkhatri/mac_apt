@@ -326,8 +326,8 @@ def FindMacOsPartitionInApfsContainer(img, vol_info, container_size, container_s
         else:
             # Search for macOS partition in volumes
             for vol in mac_info.apfs_container.volumes:
-                if vol.num_blocks_used * vol.container.block_size < 3000000000: # < 3 GB, cannot be a macOS root volume
-                    continue
+                #if vol.num_blocks_used * vol.container.block_size < 3000000000: # < 3 GB, cannot be a macOS root volume
+                #    continue
                 mac_info.macos_FS = vol
                 vol.dbo = mac_info.apfs_db
                 if FindMacOsFiles(mac_info):
