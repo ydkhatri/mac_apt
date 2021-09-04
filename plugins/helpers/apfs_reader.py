@@ -1150,6 +1150,8 @@ class ApfsVolume:
 
     def DoesFolderExist(self, path):
         '''Returns True if folder exists'''
+        if path != '/' and path.endswith('/'):
+            path = path[:-1]
         apfs_file_meta = self.GetApfsFileMeta(path)
         if apfs_file_meta:
             return apfs_file_meta.item_type in (4, 10) # will also return true for symlink which may point to file!
