@@ -9,7 +9,7 @@ __pycache__/
 *_compiled*
 *$py.class
 kill_pycache.bat
-
+.DS_Store
 libewf*
 
 

@@ -15,18 +15,19 @@
    NOTE: This currently works only on Python3.7 or higher.
 '''
 
-import sys
-import os
 import argparse
+import logging
+import os
+import sys
+import textwrap
+import time
 import traceback
 import plugins.helpers.macinfo as macinfo
-from plugins.helpers.writer import *
-import logging
-import time
-import textwrap
-from plugin import *
 
-__VERSION = "1.4.2.dev"
+from plugins.helpers.writer import *
+from plugin import *
+from version import __VERSION
+
 __PROGRAMNAME = "iOS Artifact Parsing Tool"
 __EMAIL = "yogesh@swiftforensics.com"
 

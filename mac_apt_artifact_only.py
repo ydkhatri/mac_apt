@@ -18,18 +18,18 @@
    NOTE: This currently works only on Python3.7 or higher.
 '''
 
-import sys
-import os
 import argparse
-import traceback
-import plugins.helpers.macinfo as macinfo
-from plugins.helpers.writer import *
 import logging
-import time
+import os
+import plugins.helpers.macinfo as macinfo
+import sys
 import textwrap
+import time
+import traceback
 from plugin import *
+from plugins.helpers.writer import *
+from version import __VERSION
 
-__VERSION = "1.4.2.dev"
 __PROGRAMNAME = "macOS Artifact Parsing Tool - Artifact Only mode"
 __EMAIL = "yogesh@swiftforensics.com"
 
