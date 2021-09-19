@@ -252,7 +252,8 @@ class FileMetaDataListing:
             filepos = hex(self.file_pos + 0 + self.pos)
             prop_skip_index = self.ReadVarSizeNum()[0]
             if prop_skip_index == 0:
-                log.warning("Something went wrong, skip index was 0 @ {}".format(filepos))
+                log.warning("Maybe something went wrong, skip index was 0 @ {} or rest of struct is slack".format(filepos))
+                break
             prop_index += prop_skip_index
             last_prop = prop # for debug only
             prop = properties.get(prop_index, None)
@@ -288,9 +289,11 @@ class FileMetaDataListing:
                     #    print("") 
                 elif value_type == 8 and prop_name != 'kMDStoreAccumulatedSizes':
                     if prop_type & 2 == 2:
-                        num_values = (self.ReadVarSizeNum()[0])
-                        singles = [self.ReadSingleByte() for x in range(num_values)]
+                        singles = [self.ReadSingleByte() for x in range(4)]
                         value = singles
+                    #     num_values = (self.ReadVarSizeNum()[0])
+                    #     singles = [self.ReadSingleByte() for x in range(num_values)]
+                    #     value = singles
                     else:
                         value = self.ReadSingleByte()
                 elif value_type == 9:
@@ -762,7 +765,7 @@ class SpotlightStore:
                 log.error('Block read error : ' + str(ex))
                 continue
             log.debug ("Trying to decompress compressed block @ 0x{:X}".format(index[1] * 0x1000 + 20))
-
+            
             try:
                 if compressed_block.block_type & 0x1000 == 0x1000: # LZ4 compression
                     if block_data[20:24] in [b'bv41', b'bv4-']:
@@ -774,7 +777,7 @@ class SpotlightStore:
                         last_uncompressed = b''
                         header = block_data[chunk_start:chunk_start + 4]
                         while (self.block_size > chunk_start) and (header != b'bv4$'):  # b'bv41':
-                            log.debug("0x{:X} - {}".format(chunk_start, header))
+                            #log.debug("0x{:X} - {}".format(chunk_start, header))
                             if header == b'bv41':
                                 uncompressed_size, compressed_size = struct.unpack('<II', block_data[chunk_start + 4:chunk_start + 12])
                                 last_uncompressed = lz4.block.decompress(block_data[chunk_start + 12: chunk_start + 12 + compressed_size], uncompressed_size, dict=last_uncompressed)
@@ -798,7 +801,7 @@ class SpotlightStore:
                         chunk_start = 20 # bvx offset
                         uncompressed = b''
                         header = block_data[chunk_start:chunk_start + 4]    
-                        log.debug("0x{:X} - {}".format(chunk_start, header))
+                        #log.debug("0x{:X} - {}".format(chunk_start, header))
                         if header in [b'bvx1', b'bvx2', b'bvxn']:
                             uncompressed_size = struct.unpack('<I', block_data[chunk_start + 4:chunk_start + 8])[0]
                             uncompressed = liblzfse.decompress(block_data[chunk_start : compressed_block.logical_size])
