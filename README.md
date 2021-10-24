@@ -14,7 +14,7 @@ mac_apt now also includes **[ios_apt](https://swiftforensics.com/2020/12/introdu
 #### Features
 * Cross platform (no dependency on pyobjc)
 * Works on E01, VMDK, AFF4, DD, split-DD, DMG (no compression), SPARSEIMAGE & mounted images  
-* XLSX, CSV, Sqlite outputs
+* XLSX, CSV, TSV, Sqlite outputs
 * Analyzed files/artifacts are exported for later review
 * zlib, lzvn, lzfse compressed files are supported!
 * Native HFS & APFS parser

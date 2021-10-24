@@ -63,7 +63,7 @@ def Exit(message=''):
         sys.exit(message)
 
 def SetupExportLogger(output_params):
-    '''Creates the csv writer for logging files exported'''
+    '''Creates the writer for logging files exported'''
     output_params.export_path = os.path.join(output_params.output_path, "Export")
     if not os.path.exists(output_params.export_path):
         try:
@@ -97,12 +97,14 @@ for plugin in plugins:
 plugins_info += "\n    " + "-"*76 + "\n" +\
                  " "*4 + "ALL" + " "*17 + "Runs all plugins"
 arg_parser = argparse.ArgumentParser(description='ios_apt is a framework to process forensic artifacts on an iOS full file system extraction.\n'\
-                                                 'You are running {} version {}'.format(__PROGRAMNAME, __VERSION),
+                                                 f'You are running {__PROGRAMNAME} version {__VERSION}\n\n'\
+                                                 'Note: The default output is now sqlite, no need to specify it now',
                                     epilog=plugins_info, formatter_class=argparse.RawTextHelpFormatter)
 arg_parser.add_argument('-i', '--input_path', help='Path to root folder of ios image') # Not optional !
 arg_parser.add_argument('-o', '--output_path', help='Path where output files will be created') # Not optional !
 arg_parser.add_argument('-x', '--xlsx', action="store_true", help='Save output in excel spreadsheet(s)')
-arg_parser.add_argument('-c', '--csv', action="store_true", help='Save output as CSV files (Default option if no output type selected)')
+arg_parser.add_argument('-c', '--csv', action="store_true", help='Save output as CSV files')
+arg_parser.add_argument('-t', '--tsv', action="store_true", help='Save output as TSV files (tab separated)')
 arg_parser.add_argument('-l', '--log_level', help='Log levels: INFO, DEBUG, WARNING, ERROR, CRITICAL (Default is INFO)')
 arg_parser.add_argument('plugin', nargs="+", help="Plugins to run (space separated). 'ALL' will process every available plugin")
 args = arg_parser.parse_args()
@@ -179,8 +181,10 @@ if args.xlsx:
         log.info('XLSX file could not be created at : ' + xlsx_path)
         log.exception('Exception occurred when trying to create XLSX file')
 
-if args.csv or not (output_params.write_sql or output_params.write_xlsx):
+if args.csv:
     output_params.write_csv  = True
+if args.tsv:
+    output_params.write_tsv  = True
 
 # At this point, all looks good, lets process the input file
 # Start processing plugin now!

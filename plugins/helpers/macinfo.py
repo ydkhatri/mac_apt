@@ -7,11 +7,9 @@
    
 '''
 
-import ast
 import logging
 import nska_deserialize as nd
 import os
-import plistlib
 import pytsk3
 import random
 import shutil
@@ -45,6 +43,7 @@ class OutputParams:
     def __init__(self):
         self.output_path = ''
         self.write_csv = False
+        self.write_tsv = False
         self.write_sql = False
         self.write_xlsx = False
         self.xlsx_writer = None

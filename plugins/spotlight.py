@@ -110,6 +110,7 @@ def CopyOutputParams(output_params):
     op_copy = OutputParams()
     op_copy.output_path = output_params.output_path
     op_copy.write_csv = output_params.write_csv
+    op_copy.write_tsv = output_params.write_tsv
     op_copy.write_sql = output_params.write_sql
     op_copy.write_xlsx = output_params.write_xlsx
     op_copy.xlsx_writer = output_params.xlsx_writer
@@ -178,7 +179,7 @@ def ProcessStoreDb(input_file_path, input_file, output_path, output_params, item
     items = {}
     global writer
     
-    output_path_full_paths = os.path.join(output_path, file_name_prefix + '_fullpaths.csv')
+    output_path_full_paths = os.path.join(output_path, file_name_prefix + '_fullpaths.tsv')
     output_path_data = os.path.join(output_path, file_name_prefix + '_data.txt')
 
     log.info('Processing ' + input_file_path)
@@ -216,6 +217,7 @@ def ProcessStoreDb(input_file_path, input_file, output_path, output_params, item
                 log.warning('Since the spotlight database is large, only Sqlite output will be written!')
                 out_params.write_xlsx = False
                 out_params.write_csv = False
+                out_params.write_tsv = False
                 if not out_params.write_sql: # sql is not enabled, must initialize database!
                     if not EnableSqliteDb(output_path, out_params, file_name_prefix): return None
             try:
@@ -235,7 +237,7 @@ def ProcessStoreDb(input_file_path, input_file, output_path, output_params, item
             if store.is_ios_store and (total_items_parsed > 0):
                 create_views_for_ios_db(writer.sql_writer.filepath, writer.sql_writer.table_name)
             
-            # Write Paths db as csv
+            # Write Paths db as tsv
             if (not store.is_ios_store) and (not no_path_file):
                 path_type_info = [ ('ID',DataType.INTEGER),('FullPath',DataType.TEXT) ]
                 fullpath_writer = DataWriter(out_params, "Spotlight-" + file_name_prefix + '-paths', path_type_info, input_file_path)

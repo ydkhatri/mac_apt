@@ -8,8 +8,8 @@
 '''
 
 import binascii
-import codecs
 import collections
+import csv
 import logging
 import os
 import sqlite3
@@ -33,6 +33,7 @@ class DataWriter:
     def FinishWrites(self):
         '''This must be called to properly close files'''
         if self.csv: self.csv_writer.Cleanup()
+        if self.tsv: self.tsv_writer.Cleanup()
         if self.sql: self.sql_writer.CloseDb()
 
     def __init__(self, output_params, name, column_info, artifact_source=''):
@@ -56,6 +57,8 @@ class DataWriter:
         self.row_count = 0
         self.csv = False
         self.csv_writer = None
+        self.tsv = False
+        self.tsv_writer = None
         self.xlsx = False
         self.xlsx_writer = None
         self.sql = False
@@ -72,6 +75,10 @@ class DataWriter:
             self.csv = True
             self.csv_writer = CsvWriter()
             self.csv_writer.CreateCsvFile(os.path.join(self.output_path, name + ".csv"))
+        if output_params.write_tsv:
+            self.tsv = True
+            self.tsv_writer = CsvWriter(is_tsv=True)
+            self.tsv_writer.CreateCsvFile(os.path.join(self.output_path, name + ".tsv"))
         if output_params.write_xlsx:
             self.xlsx = True
             self.xlsx_writer = output_params.xlsx_writer
@@ -100,9 +107,11 @@ class DataWriter:
             i += 1
 
     def WriteHeaders(self):
-        '''Writes Headings for csv, creates Table for sqlite, creates Sheet for XLSX'''
+        '''Writes Headings for csv/tsv, creates Table for sqlite, creates Sheet for XLSX'''
         if self.csv:
             self.csv_writer.WriteRow(self.column_info)
+        if self.tsv:
+            self.tsv_writer.WriteRow(self.column_info)
         if self.sql:
             self.sql_writer.CreateTable(self.column_info, self.name, self.column_info_extra_keywords)
         if self.xlsx:
@@ -135,11 +144,12 @@ class DataWriter:
                     self.sql_writer.WriteRow(row_copy)
                 else:
                     self.sql_writer.WriteRow(row)
-            if self.csv or self.xlsx: # This routine modifies row
+            if self.csv or self.tsv or self.xlsx: # This routine modifies row
                 if self.cols_with_blobs:
                     for col_name, index in self.cols_with_blobs:
                         row[index] = self.BlobToHex(row[index])
                 if self.csv: self.csv_writer.WriteRow(row)
+                if self.tsv: self.tsv_writer.WriteRow(row)
                 if self.xlsx: self.xlsx_writer.WriteRow(row)
         else: # Must be Dictionary!
             #list_to_write = [ row.get(col, None if self.column_info[col] in (DataType.INTEGER, DataType.BLOB, DataType.REAL) else '') \
@@ -152,11 +162,12 @@ class DataWriter:
                         row_copy[index] = bytes(row_copy[index]) if row_copy[index] else b''
                     self.sql_writer.WriteRow(row_copy)
                 else: self.sql_writer.WriteRow(list_to_write)
-            if self.csv or self.xlsx:
+            if self.csv or self.tsv or self.xlsx:
                 if self.cols_with_blobs:
                     for col_name, index in self.cols_with_blobs:
                         list_to_write[index] = self.BlobToHex(list_to_write[index])
                 if self.csv: self.csv_writer.WriteRow(list_to_write)
+                if self.tsv: self.tsv_writer.WriteRow(list_to_write)
                 if self.xlsx: self.xlsx_writer.WriteRow(list_to_write)
         self.row_count += 1
 
@@ -181,19 +192,20 @@ class DataWriter:
                     self.sql_writer.WriteRows(rows_copy)
                 else:
                     self.sql_writer.WriteRows(rows)
-            if self.csv or self.xlsx: # This routine modifies rows
+            if self.csv or self.tsv or self.xlsx: # This routine modifies rows
                 if self.cols_with_blobs:
                     for row in rows:
                         for col_name, index in self.cols_with_blobs:
                             row[index] = self.BlobToHex(row[index])
                 if self.csv: self.csv_writer.WriteRows(rows)
+                if self.tsv: self.tsv_writer.WriteRows(rows)
                 if self.xlsx: self.xlsx_writer.WriteRows(rows)
         else: # Must be Dictionary!
             list_to_write = []
             for row in rows:
                 #list_row = [ row.get(col, None if self.column_info[col] in (DataType.INTEGER, DataType.BLOB, DataType.REAL) else '') \
                 #                 for col in self.column_info ]
-                # NOTES: For csv , everything not present can be '', otherwise 'None' is printed
+                # NOTES: For csv/tsv , everything not present can be '', otherwise 'None' is printed
                 #        For sql, this works too, however None is more correct.. revisit this later.
                 list_row = [ row.get(col, '') for col in self.column_info ]
                 list_to_write.append(list_row)
@@ -206,12 +218,13 @@ class DataWriter:
                     self.sql_writer.WriteRows(rows_copy)
                 else:
                     self.sql_writer.WriteRows(list_to_write)
-            if self.csv or self.xlsx: # This routine modifies list_to_write
+            if self.csv or self.tsv or self.xlsx: # This routine modifies list_to_write
                 if self.cols_with_blobs:
                     for list_row in list_to_write:
                         for col_name, index in self.cols_with_blobs:
                             list_row[index] = self.BlobToHex(list_row[index])           
                 if self.csv: self.csv_writer.WriteRows(list_to_write)
+                if self.tsv: self.tsv_writer.WriteRows(list_to_write)
                 if self.xlsx: self.xlsx_writer.WriteRows(list_to_write)
         self.row_count += row_len
 
@@ -402,27 +415,34 @@ class SqliteWriter:
             raise ValueError('SqliteWriter destructor, Dear coder, you forgot to close db.')
 
 class CsvWriter:
-    def __init__(self, delete_empty_files=True):
+    def __init__(self, delete_empty_files=True, is_tsv=False):
         self.filepath = ''
-        self.codec = 'utf-16'
+        self.is_tsv = is_tsv
+        if is_tsv:
+            self.codec = 'utf-16'
+        else:
+            self.codec = 'utf-8'
+            self.pycsv_writer = None
         self.file_handle = None
         self.delete_empty_files = delete_empty_files # perhaps a useful option?
     
     def CreateCsvFile(self, filepath):
         '''
-        Creates a csv file with suggested name, 
+        Creates a csv/tsv file with suggested name, 
         if name is not available, get the next available name
         eg: name01.csv or name02.csv or ..
         '''
         self.filepath = CommonFunctions.GetNextAvailableFileName(filepath)
         try:
-            self.file_handle = codecs.open(self.filepath, 'w', encoding=self.codec)
-        except (OSError) as ex:
-            log.error('Failed to create csv file at path {}'.format(self.filepath))
+            self.file_handle = open(self.filepath, 'w', encoding=self.codec, newline='')
+            if not self.is_tsv:
+                self.pycsv_writer = csv.writer(self.file_handle, delimiter=',', quotechar='"', quoting=csv.QUOTE_MINIMAL, dialect='excel')
+        except (OSError, csv.Error) as ex:
+            log.error('Failed to create {} file at path {}'.format('tsv' if self.is_tsv else 'csv', self.filepath))
             log.exception('Error details')
             raise ex
 
-    def Sanitize(self, row):
+    def SanitizeForTsv(self, row):
         '''Remove \r \n \t from each item to write'''
         safe_list = []
         for item in row:
@@ -434,20 +454,38 @@ class CsvWriter:
             safe_list.append(safe_str)
         return safe_list
 
-    def WriteRow(self, row):
-        row = self.Sanitize(row)
+    def WriteRowTsv(self, row):
+        row = self.SanitizeForTsv(row)
         self.file_handle.write("\t".join(map(str,row)) + ('\r\n'))
+
+    def WriteRowCsv(self, row):
+        try:
+            self.pycsv_writer.writerow(row)
+        except (OSError, csv.Error) as ex:
+            log.exception('Failed to write csv row ' + str(row))
     
+    def WriteRow(self, row):
+        if self.is_tsv:
+            self.WriteRowTsv(row)
+        else:
+            self.WriteRowCsv(row)
+
     def WriteRows(self, rows):
-        for row in rows:
-            self.WriteRow(row)
-    
+        if self.is_tsv:
+            for row in rows:
+                self.WriteRowTsv(row)
+        else:
+            try:
+                self.pycsv_writer.writerows(rows)
+            except (OSError, csv.Error) as ex:
+                log.exception('Failed to write csv rows')
+
     def GetFileSize(self):
-        '''Return csv's filesize or None if error'''
+        '''Return csv/tsv's filesize or None if error'''
         try:
             return os.path.getsize(self.filepath)
         except OSError as ex:
-            log.warning('Failed to retrieve file size for CSV: {}'.format(self.filepath))
+            log.warning('Failed to retrieve file size for {}: {}'.format('TSV' if self.is_tsv else 'CSV',self.filepath))
         return None
     
     def Cleanup(self):
@@ -729,6 +767,7 @@ if __name__ == '__main__': # TESTING ONLY
 
         op = OutputParams()
         op.write_csv = True
+        op.write_tsv = True
         op.write_sql = True
         op.write_xlsx = True
         op.output_path = "/Users/ykhatri/Desktop/code/test" #"C:\\temp\\out"
@@ -739,8 +778,8 @@ if __name__ == '__main__': # TESTING ONLY
                                              ('BLOB',DataType.BLOB),('S_Date',DataType.DATE)])
         d = datetime.datetime(2016,11,10,9,20,45,9)
         writer = DataWriter(op, 'TESTINGWRITER', columns, '/var/folders/none/unknown.db')
-        writer.WriteRow([1, "Joe", '/Users/JoeSmith', b'\xdb]\xccY\x00\x00\x00\x00P\x87\x044\x00\x00\x00\x00', d])
-        #writer.WriteRow([datetime.datetime.now(), "Moe", '/Users/MoePo', b'\x38\x39', d])# incorret
+        writer.WriteRow([1, "Joe\n,Preet", '/Users/Joe"Smith', b'\xdb]\xccY\x00\x00\x00\x00P\x87\x044\x00\x00\x00\x00', d])
+        #writer.WriteRow([datetime.datetime.now(), "Moe", '/Users/MoePo', b'\x38\x39', d])# incorrect
         writer.WriteRow({'NAME':'Bill', 'ID':3, 'Path':'/users/coby', 'BLOB':b'\xdb]\xccY\x00\x00\x38\x39'})
         writer.WriteRow({'NAME':'OBoy', 'Path':'/users/piy', 'BLOB':b'\x38\x39', 'S_Date':d})
         writer.WriteRow({'NAME':'Bad', 'ID':44 })
@@ -751,7 +790,7 @@ if __name__ == '__main__': # TESTING ONLY
         d = datetime.datetime(2016,11,10,9,20,45,9)
         writer2.WriteRow([1, "Joe", '/Users/JoeSmith', b'\x38\x39', d])
 
-        op.xlsx_writer.CommitAndCloseFile()
+        #op.xlsx_writer.CommitAndCloseFile()
         writer.FinishWrites()
         writer2.FinishWrites()
 

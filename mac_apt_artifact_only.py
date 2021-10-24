@@ -58,6 +58,7 @@ arg_parser.add_argument('-i', '--input_path', nargs='+', help='Path to input fil
 arg_parser.add_argument('-o', '--output_path', help='Path where output files will be created') # Not optional !
 arg_parser.add_argument('-x', '--xlsx', action="store_true", help='Save output in excel spreadsheet(s)')
 arg_parser.add_argument('-c', '--csv', action="store_true", help='Save output as CSV files')
+arg_parser.add_argument('-t', '--tsv', action="store_true", help='Save output as TSV files (tab separated)')
 arg_parser.add_argument('-l', '--log_level', help='Log levels: INFO, DEBUG, WARNING, ERROR, CRITICAL (Default is INFO)')
 arg_parser.add_argument('plugin', help="Plugin to run")
 arg_parser.add_argument('--plugin_help', action="store_true", help="Plugin usage info")
@@ -136,6 +137,8 @@ if args.xlsx:
 
 if args.csv:
     output_params.write_csv  = True
+if args.tsv:
+    output_params.write_tsv  = True
 
 # At this point, all looks good, lets process the input file
 # Start processing plugin now!

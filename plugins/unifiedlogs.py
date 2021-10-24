@@ -189,6 +189,7 @@ def CopyOutputParams(output_params):
     op_copy = OutputParams()
     op_copy.output_path = output_params.output_path
     op_copy.write_csv = output_params.write_csv
+    op_copy.write_tsv = output_params.write_tsv
     op_copy.write_sql = output_params.write_sql
     op_copy.write_xlsx = output_params.write_xlsx
     op_copy.xlsx_writer = output_params.xlsx_writer
@@ -286,6 +287,7 @@ def Plugin_Start(mac_info):
         out_params = CopyOutputParams(mac_info.output_params)
         out_params.write_xlsx = False
         out_params.write_csv = False
+        out_params.write_tsv = False
         out_params.write_sql = True
         if CreateSqliteDb(output_path, out_params):
             writer = DataWriter(out_params, "UnifiedLogs", data_type_info, traceV3_path)
