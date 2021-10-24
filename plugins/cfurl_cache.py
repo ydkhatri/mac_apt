@@ -159,7 +159,7 @@ def OpenAndReadCFURLCache(cfurl_cache_artifacts, username, app_bundle_id, folder
 
 
 def PrintAll(cfurl_cache_artifacts, output_params, source_path):
-    cfurl_cache_info = [('Date', DataType.DATE), ('URL', DataType.TEXT), ('Method', DataType.TEXT), ('Request_Header', DataType.TEXT), 
+    cfurl_cache_info = [('Date', DataType.TEXT), ('URL', DataType.TEXT), ('Method', DataType.TEXT), ('Request_Header', DataType.TEXT), 
                         ('HTTP_Status', DataType.TEXT), ('Response_Header', DataType.TEXT), ('isDataOnFS', DataType.INTEGER), ('Received_Data', DataType.BLOB), 
                         ('User', DataType.TEXT), ('App_Bundle_ID', DataType.TEXT), ('Source', DataType.TEXT)]
 
