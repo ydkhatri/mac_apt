@@ -310,7 +310,7 @@ def Plugin_Start_Standalone(input_files_list, output_params):
                 except (OSError):
                     log.exception('Failed to open file for reading: ' + path)
         if len(logs) > 0:
-            PrintAll(logs, output_params)
+            PrintAll(logs)
             log.info("The source_date field on the fsevents are from the individual file modified date "\
                      "(metadata not data)! This may have changed if you are not on a live or read-only image.")
         if total_logs_processed > 0:
