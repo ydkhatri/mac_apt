@@ -11,16 +11,16 @@
    utmpx has been DEPRECATED on macOS, but we can still take advantage of it.
    Ref 1 : https://github.com/log2timeline/plaso/blob/main/plaso/parsers/utmpx.py
    Ref 2 : https://github.com/jjarava/mac-osx-forensics/blob/master/utmpx.py
+   Ref 3 : https://github.com/libyal/dtformats/blob/main/documentation/Utmp%20login%20records%20format.asciidoc
 '''
 
+import logging
 import os
-import time
+
 from construct import *
 
 from plugins.helpers.macinfo import *
 from plugins.helpers.writer import *
-
-import logging
 
 __Plugin_Name = "UTMPX" # Cannot have spaces, and must be all caps!
 __Plugin_Friendly_Name = "utmpx"
@@ -60,7 +60,10 @@ UtmpxType = {
     5 : 'INIT_PROCESS',
     6 : 'LOGIN_PROCESS',
     7 : 'USER_PROCESS',
-    8 : 'DEAD_PROCESS'
+    8 : 'DEAD_PROCESS',
+    9 : 'ACCOUNTING',
+    10 : 'SIGNATURE',
+    11 : 'SHUTDOWN_TIME'
 }
 
 
