@@ -972,7 +972,7 @@ def ProcessStoreDb(input_file_path, output_path, file_name_prefix='store'):
     time_processing_started = time.time()
     create_full_paths_output_file = True
 
-    output_path_full_paths = os.path.join(output_folder, file_name_prefix + '_fullpaths.csv')
+    output_path_full_paths = os.path.join(output_folder, file_name_prefix + '_fullpaths.tsv')
     output_path_data = os.path.join(output_folder, file_name_prefix + '_data.txt')
 
     log.info('Processing ' + input_file_path)

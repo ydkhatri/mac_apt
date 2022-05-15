@@ -228,6 +228,38 @@ def ReadCloudTabsDb(conn, safari_items, source_path, user):
     except sqlite3.Error as ex:
         log.exception ("Sqlite error")
 
+def ReadSafariTabsDb(conn, safari_items, source_path, user):
+    try:
+        conn.row_factory = sqlite3.Row
+        cursor = conn.execute(
+            """SELECT title, url, local_attributes, date_closed
+                FROM bookmarks WHERE url not like '' """)
+        try:
+            for row in cursor:
+                try:
+                    local_attributes = row['local_attributes']
+                    last_visit_ended = ''
+                    last_visit_start = ''
+                    if local_attributes:
+                        plist_file_obj = io.BytesIO(local_attributes)
+                        success, plist, error = CommonFunctions.ReadPlist(plist_file_obj)
+                        if success:
+                            last_visit_start = plist.get('LastVisitTime', '')
+                            last_visit_ended = plist.get('DateClosed', '')
+                        else:
+                            log.error(error)
+                    si = SafariItem(SafariItemType.TAB, row['url'], row['title'], last_visit_start,
+                                    f'Visit_end={last_visit_ended}',
+                                    user, source_path)
+                    safari_items.append(si)
+                except sqlite3.Error as ex:
+                    log.exception ("Error while fetching row data")
+        except sqlite3.Error as ex:
+            log.exception ("Db cursor error while reading file " + source_path)
+        conn.close()
+    except sqlite3.Error as ex:
+        log.exception ("Sqlite error")
+
 def ReadBrowserStateDb(conn, safari_items, source_path, user):
     try:
         conn.row_factory = sqlite3.Row
@@ -479,6 +511,7 @@ def ProcessSafariFolder(mac_info, folder_path, user, safari_items):
     # Yosemite onwards there is History.db
     ReadDbFromImage(mac_info, folder_path + '/History.db', user, safari_items, ReadHistoryDb, 'safari history')
     ReadDbFromImage(mac_info, folder_path + '/CloudTabs.db', user, safari_items, ReadCloudTabsDb, 'safari CloudTabs')
+    ReadDbFromImage(mac_info, folder_path + '/SafariTabs.db', user, safari_items, ReadSafariTabsDb, 'safari Tabs')
     ReadDbFromImage(mac_info, folder_path + '/BrowserState.db', user, safari_items, ReadBrowserStateDb, 'safari BrowserState')    
 
 def ReadDbFromImage(mac_info, source_path, user, safari_items, processing_func, description):
@@ -498,6 +531,7 @@ def Plugin_Start(mac_info):
     user_safari_plist_paths = ('{}/Library/Preferences/com.apple.safari.plist',\
                             '{}/Library/Containers/com.apple.Safari/Data/Library/Preferences/com.apple.Safari.plist')
     user_safari_path = '{}/Library/Safari'
+    user_safari_path_15 = '{}/Library/Containers/com.apple.Safari/Data/Library/Safari' # Safari 15 moved some data here
     user_safari_extensions = ('{}/Library/Containers/com.apple.Safari/Data/Library/Safari/AppExtensions/Extensions.plist',\
                             '{}/Library/Containers/com.apple.Safari/Data/Library/Safari/WebExtensions/Extensions.plist')
     processed_paths = []
@@ -516,6 +550,10 @@ def Plugin_Start(mac_info):
             #        log.debug('File not found: {}'.format(source_path))
 
         source_path = user_safari_path.format(user.home_dir)
+        if mac_info.IsValidFolderPath(source_path):
+            ProcessSafariFolder(mac_info, source_path, user_name, safari_items)
+        
+        source_path = user_safari_path_15.format(user.home_dir)
         if mac_info.IsValidFolderPath(source_path):
             ProcessSafariFolder(mac_info, source_path, user_name, safari_items)
         
@@ -576,6 +614,14 @@ def Plugin_Start_Standalone(input_files_list, output_params):
                 ReadCloudTabsDb(conn, safari_items, input_path, '')
             except (sqlite3.Error, OSError) as ex:
                 log.exception ("Failed to open database, is it a valid SQLITE DB?")
+        elif input_path.endswith('SafariTabs.db'):
+            log.info ("Processing file " + input_path)
+            try:
+                conn = CommonFunctions.open_sqlite_db_readonly(input_path)
+                log.debug ("Opened database successfully")
+                ReadSafariTabsDb(conn, safari_items, input_path, '')
+            except (sqlite3.Error, OSError) as ex:
+                log.exception ("Failed to open database, is it a valid SQLITE DB?")
         elif input_path.endswith('BrowserState.db'):
             log.info ("Processing file " + input_path)
             try:
@@ -606,6 +652,7 @@ def Plugin_Start_Ios(ios_info):
     if ios_info.IsValidFolderPath(source_path):
         ReadDbFromImage(ios_info, source_path + '/History.db', 'mobile', safari_items, ReadHistoryDb, 'safari History')
         ReadDbFromImage(ios_info, source_path + '/CloudTabs.db', 'mobile', safari_items, ReadCloudTabsDb, 'safari CloudTabs')
+        ReadDbFromImage(ios_info, source_path + '/SafariTabs.db', 'mobile', safari_items, ReadSafariTabsDb, 'safari Tabs')
         ReadDbFromImage(ios_info, source_path + '/BrowserState.db', 'mobile', safari_items, ReadBrowserStateDb, 'safari BrowserState')
     if len(safari_items) > 0:
         PrintAll(safari_items, ios_info.output_params, '')
