@@ -177,14 +177,15 @@ def Plugin_Start(mac_info):
 def Plugin_Start_Standalone(input_files_list, output_params):
     '''Main entry point function when used on single artifacts (mac_apt_singleplugin), not on a full disk image'''
     log.info("Module Started as standalone")
+    utmpx_artifacts = []
     for input_path in input_files_list:
         log.debug("Input file passed was: " + input_path)
-        utmpx_artifacts = []
-        if ProcessUtmpxStandalone(utmpx_artifacts, input_path):
-            if len(utmpx_artifacts) > 0:
-                PrintAll(utmpx_artifacts, output_params, input_path)
-            else:
-                log.info('No utmpx artifacts were found!')
+        ProcessUtmpxStandalone(utmpx_artifacts, input_path)
+
+    if len(utmpx_artifacts) > 0:
+        PrintAll(utmpx_artifacts, output_params, input_path)
+    else:
+        log.info('No utmpx artifacts were found!')
 
 def Plugin_Start_Ios(ios_info):
     '''Entry point for ios_apt plugin'''
