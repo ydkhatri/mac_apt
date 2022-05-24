@@ -1,22 +1,23 @@
 '''
-   Copyright (c) 2017 Yogesh Khatri 
+   Copyright (c) 2017 Yogesh Khatri
 
    This file is part of mac_apt (macOS Artifact Parsing Tool).
-   Usage or distribution of this software/code is subject to the 
+   Usage or distribution of this software/code is subject to the
    terms of the MIT License.
    
 '''
 
-import os
-import sys
 import logging
-import nska_deserialize as nd
+import os
 import plistlib
-import plugins.helpers.ccl_bplist as ccl_bplist
 import struct
-
-from enum import IntEnum
+import sys
 from binascii import unhexlify
+from enum import IntEnum
+
+import nska_deserialize as nd
+
+import plugins.helpers.ccl_bplist as ccl_bplist
 from plugins.helpers.macinfo import *
 from plugins.helpers.writer import *
 
@@ -55,11 +56,14 @@ class RecentType(IntEnum):
     VOLUME = 7 # For FXDesktopVolumePositions & systemitems.volumeslist
     BULKRENAME = 8 # For finder
     SSH_KNOWNHOST = 9 # For machines in ~/.ssh/known_hosts
+    TAG = 10
+    FAVORITE_SERVER = 11
+    FAVORITE_ITEM = 12
 
     def __str__(self):
         return self.name # This returns 'UNKNOWN' instead of 'RecentType.UNKNOWN'
 
-class RecentItem: 
+class RecentItem:
 
     class BookmarkItem:
         def __init__(self):
@@ -67,7 +71,7 @@ class RecentItem:
             self.Size = 0 # Data size
             self.Data = None
             self.Type = 0
-            
+
         def ReadData(self, bookmark):
             try:
                 if self.Type == 0x0101: # UTF8 string
@@ -100,7 +104,7 @@ class RecentItem:
             byte   VolumeNameLength;
             char   VolumeName[27];
             HFSTime   VolumeDate; //HFSDate
-            char   FsType[2]; 
+            char   FsType[2];
             ushort DiskType; //0 = fixed, 1 = network, 2 = 400Kb, 3 = 800kb, 4 = 1.44MB, 5 = ejectable
             uint   ParentCNID;
             byte   TargetNameLength;
@@ -135,7 +139,7 @@ class RecentItem:
             target_creation_date = CommonFunctions.ReadMacHFSTime(struct.unpack('>L',alias[118:122])[0])
             log.debug('FS_type={} vol_name={} vol_date={} target_name={} target_creation_date={}'.format(fs_type, vol_name, vol_date, target_name,target_creation_date))
             # Now parse tag data
-            
+
             pos = 150
             while pos < size:
                 tag, data_size = struct.unpack('>2H', alias[pos:pos + 4])
@@ -214,7 +218,7 @@ class RecentItem:
             creation_date = CommonFunctions.ReadMacHFSTime(struct.unpack('>L',alias[34:38])[0])
             log.debug('FS_type={} vol_checked_date={} creation_date={}'.format(fs_type, vol_checked_date, creation_date))
             # Now parse tag data
-            
+
             pos = 58
             while pos < size:
                 tag, data_size = struct.unpack('>2H', alias[pos:pos + 4])
@@ -301,16 +305,16 @@ class RecentItem:
                 bi.Size, bi.Type = struct.unpack("<2L", bookmark[pos:pos+8])
                 bi.ReadData(bookmark)
                 bookmark_items.append(bi)
-                pos += 8 + bi.Size 
-                remainder = bi.Size % 4   # There is padding to int boundary                
-                if remainder > 0: 
+                pos += 8 + bi.Size
+                remainder = bi.Size % 4   # There is padding to int boundary
+                if remainder > 0:
                     pos += 4 - remainder
-                
+
             # Now read all the items
             # First set of type 0x0101 are folder names in path
             # Next 0x0101 is Volume Name
             # Next 0x0101 is Volume UUID
-            # Next 0x0101 is '/' 
+            # Next 0x0101 is '/'
             found_volume_path_parts = False
             found_volume_name = False
             found_volume_uuid = False
@@ -326,7 +330,7 @@ class RecentItem:
             if found_volume_path_parts:
                 folders = []
                 for part in parts_order:
-                    item = [x for x in volume_path_parts if part == x['Pos']][0] 
+                    item = [x for x in volume_path_parts if part == x['Pos']][0]
                     folders.append(item['Data'])
                 self.URL = '/'.join(folders)
 
@@ -337,7 +341,7 @@ class RecentItem:
                     if url.find('://') > 0 and not url.startswith('file:///'): # Catch protocols, smb://, afp://, ftp..
                         self.URL = url
                         return
-            
+
         except (IndexError, ValueError, struct.error) as ex:
             log.exception('Exception while processing data in Bookmark field')
 
@@ -395,7 +399,7 @@ def ParseRecentFile(input_file):
             log.exception('Failed to open/read file: {}'.format(input_file))
     else:
         log.info ('Unknown file: {} '.format(basename))
-    
+
     return recent_items
 
 def ReadSidebarListsPlist(plist, recent_items, source, user=''):
@@ -431,13 +435,13 @@ def ReadFinderPlist(plist, recent_items, source, user=''):
         try:
             vol_name = vol
             valid_date = ''
-            
+
             last_underscore_pos = vol.rfind('_')
             if last_underscore_pos > 0:
                 vol_name = vol[0:last_underscore_pos]
                 vol_date = vol[last_underscore_pos+1:]
                 vol_date_int = 0
-                try: 
+                try:
                     vol_date_int = int(float.fromhex(vol_date))
                 except ValueError:
                     log.error('Failed to convert {} to int'.format(vol_date))
@@ -446,8 +450,8 @@ def ReadFinderPlist(plist, recent_items, source, user=''):
             ri = RecentItem(vol_name, vol, 'FXDesktopVolumePositions' + ((', vol_created_date=' + str(valid_date)) if valid_date != '' else ''), source, RecentType.VOLUME, user)
             recent_items.append(ri)
         except ValueError as ex:
-            log.exception('Error reading FXDesktopVolumePositions from plist')   
-    
+            log.exception('Error reading FXDesktopVolumePositions from plist')
+
     try:
         last_connected_url = plist['FXConnectToLastURL']
         ri = RecentItem('', last_connected_url, 'FXConnectToLastURL', source, RecentType.SERVER, user)
@@ -486,7 +490,7 @@ def ReadFinderPlist(plist, recent_items, source, user=''):
                         log.error('Could not find file-bookmark or file-data in FXRecentFolders item:{}'.format(ri.Name))
                 recent_items.append(ri)
         except (KeyError, ValueError) as ex:
-            log.exception('Error reading FXRecentFolders from plist')   
+            log.exception('Error reading FXRecentFolders from plist')
     except KeyError: # Not found
         pass
 
@@ -532,7 +536,7 @@ def ReadGlobalPrefPlist(plist, recent_items, source='', user=''):
                 ri = RecentItem('', place, 'NSNavRecentPlaces', source, RecentType.PLACE, user)
                 recent_items.append(ri)
         except (KeyError, ValueError) as ex:
-            log.exception('Error reading NSNavRecentPlaces from plist')   
+            log.exception('Error reading NSNavRecentPlaces from plist')
     except KeyError: # Not found
         pass
     try:
@@ -573,7 +577,7 @@ def ReadRecentPlist(plist, recent_items, source='', user=''):
             try:
                 for item in plist['RecentDocuments']['CustomListItems']:
                     ri = RecentItem(item['Name'], '', '', source, RecentType.DOCUMENT, user)
-                    ri.ReadBookmark(item['Bookmark'])                        
+                    ri.ReadBookmark(item['Bookmark'])
                     recent_items.append(ri)
             except KeyError as ex:
                 log.error('Error reading RecentDocuments from plist, error was {}'.format(str(ex)))
@@ -581,7 +585,7 @@ def ReadRecentPlist(plist, recent_items, source='', user=''):
             try:
                 for item in plist['RecentServers']['CustomListItems']:
                     ri = RecentItem(item['Name'], '', '', source, RecentType.SERVER, user)
-                    data = item.get('Alias', None) 
+                    data = item.get('Alias', None)
                     if data == None: # Yosemite onwards it is a bookmark!
                         data = item.get('Bookmark', None)
                         if data == None:
@@ -609,6 +613,9 @@ def ReadSFL2Plist(file_handle, recent_items, source, user=''):
             elif basename.find('recentdocuments') >=0 : recent_type = RecentType.DOCUMENT
             elif basename.find('recentapplications') >=0 : recent_type = RecentType.APPLICATION
             elif basename.find('favoritevolumes') >=0 : recent_type = RecentType.VOLUME
+            elif basename.find('projectitems') >=0 : recent_type = RecentType.TAG
+            elif basename.find('favoriteservers') >=0 : recent_type = RecentType.FAVORITE_SERVER
+            elif basename.find('favoriteitems') >=0 : recent_type = RecentType.FAVORITE_ITEM
             ri = RecentItem(name, '', 'uuid={}'.format(uuid), source, recent_type, user)
             recent_items.append(ri)
 
@@ -635,7 +642,7 @@ def ReadSFLPlist(file_handle, recent_items, source, user=''):
         root = ns_keyed_archiver_obj['root']
         log.debug('Version of SFL is {}'.format(root['version'])) # Currently we parse version 1
         items = root['items']
-        
+
         for item in items:
             url = ''
             name = ''
@@ -687,7 +694,7 @@ def ProcessSFLFolder(mac_info, user_path, recent_items):
                             ReadSFLPlist(f, recent_items, source_path, user_name)
                         else: #SFL2
                             ReadSFL2Plist(f, recent_items, source_path, user_name)
-    
+
 def ProcessSFL(mac_info, recent_items):
     '''Processes .SFL files '''
     user_path_1 = '{}/Library/Application Support/com.apple.sharedfilelist'
@@ -747,7 +754,7 @@ def ProcessPreferencesFolder(mac_info, recent_items):
             files_list = mac_info.ListItemsInFolder(source_folder,EntryType.FILES)
             for file_entry in files_list:
                 if file_entry['name'].lower().endswith('.plist') and \
-                  (file_entry['name'].lower().find('lssharedfilelist') > 0) and (file_entry['size'] > 120): 
+                  (file_entry['name'].lower().find('lssharedfilelist') > 0) and (file_entry['size'] > 120):
                     source_path = source_folder + '/' + file_entry['name']
                     mac_info.ExportFile(source_path, __Plugin_Name, user_name + "_", False)
                     ProcessSinglePlist(mac_info, source_path, user_name, recent_items)
@@ -772,7 +779,7 @@ def Plugin_Start(mac_info):
             ProcessSinglePlist(mac_info, source_path, user_name, recent_items)
         #else:
         #    log.debug('File not found: {}'.format(source_path))
-        
+
         #Process .Globalpreferences.plist
         source_path = user_global_pref_plist_path.format(user.home_dir)
         if mac_info.IsValidFilePath(source_path):
