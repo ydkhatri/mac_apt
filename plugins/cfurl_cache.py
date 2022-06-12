@@ -11,15 +11,14 @@
    response, and received data.
 '''
 
+import logging
 import os
-import sqlite3
 import plistlib
+import sqlite3
 
 from plugins.helpers.common import CommonFunctions
 from plugins.helpers.macinfo import *
 from plugins.helpers.writer import *
-
-import logging
 
 __Plugin_Name = "CFURLCACHE" # Cannot have spaces, and must be all caps!
 __Plugin_Friendly_Name = "CFURL cache"
@@ -29,7 +28,7 @@ __Plugin_Author = "Minoru Kobayashi"
 __Plugin_Author_Email = "unknownbit@gmail.com"
 
 __Plugin_Modes = "MACOS,ARTIFACTONLY" # Valid values are 'MACOS', 'IOS, 'ARTIFACTONLY' 
-__Plugin_ArtifactOnly_Usage = 'Provide the path to "/Library/Cache/" folder under user home'
+__Plugin_ArtifactOnly_Usage = 'Provide path(s) to "/Library/Cache/" folder under user\'s home'
 
 log = logging.getLogger('MAIN.' + __Plugin_Name) # Do not rename or remove this ! This is the logger object
 
@@ -37,6 +36,7 @@ log = logging.getLogger('MAIN.' + __Plugin_Name) # Do not rename or remove this 
 # Support iOS
 
 #---- Do not change the variable names in above section ----#
+
 
 class CfurlCacheItem:
     def __init__(self, date, url, method, req_header, http_status, resp_header, isDataOnFS, received_data, username, app_bundle_id, source):
@@ -63,6 +63,7 @@ def OpenDb(inputPath):
         log.exception ("Failed to open database, is it a valid DB?")
     return None
 
+
 def OpenDbFromImage(mac_info, inputPath, user):
     '''Returns tuple of (connection, wrapper_obj)'''
     log.info ("Processing CFURL cache for user '{}' from file {}".format(user, inputPath))
@@ -75,6 +76,7 @@ def OpenDbFromImage(mac_info, inputPath, user):
     except sqlite3.Error:
         log.exception ("Failed to open database, is it a valid DB?")
     return None, None
+
 
 def CheckSchemaVersion(db):
     KnownSchemaVersion = (202,)
@@ -91,6 +93,7 @@ def CheckSchemaVersion(db):
         log.debug("Unknown schema version = {}".format(schema_version))
         return None
 
+
 def ParseRequestObject(object_data):
     object_array = plistlib.loads(object_data)['Array']
     http_req_method = object_array[18]
@@ -101,6 +104,7 @@ def ParseRequestObject(object_data):
             req_headers.append("{}: {}".format(header, value))
     return http_req_method, "\r\n".join(req_headers)
 
+
 def ParseResponseObject(object_data):
     object_array = plistlib.loads(object_data)['Array']
     http_status = object_array[3]
@@ -110,6 +114,7 @@ def ParseResponseObject(object_data):
         if header != '__hhaa__':
             resp_headers.append("{}: {}".format(header, value))
     return http_status, "\r\n".join(resp_headers)
+
 
 def ParseCFURLEntry(db, cfurl_cache_artifacts, username, app_bundle_id, cfurl_cache_db_path):
     db.row_factory = sqlite3.Row
@@ -142,6 +147,7 @@ def ParseCFURLEntry(db, cfurl_cache_artifacts, username, app_bundle_id, cfurl_ca
                                         username, app_bundle_id, cfurl_cache_db_path)
                 cfurl_cache_artifacts.append(item)
 
+
 def ExtractAndReadCFURLCache(mac_info, cfurl_cache_artifacts, username, app_bundle_id, folder_path):
     cfurl_cache_db_path = os.path.join(folder_path, 'Cache.db')
     db, wrapper = OpenDbFromImage(mac_info, cfurl_cache_db_path, username)
@@ -149,6 +155,7 @@ def ExtractAndReadCFURLCache(mac_info, cfurl_cache_artifacts, username, app_bund
         ParseCFURLEntry(db, cfurl_cache_artifacts, username, app_bundle_id, cfurl_cache_db_path)
         mac_info.ExportFolder(folder_path, os.path.join(__Plugin_Name, username), True)
         db.close()
+
 
 def OpenAndReadCFURLCache(cfurl_cache_artifacts, username, app_bundle_id, folder_path):
     cfurl_cache_db_path = os.path.join(folder_path, 'Cache.db')
@@ -170,6 +177,7 @@ def PrintAll(cfurl_cache_artifacts, output_params, source_path):
 
     WriteList("CFURL cache", "CFURL_Cache", data_list, cfurl_cache_info, output_params, source_path)
 
+
 def Plugin_Start(mac_info):
     '''Main Entry point function for plugin'''
     cfurl_cache_artifacts = []
@@ -177,8 +185,8 @@ def Plugin_Start(mac_info):
     processed_paths = set()
 
     for user in mac_info.users:
-        if user.home_dir in processed_paths: 
-            continue # Avoid processing same folder twice (some users have same folder! (Eg: root & daemon))
+        if user.home_dir in processed_paths:
+            continue  # Avoid processing same folder twice (some users have same folder! (Eg: root & daemon))
         processed_paths.add(user.home_dir)
         base_path = cfurl_cache_base_path.format(user.home_dir)
         if not mac_info.IsValidFolderPath(base_path):
@@ -196,12 +204,13 @@ def Plugin_Start(mac_info):
     else:
         log.info('No CFURL cache artifacts were found!')
 
-def Plugin_Start_Standalone(input_files_list, output_params):
+
+def Plugin_Start_Standalone(input_folders_list, output_params):
     '''Main entry point function when used on single artifacts (mac_apt_singleplugin), not on a full disk image'''
     log.info("Module Started as standalone")
-    for input_path in input_files_list:
-        log.debug("Input file passed was: " + input_path)
-        cfurl_cache_artifacts = []
+    cfurl_cache_artifacts = []
+    for input_path in input_folders_list:
+        log.debug("Input folder passed was: " + input_path)
         if os.path.isdir(input_path):
             cache_folder_list = os.listdir(input_path)
             app_bundle_ids = [f for f in cache_folder_list if os.path.isdir(os.path.join(input_path, f))]
@@ -211,14 +220,16 @@ def Plugin_Start_Standalone(input_files_list, output_params):
                 if os.path.isfile(cache_db_path) and os.path.getsize(cache_db_path) > 0:
                     OpenAndReadCFURLCache(cfurl_cache_artifacts, '', app_bundle_id, cache_folder_path)
 
-        if len(cfurl_cache_artifacts) > 0:
-            PrintAll(cfurl_cache_artifacts, output_params, input_path)
-        else:
-            log.info('No CFURL cache artifacts were found!')
+    if len(cfurl_cache_artifacts) > 0:
+        PrintAll(cfurl_cache_artifacts, output_params, input_path)
+    else:
+        log.info('No CFURL cache artifacts were found!')
+
 
 def Plugin_Start_Ios(ios_info):
     '''Entry point for ios_apt plugin'''
     pass
+
 
 if __name__ == '__main__':
     print ("This plugin is a part of a framework and does not run independently on its own!")
