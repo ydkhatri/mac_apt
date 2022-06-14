@@ -1,3 +1,14 @@
+Updates in 20220614 (v1.5.0.dev):
+
++ Add CSV support for output (old CSV was TSV, also supported)
++ Add new plugins - TCC and XPROTECTDIAG by @mnrkbys
++ Add SafariTabs.db parsing
+
+! Fix an issue with Spotlight parsing (prop_type 8)
+! Fix a display issue with excel dates for utmpx plugin
+! Fix a display issue with excel dates for cfurul_cache plugin
+! Minor bugfix for fsevents and utmpx plugin
+
 Updates in 20210717 (v1.4.0):
 
 + Add parsing of Safari WebExtensions and AppExtensions plist
