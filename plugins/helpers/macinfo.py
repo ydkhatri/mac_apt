@@ -8,15 +8,13 @@
 '''
 
 import logging
-import nska_deserialize as nd
 import os
-import pytsk3
 import random
 import shutil
+import sqlite3
 import stat
 import string
 import struct
-import sqlite3
 import sys
 import tempfile
 import time
@@ -24,12 +22,15 @@ import traceback
 import zipfile
 from io import BytesIO
 from uuid import UUID
+
+import nska_deserialize as nd
+import pytsk3
+from plugins.helpers import decryptor
 from plugins.helpers.apfs_reader import *
+from plugins.helpers.common import *
 from plugins.helpers.darwin_path_generator import GetDarwinPath, GetDarwinPath2
 from plugins.helpers.hfs_alt import HFSVolume
-from plugins.helpers.common import *
 from plugins.helpers.structs import *
-from plugins.helpers import decryptor
 
 if sys.platform == 'linux':
     from plugins.helpers.statx import statx
@@ -221,7 +222,7 @@ class NativeHfsParser:
         except ValueError:
             log.exception('NativeHFSParser->Failed trying to check valid file path')
         return False
-    
+
     def IsValidFolderPath(self, path):
         '''Check if a folder path is valid'''
         try:
@@ -293,14 +294,14 @@ class NativeHfsParser:
             log.error('Error trying to get file list from folder: ' + path)
             log.exception('')
         return items
-    
+
     def _BuildFileListItemFromRecord(self, k, v, entry_type, include_dates):
         name = getString(k)
-        item = None        
+        item = None
         if include_dates:
-            item = { 'name':name, 
-                     'type':entry_type, 
-                     'size':self._GetSizeFromRec(k, v) if entry_type == EntryType.FILES else 0, 
+            item = { 'name':name,
+                     'type':entry_type,
+                     'size':self._GetSizeFromRec(k, v) if entry_type == EntryType.FILES else 0,
                      'dates': self._GetFileMACTimesFromFileRecord(v)
                     }
         else:
@@ -310,7 +311,7 @@ class NativeHfsParser:
 class MacInfo:
 
     def __init__(self, output_params, password='', dont_decrypt=False):
-        #self.Partitions = {}   # Dictionary of all partition objects returned from pytsk LATER! 
+        #self.Partitions = {}   # Dictionary of all partition objects returned from pytsk LATER!
         self.pytsk_image = None
         self.macos_FS = None      # Just the FileSystem object (fs) from OSX partition
         self.macos_partition_start_offset = 0 # Container offset if APFS
@@ -323,7 +324,7 @@ class MacInfo:
         self.hfs_native = NativeHfsParser()
         self.is_apfs = False
         self.use_native_hfs_parser = True
-        # runtime platform 
+        # runtime platform
         self.is_windows = (os.name == 'nt')
         self.is_linux = (sys.platform == 'linux')
         # for encrypted volumes
@@ -336,18 +337,18 @@ class MacInfo:
             current location (path) and a relative path to the destination. This is
             for relative paths that start with . or ..  '''
         # This is for linux paths only
-        if dest_rel_path in ('', '/'): 
+        if dest_rel_path in ('', '/'):
             return current_abs_path
         # Strip / at start and end of dest
         dest_rel_path = dest_rel_path.rstrip('/').lstrip('/')
 
         if current_abs_path[-1] != '/':
             current_abs_path += '/'
-        
+
         curr_paths = current_abs_path.rstrip('/').lstrip('/').split('/')
         if len(curr_paths) == 1 and curr_paths[0] == '':
             curr_paths = []
-        rel_paths = dest_rel_path.split('/')
+        rel_paths = os.path.normpath(dest_rel_path).split('/')
 
         curr_path_index = len(curr_paths)
         for x in rel_paths:
@@ -376,7 +377,7 @@ class MacInfo:
 
     def GetFileMACTimes(self, file_path):
         '''
-           Returns dictionary {c_time, m_time, cr_time, a_time} 
+           Returns dictionary {c_time, m_time, cr_time, a_time}
            where cr_time = created time and c_time = Last time inode/mft modified
         '''
         if self.use_native_hfs_parser:
@@ -502,7 +503,7 @@ class MacInfo:
 
     def ReadPlist(self, path, deserialize=False):
         '''Safely open and read a plist; returns tuple (True/False, plist/None, "error_message")
-            If deserialize=True, returns a deserialized version of an NSKeyedArchive plist. 
+            If deserialize=True, returns a deserialized version of an NSKeyedArchive plist.
         '''
         log.debug("Trying to open plist file : " + path)
         error = ''
@@ -543,7 +544,7 @@ class MacInfo:
         except Exception:
             pass
         return False
-    
+
     def IsValidFolderPath(self, path):
         '''Check if a folder path is valid'''
         if self.use_native_hfs_parser:
@@ -560,14 +561,14 @@ class MacInfo:
         if self.use_native_hfs_parser:
             return self.hfs_native.GetFileSize(path)
         try:
-            valid_file = self.macos_FS.open(path) 
+            valid_file = self.macos_FS.open(path)
             return valid_file.info.meta.size
         except Exception as ex:
             log.debug (" Unknown exception from GetFileSize() " + str(ex) + " Perhaps file does not exist " + path)
         return error
 
     def ListItemsInFolder(self, path='/', types_to_fetch=EntryType.FILES_AND_FOLDERS, include_dates=False):
-        ''' 
+        '''
         Returns a list of files and/or folders in a list
         Format of list = [ { 'name':'got.txt', 'type':EntryType.FILES, 'size':10, 'dates': {} }, .. ]
         'path' should be linux style using forward-slash like '/var/db/xxyy/file.tdc'
@@ -594,7 +595,7 @@ class MacInfo:
                     items.append( item )
                 elif types_to_fetch == EntryType.FOLDERS and entry_type == EntryType.FOLDERS:
                     items.append( item )
-                
+
         except Exception as ex:
             if str(ex).find('tsk_fs_dir_open: path not found'):
                 log.debug("Path not found : " + path)
@@ -692,7 +693,7 @@ class MacInfo:
             if str(ex).find('tsk_fs_file_open: path not found:') > 0:
                 log.debug("Open() returned 'Path not found' error for path: {}".format(tsk_path))
             else:
-                log.error("Failed to open/find file: " + tsk_path)            
+                log.error("Failed to open/find file: " + tsk_path)
         return False
 
     def GetArrayFirstElement(self, array, error=''):
@@ -702,7 +703,7 @@ class MacInfo:
         except IndexError:
             pass
         return error
-  
+
     def GetVersionDictionary(self):
         '''Returns macOS version as dictionary {major:10, minor:5 , micro:0}'''
         version_dict = { 'major':0, 'minor':0, 'micro':0 }
@@ -814,7 +815,7 @@ class MacInfo:
             log.error(" Unknown exception from _IsValidFileOrFolderEntry:" + self._GetName(entry))
             log.debug("Exception details:\n", exc_info=True)
         return False
-    
+
     def _GetDomainUserInfo(self):
         '''Populates self.users with data from /Users/'''
         log.debug('Trying to get domain profiles from /Users/')
@@ -860,7 +861,7 @@ class MacInfo:
             target_user.failed_login_timestamp = CommonFunctions.ReadUnixTime(plist2.get('failedLoginTimestamp', None))
             target_user.password_last_set_time = CommonFunctions.ReadUnixTime(plist2.get('passwordLastSetTime', None))
         else:
-            log.exception(f'Error reading password_policy_data embedded plist for user {target_user}')     
+            log.exception(f'Error reading password_policy_data embedded plist for user {target_user}')
 
     def _GetUserInfo(self):
         '''Populates user info from plists under: /private/var/db/dslocal/nodes/Default/users/'''
@@ -958,7 +959,7 @@ class MacInfo:
                             break
                     if not found_user:
                         log.error('Could not find username for UID={} GID={}'.format(uid, gid))
-   
+
     def _GetSystemInfo(self):
         ''' Gets system version information'''
         try:
@@ -1023,7 +1024,7 @@ class ApfsMacInfo(MacInfo):
         except (ValueError, TypeError) as ex:
             log.exception('')
         log.error('Failed to create combined System + Data volume')
-        return False        
+        return False
 
     def ReadApfsVolumes(self):
         '''Read volume information into an sqlite db'''
@@ -1087,7 +1088,7 @@ class ApfsMacInfo(MacInfo):
                 times['m_time'] = apfs_file_meta.modified
                 times['cr_time'] = apfs_file_meta.created
                 times['a_time'] = apfs_file_meta.accessed
-                times['i_time'] = apfs_file_meta.date_added                            
+                times['i_time'] = apfs_file_meta.date_added
             else:
                 log.debug('File not found in GetFileMACTimes() query!, path was ' + file_path)
         except Exception as ex:
@@ -1186,9 +1187,9 @@ class ApfsMacInfo(MacInfo):
                         items.append(dict(x))
         return items
 
-class MountedFile(): 
-    # This class is a file-like object, its existence is due to 
-    # Xways Forensics bug with reading mounted files, which can't 
+class MountedFile():
+    # This class is a file-like object, its existence is due to
+    # Xways Forensics bug with reading mounted files, which can't
     # handle f.read() , only f.read(size) works and size must not
     # go beyond end of file. This class ensures that part.
     def __init__(self):
@@ -1354,7 +1355,7 @@ class MountedMacInfo(MacInfo):
 
     def IsValidFolderPath(self, path):
         return self.IsValidFilePath(path)
-    
+
     def _GetFileSizeNoPathMod(self, full_path, error=None):
         '''Simply calls os.path.getsize(), BEWARE-does not build full path!'''
         try:
@@ -1378,11 +1379,11 @@ class MountedMacInfo(MacInfo):
         return self._GetUserAndGroupID(self.BuildFullPath(path))
 
     def ListItemsInFolder(self, path='/', types_to_fetch=EntryType.FILES_AND_FOLDERS, include_dates=False):
-        ''' 
+        '''
         Returns a list of files and/or folders in a list
         Format of list = [ {'name':'got.txt', 'type':EntryType.FILES, 'size':10}, .. ]
         'path' should be linux style using forward-slash like '/var/db/xxyy/file.tdc'
-        and starting at root / 
+        and starting at root /
         '''
         items = [] # List of dictionaries
         try:
@@ -1488,7 +1489,7 @@ class MountedMacInfo(MacInfo):
             # Unix/Linux or Mac mounted disks should preserve UID/GID, so we can read it normally from the files.
             super()._GetDarwinFoldersInfo()
             return
-        
+
         for user in self.users:
             if user.UUID != '' and user.UID not in ('', '-2', '1', '201'): # Users nobody, daemon, guest don't have one
                 darwin_path = '/private/var/folders/' + GetDarwinPath2(user.UUID, user.UID)
@@ -1642,13 +1643,13 @@ class MountedMacInfoSeperateSysData(MountedMacInfo):
         if path_in_image == '/': return self.sys_volume_folder
 
         if path_in_image[-1] == '/': path_in_image = path_in_image[:-1] # remove trailing /
-        
+
         path_parts = path_in_image[1:].split('/')
         path = ''
         vol_folder = self.sys_volume_folder
         for index, folder_name in enumerate(path_parts):
             #log.debug("index={}, folder_name={}".format(index, folder_name))
-            if index >= self.max_firmlink_depth: 
+            if index >= self.max_firmlink_depth:
                 break
             else:
                 #log.debug("Searched for {}".format('/' + '/'.join(path_parts[:index + 1])))
@@ -1691,7 +1692,7 @@ class ZipMacInfo(MacInfo):
 
     def GetFileMACTimes(self, file_path, info=None):
         '''Gets MAC timestamps for a file or folder.
-           Assumes file_path starts with / 
+           Assumes file_path starts with /
         '''
         times = { 'c_time':None, 'm_time':None, 'cr_time':None, 'a_time':None }
         if info is None:
@@ -1754,7 +1755,7 @@ class ZipMacInfo(MacInfo):
         '''folder_path must begin with / '''
         if folder_path[-1] != '/':
             folder_path += '/'
-        
+
         path_list = []
         reg = re.compile(f'^{folder_path}[^/]+/?$')
         for member in self.name_list:
@@ -1764,11 +1765,11 @@ class ZipMacInfo(MacInfo):
         return path_list
 
     def ListItemsInFolder(self, path='/', types_to_fetch=EntryType.FILES_AND_FOLDERS, include_dates=False):
-        ''' 
+        '''
         Returns a list of files and/or folders in a list
         Format of list = [ {'name':'got.txt', 'type':EntryType.FILES, 'size':10}, .. ]
         'path' should be linux style using forward-slash like '/var/db/xxyy/file.tdc'
-        and starting at root / 
+        and starting at root /
         '''
         items = [] # List of dictionaries
         if path[-1] != '/':
@@ -1788,7 +1789,7 @@ class ZipMacInfo(MacInfo):
             else:
                 name = os.path.basename(entry)
             item = { 'name':name, 'type':entry_type, 'size':info.file_size}
-            if include_dates: 
+            if include_dates:
                 item['dates'] = self.GetFileMACTimes(entry, info)
             if types_to_fetch == EntryType.FILES_AND_FOLDERS:
                 items.append( item )
@@ -1995,7 +1996,7 @@ class MountedIosInfo(MountedMacInfo):
     def __init__(self, root_folder_path, output_params):
         super().__init__(root_folder_path, output_params)
         self.apps = []
-    
+
     def GetUserAndGroupIDForFile(self, path):
         raise NotImplementedError()
 
@@ -2008,7 +2009,7 @@ class MountedIosInfo(MountedMacInfo):
     def _GetDarwinFoldersInfo(self):
         '''Gets DARWIN_*_DIR paths, these do not exist on IOS'''
         return NotImplementedError()
-    
+
     def _GetUserInfo(self):
         return NotImplementedError()
 
@@ -2131,7 +2132,7 @@ class MountedIosInfo(MountedMacInfo):
         else:
             log.error(f'Could not find {app_state_db}, cannot get Application information!')
         return False
-    
+
     def _GetAppGroupDetails(self, apps):
         '''Get Appgroup information'''
         containers_db_path = '/private/var/root/Library/MobileContainerManager/containers.sqlite3'
@@ -2209,10 +2210,10 @@ class MountedIosInfo(MountedMacInfo):
 
         pluginkits_path = '/private/var/mobile/Containers/Data/PluginKitPlugin'
         self._ResolveGroupFolders(apps, pluginkits_path, 'PluginKitPlugin')
-      
+
 
     def _ResolveGroupFolders(self, apps, groups_path, groups_name):
-        '''Get UUID and path information from AppGroup/SystemGroup folders'''    
+        '''Get UUID and path information from AppGroup/SystemGroup folders'''
         if self.IsValidFolderPath(groups_path):
             log.info('Resolving App Group folders')
             folder_items = self.ListItemsInFolder(groups_path, types_to_fetch=EntryType.FOLDERS, include_dates=False)
@@ -2280,13 +2281,12 @@ class SqliteWrapper:
     temp files.
 
     Plugins can use this class and use the SqliteWrapper.connect()
-    function to get a connection object. All other sqlite objects can be 
+    function to get a connection object. All other sqlite objects can be
     normally retrieved through SqliteWrapper.sqlite3. Use a new instance
     of SqliteWrapper for every database processed.
 
-    WARNING: Keep this object/ref alive till you are using the db. And 
+    WARNING: Keep this object/ref alive till you are using the db. And
     don't forget to call db.close() when you are done.
-    
     '''
 
     def __init__(self, mac_info):
@@ -2332,7 +2332,7 @@ class SqliteWrapper:
         return ret
 
     def __getattr__(self, attr):
-        if attr == 'connect': 
+        if attr == 'connect':
             def hooked(path):
                 # Get 'database' variable
                 self.db_file_path = path
@@ -2355,7 +2355,7 @@ class SqliteWrapper:
     def _remove_readonly(self, func, path, excinfo):
         os.chmod(path, stat.S_IWRITE)
         func(path)
-  
+
     def __del__(self):
         '''Close all file handles and delete all files & temp folder'''
         # Sometimes a delay may be needed, lets try at least 3 times before failing.
