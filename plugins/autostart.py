@@ -8,11 +8,13 @@
 '''
 
 import logging
-import nska_deserialize as nd
 import os
 import posixpath
-from plugins.helpers.bookmark import *
+
+import nska_deserialize as nd
 from plistutils.alias import AliasParser
+
+from plugins.helpers.bookmark import *
 from plugins.helpers.macinfo import *
 from plugins.helpers.writer import *
 
@@ -149,7 +151,7 @@ def process_kernel_extensions(mac_info, path, persistent_programs):
         for folder in folder_list:
             full_name = folder['name']
             full_path = path + '/' + full_name
-            
+
             name = os.path.splitext(full_name)[0] # removes extension (.kext or .plugin or .bundle usually)
             valid_source = full_path
             info_plist_path = full_path + '/Contents/Info.plist'
@@ -160,7 +162,7 @@ def process_kernel_extensions(mac_info, path, persistent_programs):
                     name = plist.get('CFBundleName', name)
                     name = name.lstrip('"').rstrip('"')
                 else:
-                    log.error("Problem reading plist for {} - ".format(info_plist_path, error))
+                    log.error("Problem reading plist for {} - {}".format(info_plist_path, error))
                 mac_info.ExportFile(info_plist_path, __Plugin_Name, "kext_" + name + "_", False)
             program = PersistentProgram(valid_source, name, full_name, 'Kernel Extension', 'root', 0, '', '')
             persistent_programs.append(program)
@@ -223,7 +225,7 @@ def get_run_when(plist, method):
     run_when = []
     run_at_load = plist.get('RunAtLoad', None)
     if run_at_load == True:
-        #run_when.append('RunAtLoad') # if run_at_load else '') # 'DontRunAtLoad' 
+        #run_when.append('RunAtLoad') # if run_at_load else '') # 'DontRunAtLoad'
         #For daemons this means execution at boot time, for agents execution at login.
         if method == 'Daemon':
             run_when.append('Run at Boot')
@@ -233,7 +235,7 @@ def get_run_when(plist, method):
         if plist.get(item, ''):
             run_when.append(item)
     return ', '.join(run_when)
-    
+
 def process_file(mac_info, file_path, persistent_programs, file_name):
     full_path = file_path + '/' + file_name
     mac_info.ExportFile(full_path, __Plugin_Name, '', False)
@@ -258,7 +260,7 @@ def process_overrides(mac_info, file_path, user, uid, persistent_programs):
         log.error("Problem reading plist - " + error)
 
 def ProcessLoginRestartApps(mac_info, persistent_programs):
-    '''Gets apps/windows set to relaunch upon re-login (after logout)''' 
+    '''Gets apps/windows set to relaunch upon re-login (after logout)'''
     processed_paths = set()
     plist_folder_path = '{}/Library/Preferences/ByHost' # /com.apple.loginwindow.<UUID>.plist'
 
@@ -311,7 +313,7 @@ def Plugin_Start(mac_info):
     persistent_usr_paths = {'Agents' : ['/Library/LaunchAgents'] }
     processed_paths = set()
     persistent_programs = []
-    
+
     ### process kernel extensions ###
     for path in kext_paths:
         process_kernel_extensions(mac_info, path, persistent_programs)
@@ -331,7 +333,7 @@ def Plugin_Start(mac_info):
             if mac_info.IsValidFilePath(file_path + '/' + file_name):
                 processed_paths.add(file_name)
                 process_file(mac_info, file_path, persistent_programs, file_name)
-    
+
     ### process user dirs ###
     for user in mac_info.users:
         user_name = user.user_name
@@ -346,7 +348,7 @@ def Plugin_Start(mac_info):
                     process_dir(mac_info, full_path, persistent_programs, method, user_name, user.UID)
                 else:
                     log.debug("Folder not found {}".format(full_path))
-        
+
         # process loginitems plist
         loginitems_plist_path = '{}/Library/Preferences/com.apple.loginitems.plist'.format(user.home_dir)
         if mac_info.IsValidFilePath(loginitems_plist_path) and mac_info.GetFileSize(loginitems_plist_path) > 70:

@@ -7,18 +7,20 @@
 
 '''
 
-from plugins.helpers.macinfo import *
-from plugins.helpers.writer import *
-from plugins.helpers.common import *
-import sqlite3
 import logging
 import os
+import sqlite3
 from itertools import chain, zip_longest
+
 from PIL import Image
+
+from plugins.helpers.common import *
+from plugins.helpers.macinfo import *
+from plugins.helpers.writer import *
 
 __Plugin_Name = "QUICKLOOK" # Cannot have spaces, and must be all caps!
 __Plugin_Friendly_Name = "QuickLook Thumbnail Cache"
-__Plugin_Version = "1.0"
+__Plugin_Version = "1.1"
 __Plugin_Description = "Parses QuickLook Thumbnail Cache data"
 __Plugin_Author = "Jack Farley - BlackStone Discovery"
 __Plugin_Author_Email = "jfarley@blackstonediscovery.com - jfarley248@gmail.com"
@@ -232,7 +234,7 @@ def parseDb(c, quicklook_array, source, path_to_thumbnails, export, user_name):
 
             # Carve out thumbnail
             carveThumb(bitmapdata_location, bitmapdata_length, thumbfile, file_name, computed_width, height, export, user_name)
-        
+
         if thumbfile:
             thumbfile.close()
 
@@ -262,6 +264,16 @@ def findParents(c, CNID, full_path):
         full_path[0] =   parent_folder + "/" + full_path[0]
         findParents(c, parent_CNID, full_path)
 
+
+def computeWidth(bitmapFormat):
+    bitmap_info = plistlib.loads(bitmapFormat)['$objects'][1]
+    bytesperrow = bitmap_info['bpr']
+    bitsperpixel = bitmap_info['bpp']
+    bitspercomponent = bitmap_info['bpc']
+
+    return int(bytesperrow / (bitsperpixel / bitspercomponent))
+
+
 def parseDbNewSinglePlug(c, quicklook_array, source, path_to_thumbnails, export):
     """
             :param c: Connection to index.sqlite
@@ -270,8 +282,11 @@ def parseDbNewSinglePlug(c, quicklook_array, source, path_to_thumbnails, export)
             :return: Nothing, fills the quicklook array
         """
 
+    pref_ver_query = """
+        SELECT value FROM preferences WHERE key == 'version' LIMIT 1;
+    """
 
-    combined_query = """
+    pref_v10_query = """
         SELECT fileId, version, MAX(size), hit_count, 
         datetime(last_hit_date + strftime('%s', '2001-01-01 00:00:00'), 'unixepoch') as last_hit_date, 
         width, (bytesperrow / (bitsperpixel/bitspercomponent)) as computed_width, height,
@@ -279,7 +294,25 @@ def parseDbNewSinglePlug(c, quicklook_array, source, path_to_thumbnails, export)
         FROM thumbnails LEFT JOIN basic_files 
         ON (basic_files.fileId | -9223372036854775808) == thumbnails.file_id
         group by fileId
-        """
+    """
+
+    pref_v11_query = """
+        SELECT fileId, version, MAX(size), hit_count, 
+        datetime(last_hit_date + strftime('%s', '2001-01-01 00:00:00'), 'unixepoch') as last_hit_date, 
+        width, bitmapFormat, height,
+        bitmapdata_location, bitmapdata_length
+        FROM thumbnails LEFT JOIN basic_files 
+        ON (basic_files.fileId | -9223372036854775808) == thumbnails.file_id
+        group by fileId
+    """
+
+    c.execute(pref_ver_query)
+    log.info("preference version = {}".format(pref_ver))
+    pref_ver = int(c.fetchone()[0])
+    if pref_ver == 11:
+        combined_query = pref_v11_query
+    else:
+        combined_query = pref_v10_query
 
     c.execute(combined_query)
     combined_files = c.fetchall()
@@ -297,7 +330,7 @@ def parseDbNewSinglePlug(c, quicklook_array, source, path_to_thumbnails, export)
             # Carve out thumbnails with no iNode
             bitmapdata_location = entries[8]
             bitmapdata_length = entries[9]
-            computed_width = entries[6]
+            computed_width = computeWidth(entries[6]) if pref_ver == 11 else entries[6]
             height = entries[7]
             name = "Unknown" + str(unknown_count)
             hit_count = entries[3]
@@ -335,7 +368,11 @@ def parseDbNew(c, quicklook_array, source, path_to_thumbnails, export, user_name
     SELECT Name from Combined_Inodes where Combined_Inodes.CNID == {}
     """
 
-    combined_query = """
+    pref_ver_query = """
+        SELECT value FROM preferences WHERE key == 'version' LIMIT 1;
+    """
+
+    pref_v10_query = """
         SELECT fileId, version, MAX(size), hit_count, 
         datetime(last_hit_date + strftime('%s', '2001-01-01 00:00:00'), 'unixepoch') as last_hit_date, 
         width, (bytesperrow / (bitsperpixel/bitspercomponent)) as computed_width, height,
@@ -344,6 +381,24 @@ def parseDbNew(c, quicklook_array, source, path_to_thumbnails, export, user_name
         ON (basic_files.fileId | -9223372036854775808) == thumbnails.file_id
         group by fileId
     """
+
+    pref_v11_query = """
+        SELECT fileId, version, MAX(size), hit_count, 
+        datetime(last_hit_date + strftime('%s', '2001-01-01 00:00:00'), 'unixepoch') as last_hit_date, 
+        width, bitmapFormat, height,
+        bitmapdata_location, bitmapdata_length
+        FROM thumbnails LEFT JOIN basic_files 
+        ON (basic_files.fileId | -9223372036854775808) == thumbnails.file_id
+        group by fileId
+    """
+
+    c.execute(pref_ver_query)
+    pref_ver = int(c.fetchone()[0])
+    log.info("preference version = {}".format(pref_ver))
+    if pref_ver == 11:
+        combined_query = pref_v11_query
+    else:
+        combined_query = pref_v10_query
 
     c.execute(combined_query)
     combined_files = c.fetchall()
@@ -356,7 +411,7 @@ def parseDbNew(c, quicklook_array, source, path_to_thumbnails, export, user_name
         for entries in combined_files:
             bitmapdata_location = entries[8]
             bitmapdata_length = entries[9]
-            width = entries[6]
+            computed_width = computeWidth(entries[6]) if pref_ver == 11 else entries[6]
             height = entries[7]
             hit_count = entries[3]
             last_hit_date = entries[4]
@@ -388,10 +443,10 @@ def parseDbNew(c, quicklook_array, source, path_to_thumbnails, export, user_name
                 name = f"Unknown-{unknown_count}-{inode}"
 
                 log.debug("Carving an unknown thumbnail, this is unknown number: " + str(unknown_count))
-                carveThumb(bitmapdata_location, bitmapdata_length, thumbfile, name, width, height, export, user_name, True)
+                carveThumb(bitmapdata_location, bitmapdata_length, thumbfile, name, computed_width, height, export, user_name, True)
                 unknown_count += 1
                 ql = QuickLook("UNKNOWN", "UNKNOWN", hit_count, last_hit_date, version, bitmapdata_location,
-                                bitmapdata_length, width, height, fs_id, inode, row_id, source)
+                                bitmapdata_length, computed_width, height, fs_id, inode, row_id, source)
                 quicklook_array.append(ql)
 
             else:
@@ -401,12 +456,12 @@ def parseDbNew(c, quicklook_array, source, path_to_thumbnails, export, user_name
                     findParents(apfs_c, inode, full_path)
 
                     ql = QuickLook(full_path[0], row, hit_count, last_hit_date, version, bitmapdata_location,
-                                    bitmapdata_length, width, height, fs_id, inode, row_id, source)
+                                    bitmapdata_length, computed_width, height, fs_id, inode, row_id, source)
                     quicklook_array.append(ql)
 
                     # Carve out thumbnails
                     log.debug("Carving thumbnail: " + str(full_path[0]) + row + " from thumbnails.data file")
-                    carveThumb(bitmapdata_location, bitmapdata_length, thumbfile, row, width, height, export, user_name, True)
+                    carveThumb(bitmapdata_location, bitmapdata_length, thumbfile, row, computed_width, height, export, user_name, True)
         if thumbfile:
             thumbfile.close()
 
@@ -433,7 +488,7 @@ def findDb(mac_info):
                     thumbnail_path = darwin_user_cache_dir + '/com.apple.QuickLook.thumbnailcache/thumbnails.data'
                 if not mac_info.IsValidFilePath(db_path) or not mac_info.IsValidFilePath(thumbnail_path):
                     continue
-                
+
                 log.debug(f"Found valid thumbnail database for user '{user.user_name}' at {db_path}")
                 log.debug(f"Found valid thumbnail data for user '{user.user_name}' at {thumbnail_path}")
                 db_path_arr.append(db_path)
@@ -515,7 +570,7 @@ def Plugin_Start_Standalone(input_files_list, output_params):
     else:
         log.error("index.sqlite or thumbnails.data not found in input directory.\n"
                   "Remember to use a folder containing the index.sqlite AND the thumbnails.data as your input!")
-                  
+
     if quicklook_array:
         log.info("QuickLook data processed. Printing out now")
         PrintAll(quicklook_array, output_params, '')

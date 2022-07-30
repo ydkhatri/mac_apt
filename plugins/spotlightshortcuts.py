@@ -4,7 +4,6 @@
    This file is part of mac_apt (macOS Artifact Parsing Tool).
    Usage or distribution of this software/code is subject to the 
    terms of the MIT License.
-   
 '''
 
 import logging
@@ -15,7 +14,7 @@ from plugins.helpers.writer import *
 
 __Plugin_Name = "SPOTLIGHTSHORTCUTS"
 __Plugin_Friendly_Name = "Spotlight shortcuts"
-__Plugin_Version = "1.0"
+__Plugin_Version = "1.1"
 __Plugin_Description = "Gets user typed data in the spotlight bar, used to launch applications and documents"
 __Plugin_Author = "Yogesh Khatri"
 __Plugin_Author_Email = "yogesh@swiftforensics.com"
@@ -33,7 +32,7 @@ def PrintAll(shortcut_items, output_params, source_path):
                    ]
     log.debug('Writing {} spotlight shortcut item(s)'.format(len(shortcut_items)))
     WriteList("spotlight shortcut information", "SpotlightShortcuts", shortcut_items, shortcut_info, output_params, source_path)
-    
+
 def ParseShortcutFile(input_file, shortcuts):
     success, plist, error = CommonFunctions.ReadPlist(input_file)
     if success:
@@ -54,7 +53,7 @@ def ReadSingleShortcutEntry(entry, value, shortcuts, uses_path, source, user):
         else:
             log.info("Found unknown item - {}, value={} in plist".format(item, value))
     shortcuts.append(sc)
-    
+
 
 def ReadShortcutPlist(plist, shortcuts, source='', user=''):
     try:
@@ -67,7 +66,7 @@ def ReadShortcutPlist(plist, shortcuts, source='', user=''):
                 ReadSingleShortcutEntry(item, value, shortcuts, False, source, user)
     except ValueError as ex:
         log.exception('Error reading plist')
-    
+
 def Plugin_Start(mac_info):
     '''Main Entry point function for plugin'''
     shortcuts = []
@@ -78,9 +77,9 @@ def Plugin_Start(mac_info):
             user_plist_rel_path = '{}/Library/Application Support/com.apple.spotlight.Shortcuts'
         elif version['minor'] >= 15:
             user_plist_rel_path = '{}/Library/Application Support/com.apple.spotlight/com.apple.spotlight.Shortcuts'
-    elif version['major'] == 11:
+    elif version['major'] >= 11:
         user_plist_rel_path = '{}/Library/Application Support/com.apple.spotlight/com.apple.spotlight.Shortcuts.v3'
-    
+
     processed_paths = set()
     for user in mac_info.users:
         user_name = user.user_name
