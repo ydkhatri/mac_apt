@@ -7,20 +7,22 @@
 
 '''
 
-from kaitaistruct import __version__ as ks_version, KaitaiStream, BytesIO
-import plugins.helpers.apfs as apfs
-import anytree
 import collections
 import logging
-import liblzfse
 import struct
 import zlib
-from anytree import Node, RenderTree
 from uuid import UUID
-from plugins.helpers.writer import DataType
-from plugins.helpers.common import *
+
+import anytree
+import liblzfse
+import plugins.helpers.apfs as apfs
+from anytree import Node, RenderTree
 from cryptography.hazmat.backends import default_backend
 from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
+from kaitaistruct import BytesIO, KaitaiStream
+from kaitaistruct import __version__ as ks_version
+from plugins.helpers.common import *
+from plugins.helpers.writer import DataType
 
 log = logging.getLogger('MAIN.HELPERS.APFS_READER')
 
@@ -2049,9 +2051,14 @@ class ApfsFileCompressed(ApfsFile):
             then decompresses and returns uncompressed bytes buffer
         '''
         lzvn_end_marker = b'\x06\0\0\0\0\0\0\0'
+
+        if compressed_size <= len(lzvn_end_marker):
+            log.error('lzvn error - could not decompress stream, returning nulls')
+            return b'\x00'* uncompressed_size
+
         if compressed_stream[-8:] != lzvn_end_marker:
             log.debug("lzvn compressed size seems incorrect, trying to correct..")
-            end = compressed_stream.rfind(b'\x06\0\0\0\0\0\0\0')
+            end = compressed_stream.rfind(lzvn_end_marker)
             if end == -1:
                 log.debug("could not find end of stream..")
             else:
@@ -2070,9 +2077,9 @@ class ApfsFileCompressed(ApfsFile):
                 decompressed_stream += b'\x00'*(uncompressed_size - len_dec)
             return decompressed_stream
         except (MemoryError, liblzfse.error) as ex:
-            log.error('lzvn error - could not decompress stream, returning nulls')
+            log.debug('lzvn error - could not decompress stream, try digging deeper into compressed stream...')
+            return self._lzvn_decompress(compressed_stream[:-len(lzvn_end_marker)], compressed_size-len(lzvn_end_marker), uncompressed_size)
             #raise ValueError('lzvn decompression failed')
-        return b'\x00'* uncompressed_size
 
     def _readCompressedAll(self):
         '''Read all compressed data in a file'''
