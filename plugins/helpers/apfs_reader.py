@@ -2061,6 +2061,8 @@ class ApfsFileCompressed(ApfsFile):
             end = compressed_stream.rfind(lzvn_end_marker)
             if end == -1:
                 log.debug("could not find end of stream..")
+                log.error('lzvn error - could not decompress stream, returning nulls')
+                return b'\x00'* uncompressed_size
             else:
                 original_compressed_size = compressed_size # for debug only
                 compressed_size = end + 8
@@ -2077,7 +2079,7 @@ class ApfsFileCompressed(ApfsFile):
                 decompressed_stream += b'\x00'*(uncompressed_size - len_dec)
             return decompressed_stream
         except (MemoryError, liblzfse.error) as ex:
-            log.debug('lzvn error - could not decompress stream, try digging deeper into compressed stream...')
+            log.debug('lzvn error - could not decompress stream, try finding another end of the compressed stream...')
             return self._lzvn_decompress(compressed_stream[:-len(lzvn_end_marker)], compressed_size-len(lzvn_end_marker), uncompressed_size)
             #raise ValueError('lzvn decompression failed')
 
