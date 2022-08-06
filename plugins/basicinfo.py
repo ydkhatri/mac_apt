@@ -113,27 +113,21 @@ def ReadSerialFromDb(mac_info, source):
     return (found_serial, serial_number)
 
 def GetMacSerialNum(mac_info):
-    sn_source1 = '/private/var/folders/zz/zyxvpxvq6csfxvn_n00000sm00006d/C/consolidated.db'
-    sn_source2 = '/private/var/folders/zz/zyxvpxvq6csfxvn_n00000sm00006d/C/cache_encryptedA.db'
-    sn_source3 = '/private/var/folders/zz/zyxvpxvq6csfxvn_n00000sm00006d/C/lockCache_encryptedA.db'
+    sn_sources = (
+        '/private/var/folders/zz/zyxvpxvq6csfxvn_n00000sm00006d/C/consolidated.db',
+        '/private/var/folders/zz/zyxvpxvq6csfxvn_n00000sm00006d/C/cache_encryptedA.db',
+        '/private/var/folders/zz/zyxvpxvq6csfxvn_n00000sm00006d/C/lockCache_encryptedA.db',
+        '/private/var/folders/zz/zyxvpxvq6csfxvn_n00000sm00006d/C/locationd/consolidated.db',
+        '/private/var/folders/zz/zyxvpxvq6csfxvn_n00000sm00006d/C/locationd/cache_encryptedA.db',
+        '/private/var/folders/zz/zyxvpxvq6csfxvn_n00000sm00006d/C/locationd/lockCache_encryptedA.db'
+    )
 
-    found_SN = False
-    serial_num = ''
-
-    found_SN, serial_num = ReadSerialFromDb(mac_info, sn_source1)
-    if found_SN:
-        basic_data.append(['HARDWARE', 'Mac Serial Number', serial_num, 'Hardware Serial Number', sn_source1])
-        mac_info.ExportFile(sn_source1, __Plugin_Name, '')
-    else:
-        found_SN, serial_num = ReadSerialFromDb(mac_info, sn_source2)
+    for sn_source in sn_sources:
+        found_SN, serial_num = ReadSerialFromDb(mac_info, sn_source)
         if found_SN:
-            basic_data.append(['HARDWARE', 'Mac Serial Number', serial_num,'Hardware Serial Number', sn_source2])
-            mac_info.ExportFile(sn_source2, __Plugin_Name, '')
-        else:
-            found_SN, serial_num = ReadSerialFromDb(mac_info, sn_source3)
-            if found_SN:
-                basic_data.append(['HARDWARE', 'Mac Serial Number', serial_num,'Hardware Serial Number', sn_source3])
-                mac_info.ExportFile(sn_source3, __Plugin_Name, '')
+            basic_data.append(['HARDWARE', 'Mac Serial Number', serial_num, 'Hardware Serial Number', sn_source])
+            mac_info.ExportFile(sn_source, __Plugin_Name, '')
+            break
 
 # Sources - /private/etc/localtime and /Library/Preferences/.GlobalPreferences.plist
 def GetTimezone(mac_info):
