@@ -18,8 +18,8 @@ import sqlite3
 import sys
 #import pytz
 from enum import IntEnum
-from io import BytesIO
 from sqlite3 import Error as sqlite3Error
+from xml.parsers.expat import ExpatError
 #from tzlocal import get_localzone
 
 log = logging.getLogger('MAIN.HELPERS.COMMON')
@@ -274,6 +274,22 @@ class CommonFunctions:
                     else:
                         plist = biplist.readPlist(f)
                     return (True, plist, '')
+                except (ExpatError) as ex:
+                    try:
+                        f.seek(0)
+                        data = f.read().decode('utf8', 'ignore')
+                        f.close()
+                        data = re.sub("<!DOCTYPE ?plist[^>]*>", "", data, flags=re.S).encode('utf8', 'backslashreplace')
+                        try:
+                            if sys.version_info >= (3, 9):
+                                plist = plistlib.loads(data, fmt=plistlib.FMT_XML)
+                            else:
+                                plist = biplist.readPlistFromString(data)
+                            return (True, plist, '')
+                        except (biplist.InvalidPlistException, ValueError, plistlib.InvalidFileException) as ex:
+                            error = 'Could not read plist: ' + path + " Error was : " + str(ex)
+                    except ValueError as ex:
+                        error = 'Could not read plist: ' + path + " Error was : " + str(ex)
                 except (biplist.InvalidPlistException, plistlib.InvalidFileException, ValueError) as ex:
                     try:
                         # Check for XML format
