@@ -9,8 +9,8 @@ mac_apt is a DFIR (Digital Forensics and Incident Response) tool to process Mac 
 
 mac_apt now also includes **[ios_apt](https://swiftforensics.com/2020/12/introducing-iosapt-ios-artifact-parsing.html)**, for processing ios images.
 
-#### Requirements: Python 3.7 or above (32/64 bit)
-
+#### Requirements: Python 3.7 or above (64 bit)
+_Note: certain dependencies do not work on Python 3.11 ! So use 3.9 or 3.10 for now._
 #### Features
 * Cross platform (no dependency on pyobjc)
 * Works on E01, VMDK, AFF4, DD, split-DD, DMG (no compression), SPARSEIMAGE & mounted images  
