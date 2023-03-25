@@ -7,20 +7,22 @@
 
 '''
 
-from kaitaistruct import __version__ as ks_version, KaitaiStream, BytesIO
-import plugins.helpers.apfs as apfs
-import anytree
 import collections
 import logging
-import liblzfse
 import struct
 import zlib
-from anytree import Node, RenderTree
 from uuid import UUID
-from plugins.helpers.writer import DataType
-from plugins.helpers.common import *
+
+import anytree
+import liblzfse
+import plugins.helpers.apfs as apfs
+from anytree import Node, RenderTree
 from cryptography.hazmat.backends import default_backend
 from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
+from kaitaistruct import BytesIO, KaitaiStream
+from kaitaistruct import __version__ as ks_version
+from plugins.helpers.common import *
+from plugins.helpers.writer import DataType
 
 log = logging.getLogger('MAIN.HELPERS.APFS_READER')
 
@@ -2043,23 +2045,8 @@ class ApfsFileCompressed(ApfsFile):
                     log.debug("should not go here getChunkList()....")
         return ret_list
 
-    def _lzvn_decompress(self, compressed_stream, compressed_size, uncompressed_size):
-        '''
-            Adds Prefix and Postfix bytes as required by decompressor, 
-            then decompresses and returns uncompressed bytes buffer
-        '''
-        lzvn_end_marker = b'\x06\0\0\0\0\0\0\0'
-        if compressed_stream[-8:] != lzvn_end_marker:
-            log.debug("lzvn compressed size seems incorrect, trying to correct..")
-            end = compressed_stream.rfind(b'\x06\0\0\0\0\0\0\0')
-            if end == -1:
-                log.debug("could not find end of stream..")
-            else:
-                original_compressed_size = compressed_size # for debug only
-                compressed_size = end + 8
-                log.debug(f"found end of stream, correcting now.. old size={original_compressed_size} new size={compressed_size}, diff={original_compressed_size-compressed_size}")
-                compressed_stream = compressed_stream[:end + 8]
 
+    def _lzvn_decompress_internal(self, compressed_stream, compressed_size, uncompressed_size):
         header = b'bvxn' + struct.pack('<I', uncompressed_size) + struct.pack('<I', compressed_size)
         footer = b'bvx$'
         try:
@@ -2070,9 +2057,53 @@ class ApfsFileCompressed(ApfsFile):
                 decompressed_stream += b'\x00'*(uncompressed_size - len_dec)
             return decompressed_stream
         except (MemoryError, liblzfse.error) as ex:
-            log.error('lzvn error - could not decompress stream, returning nulls')
-            #raise ValueError('lzvn decompression failed')
-        return b'\x00'* uncompressed_size
+            raise ValueError('lzvn decompression failed')
+
+
+    def _lzvn_decompress(self, compressed_stream, compressed_size, uncompressed_size):
+        '''
+            Adds Prefix and Postfix bytes as required by decompressor, 
+            then decompresses and returns uncompressed bytes buffer
+        '''
+        lzvn_end_marker = b'\x06\0\0\0\0\0\0\0'
+        end = None
+
+        if compressed_stream[-8:] != lzvn_end_marker:
+            log.debug("lzvn compressed size seems incorrect, trying to correct..")
+            end = compressed_stream.rfind(lzvn_end_marker)
+            if end == -1:
+                log.debug("could not find end of stream..")
+                log.error('lzvn error - could not decompress stream, returning nulls')
+                return b'\x00'* uncompressed_size
+            else:
+                original_compressed_size = compressed_size # for debug only
+                compressed_size = end + 8
+                log.debug(f"found end of stream, correcting now.. old size={original_compressed_size} new size={compressed_size}, diff={original_compressed_size-compressed_size}")
+                compressed_stream = compressed_stream[:end + 8]
+
+        try:
+            return self._lzvn_decompress_internal(compressed_stream, compressed_size, uncompressed_size)
+        except ValueError as ex:
+            log.debug('lzvn error - could not decompress stream, try finding another end of the compressed stream...')
+            failed_end = end
+            end = compressed_stream.find(lzvn_end_marker)
+            if end != -1 and end != failed_end:
+                original_compressed_size = compressed_size # for debug only
+                compressed_size = end + 8
+                log.debug(f"found end of stream, correcting now.. old size={original_compressed_size} new size={compressed_size}, diff={original_compressed_size-compressed_size}")
+                compressed_stream = compressed_stream[:end + 8]
+
+                try:
+                    return self._lzvn_decompress_internal(compressed_stream, compressed_size, uncompressed_size)
+                except ValueError as ex:
+                    log.error('lzvn error - could not decompress stream, returning nulls')
+                    return b'\x00'* uncompressed_size
+
+            else:
+                log.debug("could not find end of stream..")
+                log.error('lzvn error - could not decompress stream, returning nulls')
+                return b'\x00'* uncompressed_size
+
 
     def _readCompressedAll(self):
         '''Read all compressed data in a file'''
