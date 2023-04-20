@@ -236,6 +236,17 @@ def IsMacOsPartition(img, partition_start_offset, mac_info):
         log.exception("Exception")
     return False
 
+def IsApfsBootContainer(img, gpt_part_offset):
+    '''Checks if this is the APFS container with OS'''
+    try:
+        uuid_bytes = img.read(gpt_part_offset, 16)
+        uuid = UUID(bytes=uuid_bytes)
+        if uuid == UUID("{ef57347c-0000-aa11-aa11-00306543ecac}"):
+            return True
+    except:
+        raise ValueError('Cannot seek into image @ offset {}'.format(gpt_part_offset))
+    return False    
+
 def IsApfsContainer(img, partition_start_offset):
     '''Checks if this is an APFS container'''
     try:
@@ -340,8 +351,13 @@ def FindMacOsPartitionInApfsContainer(img, vol_info, container_size, container_s
     return False
 
 def FindMacOsPartition(img, vol_info, vs_info):
+    gpt_header_offset = -1
+    gpt_partitions_offset = -1
     for part in vol_info:
-        if (int(part.flags) & pytsk3.TSK_VS_PART_FLAG_ALLOC):
+        if (int(part.flags) & pytsk3.TSK_VS_PART_FLAG_META) and part.desc == b'GPT Header':
+            gpt_header_offset = vs_info.block_size * part.start
+            gpt_partitions_offset = gpt_header_offset + vs_info.block_size
+        elif (int(part.flags) & pytsk3.TSK_VS_PART_FLAG_ALLOC):
             partition_start_offset = vs_info.block_size * part.start
             if part.desc.decode('utf-8').upper() == "EFI SYSTEM PARTITION":
                 log.debug ("Skipping EFI System Partition @ offset {}".format(partition_start_offset))
@@ -352,7 +368,7 @@ def FindMacOsPartition(img, vol_info, vs_info):
             else:
                 log.info ("Looking at FS with volume label '{}'  @ offset {}".format(part.desc.decode('utf-8'), partition_start_offset)) 
             
-            if IsApfsContainer(img, partition_start_offset):
+            if IsApfsBootContainer(img, gpt_partitions_offset + (128 * part.slot_num)) and IsApfsContainer(img, partition_start_offset):
                 uuid = GetApfsContainerUuid(img, partition_start_offset)
                 log.info('Found an APFS container with uuid: {}'.format(str(uuid).upper()))
                 return FindMacOsPartitionInApfsContainer(img, vol_info, vs_info.block_size * part.len, partition_start_offset, uuid)
