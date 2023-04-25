@@ -7,7 +7,7 @@
 
    chrome.py
    ---------------
-   This module gets Chrome browser artifacts
+   This module gets Chromium (Chrome, Edge, ..) browser artifacts
 '''
 
 from construct import *
@@ -21,10 +21,10 @@ import os
 import sqlite3
 import re
 
-__Plugin_Name = "CHROME"
-__Plugin_Friendly_Name = "Chrome"
-__Plugin_Version = "1.0"
-__Plugin_Description = "Read Chrome History, Top Sites, Downloads, Tabs/Sessions and Extension info"
+__Plugin_Name = "CHROMIUM"
+__Plugin_Friendly_Name = "Chromium"
+__Plugin_Version = "2.0"
+__Plugin_Description = "Read Chromium browsers (Chrome, Edge, ..) History, Top Sites, Downloads, Tabs/Sessions and Extension info"
 __Plugin_Author = "Yogesh Khatri"
 __Plugin_Author_Email = "yogesh@swiftforensics.com"
 
@@ -77,8 +77,7 @@ NavigationEntry = Struct (
     "timestamp_internal_value" / Int64ul
 )
 
-
-class ChromeItemType(IntEnum):
+class ChromiumItemType(IntEnum):
     UNKNOWN = 0
     HISTORY = 1
     TOPSITE = 2
@@ -93,7 +92,7 @@ class ChromeItemType(IntEnum):
     def __str__(self):
         return self.name
 
-class ChromeItem:
+class ChromiumItem:
     def __init__(self, type, url, name, date, end_date, local_path, referrer, other, user, source):
         self.type = type
         self.url = url
@@ -106,8 +105,8 @@ class ChromeItem:
         self.user = user
         self.source = source
 
-def InsertUnique(chrome_items_list, item):
-    for x in chrome_items_list:
+def InsertUnique(chromium_items_list, item):
+    for x in chromium_items_list:
         if x.user == item.user:
             if x.source == item.source:
                 if x.type == item.type:
@@ -118,7 +117,7 @@ def InsertUnique(chrome_items_list, item):
                                     if x.referrer == item.referrer:
                                         if x.other_info == item.other_info:
                                             return
-    chrome_items_list.append(item)
+    chromium_items_list.append(item)
 
 def OpenDb(inputPath):
     log.info ("Processing file " + inputPath)
@@ -130,9 +129,9 @@ def OpenDb(inputPath):
         log.exception ("Failed to open database, is it a valid DB?")
     return None
 
-def OpenDbFromImage(mac_info, inputPath, user):
+def OpenDbFromImage(mac_info, inputPath, user, browser):
     '''Returns tuple of (connection, wrapper_obj)'''
-    log.info ("Processing Chrome database for user '{}' from file {}".format(user, inputPath))
+    log.info (f"Processing {browser} database for user '{user}' from file {inputPath}")
     try:
         sqlite = SqliteWrapper(mac_info)
         conn = sqlite.connect(inputPath)
@@ -143,16 +142,16 @@ def OpenDbFromImage(mac_info, inputPath, user):
         log.exception ("Failed to open database, is it a valid DB?")
     return None, None
 
-def ReadTabsFile(chrome_artifacts, f, file_size, user, source):
+def ReadTabsFile(chromium_artifacts, f, file_size, user, source):
     '''Reads 'Current/Last Tabs/Sessions' binary format'''
     if source.endswith('Last Tabs') or os.path.basename(source).lower().startswith('tabs_'):
-        source_type = ChromeItemType.LASTTAB
+        source_type = ChromiumItemType.LASTTAB
     elif source.endswith('Current Tabs'):
-        source_type = ChromeItemType.CURRENTTAB
+        source_type = ChromiumItemType.CURRENTTAB
     elif source.endswith('Last Session') or os.path.basename(source).lower().startswith('session_'):
-        source_type = ChromeItemType.LASTSESSION
+        source_type = ChromiumItemType.LASTSESSION
     elif source.endswith('Current Session'):
-        source_type = ChromeItemType.CURRENTSESSION
+        source_type = ChromiumItemType.CURRENTSESSION
     sig = f.read(4)
     ver = struct.unpack("<i", f.read(4))[0]
     if sig != b'SNSS':
@@ -167,8 +166,8 @@ def ReadTabsFile(chrome_artifacts, f, file_size, user, source):
             size, command = struct.unpack('<HB', f.read(3))
             if size > 25:
                 if ((ver == 1) and command in (1, 6)) or \
-                    ((ver == 3) and (command == 6 and source_type == ChromeItemType.LASTSESSION)) or \
-                    ((ver == 3) and (command == 1 and source_type == ChromeItemType.LASTTAB)):
+                    ((ver == 3) and (command == 6 and source_type == ChromiumItemType.LASTSESSION)) or \
+                    ((ver == 3) and (command == 1 and source_type == ChromiumItemType.LASTTAB)):
                     data = f.read(size - 1)
                     nav = NavigationEntry.parse(data[4:])
                     #print(nav)
@@ -181,13 +180,13 @@ def ReadTabsFile(chrome_artifacts, f, file_size, user, source):
                         url2 = 'requested_orig_url=' + url2
 
                     if url or title:
-                        InsertUnique(chrome_artifacts, ChromeItem(source_type, url, title, ts, None, None, referrer, url2, user, source))
+                        InsertUnique(chromium_artifacts, ChromiumItem(source_type, url, title, ts, None, None, referrer, url2, user, source))
                 else:
                     if command != 19:
                         log.debug(f'size ({size}) > 25, command = {command}')
             pos += size + 2
 
-def ReadTopSitesDb(chrome_artifacts, db, file_size, user, source):
+def ReadTopSitesDb(chromium_artifacts, db, file_size, user, source):
     try:
         db.row_factory = sqlite3.Row
         tables = CommonFunctions.GetTableNames(db)
@@ -196,20 +195,20 @@ def ReadTopSitesDb(chrome_artifacts, db, file_size, user, source):
             query = "SELECT url, url_rank, title from top_sites ORDER BY url_rank ASC"
             cursor = db.execute(query)
             for row in cursor:
-                item = ChromeItem(ChromeItemType.TOPSITE, row['url'], row['title'], None, None, None, None, f"URL_RANK={row['url_rank']}", user, source)
-                chrome_artifacts.append(item)
+                item = ChromiumItem(ChromiumItemType.TOPSITE, row['url'], row['title'], None, None, None, None, f"URL_RANK={row['url_rank']}", user, source)
+                chromium_artifacts.append(item)
         elif 'thumbnails' in tables: # meta.version == 3
             cursor = db.cursor()
             query = "SELECT url, url_rank, title, last_updated from thumbnails ORDER BY url_rank ASC"
             cursor = db.execute(query)
             for row in cursor:
-                item = ChromeItem(ChromeItemType.TOPSITE, row['url'], row['title'], CommonFunctions.ReadChromeTime(row['last_updated']),
+                item = ChromiumItem(ChromiumItemType.TOPSITE, row['url'], row['title'], CommonFunctions.ReadChromeTime(row['last_updated']),
                                     None, None, None, f"URL_RANK={row['url_rank']}", user, source)
-                chrome_artifacts.append(item)
+                chromium_artifacts.append(item)
     except sqlite3.Error:
         log.exception('DB read error from ReadTopSitesDb()')
 
-def ReadHistoryDb(chrome_artifacts, db, file_size, user, source):
+def ReadHistoryDb(chromium_artifacts, db, file_size, user, source):
     try:
         db.row_factory = sqlite3.Row
         cursor = db.cursor()
@@ -228,11 +227,11 @@ def ReadHistoryDb(chrome_artifacts, db, file_size, user, source):
             else:
                 end_time = None
             
-            item = ChromeItem(ChromeItemType.HISTORY, row['url'], row['title'], 
+            item = ChromiumItem(ChromiumItemType.HISTORY, row['url'], row['title'], 
                             CommonFunctions.ReadChromeTime(visit_time), end_time, None, row['referrer'],
                             f"VisitCount={row['visit_count']}, Hidden={row['hidden']}", 
                             user, source)
-            chrome_artifacts.append(item)
+            chromium_artifacts.append(item)
 
         # downloaded files
         query = """SELECT current_path, target_path, start_time, end_time, 
@@ -253,11 +252,11 @@ def ReadHistoryDb(chrome_artifacts, db, file_size, user, source):
             if not path:
                 path = row['current_path']
             downloaded_file_name = os.path.basename(path)
-            item = ChromeItem(ChromeItemType.DOWNLOAD, row['url'], downloaded_file_name, 
+            item = ChromiumItem(ChromiumItemType.DOWNLOAD, row['url'], downloaded_file_name, 
                             start_time, end_time, path, row['referrer'], 
                             f"Received Bytes = {row['received_bytes']}/{row['total_bytes']}", 
                             user, source)
-            chrome_artifacts.append(item)
+            chromium_artifacts.append(item)
     except sqlite3.Error:
         log.exception('DB read error from ReadHistoryDb()')
 
@@ -273,13 +272,13 @@ def ReadMessageFromMsgJsonLocal(possible_paths, id):
                 break
     return text
 
-def ReadMessageFromMsgJson(mac_info, possible_paths, id, user):
+def ReadMessageFromMsgJson(mac_info, possible_paths, id, user, browser):
     '''Will attempt to open filepath defined in possible_paths list,
         then read and return message defined by id'''
     text = ''
     for path in possible_paths:
         if mac_info.IsValidFilePath(path):
-            mac_info.ExportFile(path, __Plugin_Name, user + "_chrome-extension_")
+            mac_info.ExportFile(path, os.path.join(__Plugin_Name, browser), user + "_extension_")
             msg_file = mac_info.Open(path)
             if msg_file:
                 messages = json.loads(msg_file.read().decode('utf8', 'ignore'))
@@ -309,7 +308,7 @@ def GetMessage(id, msg_json):
             log.error('Could not get message from manifest file - {path}')
     return text
 
-def ProcessExtensionsLocal(chrome_artifacts, user, source):
+def ProcessExtensionsLocal(chromium_artifacts, user, source):
     ext_obfuscated_names = os.listdir(source)
     for obfuscated_dir_name in ext_obfuscated_names:
         ext_folder_path = os.path.join(source, obfuscated_dir_name)
@@ -346,8 +345,8 @@ def ProcessExtensionsLocal(chrome_artifacts, user, source):
                             if version.startswith('__MSG_'):
                                 version = ReadMessageFromMsgJsonLocal(msg_json_possible_paths, version[6:-2])
                     log.debug(f"EXT NAME={name}, Ver={version}, DESC={desc}")
-                    item = ChromeItem(ChromeItemType.EXTENSION, '', f"{name} (version {version})", None, None, None, None, desc, '', manifest_path)
-                    chrome_artifacts.append(item)
+                    item = ChromiumItem(ChromiumItemType.EXTENSION, '', f"{name} (version {version})", None, None, None, None, desc, '', manifest_path)
+                    chromium_artifacts.append(item)
                 break
 
 def ReadJson(data):
@@ -357,7 +356,7 @@ def ReadJson(data):
         log.error('Failed to parse json. Input Data was ' + str(data))
     return {}
 
-def ProcessExtensions(mac_info, chrome_artifacts, user, source):
+def ProcessExtensions(mac_info, chromium_artifacts, user, source, browser):
     ext_obfuscated_names = mac_info.ListItemsInFolder(source, EntryType.FOLDERS, False)
     for obfuscated_dir_name in ext_obfuscated_names:
         ext_folder_path = source + '/' + obfuscated_dir_name['name']
@@ -371,7 +370,7 @@ def ProcessExtensions(mac_info, chrome_artifacts, user, source):
                 # Read manifest
                 if not mac_info.IsValidFilePath(manifest_path):
                     log.error(f'Could not find manifest.json @ {manifest_path}')
-                mac_info.ExportFile(manifest_path, __Plugin_Name, user + '_chrome-extension_', False)
+                mac_info.ExportFile(manifest_path, os.path.join(__Plugin_Name, browser, "Extensions"), user + '_extension_', False)
                 manifest_file = mac_info.Open(manifest_path)
                 if manifest_file:
                     manifest_data = manifest_file.read().decode('utf8', 'ignore')
@@ -391,21 +390,21 @@ def ProcessExtensions(mac_info, chrome_artifacts, user, source):
                             en_path_gb = locales_path + '/en_GB/messages.json'
                             msg_json_possible_paths = (en_path, en_path_us, en_path_gb)
                             if name.startswith('__MSG_'):
-                                name = ReadMessageFromMsgJson(mac_info, msg_json_possible_paths, name[6:-2], user)
+                                name = ReadMessageFromMsgJson(mac_info, msg_json_possible_paths, name[6:-2], user, browser)
                             if desc.startswith('__MSG_'):
-                                desc = ReadMessageFromMsgJson(mac_info, msg_json_possible_paths, desc[6:-2], user)
+                                desc = ReadMessageFromMsgJson(mac_info, msg_json_possible_paths, desc[6:-2], user, browser)
                             if version.startswith('__MSG_'):
-                                version = ReadMessageFromMsgJson(mac_info, msg_json_possible_paths, version[6:-2], user)
+                                version = ReadMessageFromMsgJson(mac_info, msg_json_possible_paths, version[6:-2], user, browser)
                     log.debug(f"EXT NAME={name}, Ver={version}, DESC={desc}")
-                    item = ChromeItem(ChromeItemType.EXTENSION, '', f"{name} (version {version})", None, None, None, None, desc, user, manifest_path)
-                    chrome_artifacts.append(item)
+                    item = ChromiumItem(ChromiumItemType.EXTENSION, '', f"{name} (version {version})", None, None, None, None, desc, user, manifest_path)
+                    chromium_artifacts.append(item)
                 else:
                     log.error(f"Failed to open {manifest_path}")
                 break
 
 
-def PrintAll(chrome_artifacts, output_params, source_path):
-    chrome_info = [ ('Type',DataType.TEXT),('Name_or_Title',DataType.TEXT),('URL',DataType.TEXT),
+def PrintAll(browser, chromium_artifacts, output_params, source_path):
+    chromium_info = [ ('Type',DataType.TEXT),('Name_or_Title',DataType.TEXT),('URL',DataType.TEXT),
                     ('Date', DataType.DATE),('End Date', DataType.DATE),
                     ('Local Path', DataType.TEXT),('Referrer or Previous Page', DataType.TEXT),
                     ('Other_Info', DataType.TEXT),('User', DataType.TEXT),
@@ -413,125 +412,129 @@ def PrintAll(chrome_artifacts, output_params, source_path):
                   ]
 
     data_list = []
-    log.info (f"{len(chrome_artifacts)} chrome artifact(s) found")
-    for item in chrome_artifacts:
+    log.info (f"{len(chromium_artifacts)} {browser} artifact(s) found")
+    for item in chromium_artifacts:
         url = item.url
         data_list.append( [ str(item.type), item.name, url, 
                             item.date, item.end_date, 
                             item.local_path, item.referrer,
                             item.other_info, item.user, item.source ] )
 
-    WriteList("Chrome", "Chrome", data_list, chrome_info, output_params, source_path)
+    WriteList(f"{browser}", f"{browser}", data_list, chromium_info, output_params, source_path)
 
-def ExtractAndReadDb(mac_info, chrome_artifacts, user, file_path, file_size, parser_function):
-    mac_info.ExportFile(file_path, __Plugin_Name, user + '_')
-    db, wrapper = OpenDbFromImage(mac_info, file_path, user)
+def ExtractAndReadDb(mac_info, chromium_artifacts, user, file_path, file_size, parser_function, browser):
+    mac_info.ExportFile(file_path, os.path.join(__Plugin_Name, browser), user + '_')
+    db, wrapper = OpenDbFromImage(mac_info, file_path, user, browser)
     if db:
-        parser_function(chrome_artifacts, db, file_size, user, file_path)
+        parser_function(chromium_artifacts, db, file_size, user, file_path)
         db.close()
 
-def ExtractAndReadFile(mac_info, chrome_artifacts, user, file_path, file_size, parser_function):
-    mac_info.ExportFile(file_path, __Plugin_Name, user + '_')
-    log.info ("Processing Chrome file {} for user {}".format(file_path, user))
+def ExtractAndReadFile(mac_info, chromium_artifacts, user, file_path, file_size, parser_function, browser):
+    mac_info.ExportFile(file_path, os.path.join(__Plugin_Name, browser), user + '_')
+    log.info (f"Processing {browser} file {file_path} for user {user}")
     f = mac_info.Open(file_path)
     if f:
-        parser_function(chrome_artifacts, f, file_size, user, file_path)
+        parser_function(chromium_artifacts, f, file_size, user, file_path)
         f.close()
 
-def OpenLocalDbAndRead(chrome_artifacts, user, file_path, file_size, parser_function):
+def OpenLocalDbAndRead(chromium_artifacts, user, file_path, file_size, parser_function):
     conn = OpenDb(file_path)
     if conn:
-        parser_function(chrome_artifacts, conn, file_size, '', file_path)
+        parser_function(chromium_artifacts, conn, file_size, '', file_path)
         conn.close()
 
-def OpenLocalFileAndRead(chrome_artifacts, user, file_path, file_size, parser_function):
+def OpenLocalFileAndRead(chromium_artifacts, user, file_path, file_size, parser_function):
     f = open(file_path, 'rb')
-    log.info ("Processing Chrome file {}".format(file_path))
-    parser_function(chrome_artifacts, f, file_size, '', file_path)
+    log.info ("Processing Chromium file {}".format(file_path))
+    parser_function(chromium_artifacts, f, file_size, '', file_path)
     f.close()
 
 def Plugin_Start(mac_info):
     '''Main Entry point function for plugin'''
-    chrome_artifacts = []
-    chrome_profile_base_path = '{}/Library/Application Support/Google/Chrome/'
-    chrome_profile_regex = '(Default|Profile \d+|Guest Profile)'
-    processed_paths = []
-    for user in mac_info.users:
-        user_name = user.user_name
-        if user.home_dir == '/private/var/empty': continue # Optimization, nothing should be here!
-        elif user.home_dir == '/private/var/root': user_name = 'root' # Some other users use the same root folder, we will list all such users as 'root', as there is no way to tell
-        if user.home_dir in processed_paths: continue # Avoid processing same folder twice (some users have same folder! (Eg: root & daemon))
-        processed_paths.append(user.home_dir)
-        chrome_path = chrome_profile_base_path.format(user.home_dir)
-        if not mac_info.IsValidFolderPath(chrome_path):
-            continue
-        folders_list = mac_info.ListItemsInFolder(chrome_path, EntryType.FOLDERS, include_dates=False)
-        chrome_profile_names = [folder_item['name'] for folder_item in folders_list if re.match(chrome_profile_regex, folder_item['name'])]
-        for chrome_profile_name in chrome_profile_names:
-            user_profile_name = user_name + '_' + chrome_profile_name.replace(' ', '_')
-            source_path = os.path.join(chrome_profile_base_path.format(user.home_dir), chrome_profile_name)
-            if mac_info.IsValidFolderPath(source_path):
-                files_list = mac_info.ListItemsInFolder(source_path, EntryType.FILES_AND_FOLDERS, include_dates=False)
-                for file_entry in files_list:
-                    if file_entry['type'] == EntryType.FILES:
-                        if file_entry['size'] == 0: 
-                            continue
-                        if file_entry['name'] == 'Top Sites':
-                            ExtractAndReadDb(mac_info, chrome_artifacts, user_profile_name, source_path + '/Top Sites', file_entry['size'], ReadTopSitesDb)
-                        elif file_entry['name'] == 'History':
-                            ExtractAndReadDb(mac_info, chrome_artifacts, user_profile_name, source_path + '/History', file_entry['size'], ReadHistoryDb)
-                        elif file_entry['name'] == 'Last Tabs':
-                            ExtractAndReadFile(mac_info, chrome_artifacts, user_profile_name, source_path + '/Last Tabs', file_entry['size'], ReadTabsFile)
-                        elif file_entry['name'] == 'Current Tabs':
-                            ExtractAndReadFile(mac_info, chrome_artifacts, user_profile_name, source_path + '/Current Tabs', file_entry['size'], ReadTabsFile)
-                        elif file_entry['name'] == 'Last Session':
-                            ExtractAndReadFile(mac_info, chrome_artifacts, user_profile_name, source_path + '/Last Session', file_entry['size'], ReadTabsFile)
-                        elif file_entry['name'] == 'Current Session':
-                            ExtractAndReadFile(mac_info, chrome_artifacts, user_profile_name, source_path + '/Current Session', file_entry['size'], ReadTabsFile)
-                    else: # Folder
-                        if file_entry['name'] == 'Extensions':
-                            ProcessExtensions(mac_info, chrome_artifacts, user_profile_name, source_path + '/Extensions')
-                        elif file_entry['name'] == 'Sessions':
-                            sessions_path = os.path.join(source_path, "Sessions")
-                            sessions_files_list = mac_info.ListItemsInFolder(sessions_path, EntryType.FILES, include_dates=False)
-                            for file_entry in sessions_files_list:
-                                if file_entry['size'] == 0: 
-                                    continue
-                                filename = file_entry['name'].lower()
-                                if filename.startswith('tabs_') or filename.startswith('session_'):
-                                    ExtractAndReadFile(mac_info, chrome_artifacts, user_profile_name, sessions_path + f"/{file_entry['name']}", file_entry['size'], ReadTabsFile)
+    chromium_browsers = {'Chrome': '{}/Library/Application Support/Google/Chrome/', 
+                        'Edge':'{}/Library/Application Support/Microsoft Edge/'}
 
-    if len(chrome_artifacts) > 0:
-        PrintAll(chrome_artifacts, mac_info.output_params, '')
-    else:
-        log.info('No Chrome artifacts were found!')
+    profile_regex = '(Default|Profile \d+|Guest Profile)'
+
+    for browser, chromium_profile_base_path in chromium_browsers.items():
+        processed_paths = []
+        chromium_artifacts = []
+        for user in mac_info.users:
+            user_name = user.user_name
+            if user.home_dir == '/private/var/empty': continue # Optimization, nothing should be here!
+            elif user.home_dir == '/private/var/root': user_name = 'root' # Some other users use the same root folder, we will list all such users as 'root', as there is no way to tell
+            if user.home_dir in processed_paths: continue # Avoid processing same folder twice (some users have same folder! (Eg: root & daemon))
+            processed_paths.append(user.home_dir)
+            chromium_path = chromium_profile_base_path.format(user.home_dir)
+            if not mac_info.IsValidFolderPath(chromium_path):
+                continue
+            folders_list = mac_info.ListItemsInFolder(chromium_path, EntryType.FOLDERS, include_dates=False)
+            profile_names = [folder_item['name'] for folder_item in folders_list if re.match(profile_regex, folder_item['name'])]
+            for profile_name in profile_names:
+                user_profile_name = user_name + '_' + profile_name.replace(' ', '_')
+                source_path = os.path.join(chromium_profile_base_path.format(user.home_dir), profile_name)
+                if mac_info.IsValidFolderPath(source_path):
+                    files_list = mac_info.ListItemsInFolder(source_path, EntryType.FILES_AND_FOLDERS, include_dates=False)
+                    for file_entry in files_list:
+                        if file_entry['type'] == EntryType.FILES:
+                            if file_entry['size'] == 0: 
+                                continue
+                            if file_entry['name'] == 'Top Sites':
+                                ExtractAndReadDb(mac_info, chromium_artifacts, user_profile_name, source_path + '/Top Sites', file_entry['size'], ReadTopSitesDb, browser)
+                            elif file_entry['name'] == 'History':
+                                ExtractAndReadDb(mac_info, chromium_artifacts, user_profile_name, source_path + '/History', file_entry['size'], ReadHistoryDb, browser)
+                            elif file_entry['name'] == 'Last Tabs':
+                                ExtractAndReadFile(mac_info, chromium_artifacts, user_profile_name, source_path + '/Last Tabs', file_entry['size'], ReadTabsFile, browser)
+                            elif file_entry['name'] == 'Current Tabs':
+                                ExtractAndReadFile(mac_info, chromium_artifacts, user_profile_name, source_path + '/Current Tabs', file_entry['size'], ReadTabsFile, browser)
+                            elif file_entry['name'] == 'Last Session':
+                                ExtractAndReadFile(mac_info, chromium_artifacts, user_profile_name, source_path + '/Last Session', file_entry['size'], ReadTabsFile, browser)
+                            elif file_entry['name'] == 'Current Session':
+                                ExtractAndReadFile(mac_info, chromium_artifacts, user_profile_name, source_path + '/Current Session', file_entry['size'], ReadTabsFile, browser)
+                        else: # Folder
+                            if file_entry['name'] == 'Extensions':
+                                ProcessExtensions(mac_info, chromium_artifacts, user_profile_name, source_path + '/Extensions', browser)
+                            elif file_entry['name'] == 'Sessions':
+                                sessions_path = os.path.join(source_path, "Sessions")
+                                sessions_files_list = mac_info.ListItemsInFolder(sessions_path, EntryType.FILES, include_dates=False)
+                                for file_entry in sessions_files_list:
+                                    if file_entry['size'] == 0: 
+                                        continue
+                                    filename = file_entry['name'].lower()
+                                    if filename.startswith('tabs_') or filename.startswith('session_'):
+                                        ExtractAndReadFile(mac_info, chromium_artifacts, user_profile_name, sessions_path + f"/{file_entry['name']}", file_entry['size'], ReadTabsFile, browser)
+
+        if len(chromium_artifacts) > 0:
+            PrintAll(browser, chromium_artifacts, mac_info.output_params, chromium_profile_base_path)
+        else:
+            log.info(f'No {browser} artifacts were found!')
 
 def Plugin_Start_Standalone(input_files_list, output_params):
     '''Main entry point function when used on single artifacts (mac_apt_singleplugin), not on a full disk image'''
     log.info("Module Started as standalone")
     for input_path in input_files_list:
         log.debug("Input file passed was: " + input_path)
-        chrome_artifacts = []
+        chromium_artifacts = []
         if os.path.isdir(input_path):
             file_names = os.listdir(input_path)
             for file_name in file_names:
                 file_path = os.path.join(input_path, file_name)
                 file_size = os.path.getsize(file_path)
                 if file_name == 'Top Sites':
-                    OpenLocalDbAndRead(chrome_artifacts, '', file_path, file_size, ReadTopSitesDb)
+                    OpenLocalDbAndRead(chromium_artifacts, '', file_path, file_size, ReadTopSitesDb)
                 elif file_name == 'History':
-                    OpenLocalDbAndRead(chrome_artifacts, '', file_path, file_size, ReadHistoryDb)
+                    OpenLocalDbAndRead(chromium_artifacts, '', file_path, file_size, ReadHistoryDb)
                 elif file_name in ('Last Tabs', 'Current Tabs') or file_name.lower().startswith('tabs_'):
-                    OpenLocalFileAndRead(chrome_artifacts, '', file_path, file_size, ReadTabsFile)
+                    OpenLocalFileAndRead(chromium_artifacts, '', file_path, file_size, ReadTabsFile)
                 elif file_name in ('Last Session', 'Current Session') or file_name.lower().startswith('session_'):
-                    OpenLocalFileAndRead(chrome_artifacts, '', file_path, file_size, ReadTabsFile)
+                    OpenLocalFileAndRead(chromium_artifacts, '', file_path, file_size, ReadTabsFile)
                 elif file_name == 'Extensions' and os.path.isdir(file_path):
-                    ProcessExtensionsLocal(chrome_artifacts, '', file_path)
+                    ProcessExtensionsLocal(chromium_artifacts, '', file_path)
 
-            if len(chrome_artifacts) > 0:
-                PrintAll(chrome_artifacts, output_params, input_path)
+            if len(chromium_artifacts) > 0:
+                PrintAll(chromium_artifacts, output_params, input_path)
             else:
-                log.info('No chrome artifacts found in {}'.format(input_path))
+                log.info('No chrome/chromium artifacts found in {}'.format(input_path))
         else:
             log.error(f"Argument passed was not a folder : {input_path}")
 
