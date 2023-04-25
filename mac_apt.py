@@ -242,7 +242,10 @@ def IsApfsBootContainer(img, gpt_part_offset):
         uuid_bytes = img.read(gpt_part_offset, 16)
         uuid = UUID(bytes=uuid_bytes)
         if uuid == UUID("{ef57347c-0000-aa11-aa11-00306543ecac}"):
+            log.debug(f'Got UUID={uuid}, IS  a bootable APFS container!, defined in GPT at {gpt_part_offset}')
             return True
+        else:
+            log.debug(f'Got UUID={uuid}, not a bootable APFS container!, defined in GPT at {gpt_part_offset}')
     except:
         raise ValueError('Cannot seek into image @ offset {}'.format(gpt_part_offset))
     return False    
@@ -368,10 +371,11 @@ def FindMacOsPartition(img, vol_info, vs_info):
             else:
                 log.info ("Looking at FS with volume label '{}'  @ offset {}".format(part.desc.decode('utf-8'), partition_start_offset)) 
             
-            if IsApfsBootContainer(img, gpt_partitions_offset + (128 * part.slot_num)) and IsApfsContainer(img, partition_start_offset):
-                uuid = GetApfsContainerUuid(img, partition_start_offset)
-                log.info('Found an APFS container with uuid: {}'.format(str(uuid).upper()))
-                return FindMacOsPartitionInApfsContainer(img, vol_info, vs_info.block_size * part.len, partition_start_offset, uuid)
+            if  IsApfsContainer(img, partition_start_offset):
+                if IsApfsBootContainer(img, gpt_partitions_offset + (128 * part.slot_num)):
+                    uuid = GetApfsContainerUuid(img, partition_start_offset)
+                    log.info('Found an APFS container with uuid: {}'.format(str(uuid).upper()))
+                    return FindMacOsPartitionInApfsContainer(img, vol_info, vs_info.block_size * part.len, partition_start_offset, uuid)
 
             elif IsMacOsPartition(img, partition_start_offset, mac_info): # Assumes there is only one single macOS installation partition
                 return True
@@ -581,6 +585,7 @@ if args.input_type.upper() not in ('MOUNTED','AXIOMZIP'):
     mac_info.dont_decrypt = True if args.dont_decrypt else False
 
     if IsApfsContainer(img, 0):
+        log.debug("Found container at offset zero in image, must be a container image")
         uuid = GetApfsContainerUuid(img, 0)
         log.info('Found an APFS container with uuid: {}'.format(str(uuid).upper()))
         found_macos = FindMacOsPartitionInApfsContainer(img, None, img.get_size(), 0, uuid)

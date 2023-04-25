@@ -529,7 +529,7 @@ class ApfsFileSystemParser:
                     self.RecurseReadTree(new_block_num, newblock, my_node, force_fstree, root_oid, oid, xid, debug_parent_list)
                     debug_parent_list.pop()
                 except (ValueError, EOFError, OSError):
-                    log.exception('Exception trying to read block {}'.format(entry.data.pointer))
+                    log.exception(f'Exception trying to read block {new_block_num}')
         elif (block.header.subtype == self.container_type_files) or no_blk_hdr_force_subtype_fstree: # fs tree
             if block.body.level > 0:
                 my_root.payload = Node(block.body.level)

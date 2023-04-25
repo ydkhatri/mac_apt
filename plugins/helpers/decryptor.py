@@ -150,9 +150,9 @@ class kb_locker_vek(KaitaiStruct):
         self._io = _io
         self._parent = _parent
         self._root = _root if _root else self
-        self.kl_version = self._io.read_u2le()
+        self.kl_version = self._io.read_u2le() # TODO check and raise an exception
         self.kl_nkeys = self._io.read_u2le()
-        self.kl_nbytes = self._io.read_u4le()
+        self.kl_nbytes = self._io.read_u4le() # TODO check and raise an exception
         self.padding = self._io.read_bytes(8)
         self.kl_entries = [keybag_entry_vek] * (self.kl_nkeys)
         ## For debug only
@@ -507,6 +507,7 @@ class EncryptedVol:
         log.debug("Attempting to unwrap the Wrapped Keybag now")
         unwrapped_container_keybag = self.decrypt_keybag(wrapped_container_keybag, self.wrapped_keybag_offset, self.uuid)
         log.debug("Successfully unwrapped the Wrapped Keybag!")
+        log.debug(binascii.hexlify(unwrapped_container_keybag))
         parsed_container_keybag = parse_vek_keybag(unwrapped_container_keybag)
 
         # Parses the unwrapped kb_locker object derived from the wrapped keybag into structures

@@ -1051,30 +1051,38 @@ class ApfsMacInfo(MacInfo):
                 preboot_dir = preboot_vol.ListItemsInFolder('/')
                 for items in preboot_dir:
                     if len(items['name']) == 36: # UUID Named folder
-                        uuid_folders.append(items['name'])
-                if len(uuid_folders) > 1:
-                    log.warning("There are more than 1 UUID like folders:\n" + str(uuid_folders) + "\nThe volume cannot be unencrypted by this script. Please contact the developers")
-                elif len(uuid_folders) == 0:
+                        if items['name'] != "00000000-0000-0000-0000-000000000000":
+                            uuid_folders.append(items['name'])
+                if len(uuid_folders) == 0:
                     log.error("There are no UUID like folders in the Preboot volume! Decryption cannot continue")
                 else:
-                    plist_path = uuid_folders[0] +  "/var/db/CryptoUserInfo.plist"
-                    if preboot_vol.DoesFileExist(plist_path):
-                        plist_f = preboot_vol.open(plist_path)
-                        success, plist, error = CommonFunctions.ReadPlist(plist_f)
-                        if success:
-                            decryption_key = decryptor.EncryptedVol(vol, plist, self.password).decryption_key
-                            if decryption_key is None:
-                                log.error(f"No decryption key found. Did you enter the right password? Volume '{vol.volume_name}' cannot be decrypted! " + \
-                                    "If the password contains special chars like ^ or \ or / use the password file option (-pf) instead.")
-                                if vol.role == vol.container.apfs.VolumeRoleType.data.value:
-                                    sys.exit('Decryption failed for DATA volume, cannot proceed!')
+                    if len(uuid_folders) > 1:
+                        log.warning("There are more than 1 UUID like folders:\n" + str(uuid_folders))
+                    index = 1
+                    num_uuid_folders = len(uuid_folders)
+                    for uuid_folder in uuid_folders:
+                        plist_path = uuid_folder +  "/var/db/CryptoUserInfo.plist"
+                        if preboot_vol.DoesFileExist(plist_path):
+                            plist_f = preboot_vol.open(plist_path)
+                            success, plist, error = CommonFunctions.ReadPlist(plist_f)
+                            if success:
+                                decryption_key = decryptor.EncryptedVol(vol, plist, self.password).decryption_key
+                                if decryption_key is None:
+                                    if index < num_uuid_folders:
+                                        continue
+                                    log.error(f"No decryption key found. Did you enter the right password? Volume '{vol.volume_name}' cannot be decrypted! " + \
+                                        "If the password contains special chars like ^ or \ or / use the password file option (-pf) instead.")
+                                    if vol.role == vol.container.apfs.VolumeRoleType.data.value:
+                                        sys.exit('Decryption failed for DATA volume, cannot proceed!')
+                                else:
+                                    log.debug(f"Starting decryption of filesystem, VEK={decryption_key.hex().upper()}")
+                                    vol.encryption_key = decryption_key
+                                    apfs_parser = ApfsFileSystemParser(vol, self.apfs_db)
+                                    apfs_parser.read_volume_records()
+                                    break
                             else:
-                                log.debug(f"Starting decryption of filesystem, VEK={decryption_key.hex().upper()}")
-                                vol.encryption_key = decryption_key
-                                apfs_parser = ApfsFileSystemParser(vol, self.apfs_db)
-                                apfs_parser.read_volume_records()
-                        else:
-                            log.error(f"Failed to read {plist_path}. Error was : {error}")
+                                log.error(f"Failed to read {plist_path}. Error was : {error}")
+                        index += 1
             else:
                 apfs_parser = ApfsFileSystemParser(vol, self.apfs_db)
                 apfs_parser.read_volume_records()
