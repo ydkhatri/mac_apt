@@ -63,7 +63,7 @@ Utf16Str = Struct (
 )
 
 NavigationEntry = Struct (
-    "unk" / Int32ul,
+    "window_id" / Int32ul,
     "index" / Int32ul,
     "virtual_url_spec" / Utf8Str,
     "title" / Utf16Str,
@@ -145,28 +145,30 @@ def OpenDbFromImage(mac_info, inputPath, user):
 
 def ReadTabsFile(chrome_artifacts, f, file_size, user, source):
     '''Reads 'Current/Last Tabs/Sessions' binary format'''
-    if source.endswith('Last Tabs'):
+    if source.endswith('Last Tabs') or os.path.basename(source).lower().startswith('tabs_'):
         source_type = ChromeItemType.LASTTAB
     elif source.endswith('Current Tabs'):
         source_type = ChromeItemType.CURRENTTAB
-    elif source.endswith('Last Session'):
+    elif source.endswith('Last Session') or os.path.basename(source).lower().startswith('session_'):
         source_type = ChromeItemType.LASTSESSION
     elif source.endswith('Current Session'):
         source_type = ChromeItemType.CURRENTSESSION
     sig = f.read(4)
-    ver = f.read(4)
+    ver = struct.unpack("<i", f.read(4))[0]
     if sig != b'SNSS':
         log.error(f"ERR, wrong sig for {source}, expected SNSS, got {sig.hex()}")
     else:
         pos = 0x8
-        if ver != b'\x01\0\0\0':
-            log.warning(f'Not version 1, parser may fail! Version={ver.hex()}')
+        if ver not in (1, 3):
+            log.warning(f'Not version 1 or 3, parser may fail! Version={ver}')
 
         while pos < file_size:
             f.seek(pos)
             size, command = struct.unpack('<HB', f.read(3))
             if size > 25:
-                if command in (1, 6):
+                if ((ver == 1) and command in (1, 6)) or \
+                    ((ver == 3) and (command == 6 and source_type == ChromeItemType.LASTSESSION)) or \
+                    ((ver == 3) and (command == 1 and source_type == ChromeItemType.LASTTAB)):
                     data = f.read(size - 1)
                     nav = NavigationEntry.parse(data[4:])
                     #print(nav)
@@ -466,10 +468,10 @@ def Plugin_Start(mac_info):
         folders_list = mac_info.ListItemsInFolder(chrome_path, EntryType.FOLDERS, include_dates=False)
         chrome_profile_names = [folder_item['name'] for folder_item in folders_list if re.match(chrome_profile_regex, folder_item['name'])]
         for chrome_profile_name in chrome_profile_names:
+            user_profile_name = user_name + '_' + chrome_profile_name.replace(' ', '_')
             source_path = os.path.join(chrome_profile_base_path.format(user.home_dir), chrome_profile_name)
             if mac_info.IsValidFolderPath(source_path):
                 files_list = mac_info.ListItemsInFolder(source_path, EntryType.FILES_AND_FOLDERS, include_dates=False)
-                user_profile_name = user_name + '_' + chrome_profile_name.replace(' ', '_')
                 for file_entry in files_list:
                     if file_entry['type'] == EntryType.FILES:
                         if file_entry['size'] == 0: 
@@ -489,6 +491,15 @@ def Plugin_Start(mac_info):
                     else: # Folder
                         if file_entry['name'] == 'Extensions':
                             ProcessExtensions(mac_info, chrome_artifacts, user_profile_name, source_path + '/Extensions')
+                        elif file_entry['name'] == 'Sessions':
+                            sessions_path = os.path.join(source_path, "Sessions")
+                            sessions_files_list = mac_info.ListItemsInFolder(sessions_path, EntryType.FILES, include_dates=False)
+                            for file_entry in sessions_files_list:
+                                if file_entry['size'] == 0: 
+                                    continue
+                                filename = file_entry['name'].lower()
+                                if filename.startswith('tabs_') or filename.startswith('session_'):
+                                    ExtractAndReadFile(mac_info, chrome_artifacts, user_profile_name, sessions_path + f"/{file_entry['name']}", file_entry['size'], ReadTabsFile)
 
     if len(chrome_artifacts) > 0:
         PrintAll(chrome_artifacts, mac_info.output_params, '')
@@ -510,13 +521,9 @@ def Plugin_Start_Standalone(input_files_list, output_params):
                     OpenLocalDbAndRead(chrome_artifacts, '', file_path, file_size, ReadTopSitesDb)
                 elif file_name == 'History':
                     OpenLocalDbAndRead(chrome_artifacts, '', file_path, file_size, ReadHistoryDb)
-                elif file_name == 'Last Tabs':
+                elif file_name in ('Last Tabs', 'Current Tabs') or file_name.lower().startswith('tabs_'):
                     OpenLocalFileAndRead(chrome_artifacts, '', file_path, file_size, ReadTabsFile)
-                elif file_name == 'Current Tabs':
-                    OpenLocalFileAndRead(chrome_artifacts, '', file_path, file_size, ReadTabsFile)
-                elif file_name == 'Last Session':
-                    OpenLocalFileAndRead(chrome_artifacts, '', file_path, file_size, ReadTabsFile)
-                elif file_name == 'Current Session':
+                elif file_name in ('Last Session', 'Current Session') or file_name.lower().startswith('session_'):
                     OpenLocalFileAndRead(chrome_artifacts, '', file_path, file_size, ReadTabsFile)
                 elif file_name == 'Extensions' and os.path.isdir(file_path):
                     ProcessExtensionsLocal(chrome_artifacts, '', file_path)
