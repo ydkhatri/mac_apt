@@ -10,20 +10,21 @@
    This module gets Chromium (Chrome, Edge, ..) browser artifacts
 '''
 
+import json
+import logging
+import os
+import re
+import sqlite3
+
 from construct import *
+
 from plugins.helpers.common import CommonFunctions
 from plugins.helpers.macinfo import *
 from plugins.helpers.writer import *
 
-import json
-import logging
-import os
-import sqlite3
-import re
-
 __Plugin_Name = "CHROMIUM"
 __Plugin_Friendly_Name = "Chromium"
-__Plugin_Version = "2.0"
+__Plugin_Version = "2.1"
 __Plugin_Description = "Read Chromium browsers (Chrome, Edge, ..) History, Top Sites, Downloads, Tabs/Sessions and Extension info"
 __Plugin_Author = "Yogesh Khatri"
 __Plugin_Author_Email = "yogesh@swiftforensics.com"
@@ -226,7 +227,7 @@ def ReadHistoryDb(chromium_artifacts, db, file_size, user, source):
                 end_time = CommonFunctions.ReadChromeTime(visit_time + visit_duration)
             else:
                 end_time = None
-            
+
             item = ChromiumItem(ChromiumItemType.HISTORY, row['url'], row['title'], 
                             CommonFunctions.ReadChromeTime(visit_time), end_time, None, row['referrer'],
                             f"VisitCount={row['visit_count']}, Hidden={row['hidden']}", 
@@ -380,7 +381,7 @@ def ProcessExtensions(mac_info, chromium_artifacts, user, source, browser):
                     name = manifest.get('name', '')
                     desc = manifest.get('description', '')
                     version = manifest.get('version', '')
-                    
+
                     if name.startswith('__MSG_') or \
                         desc.startswith('__MSG_') or \
                         version.startswith('__MSG_'): # Must find it in the _locales
@@ -415,8 +416,8 @@ def PrintAll(browser, chromium_artifacts, output_params, source_path):
     log.info (f"{len(chromium_artifacts)} {browser} artifact(s) found")
     for item in chromium_artifacts:
         url = item.url
-        data_list.append( [ str(item.type), item.name, url, 
-                            item.date, item.end_date, 
+        data_list.append( [ str(item.type), item.name, url,
+                            item.date, item.end_date,
                             item.local_path, item.referrer,
                             item.other_info, item.user, item.source ] )
 
@@ -451,8 +452,11 @@ def OpenLocalFileAndRead(chromium_artifacts, user, file_path, file_size, parser_
 
 def Plugin_Start(mac_info):
     '''Main Entry point function for plugin'''
-    chromium_browsers = {'Chrome': '{}/Library/Application Support/Google/Chrome/', 
-                        'Edge':'{}/Library/Application Support/Microsoft Edge/'}
+    chromium_browsers = {'Chrome': '{}/Library/Application Support/Google/Chrome/',
+                         'Edge': '{}/Library/Application Support/Microsoft Edge/',
+                         'Opera': '{}/Library/Application Support/com.operasoftware.Opera/',  # Does not support profiles
+                         'Vivaldi': '{}/Library/Application Support/Vivaldi/',
+                         'Brave': '{}/Library/Application Support/BraveSoftware/Brave-Browser/'}
 
     profile_regex = '(Default|Profile \d+|Guest Profile)'
 
@@ -468,16 +472,26 @@ def Plugin_Start(mac_info):
             chromium_path = chromium_profile_base_path.format(user.home_dir)
             if not mac_info.IsValidFolderPath(chromium_path):
                 continue
-            folders_list = mac_info.ListItemsInFolder(chromium_path, EntryType.FOLDERS, include_dates=False)
-            profile_names = [folder_item['name'] for folder_item in folders_list if re.match(profile_regex, folder_item['name'])]
+
+            if browser not in ('Opera', ):
+                folders_list = mac_info.ListItemsInFolder(chromium_path, EntryType.FOLDERS, include_dates=False)
+                profile_names = [folder_item['name'] for folder_item in folders_list if re.match(profile_regex, folder_item['name'])]
+            else:
+                profile_names = ('', )
+
             for profile_name in profile_names:
-                user_profile_name = user_name + '_' + profile_name.replace(' ', '_')
-                source_path = os.path.join(chromium_profile_base_path.format(user.home_dir), profile_name)
+                if profile_name:
+                    user_profile_name = user_name + '_' + profile_name.replace(' ', '_')
+                    source_path = os.path.join(chromium_profile_base_path.format(user.home_dir), profile_name)
+                else:
+                    user_profile_name = user_name + '_' + 'NOPROFILE'
+                    source_path = chromium_profile_base_path.format(user.home_dir)
+
                 if mac_info.IsValidFolderPath(source_path):
                     files_list = mac_info.ListItemsInFolder(source_path, EntryType.FILES_AND_FOLDERS, include_dates=False)
                     for file_entry in files_list:
                         if file_entry['type'] == EntryType.FILES:
-                            if file_entry['size'] == 0: 
+                            if file_entry['size'] == 0:
                                 continue
                             if file_entry['name'] == 'Top Sites':
                                 ExtractAndReadDb(mac_info, chromium_artifacts, user_profile_name, source_path + '/Top Sites', file_entry['size'], ReadTopSitesDb, browser)
