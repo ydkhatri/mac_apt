@@ -84,6 +84,30 @@ class CommonFunctions:
         return ''
 
     @staticmethod
+    def ReadUnixMillisecondsTime(unix_time): # Unix timestamp is time epoch beginning 1970/1/1 in milliseconds
+        '''Returns datetime object, or empty string upon error'''
+        if unix_time not in ( 0, None, ''):
+            try:
+                if isinstance(unix_time, str):
+                    unix_time = float(unix_time)
+                return datetime.datetime(1970, 1, 1) + datetime.timedelta(seconds=unix_time/1000.)
+            except (ValueError, OverflowError, TypeError) as ex:
+                log.error("ReadUnixTime() Failed to convert timestamp from value " + str(unix_time) + " Error was: " + str(ex))
+        return ''
+
+    @staticmethod
+    def ReadUnixMicrosecondsTime(unix_time): # Unix timestamp is time epoch beginning 1970/1/1 in microseconds
+        '''Returns datetime object, or empty string upon error'''
+        if unix_time not in ( 0, None, ''):
+            try:
+                if isinstance(unix_time, str):
+                    unix_time = float(unix_time)
+                return datetime.datetime(1970, 1, 1) + datetime.timedelta(seconds=unix_time/1000000.)
+            except (ValueError, OverflowError, TypeError) as ex:
+                log.error("ReadUnixTime() Failed to convert timestamp from value " + str(unix_time) + " Error was: " + str(ex))
+        return ''
+
+    @staticmethod
     def ReadUnixTime(unix_time): # Unix timestamp is time epoch beginning 1970/1/1
         '''Returns datetime object, or empty string upon error'''
         if unix_time not in ( 0, None, ''):
@@ -94,7 +118,7 @@ class CommonFunctions:
             except (ValueError, OverflowError, TypeError) as ex:
                 log.error("ReadUnixTime() Failed to convert timestamp from value " + str(unix_time) + " Error was: " + str(ex))
         return ''
-
+    
     @staticmethod
     def ReadWindowsFileTime(file_time): # File time is time epoch beginning 1601/1/1
         '''Returns datetime object, or empty string upon error'''
