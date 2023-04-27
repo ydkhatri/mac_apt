@@ -162,6 +162,20 @@ def GetImgInfoObjectForAff4(path):
 
 ####### End special handling for AFF4 #########
 
+
+def IsApfsBootContainer(img, gpt_part_offset):
+    '''Checks if this is the APFS container with OS'''
+    try:
+        uuid_bytes = img.read(gpt_part_offset, 16)
+        uuid = UUID(bytes=uuid_bytes)
+        if uuid == UUID("{ef57347c-0000-aa11-aa11-00306543ecac}"):
+            log.debug(f'Got UUID={uuid}, IS  a bootable APFS container!, defined in GPT at {gpt_part_offset}')
+            return True
+        else:
+            log.debug(f'Got UUID={uuid}, not a bootable APFS container!, defined in GPT at {gpt_part_offset}')
+    except:
+        raise ValueError('Cannot seek into image @ offset {}'.format(gpt_part_offset))
+    return False    
 def IsApfsContainer(img, partition_start_offset):
     '''Checks if this is an APFS container'''
     try:
@@ -288,8 +302,13 @@ def ParseVolumesInApfsContainer(img, vol_info, container_size, container_start_o
     return False
 
 def ParsePartitionTables(img, vol_info, vs_info):
+    gpt_header_offset = -1
+    gpt_partitions_offset = -1
     for part in vol_info:
-        if (int(part.flags) & pytsk3.TSK_VS_PART_FLAG_ALLOC):
+        if (int(part.flags) & pytsk3.TSK_VS_PART_FLAG_META) and part.desc == b'GPT Header':
+            gpt_header_offset = vs_info.block_size * part.start
+            gpt_partitions_offset = gpt_header_offset + vs_info.block_size
+        elif (int(part.flags) & pytsk3.TSK_VS_PART_FLAG_ALLOC):
             partition_start_offset = vs_info.block_size * part.start
             if part.desc.decode('utf-8').upper() == "EFI SYSTEM PARTITION":
                 log.debug ("Skipping EFI System Partition @ offset {}".format(partition_start_offset))
@@ -300,11 +319,13 @@ def ParsePartitionTables(img, vol_info, vs_info):
             else:
                 log.info ("Looking at FS with volume label '{}'  @ offset {}".format(part.desc.decode('utf-8'), partition_start_offset)) 
             
-            if IsApfsContainer(img, partition_start_offset):
-                uuid = GetApfsContainerUuid(img, partition_start_offset)
-                log.info('Found an APFS container with uuid: {}'.format(str(uuid).upper()))
-                return ParseVolumesInApfsContainer(img, vol_info, vs_info.block_size * part.len, partition_start_offset, uuid)
-
+            if  IsApfsContainer(img, partition_start_offset):
+                if IsApfsBootContainer(img, gpt_partitions_offset + (128 * part.slot_num)):
+                    uuid = GetApfsContainerUuid(img, partition_start_offset)
+                    log.info('Found an APFS container with uuid: {}'.format(str(uuid).upper()))
+                    return ParseVolumesInApfsContainer(img, vol_info, vs_info.block_size * part.len, partition_start_offset, uuid)
+                else:
+                    log.info("Found unknown APFS container, skipping..")
             elif IsHFSVolume(img, partition_start_offset):
                 log.info('Found HFS partition, skipping..')
             else:
@@ -437,6 +458,7 @@ log.debug('mac_info.dont_decrypt=' + ('TRUE' if mac_info.dont_decrypt else 'FALS
 
 mac_info.pytsk_image = img
 if IsApfsContainer(img, 0):
+    log.debug("Found container at offset zero in image, must be a container image")
     uuid = GetApfsContainerUuid(img, 0)
     log.info('Found an APFS container with uuid: {}'.format(str(uuid).upper()))
     ParseVolumesInApfsContainer(img, None, img.get_size(), 0, uuid)
