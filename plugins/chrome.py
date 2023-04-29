@@ -473,11 +473,10 @@ def Plugin_Start(mac_info):
             if not mac_info.IsValidFolderPath(chromium_path):
                 continue
 
-            if browser not in ('Opera', ):
-                folders_list = mac_info.ListItemsInFolder(chromium_path, EntryType.FOLDERS, include_dates=False)
-                profile_names = [folder_item['name'] for folder_item in folders_list if re.match(profile_regex, folder_item['name'])]
-            else:
-                profile_names = ('', )
+            folders_list = mac_info.ListItemsInFolder(chromium_path, EntryType.FOLDERS, include_dates=False)
+            profile_names = [folder_item['name'] for folder_item in folders_list if re.match(profile_regex, folder_item['name'])]
+            if not profile_names:
+                profile_names = ['']
 
             for profile_name in profile_names:
                 if profile_name:
