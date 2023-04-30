@@ -23,12 +23,12 @@ from plugins.helpers.writer import *
 
 __Plugin_Name = "BLUETOOTH"
 __Plugin_Friendly_Name = "Bluetooth Parser"
-__Plugin_Version = "1.0"
+__Plugin_Version = "1.1"
 __Plugin_Description = "Parses System Bluetooth Artifacts"
 __Plugin_Author = "Adam Ferrante, Yogesh Khatri"
 __Plugin_Author_Email = "adam@ferrante.io, yogesh@swiftforensics.com"
 __Plugin_Modes = "MACOS,ARTIFACTONLY"
-__Plugin_ArtifactOnly_Usage = 'Provide the plist file located at /Library/Preferences/com.apple.Bluetooth.plist'
+__Plugin_ArtifactOnly_Usage = 'Provide the plist files located at /Library/Preferences/com.apple.Bluetooth.plist or /Library/Bluetooth/Library/Preferences/com.apple.MobileBluetooth.devices.plist'
 
 log = logging.getLogger('MAIN.' + __Plugin_Name) # Do not rename or remove this ! This is the logger object
 
@@ -216,7 +216,7 @@ def ParseClassOfDevice(cod_number):
 
 
 class BluetoothCacheItem:
-    def __init__(self, bluetooth_address, name, displayname, manufacturer, batterypercent, connected, vendorid, productid, cod, lastnameupdate, services, supportfeatures, lastservicesupdate): # item, user, source_path):
+    def __init__(self, bluetooth_address, name, displayname, manufacturer, batterypercent, connected, vendorid, productid, cod, lastnameupdate, services, supportfeatures, lastservicesupdate, last_seen, source):
 
         self.bluetooth_address = bluetooth_address
         self.name = name
@@ -231,6 +231,8 @@ class BluetoothCacheItem:
         self.services = services
         self.supportfeatures = supportfeatures
         self.lastservicesupdate = lastservicesupdate
+        self.last_seen = last_seen
+        self.source = source
 
 def PrintAll(bluetooth_devices, output_params, input_path=''):
     bluetooth_info = [   ('Bluetooth Address',DataType.TEXT),('Name',DataType.TEXT),
@@ -238,7 +240,9 @@ def PrintAll(bluetooth_devices, output_params, input_path=''):
                     ('Connected',DataType.TEXT), ('Vendor ID',DataType.INTEGER), ('Product ID',DataType.INTEGER),
                     ('Class of Device',DataType.INTEGER), ('CoD_Device',DataType.TEXT), ('CoD_Service',DataType.TEXT),
                     ('Last Name Update',DataType.DATE), ('Services',DataType.BLOB),
-                    ('Support Features',DataType.BLOB), ('Last Services Update',DataType.DATE),('Source',DataType.TEXT)
+                    ('Support Features',DataType.BLOB), ('Last Services Update',DataType.DATE),
+                    ('Last Seen',DataType.DATE),
+                    ('Source',DataType.TEXT)
                 ]
 
     log.info (str(len(bluetooth_devices)) + " Bluetooth device(s) found")
@@ -252,7 +256,8 @@ def PrintAll(bluetooth_devices, output_params, input_path=''):
                             device.connected, device.vendorid, device.productid, 
                             device.classofdevice, cod_device, cod_service, device.lastnameupdate,
                             device.services, device.supportfeatures, device.lastservicesupdate,
-                            input_path
+                            device.last_seen,
+                            device.source
                             ]
 
         bluetooth_devices_list.append(single_bt_instance)
@@ -260,7 +265,7 @@ def PrintAll(bluetooth_devices, output_params, input_path=''):
     WriteList("Bluetooth Devices", "BT Devices", bluetooth_devices_list, bluetooth_info, output_params, input_path)
 
 
-def ReadBluetoothPlist(plist):
+def ReadBluetoothPlist(plist, source_path):
     '''Reads the com.apple.Bluetooth.plist and gets connected device info'''
     # Check to see what devices were paired first for later comparison.
     try:
@@ -278,7 +283,7 @@ def ReadBluetoothPlist(plist):
             if cache_data:
                 cache_item = BluetoothCacheItem(
                     cached_device,
-                    cache_data.get('Name', ''),
+                    cache_data.get('Name', '').upper(),
                     cache_data.get('displayName', ''),
                     cache_data.get('Manufacturer', ''),
                     cache_data.get('BatteryPercent', None), 
@@ -289,24 +294,69 @@ def ReadBluetoothPlist(plist):
                     cache_data.get('LastNameUpdate', None),
                     cache_data.get('Services', None),
                     cache_data.get('SupportedFeatures', None),
-                    cache_data.get('LastServicesUpdate', None)
+                    cache_data.get('LastServicesUpdate', None),
+                    None,
+                    source_path
                 )
                 cache_list.append(cache_item)
     return cache_list
 
+def FindCachedItem(cache_list, mac_address):
+    '''Return BluetoothCacheItem that matches mac_address'''
+    mac_address = mac_address.upper()
+    for item in cache_list:
+        if item.bluetooth_address == mac_address:
+            return item
+    return None
+
+def ReadMobileBluetoothPlist(plist, mobile_bluetooth_path, cache_list):
+    for device_mac_address, device_details in plist.items():
+        cached_item = FindCachedItem(cache_list, device_mac_address)
+        device_class = struct.unpack('<i', device_details.get('DeviceClass', b'\0'*4))[0]
+
+        if cached_item is None:
+            cached_item = BluetoothCacheItem(
+                device_mac_address.upper(), 
+                device_details.get('DefaultName', ''),
+                device_details.get('Name', ''),
+                '',
+                '',
+                'Yes',
+                device_details.get('DeviceIdVendor', ''),
+                device_details.get('DeviceIdProduct', ''),
+                device_class,
+                None,
+                None,
+                None,
+                None,
+                CommonFunctions.ReadUnixTime(device_details.get('LastSeenTime', '')),
+                mobile_bluetooth_path
+                )
+            cache_list.append(cached_item)
+        else:
+            cached_item.last_seen = CommonFunctions.ReadUnixTime(device_details.get('LastSeenTime', ''))
 
 def Plugin_Start(mac_info):
     '''Main Entry point function for plugin'''
-    bluetooth_path = '/Library/Preferences/com.apple.Bluetooth.plist' # Plist within the /Preferences folder.
+    bluetooth_path = '/Library/Preferences/com.apple.Bluetooth.plist'
+    mobile_bluetooth_path = '/Library/Bluetooth/Library/Preferences/com.apple.MobileBluetooth.devices.plist'
     cache_list = []
 
-    if mac_info.IsValidFilePath(bluetooth_path): # Determine if the above path is valid.
+    if mac_info.IsValidFilePath(bluetooth_path):
         mac_info.ExportFile(bluetooth_path, __Plugin_Name)
         success, plist, error = mac_info.ReadPlist(bluetooth_path)
         if success:
-            cache_list = ReadBluetoothPlist(plist)
+            cache_list = ReadBluetoothPlist(plist, bluetooth_path)
     else:
-        log.error('PList file cannot be found, is the file missing?')
+        log.error('com.apple.Bluetooth.plist not found')
+
+    if mac_info.IsValidFilePath(mobile_bluetooth_path):
+        mac_info.ExportFile(mobile_bluetooth_path, __Plugin_Name)
+        success, plist, error = mac_info.ReadPlist(mobile_bluetooth_path)
+        if success:
+            ReadMobileBluetoothPlist(plist, mobile_bluetooth_path, cache_list)
+    else:
+        log.error('com.apple.MobileBluetooth.devices.plist not found')
 
     # Write it all out.
     if len(cache_list) > 0:
@@ -319,7 +369,10 @@ def Plugin_Start_Standalone(input_files_list, output_params):
         cache_list = []
         success, plist, error = CommonFunctions.ReadPlist(input_file)
         if success:
-            cache_list = ReadBluetoothPlist(plist)
+            if input_file.endswith('com.apple.Bluetooth.plist'):
+                cache_list = ReadBluetoothPlist(plist, input_file)
+            elif input_file.endswith('com.apple.MobileBluetooth.devices.plist'):
+                ReadMobileBluetoothPlist(plist, input_file, cache_list)
         else:
             log.error(error)
 
@@ -327,7 +380,6 @@ def Plugin_Start_Standalone(input_files_list, output_params):
             PrintAll(cache_list, output_params, input_file)
         else:
             log.debug("No bluetooth devices found")
-        
 
 if __name__ == '__main__':
     print ("This plugin is a part of a framework and does not run independently on its own!")
