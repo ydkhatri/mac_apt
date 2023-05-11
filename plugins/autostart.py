@@ -20,7 +20,7 @@ from plugins.helpers.writer import *
 
 __Plugin_Name = "AUTOSTART" # Cannot have spaces, and must be all caps!
 __Plugin_Friendly_Name = "Auto start"
-__Plugin_Version = "1.0"
+__Plugin_Version = "1.1"
 __Plugin_Description = "Retrieves persistent and auto-start programs, daemons, services"
 __Plugin_Author = "Brandon Mignini, Yogesh Khatri"
 __Plugin_Author_Email = "brandon.mignini@mymail.champlain.edu, khatri@champlain.edu"
@@ -94,54 +94,103 @@ def process_backgrounditems_btm(mac_info, btm_path, user, uid, persistent_progra
 
     success, plist, error = mac_info.ReadPlist(btm_path, deserialize=True)
     if success:
-        all_containers = plist.get('backgroundItems', {}).get('allContainers', {})
-        for container in all_containers:
-            try:
-                bm = container['internalItems'][0]['bookmark']['data']
-            except (KeyError, ValueError, TypeError) as ex:
-                log.error('Error fetching bookmark data ' + str(ex))
-                continue
-            if isinstance(bm, bytes):
-                bm = Bookmark.from_bytes(bm)
-            elif isinstance(bm, dict):
+        # >= macOS 10.13 and <= macOS 12
+        if isinstance(plist, dict) and plist['version'] == 2:
+            all_containers = plist.get('backgroundItems', {}).get('allContainers', {})
+            for container in all_containers:
                 try:
-                    bm = Bookmark.from_bytes(bm['NS.data'])
-                except (KeyError, ValueError, TypeError):
-                    log.exception("Failed to read NS.data as bookmark")
+                    bm = container['internalItems'][0]['bookmark']['data']
+                except (KeyError, ValueError, TypeError) as ex:
+                    log.error('Error fetching bookmark data ' + str(ex))
                     continue
-            try:
-                # record type 0xf017 means an item name
-                name = bm.tocs[0][1].get(0xf017, '')
+                if isinstance(bm, bytes):
+                    bm = Bookmark.from_bytes(bm)
+                elif isinstance(bm, dict):
+                    try:
+                        bm = Bookmark.from_bytes(bm['NS.data'])
+                    except (KeyError, ValueError, TypeError):
+                        log.exception("Failed to read NS.data as bookmark")
+                        continue
+                try:
+                    # record type 0xf017 means an item name
+                    name = bm.tocs[0][1].get(0xf017, '')
 
-                # Get full file path
-                vol_path = bm.tocs[0][1].get(BookmarkKey.VolumePath, '')
-                file_path = bm.tocs[0][1].get(BookmarkKey.Path, [])
-                file_path = '/' + '/'.join(file_path)
-                if vol_path and (not file_path.startswith(vol_path)):
-                    file_path = vol_path + file_path
+                    # Get full file path
+                    vol_path = bm.tocs[0][1].get(BookmarkKey.VolumePath, '')
+                    file_path = bm.tocs[0][1].get(BookmarkKey.Path, [])
+                    file_path = '/' + '/'.join(file_path)
+                    if vol_path and (not file_path.startswith(vol_path)):
+                        file_path = vol_path + file_path
 
-                # If file is on a mounted volume (dmg), get the dmg file details too
-                orig_vol_bm = bm.tocs[0][1].get(BookmarkKey.VolumeBookmark, None)
-                if orig_vol_bm:
-                    filtered = list(filter(lambda x: x[0]==orig_vol_bm, bm.tocs))
-                    if filtered:
-                        orig_vol_toc = filtered[0][1]
-                        orig_vol_path = orig_vol_toc.get(BookmarkKey.Path, '')
-                        orig_vol_creation_date = orig_vol_toc.get(BookmarkKey.VolumeCreationDate, '')
-                        if orig_vol_path:
-                            orig_vol_path = '/' + '/'.join(orig_vol_path)
-                            log.info
+                    # If file is on a mounted volume (dmg), get the dmg file details too
+                    orig_vol_bm = bm.tocs[0][1].get(BookmarkKey.VolumeBookmark, None)
+                    if orig_vol_bm:
+                        filtered = list(filter(lambda x: x[0]==orig_vol_bm, bm.tocs))
+                        if filtered:
+                            orig_vol_toc = filtered[0][1]
+                            orig_vol_path = orig_vol_toc.get(BookmarkKey.Path, '')
+                            orig_vol_creation_date = orig_vol_toc.get(BookmarkKey.VolumeCreationDate, '')
+                            if orig_vol_path:
+                                orig_vol_path = '/' + '/'.join(orig_vol_path)
+                                log.info
+                        else:
+                            print ("Error, tid {} not found ".format(orig_vol_bm))
+                except (TypeError, KeyError, ValueError) as ex:
+                    log.exception('Problem reading btm bookmark')
+                    continue
+
+                if not name:
+                    name = os.path.basename(file_path)
+                program = PersistentProgram(btm_path, name, file_path, 'Background Task Management Agent', user, uid, '', file_path)
+                program.start_when = 'Run at Login'
+                persistent_programs.append(program)
+
+        # >= macOS 13
+        elif isinstance(plist, list) and plist[0].get('version', 0) >= 3:
+            for uuid in plist[1]['store']['itemsByUserIdentifier'].keys():
+                user_name = ''
+                for user_info in mac_info.users:
+                    if uuid == user_info.UUID:
+                        user_name = user_info.user_name
+                        user_uid = user_info.UID
+                        break
+
+                if not user_name:
+                    user_name = 'unknown (' + uuid + ')'
+                    user_uid = ''
+
+                for item_number in list(range(len(plist[1]['store']['itemsByUserIdentifier'][uuid]))):
+                    entry = plist[1]['store']['itemsByUserIdentifier'][uuid][item_number]
+                    if entry.get('url', ''):
+                        url_relative = entry['url'].get('NS.relative', '')
                     else:
-                        print ("Error, tid {} not found ".format(orig_vol_bm))
-            except (TypeError, KeyError, ValueError) as ex:
-                log.exception('Problem reading btm bookmark')
-                continue
+                        url_relative = ''
+                    executable_path = entry.get('executablePath', '')
+                    items = entry.get('items', '')
+                    name = entry.get('name', '')
 
-            if not name:
-                name = os.path.basename(file_path)
-            program = PersistentProgram(btm_path, name, file_path, 'Background Task Management Agent', user, uid, '', file_path)
-            program.start_when = 'Run at Login'
-            persistent_programs.append(program)
+                    start_when = ''
+                    if url_relative.endswith('.plist'):
+                        file_path = executable_path
+                        if '/LaunchAgents/' in url_relative:
+                            start_when = 'Run at Login'
+                        elif '/LaunchDaemons/' in url_relative:
+                            start_when = 'Run at Boot'
+                    elif url_relative:
+                        file_path = url_relative
+                        start_when = 'Run at Login'
+                    elif items:
+                        file_path = items[0]
+                    else:
+                        file_path = 'unknown'
+
+                    program = PersistentProgram(btm_path, name, file_path, 'Background Task Management Agent', user_name, user_uid, '', file_path)
+                    program.start_when = start_when
+                    persistent_programs.append(program)
+
+        else:
+            log.error('Unsupported btm file: {}'.format(btm_path))
+
     else:
         log.error('Failed to read btm file, Error was ' + error)
 
@@ -204,7 +253,27 @@ def process_dir(mac_info, path, persistent_programs, method, user_name, uid):
             if method == 'Daemon' or method == 'Agents':
                 success, plist, error = mac_info.ReadPlist(full_path)
                 if success:
-                    program.disabled = plist.get('Disabled', '')
+                    disabled_param = plist.get('Disabled', '')
+                    if isinstance(disabled_param, dict):
+                        feature_flag_enabled = disabled_param.get('#IfFeatureFlagEnabled', '')
+                        feature_flag_disabled = disabled_param.get('#IfFeatureFlagDisabled', '')
+                        _disabled = disabled_param.get('#Then', '')
+                        msg = ''
+                        if feature_flag_enabled:
+                            msg = 'IfFeatureFlagEnabled {} Then {}'.format(feature_flag_enabled, _disabled)
+                        elif feature_flag_disabled:
+                            msg = 'IfFeatureFlagDisabled {} Then {}'.format(feature_flag_disabled, _disabled)
+                        else:
+                            log.error('Unsupported plist Disabled parameter: {}'.format(disabled_param))
+                            for k, v in disabled_param.items():
+                                if msg:
+                                    msg += ', {}:{}'.format(k, v)
+                                else:
+                                    msg = '{}:{}'.format(k, v)
+                        program.disabled = msg
+                    else:
+                        program.disabled = disabled_param
+
                     program_path = plist.get('Program', '')
                     if not program_path:
                         program_args = plist.get('ProgramArguments', None)
@@ -217,7 +286,7 @@ def process_dir(mac_info, path, persistent_programs, method, user_name, uid):
                     program.start_when = get_run_when(plist, method)
                     program.user = plist.get('UserName', program.user) # plist can override this, so get that value
                 else:
-                    log.error("Problem reading plist - " + error)
+                    log.error("Problem reading plist for {} - {}".format(full_path, error))
             else:
                 persistent_programs.append(program)
 
@@ -257,7 +326,7 @@ def process_overrides(mac_info, file_path, user, uid, persistent_programs):
             else:
                 log.error('Did not find "Disabled" in override for {}'.format(k))
     else:
-        log.error("Problem reading plist - " + error)
+        log.error("Problem reading plist for {} - {}".format(full_path, error))
 
 def ProcessLoginRestartApps(mac_info, persistent_programs):
     '''Gets apps/windows set to relaunch upon re-login (after logout)'''
@@ -358,6 +427,14 @@ def Plugin_Start(mac_info):
         backgrounditems_btm_path = '{}/Library/Application Support/com.apple.backgroundtaskmanagementagent/backgrounditems.btm'.format(user.home_dir)
         if mac_info.IsValidFilePath(backgrounditems_btm_path):
             process_backgrounditems_btm(mac_info, backgrounditems_btm_path, user_name, user.UID, persistent_programs)
+
+    # process BackgroundItems-v*.btm
+    backgrounditems_btm_base_path = '/private/var/db/com.apple.backgroundtaskmanagement'
+    if mac_info.IsValidFolderPath(backgrounditems_btm_base_path):
+        files_list = mac_info.ListItemsInFolder(backgrounditems_btm_base_path, EntryType.FILES, include_dates=False)
+        for file_entry in files_list:
+                backgrounditems_btm_path = os.path.join(backgrounditems_btm_base_path, file_entry['name'])
+                process_backgrounditems_btm(mac_info, backgrounditems_btm_path, 'root', 0, persistent_programs)
 
     # system overrides
     override_plist_path = '/private/var/db/launchd.db/com.apple.launchd/overrides.plist'
