@@ -18,7 +18,7 @@ from plugins.helpers.writer import *
 
 __Plugin_Name = "SPOTLIGHT"
 __Plugin_Friendly_Name = "Spotlight"
-__Plugin_Version = "1.0"
+__Plugin_Version = "1.1"
 __Plugin_Description = "Reads spotlight indexes (user, volume, iOS)"
 __Plugin_Author = "Yogesh Khatri"
 __Plugin_Author_Email = "yogesh@swiftforensics.com"
