@@ -7,13 +7,13 @@
    
 '''
 
-import os
 import logging
+import os
 import struct
-from plugins.helpers import spotlight_parser as spotlight_parser
-from plugins.helpers.spotlight_filter import create_views_for_ios_db
 
+from plugins.helpers import spotlight_parser as spotlight_parser
 from plugins.helpers.macinfo import *
+from plugins.helpers.spotlight_filter import create_views_for_ios_db
 from plugins.helpers.writer import *
 
 __Plugin_Name = "SPOTLIGHT"
@@ -399,21 +399,34 @@ def ProcessStoreAndDotStore(mac_info, store_path_1, store_path_2, prefix):
 
 def Process_User_DBs(mac_info):
     '''
-    Process the databases located in /Users/<USER>/Library/Metadata/CoreSpotlight/index.spotlightV3/
-    Seen in High Sierra (10.13) and above
+    Process the databases located in user's home directory.
+    macOS 10.13 - macOS 11: /Users/<USER>/Library/Metadata/CoreSpotlight/index.spotlightV3/
+    macOS 12 and above    : /Users/<USER>/Library/Metadata/CoreSpotlight/NSFileProtectionComplete/index.spotlightV3/
+                            /Users/<USER>/Library/Metadata/CoreSpotlight/NSFileProtectionCompleteUnlessOpen/index.spotlightV3/
+                            /Users/<USER>/Library/Metadata/CoreSpotlight/NSFileProtectionCompleteUntilFirstUserAuthentication/index.spotlightV3/
+                            /Users/<USER>/Library/Caches/com.apple.helpd/NSFileProtectionComplete/index.spotlightV3/
+                            /Users/<USER>/Library/Caches/com.apple.helpd/NSFileProtectionCompleteUnlessOpen/index.spotlightV3/
+                            /Users/<USER>/Library/Caches/com.apple.helpd/NSFileProtectionCompleteUntilFirstUserAuthentication/index.spotlightV3/
     '''
-    user_spotlight_store = '{}/Library/Metadata/CoreSpotlight/index.spotlightV3/store.db'
-    user_spotlight_dot_store = '{}/Library/Metadata/CoreSpotlight/index.spotlightV3/.store.db'
-    processed_paths = []
-    for user in mac_info.users:
-        user_name = user.user_name
-        if user.home_dir == '/private/var/empty': continue # Optimization, nothing should be here!
-        elif user.home_dir == '/private/var/root': user_name = 'root' # Some other users use the same root folder, we will list such all users as 'root', as there is no way to tell
-        if user.home_dir in processed_paths: continue # Avoid processing same folder twice (some users have same folder! (Eg: root & daemon))
-        processed_paths.append(user.home_dir)
-        store_path_1 = user_spotlight_store.format(user.home_dir)
-        store_path_2 = user_spotlight_dot_store.format(user.home_dir)
-        ProcessStoreAndDotStore(mac_info, store_path_1, store_path_2, user_name)
+    user_spotlight_metadata_paths = ['{}/Library/Metadata/CoreSpotlight/index.spotlightV3/',
+                                     '{}/Library/Metadata/CoreSpotlight/NSFileProtectionComplete/index.spotlightV3/',
+                                     '{}/Library/Metadata/CoreSpotlight/NSFileProtectionCompleteUnlessOpen/index.spotlightV3/',
+                                     '{}/Library/Metadata/CoreSpotlight/NSFileProtectionCompleteUntilFirstUserAuthentication/index.spotlightV3/']
+    user_spotlight_cache_paths = ['{}/Library/Caches/com.apple.helpd/NSFileProtectionComplete/index.spotlightV3/',
+                                  '{}/Library/Caches/com.apple.helpd/NSFileProtectionCompleteUnlessOpen/index.spotlightV3/',
+                                  '{}/Library/Caches/com.apple.helpd/NSFileProtectionCompleteUntilFirstUserAuthentication/index.spotlightV3/']
+    for spotlight_path in user_spotlight_metadata_paths + user_spotlight_cache_paths:
+        processed_paths = []
+        for user in mac_info.users:
+            user_name = user.user_name
+            if user.home_dir == '/private/var/empty': continue # Optimization, nothing should be here!
+            elif user.home_dir == '/private/var/root': user_name = 'root' # Some other users use the same root folder, we will list such all users as 'root', as there is no way to tell
+            if user.home_dir in processed_paths: continue # Avoid processing same folder twice (some users have same folder! (Eg: root & daemon))
+            processed_paths.append(user.home_dir)
+            store_path_1 = os.path.join(spotlight_path.format(user.home_dir), 'store.db')
+            store_path_2 = os.path.join(spotlight_path.format(user.home_dir), '.store.db')
+            ProcessStoreAndDotStore(mac_info, store_path_1, store_path_2, user_name)
+
 
 def ProcessVolumeStore(mac_info, spotlight_base_path, export_prefix=''):
     '''
@@ -485,6 +498,12 @@ def Plugin_Start(mac_info):
     if mac_info.IsValidFolderPath(spotlight_base_path):
         ProcessVolumeStore(mac_info, spotlight_base_path, 'BootVolume')
 
+    # For Ventura's Preboot volume
+    spotlight_base_path = '/private/var/db/Spotlight-V100/Preboot'
+    if mac_info.IsValidFolderPath(spotlight_base_path):
+        ProcessVolumeStore(mac_info, spotlight_base_path, 'Preboot')
+
+
 def Plugin_Start_Standalone(input_files_list, output_params):
     log.info("Module Started as standalone")
     for input_path in input_files_list:
@@ -499,6 +518,7 @@ def Plugin_Start_Standalone(input_files_list, output_params):
                 log.exception('Failed to open input file ' + input_path)
         else:
             log.info("Unknown file type: {}".format(os.path.basename()))
+
 
 def Plugin_Start_Ios(ios_info):
     '''Entry point for ios_apt plugin'''
