@@ -18,7 +18,6 @@ import struct
 import sys
 import tempfile
 import time
-import traceback
 import zipfile
 from io import BytesIO
 from uuid import UUID
@@ -318,6 +317,7 @@ class MacInfo:
         self.vol_info = None # disk_volumes
         self.output_params = output_params
         self.os_version = '0.0.0'
+        self.os_version_extra = '' # Since macOS 13, for Rapid Security Response patches
         self.os_build = ''
         self.os_friendly_name = 'No name yet!'
         self.users = []
@@ -600,7 +600,7 @@ class MacInfo:
             if str(ex).find('tsk_fs_dir_open: path not found'):
                 log.debug("Path not found : " + path)
             else:
-                log.debug("Exception details:\n", exc_info=True) #traceback.print_exc()
+                log.debug("Exception details:\n", exc_info=True)
                 log.error("Failed to get dir info!")
         return items
 
@@ -705,8 +705,8 @@ class MacInfo:
         return error
 
     def GetVersionDictionary(self):
-        '''Returns macOS version as dictionary {major:10, minor:5 , micro:0}'''
-        version_dict = { 'major':0, 'minor':0, 'micro':0 }
+        '''Returns macOS version as dictionary {major:10, minor:5 , micro:0, extra:'(a)'}'''
+        version_dict = { 'major':0, 'minor':0, 'micro':0, 'extra':self.os_version_extra }
         info = self.os_version.split(".")
         try:
             version_dict['major'] = int(info[0])
@@ -714,11 +714,11 @@ class MacInfo:
                 version_dict['minor'] = int(info[1])
                 try:
                     version_dict['micro'] = int(info[2])
-                except Exception:
+                except (IndexError,ValueError):
                     pass
-            except Exception:
+            except (IndexError,ValueError):
                 pass
-        except Exception:
+        except (IndexError,ValueError):
             pass
         return version_dict
 
@@ -1012,6 +1012,8 @@ class ApfsMacInfo(MacInfo):
         self.apfs_db_path = ''
         self.apfs_sys_volume = None  # New in 10.15, a System read-only partition
         self.apfs_data_volume = None # New in 10.15, a separate Data partition
+        self.apfs_preboot_volume = None # In macOS 13, it's loaded while running
+        self.apfs_update_volume = None  # In macOS 13, it's loaded while running
 
     def UseCombinedVolume(self):
         self.macos_FS = ApfsSysDataLinkedVolume(self.apfs_sys_volume, self.apfs_data_volume)
@@ -1026,6 +1028,51 @@ class ApfsMacInfo(MacInfo):
             log.exception('')
         log.error('Failed to create combined System + Data volume')
         return False
+
+    def _GetSystemInfo(self):
+        info = MacInfo._GetSystemInfo(self)
+        if self.GetVersionDictionary()['major'] >= 13:
+            # Get Rapid Security Response patch info, new in macOS 13 (Ventura)
+            uuid = ''
+            update_plist_path = '/nvram.plist'
+            log.debug(f"Trying to read RSR related UUID from {update_plist_path}")
+            f = self.apfs_update_volume.open(update_plist_path)
+            if f != None:
+                success, plist, error = CommonFunctions.ReadPlist(f)
+                if success:
+                    efi_boot_device = plist.get('efi-boot-device', '')
+                    #if efi_boot_device:
+                    #    plistlib.loads()
+                    matches = re.search(r"\<key\>Path\<\/key\>\<string\>\\([^\\]+)\\", efi_boot_device)
+                    if matches:
+                        uuid = matches.group(1)
+                    else:
+                        log.warning(f"No UUID found for RSR, efi_boot_device info = {efi_boot_device}")
+                    f.close()
+                else:
+                    log.error("Could not read plist. Error=" + error)
+                f.close()
+            else:
+                log.error("Could not open plist to get system version info!")
+                return info
+            
+            preboot_plist_path = f'/{uuid}/cryptex1/current/SystemVersion.plist'
+            log.debug(f"Trying to get RSR patch version from {preboot_plist_path}")
+            f = self.apfs_preboot_volume.open(preboot_plist_path)
+            if f != None:
+                success, plist, error = CommonFunctions.ReadPlist(f)
+                if success:
+                    self.os_version_extra = plist.get('ProductVersionExtra', '')
+                    self.os_version = plist.get('ProductVersion', self.os_version)
+                    self.os_build = plist.get('ProductBuildVersion', self.os_build)
+                    log.info (f'macOS RSR patch version detected is: {self.os_version} {self.os_version_extra}')
+                    f.close()
+                else:
+                    log.error("Could not read plist. Error=" + error)
+                f.close()
+            else:
+                log.error("Could not open plist to get system version info!")
+        return info
 
     def ReadApfsVolumes(self):
         '''Read volume information into an sqlite db'''
@@ -1426,7 +1473,7 @@ class MountedMacInfo(MacInfo):
                 log.debug("Path not found : " + mounted_path)
             else:
                 log.debug("Problem accessing path : " + mounted_path)
-                log.debug("Exception details:\n", exc_info=True) #traceback.print_exc()
+                log.debug("Exception details:\n", exc_info=True)
                 log.error("Failed to get dir info!")
         return items
 

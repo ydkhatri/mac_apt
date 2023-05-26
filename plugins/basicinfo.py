@@ -241,7 +241,10 @@ def GetModelAndHostNameFromPreference(mac_info, preference_plist_path):
 
 def GetMacOSVersion(mac_info):
     sys_ver_plist_path = '/System/Library/CoreServices/SystemVersion.plist'
-    basic_data.append(['SYSTEM', 'macOS Version', mac_info.os_version, mac_info.os_friendly_name, sys_ver_plist_path])
+    version = mac_info.os_version
+    if mac_info.os_version_extra:
+        version += ' ' + mac_info.os_version_extra
+    basic_data.append(['SYSTEM', 'macOS Version', version, mac_info.os_friendly_name, sys_ver_plist_path])
     basic_data.append(['SYSTEM', 'macOS Build Version', mac_info.os_build, mac_info.os_friendly_name, sys_ver_plist_path])
     mac_info.ExportFile(sys_ver_plist_path, __Plugin_Name, "", False)
 
