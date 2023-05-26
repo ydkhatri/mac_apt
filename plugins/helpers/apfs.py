@@ -185,6 +185,15 @@ class Apfs(KaitaiStruct):
         installer = 0x20
         data = 0x40
         baseband = 0x80
+        update = 0xC0
+        xart = 0x100
+        hardware = 0x140
+        backup = 0x180
+        reserved_7 = 0x1C0
+        reserved_8 = 0x200
+        enterprise = 0x240
+        reserved_10 = 400
+        prelogin = 0x440
         reserved = 0x200
 
     def __init__(self, _io, _parent=None, _root=None):
