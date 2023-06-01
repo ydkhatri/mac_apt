@@ -17,13 +17,13 @@
 #
 # Script Name  : spotlight_parser.py
 # Author       : Yogesh Khatri
-# Last Updated : 08/07/2020
+# Last Updated : 01/06/2023
 # Requirement  : Python 3.7, modules ( lz4, pyliblzfse )
 #                Dependencies can be installed using the command 'pip install lz4 pyliblzfse' 
 # 
 # Purpose      : Parse the Spotlight store.db or .store.db file from mac OSX
 #                These files are located under:
-#                 /.Spotlight-V100/Store-V2/<UUID>/
+#                 /.Spotlight-V100/Store-Vx/<UUID>/
 #
 #                Since macOS 10.13, there are also spotlight databases for each user under
 #                 ~/Library/Metadata/CoreSpotlight/index.spotlightV3/
@@ -52,6 +52,7 @@ import struct
 import binascii
 import datetime
 import os
+import re
 import sys
 import logging
 from enum import IntEnum
@@ -64,7 +65,7 @@ try:
 except ImportError:
     print("liblzfse not found. Won't decompress lzfse/lzvn streams")
 
-__VERSION__ = '0.9.2'
+__VERSION__ = '1.0.1'
 
 log = logging.getLogger('SPOTLIGHT_PARSER')
 
@@ -93,8 +94,23 @@ class FileMetaDataListing:
         self.pos += 8
         return num
 
+    def ReadShort(self):
+        num = struct.unpack("<H", self.data[self.pos : self.pos + 2])[0]
+        self.pos += 2
+        return num
+       
+    def ReadUint32(self):
+        num = struct.unpack("<I", self.data[self.pos : self.pos + 4])[0]
+        self.pos += 4
+        return num
+     
+    def ReadUint64(self):
+        num = struct.unpack("<Q", self.data[self.pos : self.pos + 8])[0]
+        self.pos += 8
+        return num
+
     def ReadDate(self):
-        '''Returns date as string'''
+        '''Returns date as datetime object'''
         # Date stored as 8 byte double, it is mac absolute time (2001 epoch)
         mac_abs_time = self.ReadDouble()
         if mac_abs_time > 0: # Sometimes, a very large number that needs to be reinterpreted as signed int
@@ -109,7 +125,7 @@ class FileMetaDataListing:
         return ""
     
     def ConvertEpochToUtcDateStr(self, value):
-        '''Convert Epoch microseconds timestamp to string'''
+        '''Convert Epoch microseconds timestamp to datetime'''
         try:
             return datetime.datetime(1970, 1, 1) + datetime.timedelta(seconds=value/1000000.)
         except OverflowError:
@@ -153,7 +169,7 @@ class FileMetaDataListing:
         return single
 
     def ReadManyBytes(self, count, debug_dont_advance = False):
-        '''Returns tuple, does not increment file pointer'''
+        '''Returns tuple'''
         many = struct.unpack("<" + str(count) + "B", self.data[self.pos : self.pos + count])
         if debug_dont_advance:
             return many
@@ -215,21 +231,131 @@ class FileMetaDataListing:
         except (UnicodeEncodeError, ValueError, TypeError) as ex:
             log.exception("Exception trying to print data : ")
 
-    def ConvertUint64ToSigned(self, unsigned_num):
+    @staticmethod
+    def ConvertUint64ToSigned(unsigned_num):
         '''Return signed version of number, Eg: 0xFFFFFFFFFFFFFFFF will return -1'''
         return struct.unpack("<q", struct.pack("<Q", unsigned_num))[0]
 
-    def ConvertUint32ToSigned(self, unsigned_num):
+    @staticmethod
+    def ConvertUint32ToSigned(unsigned_num):
         '''Return signed version of number, Eg: 0xFFFFFFFF will return -1'''
         return struct.unpack("<i", struct.pack("<I", unsigned_num))[0]
+    
+    @staticmethod
+    def FilterStrings(str):
+        ''' Remove lang chars \x16\x02<2 char LANG CODE> 
+            Input is binary string
+            Output is single utf8 string (comma seperated if there were multiple in input) '''
+        str = str.rstrip(b'\x00')
+        try:
+            s = re.sub(b"\x16\x02[^\x00]{0,2}", b"", str).rstrip(b"\x00")
+            s = ", ".join(s.decode('utf8', 'ignore').split('\x00'))
+        except ValueError as ex:
+            log.warning('Had a regex error', ex)
+            return str
+        return s
 
+    def ParseItemV1(self, properties, id):
+        self.id = FileMetaDataListing.ConvertUint64ToSigned(id)
+        self.date_updated = self.ReadUint64()
+        self.unknown1 = self.ReadUint64()
+        self.item_id = FileMetaDataListing.ConvertUint64ToSigned(self.ReadUint64())
+        self.flags = self.ReadUint64()
+
+        filepos = None
+        prop = None
+        while  self.pos < self.size:
+            last_filepos = filepos
+            filepos = hex(self.file_pos + 0 + self.pos)
+            data_type = self.ReadUint32()
+            prop_index = self.ReadUint32()
+            if prop_index == 0:
+                log.warning("Maybe something went wrong, skip index was 0 @ {} or rest of struct is slack".format(filepos))
+                break
+
+            last_prop = prop # for debug only
+            prop = properties.get(prop_index, None)
+            if prop == None:
+                log.error("Error, cannot proceed, invalid property index {}".format(prop_index))
+                return
+            else:
+                prop_name = prop[0]
+                prop_flags = prop[1]
+                value = ''
+            ####
+            data_len = self.ReadUint32()
+            if data_type & 0xF == 0x01: # bool
+                if data_len == 1:
+                    value = False if self.ReadSingleByte() == 0 else True
+                else:
+                    log.error("probably not bool, data_type 01, len={data_len}")
+            elif data_type & 0xF == 0x02: # single byte ?
+                if data_len == 1:
+                    value = self.ReadSingleByte()
+                else:
+                    log.error(f"not seen before, data_type 02, len={data_len}")
+            elif data_type & 0xF  == 0x06:
+                if data_len == 4:
+                    value = self.ReadUint32()
+                else:
+                    log.error(f"not seen before, data_type 06, len={data_len}")
+            elif data_type & 0xF == 0x07: # 64 bit number
+                if data_len == 8:
+                    value = FileMetaDataListing.ConvertUint64ToSigned(self.ReadUint64())
+                else:
+                    value = ", ".join([str(FileMetaDataListing.ConvertUint64ToSigned(self.ReadUint64())) for x in range(0, data_len//8)])
+            elif data_type & 0xF == 0x0a: # double
+                if data_len == 8:
+                    value = self.ReadDouble()
+                else:
+                    value = ", ".join([str(self.ReadDouble()) for x in range(0, data_len//8)])
+            elif data_type & 0xF == 0x0b: # string
+                if data_type & 0x00100000 == 0x00100000: # index
+                    num_values = data_len//4
+                    strings = []
+                    for x in range(0, num_values):
+                        index = self.ReadShort()
+                        extra = self.ReadShort()
+                        if index == 65534: continue
+                        s = properties.get(index, None)
+                        if s is None:
+                            log.error("Invalid index {}".format(index))
+                            s = ''
+                        else:
+                            s = s[0]
+                        strings.append(s)
+                    value = ', '.join(strings)
+                else: # string
+                    value = FileMetaDataListing.FilterStrings(self.data[self.pos:self.pos + data_len])
+                    self.pos += data_len
+            elif data_type & 0xF == 0x0c:
+                if data_len > 8:
+                    num_values = data_len//8
+                    dates = []
+                    for x in range(0, num_values):
+                        d = self.ReadDate()
+                        dates.append(str(d))
+                    value = ', '.join(dates)
+                else:
+                    value = self.ReadDate()
+            elif data_type & 0xF == 0x0e: # binary data
+                if prop_name == 'kMDStoreProperties':
+                    value = self.data[self.pos:self.pos+data_len].decode('utf8', 'ignore')
+                    self.pos += data_len
+                else:
+                    value = self.ReadManyBytesReturnHexString(data_len)
+            else:
+                log.warning(f"Not seen data type: 0x{data_type:X}")
+                pass
+            self.meta_data_dict[prop_name] = value
+ 
     def ParseItem(self, properties, categories, indexes_1, indexes_2):
-        self.id = self.ConvertUint64ToSigned(self.ReadVarSizeNum()[0])
+        self.id = FileMetaDataListing.ConvertUint64ToSigned(self.ReadVarSizeNum()[0])
         self.flags = self.ReadSingleByte()
-        self.item_id = self. ConvertUint64ToSigned(self.ReadVarSizeNum()[0])
-        self.parent_id = self.ConvertUint64ToSigned(self.ReadVarSizeNum()[0])
+        self.item_id = FileMetaDataListing.ConvertUint64ToSigned(self.ReadVarSizeNum()[0])
+        self.parent_id = FileMetaDataListing.ConvertUint64ToSigned(self.ReadVarSizeNum()[0])
         self.date_updated = self.ReadVarSizeNum()[0]
-        
+
         ## type = bytes used
         #  00 = byte or varNum ?  bool?
         #  02 = byte or varNum ?
@@ -274,9 +400,9 @@ class FileMetaDataListing:
                 elif value_type == 7:
                     #log.debug("Found value_type 7, prop_type=0x{:X} prop={} @ {}, pos 0x{:X}".format(prop_type, prop_name, filepos, self.pos))
                     if prop_type & 2 == 2: #  == 0x0A:
-                        number = self.ConvertUint64ToSigned(self.ReadVarSizeNum()[0])
+                        number = FileMetaDataListing.ConvertUint64ToSigned(self.ReadVarSizeNum()[0])
                         num_values = number >> 3
-                        value = [self.ConvertUint64ToSigned(self.ReadVarSizeNum()[0]) for x in range(num_values)]
+                        value = [FileMetaDataListing.ConvertUint64ToSigned(self.ReadVarSizeNum()[0]) for x in range(num_values)]
                         discarded_bits = number & 0x07
                         if discarded_bits != 0:
                             log.info('Discarded bits value was 0x{:X}'.format(discarded_bits))
@@ -284,7 +410,7 @@ class FileMetaDataListing:
                         # 0x48 (_kMDItemDataOwnerType, _ICItemSearchResultType, kMDItemRankingHint, FPCapabilities)
                         # 0x4C (_kMDItemStorageSize, _kMDItemApplicationImporterVersion)
                         # 0x0a (_kMDItemOutgoingCounts, _kMDItemIncomingCounts) firstbyte = 0x20 , then 4 bytes
-                        value = self.ConvertUint64ToSigned(self.ReadVarSizeNum()[0])
+                        value = FileMetaDataListing.ConvertUint64ToSigned(self.ReadVarSizeNum()[0])
                     #if prop_type == 0x48: # Can perhaps be resolved to a category? Need to check.
                     #    print("") 
                 elif value_type == 8 and prop_name != 'kMDStoreAccumulatedSizes':
@@ -342,7 +468,7 @@ class FileMetaDataListing:
                         else: # single string
                             value = binascii.hexlify(value).decode('ascii').upper()
                 elif value_type == 0x0F:
-                    value = self.ConvertUint32ToSigned(self.ReadVarSizeNum()[0])
+                    value = FileMetaDataListing.ConvertUint32ToSigned(self.ReadVarSizeNum()[0])
                     if value < 0:
                         if value == -16777217:
                             value = ''
@@ -407,6 +533,7 @@ class FileMetaDataListing:
 
 class BlockType(IntEnum):
     UNKNOWN_0  = 0
+    STRINGSV1  = 0x03
     METADATA   = 0x09
     PROPERTY   = 0x11
     CATEGORY   = 0x21
@@ -481,19 +608,34 @@ class SpotlightStore:
         self.file = file_pointer
         #self.pos = 0
         if not self.IsValidStore():
-            raise Exception('Not a version 2 Spotlight store.db file, invalid format!')
+            raise Exception('Not a version 1 or 2 Spotlight store.db file, invalid format!')
         self.file.seek(0)
         self.header = self.file.read(0x1000)
-        self.flags = struct.unpack("<I", self.header[4:8])[0]
-        self.header_unknowns = struct.unpack("6I", self.header[12:36])
-        self.header_size = self.ReadUint(self.header[36:40])
-        self.block0_size = self.ReadUint(self.header[40:44])
-        self.block_size  = self.ReadUint(self.header[44:48])
-        self.index_blocktype_11 = self.ReadUint(self.header[48:52])
-        self.index_blocktype_21 = self.ReadUint(self.header[52:56])
-        self.index_blocktype_41 = self.ReadUint(self.header[56:60])
-        self.index_blocktype_81_1 = self.ReadUint(self.header[60:64])
-        self.index_blocktype_81_2 = self.ReadUint(self.header[64:68])
+        if self.header[0:4] == b'\x38\x74\x73\x64': # version 2
+            self.version = 2
+            self.flags = struct.unpack("<I", self.header[4:8])[0]
+            self.header_unknowns = struct.unpack("6I", self.header[12:36])
+            self.header_size = self.ReadUint(self.header[36:40])
+            self.block0_size = self.ReadUint(self.header[40:44])
+            self.block_size  = self.ReadUint(self.header[44:48])
+            self.index_blocktype_11 = self.ReadUint(self.header[48:52])
+            self.index_blocktype_21 = self.ReadUint(self.header[52:56])
+            self.index_blocktype_41 = self.ReadUint(self.header[56:60])
+            self.index_blocktype_81_1 = self.ReadUint(self.header[60:64])
+            self.index_blocktype_81_2 = self.ReadUint(self.header[64:68])
+
+            self.is_ios_store = self.index_blocktype_11 == 0
+        else: # version 1
+            self.is_ios_store = False
+            self.version = 1
+            self.flags = struct.unpack("<I", self.header[4:8])[0]
+            self.header_unknowns = struct.unpack("8I", self.header[8:40])
+            self.header_size = self.ReadUint(self.header[40:44])
+            self.block0_size = self.ReadUint(self.header[44:48])
+            self.block_size  = self.ReadUint(self.header[48:52])
+            #self.index_unknowns = struct.unpack("2I", self.header[52:60])
+            self.index_blocktype_03 = self.ReadUint(self.header[52:56])
+            self.num_blocktype_03_blocks = self.ReadUint(self.header[56:60])
         self.original_path = self.header[0x144:0x244].decode('utf-8', 'backslashreplace').rstrip('\0') # 256 bytes
         self.file_size = self.GetFileSize(self.file)
 
@@ -501,9 +643,7 @@ class SpotlightStore:
         self.categories = {}
         self.indexes_1 = {}
         self.indexes_2 = {}
-        self.block0 = None
-
-        self.is_ios_store = self.index_blocktype_11 == 0
+        self.block0 = None            
 
     def GetFileSize(self, file):
         '''Return size from an open file handle'''
@@ -516,7 +656,7 @@ class SpotlightStore:
     def IsValidStore(self):
         self.file.seek(0)
         signature = self.file.read(4)
-        if signature == b'\x38\x74\x73\x64': # 8tsd
+        if signature in (b'\x37\x74\x73\x64', b'\x38\x74\x73\x64'): # 7tsd or 8tsd
             return True
         return False
 
@@ -618,6 +758,17 @@ class SpotlightStore:
             value_type, prop_type = struct.unpack("<BB", data_content[offset + bytes_moved : offset + bytes_moved + 2])
             name = data_content[offset + bytes_moved + 2:offset + bytes_moved + entry_size].split(b'\x00')[0]
             self.properties[index] = [name.decode('utf-8', 'backslashreplace'), prop_type, value_type]
+
+    def ParsePropertiesV1(self, block):
+        data = block.data
+        pos = 28
+        size = block.logical_size
+        while pos < size:
+            index, prop_type = struct.unpack("<HH", data[pos : pos+4])
+            pos += 4
+            name = data[pos:pos+size].split(b'\x00')[0]
+            pos += len(name) + 1 if len(name) < size else size
+            self.properties[index] = [FileMetaDataListing.FilterStrings(name), prop_type, 0]
 
     def ParseProperties(self, block):
         data = block.data
@@ -728,6 +879,7 @@ class SpotlightStore:
             pass
         elif block.block_type == BlockType.METADATA:
             pass
+        elif block.block_type == BlockType.STRINGSV1: self.ParsePropertiesV1(block)
         elif block.block_type == BlockType.PROPERTY: self.ParseProperties(block)
         elif block.block_type == BlockType.CATEGORY: self.ParseCategories(block)
         elif block.block_type == BlockType.UNKNOWN_41:
@@ -826,33 +978,64 @@ class SpotlightStore:
             pos = 0
             count = 0
             meta_size = len(uncompressed)
-            while (pos < meta_size):
-                item_size = struct.unpack("<I", uncompressed[pos:pos+4])[0]
-                md_item = FileMetaDataListing(pos + 4, uncompressed[pos + 4 : pos + 4 + item_size], item_size)
-                try:
-                    md_item.ParseItem(self.properties, self.categories, self.indexes_1, self.indexes_2)
-                    if items_to_compare and self.ItemExistsInDictionary(items_to_compare, md_item): pass # if md_item exists in compare_dict, skip it, else add
-                    else:
-                        items_in_block.append(md_item)
-                        total_items_written += 1
-                        name = md_item.GetFileName()
-                        existing_item = items.get(md_item.id, None)
-                        if existing_item != None:
-                            log.warning('Item already present id={}, name={}, existing_name={}'.format(md_item.id, name, existing_item[2]))
-                            if existing_item[1] != md_item.parent_id:
-                                log.warning("Repeat item has different parent_id, existing={}, new={}".format(existing_item[1], md_item.parent_id))
-                            if name != '------NONAME------': # got a real name
-                                if existing_item[2] == '------NONAME------':
-                                    existing_item[2] = name
-                                else:  # has a valid name
-                                    if existing_item[2] != name:
-                                        log.warning("Repeat item has different name, existing={}, new={}".format(existing_item[2], name))
-                        else: # Not adding repeat elements
-                            items[md_item.id] = [md_item.id, md_item.parent_id, md_item.GetFileName(), None, md_item.date_updated] # id, parent_id, name, path, date
-                except:
-                    log.exception('Error trying to process item @ block {:X} offset {}'.format(index[1] * 0x1000 + 20, pos))
-                pos += item_size + 4
-                count += 1
+            if self.version == 1:
+                while (pos < meta_size):
+                    id = struct.unpack("<Q", uncompressed[pos:pos+8])[0]
+                    item_size_1 = struct.unpack("<I", uncompressed[pos+8:pos+12])[0]
+                    item_size_2 = struct.unpack("<I", uncompressed[pos+12:pos+16])[0]
+                    md_item = FileMetaDataListing(pos + 16, uncompressed[pos + 16 : pos + 16 + item_size_2], item_size_2 - 16)
+                    try:
+                        md_item.ParseItemV1(self.properties, id)
+                        if items_to_compare and self.ItemExistsInDictionary(items_to_compare, md_item): pass # if md_item exists in compare_dict, skip it, else add
+                        else:
+                            items_in_block.append(md_item)
+                            total_items_written += 1
+                            name = md_item.GetFileName()
+                            existing_item = items.get(md_item.id, None)
+                            if existing_item != None:
+                                log.warning('Item already present id={}, name={}, existing_name={}'.format(md_item.id, name, existing_item[2]))
+                                if existing_item[1] != md_item.parent_id:
+                                    log.warning("Repeat item has different parent_id, existing={}, new={}".format(existing_item[1], md_item.parent_id))
+                                if name != '------NONAME------': # got a real name
+                                    if existing_item[2] == '------NONAME------':
+                                        existing_item[2] = name
+                                    else:  # has a valid name
+                                        if existing_item[2] != name:
+                                            log.warning("Repeat item has different name, existing={}, new={}".format(existing_item[2], name))
+                            else: # Not adding repeat elements
+                                items[md_item.id] = [md_item.id, md_item.parent_id, md_item.GetFileName(), None, md_item.date_updated] # id, parent_id, name, path, date
+                    except:
+                        log.exception('Error trying to process item @ block {:X} offset {}'.format(index[1] * 0x1000 + 20, pos))
+                    pos += item_size_2
+                    count += 1
+            else: # ver = 2
+                while (pos < meta_size):
+                    item_size = struct.unpack("<I", uncompressed[pos:pos+4])[0]
+                    md_item = FileMetaDataListing(pos + 4, uncompressed[pos + 4 : pos + 4 + item_size], item_size)
+                    try:
+                        md_item.ParseItem(self.properties, self.categories, self.indexes_1, self.indexes_2)
+                        if items_to_compare and self.ItemExistsInDictionary(items_to_compare, md_item): pass # if md_item exists in compare_dict, skip it, else add
+                        else:
+                            items_in_block.append(md_item)
+                            total_items_written += 1
+                            name = md_item.GetFileName()
+                            existing_item = items.get(md_item.id, None)
+                            if existing_item != None:
+                                log.warning('Item already present id={}, name={}, existing_name={}'.format(md_item.id, name, existing_item[2]))
+                                if existing_item[1] != md_item.parent_id:
+                                    log.warning("Repeat item has different parent_id, existing={}, new={}".format(existing_item[1], md_item.parent_id))
+                                if name != '------NONAME------': # got a real name
+                                    if existing_item[2] == '------NONAME------':
+                                        existing_item[2] = name
+                                    else:  # has a valid name
+                                        if existing_item[2] != name:
+                                            log.warning("Repeat item has different name, existing={}, new={}".format(existing_item[2], name))
+                            else: # Not adding repeat elements
+                                items[md_item.id] = [md_item.id, md_item.parent_id, md_item.GetFileName(), None, md_item.date_updated] # id, parent_id, name, path, date
+                    except:
+                        log.exception('Error trying to process item @ block {:X} offset {}'.format(index[1] * 0x1000 + 20, pos))
+                    pos += item_size + 4
+                    count += 1
 
             if process_items_func:
                 process_items_func(items_in_block, self.is_ios_store)
@@ -889,11 +1072,14 @@ class SpotlightStore:
         self.block0 = StoreBlock0(block0_data)
         
         if not only_read_block_0:
-            self.ParseBlockSequence(self.index_blocktype_11, BlockType.PROPERTY, self.properties)
-            self.ParseBlockSequence(self.index_blocktype_21, BlockType.CATEGORY, self.categories)
-            self.ParseBlockSequence(self.index_blocktype_81_1, BlockType.INDEX, self.indexes_1)
-            self.ParseBlockSequence(self.index_blocktype_81_2, BlockType.INDEX, self.indexes_2)
-            self.ParseBlockSequence(self.index_blocktype_41, BlockType.UNKNOWN_41, None)
+            if self.version == 1:
+                self.ParseBlockSequence(self.index_blocktype_03, BlockType.STRINGSV1, self.properties)
+            else:
+                self.ParseBlockSequence(self.index_blocktype_11, BlockType.PROPERTY, self.properties)
+                self.ParseBlockSequence(self.index_blocktype_21, BlockType.CATEGORY, self.categories)
+                self.ParseBlockSequence(self.index_blocktype_81_1, BlockType.INDEX, self.indexes_1)
+                self.ParseBlockSequence(self.index_blocktype_81_2, BlockType.INDEX, self.indexes_2)
+                self.ParseBlockSequence(self.index_blocktype_41, BlockType.UNKNOWN_41, None)
         
     def ReadBlocksNoSeq(self):
         '''Reads all blocks as is, without consideration for sequence,, may miss or exclude some data or may read invalid data, if its a deleted chunk??'''
@@ -1013,6 +1199,9 @@ def ProcessStoreDb(input_file_path, output_path, file_name_prefix='store'):
                 return
         else:
             store.ReadPageIndexesAndOtherDefinitions()
+
+        if store.version == 1:
+            create_full_paths_output_file = False
 
         log.info("Creating output file {}".format(output_path_data))
 

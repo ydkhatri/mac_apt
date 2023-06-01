@@ -9,7 +9,6 @@
 
 import logging
 import os
-import struct
 
 from plugins.helpers import spotlight_parser as spotlight_parser
 from plugins.helpers.macinfo import *
@@ -54,6 +53,7 @@ def ProcessStoreItem(item, id_as_hex):
         else:
             data_dict['ID'] = item.id
             data_dict['Parent_ID'] = item.parent_id
+            data_dict['Item_ID'] = item.item_id
         data_dict['Flags'] = item.flags
         data_dict['Date_Updated'] = item.ConvertEpochToUtcDateStr(item.date_updated)
         for k, v in list(item.meta_data_dict.items()):
@@ -90,19 +90,32 @@ def Get_Column_Info(store):
         data_info = [ ('ID_hex',DataType.TEXT),('ID_hex_reversed',DataType.TEXT),('Flags',DataType.INTEGER),
                       ('Parent_ID_hex',DataType.TEXT),('Date_Updated',DataType.TEXT) ]
     else:
-        data_info = [ ('ID',DataType.INTEGER),('Flags',DataType.INTEGER),
-                      ('Parent_ID',DataType.INTEGER),('Date_Updated',DataType.TEXT) ]
-    for _, prop in list(store.properties.items()):
-        # prop = [name, prop_type, value_type]
-        if prop[0] in ('_kMDXXXX___DUMMY', 'kMDStoreAccumulatedSizes') : continue # skip this
-        if prop[2] in [0, 2, 6, 7]:
-            if prop[1] & 2 == 2: # Multiple items
-                val_type = DataType.TEXT
-            else:
-                val_type = DataType.INTEGER
+        if store.version == 1:
+            data_info = [ ('ID',DataType.INTEGER),('Flags',DataType.INTEGER),
+                      ('Item_ID',DataType.INTEGER),('Date_Updated',DataType.TEXT) ]
         else:
+            data_info = [ ('ID',DataType.INTEGER),('Flags',DataType.INTEGER),
+                        ('Parent_ID',DataType.INTEGER),('Date_Updated',DataType.TEXT) ]
+    if store.version == 1:
+        for _, prop in list(store.properties.items()):
+            # prop = [name, prop_type, value_type]
+            if prop[0] in ('_kMDXXXX___DUMMY', 'kMDStoreAccumulatedSizes') : continue # skip this
+            if prop[1] != 0: continue # skip as these are not columns
             val_type = DataType.TEXT
-        data_info.append((prop[0], val_type))
+
+            data_info.append((prop[0], val_type))
+    else:
+        for _, prop in list(store.properties.items()):
+            # prop = [name, prop_type, value_type]
+            if prop[0] in ('_kMDXXXX___DUMMY', 'kMDStoreAccumulatedSizes') : continue # skip this
+            if prop[2] in [0, 2, 6, 7]:
+                if prop[1] & 2 == 2: # Multiple items
+                    val_type = DataType.TEXT
+                else:
+                    val_type = DataType.INTEGER
+            else:
+                val_type = DataType.TEXT
+            data_info.append((prop[0], val_type))
     return data_info
 
 def CopyOutputParams(output_params):
@@ -238,7 +251,7 @@ def ProcessStoreDb(input_file_path, input_file, output_path, output_params, item
                 create_views_for_ios_db(writer.sql_writer.filepath, writer.sql_writer.table_name)
             
             # Write Paths db as tsv
-            if (not store.is_ios_store) and (not no_path_file):
+            if (not store.is_ios_store) and (not store.version==1) and (not no_path_file):
                 path_type_info = [ ('ID',DataType.INTEGER),('FullPath',DataType.TEXT) ]
                 fullpath_writer = DataWriter(out_params, "Spotlight-" + file_name_prefix + '-paths', path_type_info, input_file_path)
                 with open(output_path_full_paths, 'wb') as output_paths_file:
