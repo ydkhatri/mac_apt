@@ -14,7 +14,7 @@ from plugins.helpers.writer import *
 
 __Plugin_Name = "SPOTLIGHTSHORTCUTS"
 __Plugin_Friendly_Name = "Spotlight shortcuts"
-__Plugin_Version = "1.1"
+__Plugin_Version = "1.2"
 __Plugin_Description = "Gets user typed data in the spotlight bar, used to launch applications and documents"
 __Plugin_Author = "Yogesh Khatri"
 __Plugin_Author_Email = "yogesh@swiftforensics.com"
@@ -28,7 +28,8 @@ log = logging.getLogger('MAIN.' + __Plugin_Name) # Do not rename or remove this 
 
 def PrintAll(shortcut_items, output_params, source_path):
     shortcut_info = [ ('User',DataType.TEXT),('UserTyped',DataType.TEXT),('DisplayName',DataType.TEXT),
-                      ('LastUsed',DataType.DATE),('URL',DataType.TEXT),('Source',DataType.TEXT)
+                      ('LastUsed',DataType.DATE),('URL',DataType.TEXT),('Identifier',DataType.TEXT),
+                      ('Source',DataType.TEXT)
                    ]
     log.debug('Writing {} spotlight shortcut item(s)'.format(len(shortcut_items)))
     WriteList("spotlight shortcut information", "SpotlightShortcuts", shortcut_items, shortcut_info, output_params, source_path)
@@ -45,13 +46,14 @@ def ReadSingleShortcutEntry(entry, value, shortcuts, uses_path, source, user):
     for item, val in value.items():
         if item == 'DISPLAY_NAME': sc['DisplayName'] = val
         elif item == 'LAST_USED':  sc['LastUsed'] = val
+        elif item == 'IDENTIFIER': sc['Identifier'] = val
         elif (uses_path and (item == 'PATH')) or (item == 'URL'):
             path = val
             if path.startswith('file://'):
                 path = path[7:]
             sc['URL'] = path
         else:
-            log.info("Found unknown item - {}, value={} in plist".format(item, value))
+            log.info("Found unknown item - {}, value={} in plist".format(item, val))
     shortcuts.append(sc)
 
 
