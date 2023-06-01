@@ -25,7 +25,6 @@ import plugins.helpers.macinfo as macinfo
 import sys
 import textwrap
 import time
-import traceback
 from plugin import *
 from plugins.helpers.writer import *
 from version import __VERSION
