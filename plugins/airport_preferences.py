@@ -63,12 +63,14 @@ class Network:
         self.RoamingProfileType = ""
         self.lastChannelHistory = ""
         self.ChannelHistory = ""
-        self.BSSIDHistory = None
+        self.BSSIDHistory = ""
         # com.apple.wifi.known-networks.plist additional
         self.AddedAt = None
         self.JoinedBySystemAt = None
         self.JoinedByUserAt = None
         self.UpdatedAt = None
+        self.LastDiscoveredAt = None
+        self.AddReason = ''
         #self.usage = None
         self.Source = ''
     
@@ -129,7 +131,9 @@ def PrintAll(networks, output_params, source_path):
                      ('SPRoaming',DataType.TEXT),('System mode',DataType.TEXT),('Temporarily disabled',DataType.TEXT),
                      ('Last connected channel',DataType.TEXT),('Other channel history',DataType.TEXT),
                      ('BSSIDHistory',DataType.TEXT),('AddedAt',DataType.DATE),('JoinedBySystemAt',DataType.DATE),
-                     ('JoinedByUserAt',DataType.DATE),('UpdatedAt',DataType.DATE),('Source',DataType.TEXT)
+                     ('JoinedByUserAt',DataType.DATE),('UpdatedAt',DataType.DATE),('LastDiscoveredAt',DataType.DATE),
+                     ('AddReason',DataType.TEXT),
+                     ('Source',DataType.TEXT)
                      #,('Network_Usage',DataType.REAL)
                    ]
 
@@ -145,7 +149,7 @@ def PrintAll(networks, output_params, source_path):
                             str(wifi.lastChannelHistory), 
                             str(wifi.ChannelHistory) if (wifi.ChannelHistory and len(wifi.ChannelHistory) > 0) else '',
                             wifi.BSSIDHistory, wifi.AddedAt, wifi.JoinedBySystemAt, wifi.JoinedByUserAt,
-                            wifi.UpdatedAt, wifi.Source
+                            wifi.UpdatedAt, wifi.LastDiscoveredAt, wifi.AddReason, wifi.Source
                           ] )
 
     WriteList("wifi network information", "Wifi", data_list, network_info, output_params, source_path)
@@ -281,6 +285,7 @@ def ReadKnownNetworksPlist(plist, networks, source):
         net.Type = NetType.KNOWN
         net.Name = network.get('SSID', b'').decode('utf8', 'ignore')
         net.SSIDString = net.Name
+        net.AddReason = network.get('AddReason', '')
         net.SecurityType = network.get('SupportedSecurityTypes', '')
         net.SystemMode = network.get('SystemMode', '')
         net.AddedAt = network.get('AddedAt', '')
@@ -288,10 +293,17 @@ def ReadKnownNetworksPlist(plist, networks, source):
         net.JoinedByUserAt = network.get('JoinedByUserAt', '')
         try:
             net.LastConnected = max(net.JoinedByUserAt, net.JoinedBySystemAt)
-        except Exception as ex:
-            net.LastConnected = ''
-            log.debug("Exception determining last connected time " + str(ex))
+        except (ValueError,TypeError) as ex:
+            # one or both of the values is bad, or non-existent
+            if net.JoinedBySystemAt == '' and net.JoinedByUserAt == '':
+                net.LastConnected = ''
+            elif net.JoinedByUserAt == '':
+                net.LastConnected = net.JoinedBySystemAt
+            else:
+                net.LastConnected = net.JoinedByUserAt
+            #log.debug("Exception determining last connected time " + str(ex))
         net.UpdatedAt = network.get('UpdatedAt', '')
+        net.LastDiscoveredAt = network.get('LastDiscoveredAt', '') # seen in macOS 13
         #net.usage = details.get('networkUsage', None) # only on ios?
         details = network.get('__OSSpecific__', None)
         if details:
@@ -325,6 +337,12 @@ def ReadKnownNetworksPlist(plist, networks, source):
             net.RoamingProfileType = details.get('RoamingProfileType', '')
             net.Captive = details.get('CaptiveProfile', {}).get('CaptiveNetwork', False)
             net.TemporarilyDisabled = details.get('TemporarilyDisabled', False)
+        for bss in network.get('BSSList', []):
+            net.BSSIDHistory += ',[MAC={}, {}]'.format(
+                                    bss.get('BSSID',''), 
+                                    str(bss.get('LastAssociatedAt', '')) )
+        if net.BSSIDHistory:
+            net.BSSIDHistory = net.BSSIDHistory.lstrip(',')
         networks.append(net)
 
 def Plugin_Start(mac_info):
