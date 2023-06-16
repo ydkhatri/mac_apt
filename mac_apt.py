@@ -220,7 +220,7 @@ def IsMacOsPartition(img, partition_start_offset, mac_info):
     try:
         fs = pytsk3.FS_Info(img, offset=partition_start_offset)    
         fs_info = fs.info # TSK_FS_INFO
-        if (fs_info.ftype != pytsk3.TSK_FS_TYPE_HFS_DETECT):
+        if fs_info.ftype not in (pytsk3.TSK_FS_TYPE_HFS, pytsk3.TSK_FS_TYPE_HFS_DETECT):
             log.info (" Skipping non-HFS partition")
             return False
 
