@@ -445,7 +445,14 @@ def ProcessVolumeStore(mac_info, spotlight_base_path, export_prefix=''):
     '''
     Process the main Spotlight-V100 database usually found on the volume's root.
     '''
-    spotlight_folder = spotlight_base_path + '/Store-V2/'
+
+    if mac_info.IsValidFolderPath(spotlight_base_path + '/Store-V2/'):
+        spotlight_folder = spotlight_base_path + '/Store-V2/'
+    elif mac_info.IsValidFolderPath(spotlight_base_path + '/Store-V1/'):
+        spotlight_folder = spotlight_base_path + '/Store-V1/'
+    else:
+        log.error(f'Neither Store-V1 or Store-V2 folders were found in {spotlight_folder}. Cannot proceed.')
+        return
     vol_config_plist_path = spotlight_base_path + '/VolumeConfiguration.plist'
     if mac_info.IsValidFilePath(vol_config_plist_path):
         mac_info.ExportFile(vol_config_plist_path, __Plugin_Name, export_prefix, False)
