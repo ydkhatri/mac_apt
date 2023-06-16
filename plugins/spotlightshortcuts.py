@@ -65,7 +65,10 @@ def ReadShortcutPlist(plist, shortcuts, source='', user=''):
                 ReadSingleShortcutEntry(item, value, shortcuts, True, source, user) 
         else :
             for item, value in plist.items():
-                ReadSingleShortcutEntry(item, value, shortcuts, False, source, user)
+                if isinstance(value, dict):
+                    ReadSingleShortcutEntry(item, value, shortcuts, False, source, user)
+                else:
+                    log.debug(f'{item} = {str(value)} is not a dictionary')
     except ValueError as ex:
         log.exception('Error reading plist')
 
