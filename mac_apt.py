@@ -134,14 +134,16 @@ def OpenExtentDataFiles(vmdk_handle, base_directory):
         file_object = open(extent_data_file_path, "rb")
         file_objects.append(file_object)
 
-    vmdk_handle.open_extent_data_files_file_objects(file_objects)
+    vmdk_handle.open_extent_data_files_file_objects(file_objects) # removed in 20221124
 
 def GetImgInfoObjectForVMDK(path):
     vmdk_handle = pyvmdk.handle()
     vmdk_handle.open(path)
     base_directory = os.path.dirname(path)
-    #vmdk_handle.open_extent_data_files() Broken in current version #20170226
-    OpenExtentDataFiles(vmdk_handle, base_directory)
+    if pyvmdk.get_version() < '20221124':
+        OpenExtentDataFiles(vmdk_handle, base_directory)
+    else:
+        vmdk_handle.open_extent_data_files() #Broken in current version #20170226, works in #20221124
     img_info = vmdk_Img_Info(vmdk_handle)
     return img_info
 ####### End special handling for VMDK #########
