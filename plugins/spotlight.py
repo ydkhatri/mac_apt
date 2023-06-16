@@ -449,7 +449,7 @@ def ProcessVolumeStore(mac_info, spotlight_base_path, export_prefix=''):
     if mac_info.IsValidFolderPath(spotlight_base_path + '/Store-V2/'):
         spotlight_folder = spotlight_base_path + '/Store-V2/'
     elif mac_info.IsValidFolderPath(spotlight_base_path + '/Store-V1/'):
-        spotlight_folder = spotlight_base_path + '/Store-V1/'
+        spotlight_folder = spotlight_base_path + '/Store-V1/Stores/'
     else:
         log.error(f'Neither Store-V1 or Store-V2 folders were found in {spotlight_folder}. Cannot proceed.')
         return
