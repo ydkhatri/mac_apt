@@ -38,11 +38,14 @@ ARD | Reads ARD (Apple Remote Desktop) cached databases about app usage
 AUTOSTART | Retrieves programs, daemons, services set to start at boot/login
 BASICINFO | Basic machine & OS configuration like SN, timezone, computer name, last logged in user, HFS info
 BLUETOOTH | Gets Bluetooth Artifacts
-CHROME | Read Chrome History, Top Sites, Downloads and Extension info
+CHROMIUM | Read Chromium Browsers (Edge, Chrome, Opera,..) History, Top Sites, Downloads and Extension info
+CFURLCACHE | Reads CFURL cache to URLs, requests and responses
 COOKIES | Reads .binarycookies, .cookies files and HSTS.plist for each user
 DOCKITEMS | Reads the Dock plist for every user
 DOCUMENTREVISIONS | Reads DocumentRevisions database
 DOMAINS | Active Directory Domain(s) that the mac is connected to
+FILESHARING | Read shared folder info
+FIREFOX | Read internet history from Mozilla Firefox browser
 FSEVENTS | Reads file system event logs (from .fseventsd)
 IDEVICEBACKUPS | Reads and exports iPhone/iPad backup databases
 IDEVICEINFO | Reads and exports connected iDevice details
@@ -69,6 +72,7 @@ TERMSESSIONS | Reads Terminal (bash & zsh) history & sesions for every user
 UNIFIEDLOGS | Reads macOS unified logging logs from .tracev3 files
 USERS | Local & Domain user information - name, UID, UUID, GID, account creation & password set dates, pass hints, homedir & Darwin paths
 WIFI | Gets wifi network information
+XPROTECTDIAG | Reads XProtect diagnostic files
 
 ### Coming soon..
 * More plugins
@@ -77,7 +81,7 @@ WIFI | Gets wifi network information
 For installation (to run from code) see https://github.com/ydkhatri/mac_apt/wiki/Installation-for-Python3  
 **Please read the documentation here:** https://github.com/ydkhatri/mac_apt/wiki
 
-To download, proceed here - https://github.com/ydkhatri/mac_apt/releases
+To download windows binaries, proceed here - https://github.com/ydkhatri/mac_apt/releases
 
 ## Bugs
 Feel free to send comments and feedback to yogesh@swiftforensics.com, or open an [issue](https://github.com/ydkhatri/mac_apt/issues).  
