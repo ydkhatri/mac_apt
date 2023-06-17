@@ -17,7 +17,7 @@
 #
 # Script Name  : spotlight_parser.py
 # Author       : Yogesh Khatri
-# Last Updated : 01/06/2023
+# Last Updated : 17/06/2023
 # Requirement  : Python 3.7, modules ( lz4, pyliblzfse )
 #                Dependencies can be installed using the command 'pip install lz4 pyliblzfse' 
 # 
@@ -65,7 +65,7 @@ try:
 except ImportError:
     print("liblzfse not found. Won't decompress lzfse/lzvn streams")
 
-__VERSION__ = '1.0.1'
+__VERSION__ = '1.0.2'
 
 log = logging.getLogger('SPOTLIGHT_PARSER')
 
@@ -514,7 +514,7 @@ class FileMetaDataListing:
                                 cat = categories.get(value, None)
                                 if cat == None:
                                     log.error('error getting category for index={}  prop_type={}  prop_name={}'.format(v, prop_type, prop_name))
-                                    value = ''
+                                    value = b''
                                 else:
                                     value = cat
                                 value = value.decode('utf8', 'backslashreplace')
@@ -794,6 +794,9 @@ class SpotlightStore:
         # Parse data file
         data_version = struct.unpack("<H", data_content[0:2])
         for index, offset in offsets:
+            if offset >= len(data_content):
+                log.error(f'Index ({index}) Offset ({offset})> filesize ({len(data_content)}) in ParseCategoriesFromFileData()')
+                continue
             entry_size, bytes_moved = SpotlightStore.ReadVarSizeNum(data_content[offset:])
             name = data_content[offset + bytes_moved:offset + bytes_moved + entry_size].split(b'\x00')[0]
             self.categories[index] = name
@@ -829,6 +832,9 @@ class SpotlightStore:
         pos = 0
         for index, offset in offsets:
             pos = offset
+            if pos >= len(data_content):
+                log.error(f'Index ({index}) Offset ({offset})> filesize ({len(data_content)}) in ParseIndexesFromFileData()')
+                continue
             entry_size, bytes_moved = SpotlightStore.ReadIndexVarSizeNum(data_content[pos:])
             pos += bytes_moved
             index_size, bytes_moved = SpotlightStore.ReadVarSizeNum(data_content[pos:])
