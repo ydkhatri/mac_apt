@@ -1,15 +1,17 @@
-pip >= 7.0.0
+anytree
 biplist
-construct == 2.8.10
-enum34
+construct==2.9.45
+cryptography
 kaitaistruct
-# warning: PyPI provides the experimental version
-# libewf-python
+libewf-python
+libvmdk-python
 lz4
-pkipplib
-# warning: failing due to missing liblzfse header files
-# See: https://github.com/dimkr/pylzfse/issues/4
-# pylzfse
-pytsk3
-tzlocal
+nska_deserialize
+pillow
+plistutils
+pybindgen==0.21.0
+pycryptodome
+pyliblzfse
+pytsk3==20230125
 xlsxwriter
+other_dependencies/pyaff4-0.31-yk.zip
