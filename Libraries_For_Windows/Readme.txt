@@ -1,3 +1,8 @@
+** THESE ARE NO LONGER PUBLISHED SINCE v1.5.7 AS THE RECOMMENDED
+   METHOD IS INSTALLING DEPENDENCIES VIA PIP FROM THE REQUIREMENTS.TXT 
+   FILE. SEE THE WIKI LINK BELOW FOR ISSUES INSTALLING VIA PIP:
+   https://github.com/ydkhatri/mac_apt/wiki/Installation-for-Python3 **   
+
 You will need to copy the .pyd files contained here into your python 
 installation folder under Lib\site-packages\
 
