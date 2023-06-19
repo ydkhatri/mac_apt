@@ -67,7 +67,7 @@ SCREENTIME | Reads ScreenTime database for program and app usage
 SPOTLIGHT | Reads the spotlight index databases
 SPOTLIGHTSHORTCUTS | User typed data in the spotlight bar & targeted document/app
 SUDOLASTRUN | Gets last time sudo was used and a few other times earlier (if available)
-TCC | Reads TCC database
+TCC | Reads Transparency, Consent and Control (TCC) database
 TERMINALSTATE | Reads Terminal saved state files which includes full text content of terminal windows
 TERMSESSIONS | Reads Terminal (bash & zsh) history & sesions for every user
 UNIFIEDLOGS | Reads macOS unified logging logs from .tracev3 files
