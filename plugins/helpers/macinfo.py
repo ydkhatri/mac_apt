@@ -1036,6 +1036,9 @@ class ApfsMacInfo(MacInfo):
             uuid = ''
             update_plist_path = '/nvram.plist'
             log.debug(f"Trying to read RSR related UUID from {update_plist_path}")
+            if self.apfs_update_volume is None:
+                log.info('No Update volume found!')
+                return info
             f = self.apfs_update_volume.open(update_plist_path)
             if f != None:
                 success, plist, error = CommonFunctions.ReadPlist(f)
