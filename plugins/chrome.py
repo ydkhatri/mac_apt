@@ -454,9 +454,10 @@ def Plugin_Start(mac_info):
     '''Main Entry point function for plugin'''
     chromium_browsers = {'Chrome': '{}/Library/Application Support/Google/Chrome/',
                          'Edge': '{}/Library/Application Support/Microsoft Edge/',
-                         'Opera': '{}/Library/Application Support/com.operasoftware.Opera/',  # Does not support profiles
+                         'Opera': '{}/Library/Application Support/com.operasoftware.Opera/',  # Does not support multiple profiles
                          'Vivaldi': '{}/Library/Application Support/Vivaldi/',
-                         'Brave': '{}/Library/Application Support/BraveSoftware/Brave-Browser/'}
+                         'Brave': '{}/Library/Application Support/BraveSoftware/Brave-Browser/',
+                         'Arc': '{}/Library/Application Support/Arc/User Data/'}
 
     profile_regex = '(Default|Profile \d+|Guest Profile)'
 
