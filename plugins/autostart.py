@@ -434,6 +434,8 @@ def Plugin_Start(mac_info):
         files_list = mac_info.ListItemsInFolder(backgrounditems_btm_base_path, EntryType.FILES, include_dates=False)
         for file_entry in files_list:
                 backgrounditems_btm_path = os.path.join(backgrounditems_btm_base_path, file_entry['name'])
+                if mac_info.is_windows:
+                    backgrounditems_btm_path = backgrounditems_btm_path.replace('\\', '/')
                 process_backgrounditems_btm(mac_info, backgrounditems_btm_path, 'root', 0, persistent_programs)
 
     # system overrides
