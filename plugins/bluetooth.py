@@ -348,7 +348,7 @@ def Plugin_Start(mac_info):
         if success:
             cache_list = ReadBluetoothPlist(plist, bluetooth_path)
     else:
-        log.error('com.apple.Bluetooth.plist not found')
+        log.warning(f'{bluetooth_path} not found')
 
     if mac_info.IsValidFilePath(mobile_bluetooth_path):
         mac_info.ExportFile(mobile_bluetooth_path, __Plugin_Name)
@@ -356,7 +356,7 @@ def Plugin_Start(mac_info):
         if success:
             ReadMobileBluetoothPlist(plist, mobile_bluetooth_path, cache_list)
     else:
-        log.error('com.apple.MobileBluetooth.devices.plist not found')
+        log.warning(f'{mobile_bluetooth_path} not found')
 
     # Write it all out.
     if len(cache_list) > 0:

@@ -266,13 +266,10 @@ def Plugin_Start(mac_info):
             folders_list = mac_info.ListItemsInFolder(source_path, EntryType.FOLDERS, include_dates=False)
             profile_names = (x['name'] for x in folders_list)
             for profile_name in profile_names:
-                places_db_path = os.path.join(source_path, profile_name, 'places.sqlite')
-                formhistory_db_path = os.path.join(source_path, profile_name, 'formhistory.sqlite')
-                extensions_json_path = os.path.join(source_path, profile_name, 'extensions.json')
-                if mac_info.is_windows:
-                    places_db_path = places_db_path.replace('\\', '/')
-                    formhistory_db_path = formhistory_db_path.replace('\\', '/')
-                    extensions_json_path = extensions_json_path.replace('\\', '/')
+                places_db_path = f'{source_path}/{profile_name}/places.sqlite'
+                formhistory_db_path = f'{source_path}/{profile_name}/formhistory.sqlite'
+                extensions_json_path = f'{source_path}/{profile_name}/extensions.json'
+
                 ExtractAndReadDb(mac_info, firefox_artifacts, user_name, places_db_path, process_places)
                 ExtractAndReadDb(mac_info, firefox_form_artifacts, user_name, formhistory_db_path, process_formhistory)
                 ExtractAndReadFile(mac_info, firefox_artifacts, user_name, extensions_json_path, process_extensions)
