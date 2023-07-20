@@ -326,7 +326,7 @@ def process_overrides(mac_info, file_path, user, uid, persistent_programs):
             else:
                 log.error('Did not find "Disabled" in override for {}'.format(k))
     else:
-        log.error("Problem reading plist for {} - {}".format(full_path, error))
+        log.error("Problem reading plist for {} - {}".format(file_path, error))
 
 def ProcessLoginRestartApps(mac_info, persistent_programs):
     '''Gets apps/windows set to relaunch upon re-login (after logout)'''
@@ -433,7 +433,7 @@ def Plugin_Start(mac_info):
     if mac_info.IsValidFolderPath(backgrounditems_btm_base_path):
         files_list = mac_info.ListItemsInFolder(backgrounditems_btm_base_path, EntryType.FILES, include_dates=False)
         for file_entry in files_list:
-                backgrounditems_btm_path = os.path.join(backgrounditems_btm_base_path, file_entry['name'])
+                backgrounditems_btm_path = backgrounditems_btm_base_path + '/' + file_entry['name']
                 process_backgrounditems_btm(mac_info, backgrounditems_btm_path, 'root', 0, persistent_programs)
 
     # system overrides

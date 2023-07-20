@@ -149,7 +149,7 @@ def ParseCFURLEntry(db, cfurl_cache_artifacts, username, app_bundle_id, cfurl_ca
 
 
 def ExtractAndReadCFURLCache(mac_info, cfurl_cache_artifacts, username, app_bundle_id, folder_path):
-    cfurl_cache_db_path = os.path.join(folder_path, 'Cache.db')
+    cfurl_cache_db_path = folder_path + '/Cache.db'
     db, wrapper = OpenDbFromImage(mac_info, cfurl_cache_db_path, username)
     if db:
         ParseCFURLEntry(db, cfurl_cache_artifacts, username, app_bundle_id, cfurl_cache_db_path)
@@ -181,7 +181,7 @@ def PrintAll(cfurl_cache_artifacts, output_params, source_path):
 def Plugin_Start(mac_info):
     '''Main Entry point function for plugin'''
     cfurl_cache_artifacts = []
-    cfurl_cache_base_path = '{}/Library/Caches/'
+    cfurl_cache_base_path = '{}/Library/Caches'
     processed_paths = set()
 
     for user in mac_info.users:
@@ -194,8 +194,8 @@ def Plugin_Start(mac_info):
         cache_folder_list = mac_info.ListItemsInFolder(base_path, EntryType.FOLDERS, include_dates=False)
         app_bundle_ids = [folder_item['name'] for folder_item in cache_folder_list]
         for app_bundle_id in app_bundle_ids:
-            cache_folder_path = os.path.join(cfurl_cache_base_path.format(user.home_dir), app_bundle_id)
-            cache_db_path = os.path.join(cache_folder_path, 'Cache.db')
+            cache_folder_path = cfurl_cache_base_path.format(user.home_dir) + '/' + app_bundle_id
+            cache_db_path = f'{cache_folder_path}/Cache.db'
             if mac_info.IsValidFilePath(cache_db_path) and mac_info.GetFileSize(cache_db_path) > 0:
                 ExtractAndReadCFURLCache(mac_info, cfurl_cache_artifacts, user.user_name, app_bundle_id, cache_folder_path)
 
