@@ -236,6 +236,18 @@ class CommonFunctions:
         except sqlite3Error as ex:
             log.error ("Failed to list tables on db. Error Details: {}".format(str(ex)))
         return ''
+    
+    @staticmethod
+    def convert_32bit_num_to_signed(num):
+        '''
+            Some numbers are stored as their unsigned versions.
+            For example: 
+              UID is typically stored as its unsigned version
+              -2 is stored as 4294967294
+        '''
+        if num > 0x7fffffff: # convert to its signed version
+            num = num - 4294967296
+        return num
 
     @staticmethod
     def replace_all_hex_int_with_int(xml_text):

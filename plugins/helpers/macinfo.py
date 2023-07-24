@@ -958,7 +958,7 @@ class MacInfo:
                             found_user = True
                             break
                     if not found_user:
-                        log.error('Could not find username for UID={} GID={}'.format(uid, gid))
+                        log.error('Could not find username for UID={} GID={} PATH={}'.format(uid, gid, path))
 
     def _GetSystemInfo(self):
         ''' Gets system version information'''
@@ -1535,10 +1535,10 @@ class MountedMacInfo(MacInfo):
         success, uid, gid = False, 0, 0
         try:
             stat = os.stat(path)
-            uid = str(stat.st_uid)
-            gid = str(stat.st_gid)
+            uid = str(CommonFunctions.convert_32bit_num_to_signed(stat.st_uid))
+            gid = str(CommonFunctions.convert_32bit_num_to_signed(stat.st_gid))
             success = True
-        except OSError as ex:
+        except (OSError, ValueError) as ex:
             log.error("Exception trying to get uid & gid for file " + path + ' Exception details: ' + str(ex))
         return success, uid, gid
 

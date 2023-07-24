@@ -452,8 +452,7 @@ def Plugin_Start(mac_info):
                     uid_str = full_name[26:]
                     uid = CommonFunctions.IntFromStr(uid_str, error_val=None)
                     if uid != None:
-                        if uid > 0x7fffffff: # convert to its signed version
-                            uid = uid - 4294967296 # 4294967294 becomes -2
+                        uid = CommonFunctions.convert_32bit_num_to_signed(uid)
                         uid_str = str(uid)
                         user_name = ''
                         for user in mac_info.users:
