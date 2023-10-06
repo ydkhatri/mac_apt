@@ -991,6 +991,7 @@ class MacInfo:
                         elif self.os_version.startswith('11.'): self.os_friendly_name = 'Big Sur'
                         elif self.os_version.startswith('12.'): self.os_friendly_name = 'Monterey'
                         elif self.os_version.startswith('13.'): self.os_friendly_name = 'Ventura'
+                        elif self.os_version.startswith('14.'): self.os_friendly_name = 'Sonoma'
                         else: self.os_friendly_name = 'Unknown version!'
                     log.info ('macOS version detected is: {} ({}) Build={}'.format(self.os_friendly_name, self.os_version, self.os_build))
                     f.close()
