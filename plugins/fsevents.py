@@ -15,7 +15,7 @@ import struct
 
 __Plugin_Name = "FSEVENTS"
 __Plugin_Friendly_Name = "Fsevents"
-__Plugin_Version = "1.0"
+__Plugin_Version = "1.2"
 __Plugin_Description = "Reads file system event logs (from .fseventsd)"
 __Plugin_Author = "Yogesh Khatri"
 __Plugin_Author_Email = "yogesh@swiftforensics.com"
@@ -104,7 +104,7 @@ data_writer = ChunkedDataWriter()
 out_params = None
 total_logs_processed = 0
 
-# [log_id, log_event_flag, log_filepath, log_file_id, source_date, source]
+# [log_id, log_event_flag, log_filepath, log_file_id, log_unknown, source_date, source]
 def PrintAll(logs):
     global FlagValues
     global TypeValues
@@ -113,7 +113,8 @@ def PrintAll(logs):
     fsevent_info = [ ('LogID',DataType.TEXT),
                      ('EventFlagsHex',DataType.TEXT),('EventType',DataType.TEXT),('EventFlags',DataType.TEXT),
                      ('Filepath',DataType.TEXT),
-                     ('File_ID',DataType.INTEGER),('SourceModDate',DataType.DATE),('Source',DataType.TEXT)
+                     ('File_ID',DataType.INTEGER),('Log_Unknown',DataType.INTEGER),
+                     ('SourceModDate',DataType.DATE),('Source',DataType.TEXT)
                    ]
 
     log.info ("Writing " + str(len(logs)) + " fsevent(s)")
@@ -122,7 +123,7 @@ def PrintAll(logs):
         e_item =  [ "{:016X}".format(x[0]), 
                     "{:08X}".format(x[1]), GetEventFlagsString(x[1], TypeValues), GetEventFlagsString(x[1], FlagValues), 
                     x[2],
-                    x[3], x[4], x[5]
+                    x[3], x[4], x[5], x[6]
                   ]
         fsevent_list.append(e_item)
     data_writer.WriteListPartial("fsevents information", "FsEvents", fsevent_list, fsevent_info, out_params, '')
@@ -162,8 +163,9 @@ def ParseData(buffer, logs, source_date, source):
     
     header_sig, unknown, file_size = struct.unpack("<4sII", buffer[0:12])
     #Changed header_sig encoding so that it would actually match true against a string
+    is_version3 = (str(header_sig, 'utf-8') == '3SLD')
     is_version2 = (str(header_sig, 'utf-8') == '2SLD')
-    is_version_unknown = (not is_version2) and (str(header_sig, 'utf-8') != '1SLD')
+    is_version_unknown = (not is_version2) and (not is_version3) and (str(header_sig, 'utf-8') != '1SLD')
 
     if is_version_unknown:
         log.error("Unsupported version, header = {}".format(str(header_sig)))
@@ -172,20 +174,27 @@ def ParseData(buffer, logs, source_date, source):
     pos = 12
 
     try:
+        if is_version3:
+            while pos < min(buffer_size, file_size): # buffer size is always larger, this skips the junk data at its end
+                log_filepath, pos = ReadCString(buffer, buffer_size, pos)
+                log_id, log_event_flag, log_file_id, log_unknown = struct.unpack("<QIqi", buffer[pos:pos+24])
+                pos += 24
+                num_logs_processed += 1
+                logs.append([log_id, log_event_flag, log_filepath, log_file_id, log_unknown, source_date, source])
         if is_version2:
             while pos < min(buffer_size, file_size): # buffer size is always larger, this skips the junk data at its end
                 log_filepath, pos = ReadCString(buffer, buffer_size, pos)
                 log_id, log_event_flag, log_file_id = struct.unpack("<QIq", buffer[pos:pos+20])
                 pos += 20
                 num_logs_processed += 1
-                logs.append([log_id, log_event_flag, log_filepath, log_file_id, source_date, source])
+                logs.append([log_id, log_event_flag, log_filepath, log_file_id, None, source_date, source])
         else:
             while pos < min(buffer_size, file_size):
                 log_filepath, pos = ReadCString(buffer, buffer_size, pos)
                 log_id, log_event_flag = struct.unpack("<QI", buffer[pos:pos+12])
                 pos += 12
                 num_logs_processed += 1
-                logs.append([log_id, log_event_flag, log_filepath, None, source_date, source])
+                logs.append([log_id, log_event_flag, log_filepath, None, None, source_date, source])
     except (ValueError, IndexError, struct.error):
         log.exception('Error processing stream from file {}, stream pos was {}'.format(source, pos))
     if len(logs) > 500000:
@@ -271,7 +280,7 @@ def Plugin_Start(mac_info):
 
     #if hasattr(mac_info, 'BuildFullPath') or isinstance(mac_info, ZipMacInfo): # its a MOUNTED or live image
     os_ver = mac_info.GetVersionDictionary()
-    if (os_ver['major'] == 10 and os_ver['minor'] >= 15) or os_ver['major'] == 11:
+    if (os_ver['major'] == 10 and os_ver['minor'] >= 15) or os_ver['major'] >= 11:
         # Then also get DATA volume's FSEVENTS from /System/Volumes/Data
         file_list = mac_info.ListItemsInFolder('/System/Volumes/Data/.fseventsd', EntryType.FILES, True)
         ProcessFsevents(logs, '/System/Volumes/Data/.fseventsd', file_list, mac_info)
