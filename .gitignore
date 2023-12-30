@@ -1,7 +1,7 @@
 
 .vscode/
 .idea/
-
+other_dependencies/pyaff4-0.31
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[co]

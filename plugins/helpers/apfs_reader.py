@@ -2196,6 +2196,7 @@ class ApfsFileCompressed(ApfsFile):
                 req_start = self.uncomp_pointer
                 if self.compression_type == 4:   # zlib
                    # Determine chunks to decryt
+                    z_decomp_obj = zlib.decompressobj()
                     chunks_to_decompress = self.getChunkList(self.zlib_info.chunk_info, req_start, size)
                     for chunk_offset, chunk_size, uncomp_offset_start, uncomp_offset_end in chunks_to_decompress:
                         super().seek(self.zlib_info.header_size + 4 + chunk_offset)
@@ -2203,7 +2204,7 @@ class ApfsFileCompressed(ApfsFile):
                         if compressed_data[0] == 0xFF:
                             decompressed += compressed_data[1 : chunk_size]
                         else:
-                            decompressed += zlib.decompress(compressed_data)
+                            decompressed += z_decomp_obj.decompress(compressed_data)
                 elif self.compression_type == 8: # lzvn
                     chunks_to_decompress = self.getChunkList(self.lzvn_info.chunk_info, req_start, size)
                     for chunk_offset, chunk_size, uncomp_offset_start, uncomp_offset_end in chunks_to_decompress:
