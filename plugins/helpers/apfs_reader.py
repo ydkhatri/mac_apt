@@ -1145,6 +1145,10 @@ class ApfsVolume:
 
     def DoesFileExist(self, path):
         '''Returns True if file exists'''
+        ### FOR DEBUG ONLY
+        if path.find('\\') >= 0:
+            log.debug(f'In ApfsVolume::DoesFileExist(), found \\ in path: {path}')
+        ###
         apfs_file_meta = self.GetApfsFileMeta(path)
         if apfs_file_meta:
             return apfs_file_meta.item_type in (8, 10) # will also return true for symlink which may point to folder!
@@ -1152,6 +1156,10 @@ class ApfsVolume:
 
     def DoesFolderExist(self, path):
         '''Returns True if folder exists'''
+        ### FOR DEBUG ONLY
+        if path.find('\\') >= 0:
+            log.debug(f'In ApfsVolume::DoesFolderExist(), found \\ in path: {path}')
+        ###
         if path != '/' and path.endswith('/'):
             path = path[:-1]
         apfs_file_meta = self.GetApfsFileMeta(path)

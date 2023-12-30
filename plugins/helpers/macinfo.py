@@ -9,6 +9,7 @@
 
 import logging
 import os
+import posixpath
 import random
 import shutil
 import sqlite3
@@ -216,6 +217,10 @@ class NativeHfsParser:
 
     def IsValidFilePath(self, path):
         '''Check if a file path is valid, does not check for folders!'''
+        ### FOR DEBUG ONLY
+        if path.find('\\') >= 0:
+            log.warning(f'In NativeHfsParser::IsValidFilePath(), found \\ in path: {path}')
+        ###
         try:
             return self.volume.IsValidFilePath(path)
         except ValueError:
@@ -224,6 +229,10 @@ class NativeHfsParser:
 
     def IsValidFolderPath(self, path):
         '''Check if a folder path is valid'''
+        ### FOR DEBUG ONLY
+        if path.find('\\') >= 0:
+            log.warning(f'InNativeHfsParser::IsValidFolderPath(), found \\ in path: {path}')
+        ###
         try:
             return self.volume.IsValidFolderPath(path)
         except ValueError:
@@ -348,7 +357,7 @@ class MacInfo:
         curr_paths = current_abs_path.rstrip('/').lstrip('/').split('/')
         if len(curr_paths) == 1 and curr_paths[0] == '':
             curr_paths = []
-        rel_paths = os.path.normpath(dest_rel_path).split('/')
+        rel_paths = posixpath.normpath(dest_rel_path).split('/')
 
         curr_path_index = len(curr_paths)
         for x in rel_paths:
@@ -458,6 +467,10 @@ class MacInfo:
            It is much faster to skip the check if not needed.
            The Function returns False if it fails to export the file.
         '''
+        ### FOR DEBUG ONLY
+        if artifact_path.find('\\') >= 0:
+            log.warning(f'In MacInfo::ExportFile(), found \\ in path: {artifact_path}')
+        ###
         export_path = os.path.join(self.output_params.export_path, subfolder_name)
         # create folder
         try:
@@ -536,6 +549,10 @@ class MacInfo:
 
     def IsValidFilePath(self, path):
         '''Check if a file path is valid, does not check for folders!'''
+        ### FOR DEBUG ONLY
+        if path.find('\\') >= 0:
+            log.warning(f'In MacInfo::IsValidFilePath(), found \\ in path: {path}')
+        ###
         if self.use_native_hfs_parser:
             return self.hfs_native.IsValidFilePath(path)
         try:
@@ -547,6 +564,10 @@ class MacInfo:
 
     def IsValidFolderPath(self, path):
         '''Check if a folder path is valid'''
+        ### FOR DEBUG ONLY
+        if path.find('\\') >= 0:
+            log.warning(f'In MacInfo::IsValidFolderPath(), found \\ in path: {path}')
+        ###
         if self.use_native_hfs_parser:
             return self.hfs_native.IsValidFolderPath(path)
         try:
@@ -1406,6 +1427,10 @@ class MountedMacInfo(MacInfo):
         return False
 
     def IsValidFilePath(self, path):
+        ### FOR DEBUG ONLY
+        if path.find('\\') >= 0:
+            log.warning(f'In MountedMacInfo::IsValidFilePath(), found \\ in path: {path}')
+        ###
         try:
             return os.path.lexists(self.BuildFullPath(path)) 
         except OSError as ex:
@@ -1778,6 +1803,10 @@ class ZipMacInfo(MacInfo):
         return False
 
     def IsValidFilePath(self, path):
+        ### FOR DEBUG ONLY
+        if path.find('\\') >= 0:
+            log.warning(f'In ZipMacInfo::IsValidFilePath(), found \\ in path: {path}')
+        ###
         try:
             info = self.zip_file.getinfo(path[1:])
             return not info.is_dir() # check if its not folder
@@ -1786,6 +1815,10 @@ class ZipMacInfo(MacInfo):
         return False
 
     def IsValidFolderPath(self, path):
+        ### FOR DEBUG ONLY
+        if path.find('\\') >= 0:
+            log.warning(f'In ZipMacInfo::IsValidFolderPath(), found \\ in path: {path}')
+        ###
         try:
             if path[-1] != '/': # For Axiom created zip files, folders have their own objects, which end in /
                 path += '/'

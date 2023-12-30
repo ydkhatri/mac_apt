@@ -247,6 +247,12 @@ def process_dir(mac_info, path, persistent_programs, method, user_name, uid):
                     full_path = mac_info.GetAbsolutePath(posixpath.split(full_path)[0], target_path)
                 else:
                     full_path = target_path
+            if full_path.startswith('/System/Cryptexes/App/'):
+                # This is a sym link to /../../System/Volumes/Preboot/Cryptexes/App   
+                # Read from mac_info.apfs_preboot_volume.
+                pass #TODO
+                # TODO - change ExportFile and some other functions to accept a volume, or perhaps better to 
+                #        add Preboot volume to the Combined_Volume after reading the 
 
             mac_info.ExportFile(full_path, __Plugin_Name, user_name + "_", False)
 
