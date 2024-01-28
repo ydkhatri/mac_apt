@@ -974,7 +974,7 @@ class SpotlightStore:
                         uncompressed = lz4.block.decompress(block_data[20:compressed_block.logical_size], compressed_block.unknown - 20)
                 else: # zlib compression
                     #compressed_size = compressed_block.logical_size - 20
-                    uncompressed = zlib.decompress(block_data[20:compressed_block.logical_size])
+                    uncompressed = zlib.decompressobj().decompress(block_data[20:compressed_block.logical_size])
             except (ValueError,  lz4.block.LZ4BlockError, liblzfse.error) as ex:
                 log.error("Decompression error for block @ 0x{:X}\r\n{}".format(index[1] * 0x1000 + 20, str(ex)))
                 if len(uncompressed) == 0: continue
