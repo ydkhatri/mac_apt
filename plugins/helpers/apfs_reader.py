@@ -1722,7 +1722,7 @@ class ApfsExtent:
         num_full_blocks_needed = self.size // volume.block_size
         partial_block_size = self.size % volume.block_size
 
-        data = b''
+        data = bytearray()
         for b in range(num_full_blocks_needed):
             data += volume.get_raw_decrypted_block(self.block_num + b, encryption_key)
         if partial_block_size > 0:
@@ -1771,7 +1771,7 @@ class ApfsFile():
 
     def _GetDataFromExtents(self, extents, total_size):
         '''Retrieves data from extents'''
-        content = b''
+        content = bytearray()
         if total_size == 0: 
             return content
         bytes_left = total_size
@@ -2245,7 +2245,7 @@ class ApfsFileCompressed(ApfsFile):
                 if compressed_data[start] == 0xFF:
                     decompressed += compressed_data[start + 1 : start + chunk_size]
                 else:
-                    decompressed += zlib.decompress(compressed_data[start : start + chunk_size])
+                    decompressed += zlib.decompressobj().decompress(compressed_data[start : start + chunk_size])
         elif compression_type == 8: # lzvn in ResourceFork
             # The following is only for lzvn, not encountered lzfse yet!
             full_uncomp = uncompressed_size
@@ -2293,7 +2293,7 @@ class ApfsFileCompressed(ApfsFile):
             if (uncompressed_size <= total_len - 16) and (decmpfs[16] == 0xFF):
                 decompressed = decmpfs[17:]
             else:
-                decompressed = zlib.decompress(decmpfs[16:])
+                decompressed = zlib.decompressobj().decompress(decmpfs[16:])
         elif compression_type in [4, 8, 12]: # types in ResourceFork
             log.error (f"compression_type = {compression_type} in DecompressInline --> ERROR! Should not go here! data_size={len(decmpfs)} " + str(decmpfs))
         elif compression_type == 7: # LZVN inline
