@@ -132,33 +132,45 @@ def GetMacSerialNum(mac_info):
 # Sources - /private/etc/localtime and /Library/Preferences/.GlobalPreferences.plist
 def GetTimezone(mac_info):
     global_pref_plist_path = '/Library/Preferences/.GlobalPreferences.plist'
-    mac_info.ExportFile(global_pref_plist_path, __Plugin_Name, '', False)
-    success, plist, error_message = mac_info.ReadPlist(global_pref_plist_path)
-    num_items_read = 0
-    if success:
-        for item in ['CountryCode','Latitude','Longitude','Name','RegionalCode','TimeZoneName','Version']:
-            try:
-                data = plist['com.apple.preferences.timezone.selected_city'][item]
-                basic_data.append(['TIMEZONE', 'SelectedCity.' + item, data, '', global_pref_plist_path])
-                num_items_read += 1
-            except KeyError: pass
-        mac_version_dict = mac_info.GetVersionDictionary()
-        if num_items_read < 2 and (mac_version_dict['major'] == 10) and (mac_version_dict['minor'] < 12): # Not seen in later versions!
-            log.info('Only read {} items from TimeZone.SelectedCity, this does not seem right!'.format(num_items_read))
+    if mac_info.IsValidFilePath(global_pref_plist_path):
+        mac_info.ExportFile(global_pref_plist_path, __Plugin_Name, '', False)
+        success, plist, error_message = mac_info.ReadPlist(global_pref_plist_path)
+        num_items_read = 0
+        if success:
+            for item in ['CountryCode','Latitude','Longitude','Name','RegionalCode','TimeZoneName','Version']:
+                try:
+                    data = plist['com.apple.preferences.timezone.selected_city'][item]
+                    basic_data.append(['TIMEZONE', 'SelectedCity.' + item, data, '', global_pref_plist_path])
+                    num_items_read += 1
+                except KeyError: pass
+            mac_version_dict = mac_info.GetVersionDictionary()
+            if num_items_read < 2 and (mac_version_dict['major'] == 10) and (mac_version_dict['minor'] < 12): # Not seen in later versions!
+                log.info('Only read {} items from TimeZone.SelectedCity, this does not seem right!'.format(num_items_read))
+            for item in ['Country', 'AppleLocale']:
+                data = plist.get(item, '')
+                if data:
+                    basic_data.append(['PREFERENCES', item, data, '', global_pref_plist_path])
+            data = plist.get('com.apple.TimeZonePref.Last_Selected_City', [])
+            if data:
+                basic_data.append(['PREFERENCES', 'com.apple.TimeZonePref.Last_Selected_City', ', '.join(data), '', global_pref_plist_path])
+
+        else:
+            log.error('Failed to read plist ' + global_pref_plist_path + " Error was : " + error_message)
     else:
-        log.error('Failed to read plist ' + global_pref_plist_path + " Error was : " + error_message)
-
+        log.error(f'{global_pref_plist_path} not found')
     # Read /private/etc/localtime --> /usr/share/zoneinfo/xxxxxxx
-    try:
-        tz_symlink_path = mac_info.ReadSymLinkTargetPath('/private/etc/localtime')
-        if tz_symlink_path.startswith('/usr/share/zoneinfo'):
-            tz_symlink_path = tz_symlink_path[20:]
-        elif tz_symlink_path.startswith('/var/db/timezone/zoneinfo/'): # on HighSierra
-            tz_symlink_path = tz_symlink_path[26:]
-        basic_data.append(['TIMEZONE', 'TimeZone Set', tz_symlink_path, 'Timezone on machine', '/private/etc/localtime'])
-    except (IndexError, ValueError, TypeError) as ex:
-        log.error('Error trying to read timezone information - ' + str(ex))
-
+    if mac_info.IsValidFilePath('/private/etc/localtime'):
+        try:
+            tz_symlink_path = mac_info.ReadSymLinkTargetPath('/private/etc/localtime')
+            if tz_symlink_path.startswith('/usr/share/zoneinfo'):
+                tz_symlink_path = tz_symlink_path[20:]
+            elif tz_symlink_path.startswith('/var/db/timezone/zoneinfo/'): # on HighSierra
+                tz_symlink_path = tz_symlink_path[26:]
+            basic_data.append(['TIMEZONE', 'TimeZone Set', tz_symlink_path, 'Timezone on machine', '/private/etc/localtime'])
+        except (IndexError, ValueError, TypeError) as ex:
+            log.error('Error trying to read timezone information - ' + str(ex))
+    else:
+        log.error('/private/etc/localtime not found')
     # f = mac_info.Open('/private/etc/localtime')
     # if f:
     #     try:
