@@ -121,6 +121,8 @@ def Plugin_Start(mac_info):
         auto_login = True
 
     users = []
+    count_actual_users = 0
+    count_system_users = 0
     for user in mac_info.users:
         source = user._source
         if auto_login and (auto_username == user.user_name):
@@ -133,10 +135,15 @@ def Plugin_Start(mac_info):
                      user.password_last_set_time, user.pw_hint, user.password,
                      user.DARWIN_USER_DIR, user.DARWIN_USER_TEMP_DIR, user.DARWIN_USER_CACHE_DIR,
                      source])
+        
+        if user.UUID.startswith('FFFFEEEE'):
+            count_system_users += 1
+        else:
+            count_actual_users += 1
 
+    count_existing_accounts = len(users)
     deleted_users = GetDeletedUsers(mac_info)
-    log.info('Found {} users and {} deleted user(s)'.format(len(users), len(deleted_users)))
-
+    
     if len(deleted_users) > 0:
         for user in deleted_users:
             users.append([user.user_name, user.real_name, user.home_dir, user.UID, user.GID, user.UUID,
@@ -146,6 +153,9 @@ def Plugin_Start(mac_info):
                      user.DARWIN_USER_DIR, user.DARWIN_USER_TEMP_DIR, user.DARWIN_USER_CACHE_DIR,
                      user._source])
     WriteList("user information", "Users", users, user_info, mac_info.output_params, '')
+
+    log.info(f'Found {count_existing_accounts} existing accounts - ({count_actual_users} user accounts, {count_system_users} system accounts) and {len(deleted_users)} deleted users')
+
 
 def Plugin_Start_Standalone(input_files_list, output_params):
     log.info("This cannot be used as a standalone plugin")
