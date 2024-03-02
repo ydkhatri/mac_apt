@@ -368,12 +368,12 @@ def PrintAll(recent_items, output_params, source_path):
 def ParseRecentFile(input_file):
     recent_items = []
     basename = os.path.basename(input_file).lower()
-    if basename.endswith('.sfl') or basename.endswith('.sfl2'):
+    if basename.endswith('.sfl') or basename.endswith('.sfl2') or basename.endswith('.sfl3'):
         try:
             with open(input_file, "rb") as f:
                 if basename.endswith('.sfl'):
                     ReadSFLPlist(f, recent_items, input_file, '')
-                else: #SFL2
+                else: #SFL2 or SFL3
                     ReadSFL2Plist(f, recent_items, input_file, '')
         except (OSError) as ex:
             log.exception('Failed to open file: {}'.format(input_file))
@@ -630,7 +630,7 @@ def ReadSFL2Plist(file_handle, recent_items, source, user=''):
                     ri.ReadBookmark(data)
     except(KeyError, nd.DeserializeError, nd.biplist.NotBinaryPlistException, nd.biplist.InvalidPlistException,
             plistlib.InvalidFileException,nd.ccl_bplist.BplistError, ValueError, TypeError, OSError, OverflowError):
-        log.exception('Error reading SFL2 plist')
+        log.exception('Error reading SFL2 or SFL3 plist')
 
 def ReadSFLPlist(file_handle, recent_items, source, user=''):
     try:
@@ -683,9 +683,9 @@ def ProcessSFLFolder(mac_info, user_path, recent_items):
             files_list = mac_info.ListItemsInFolder(source_folder,EntryType.FILES)
             for file_entry in files_list:
                 f_name = file_entry['name'].lower()
-                if (f_name.endswith('.sfl') and (file_entry['size'] > 446)) or f_name.endswith('.sfl2'): # 446 is an empty plist, only keyed class data for SFL
+                if (f_name.endswith('.sfl') and (file_entry['size'] > 446)) or f_name.endswith('.sfl2') or f_name.endswith('.sfl3'): # 446 is an empty plist, only keyed class data for SFL
                     source_path = source_folder + '/' + file_entry['name']
-                    if f_name == 'com.apple.LSSharedFileList.ProjectsItems.sfl2': # Only has Tag/color info
+                    if f_name.startswith('com.apple.lssharedfilelist.projectsitems.'): # Only has Tag/color info
                         log.info('Skipping ' + source_path)
                         continue
                     mac_info.ExportFile(source_path, __Plugin_Name, user_name + "_", False)
@@ -693,7 +693,7 @@ def ProcessSFLFolder(mac_info, user_path, recent_items):
                     if f != None:
                         if f_name.endswith('.sfl'):
                             ReadSFLPlist(f, recent_items, source_path, user_name)
-                        else: #SFL2
+                        else: #SFL2 or SFL3
                             ReadSFL2Plist(f, recent_items, source_path, user_name)
 
 def ProcessSFL(mac_info, recent_items):
@@ -811,7 +811,7 @@ def Plugin_Start_Standalone(input_files_list, output_params):
     log.info("Module Started as standalone")
     for input_path in input_files_list:
         log.debug("Input file passed was: " + input_path)
-        if os.path.basename(input_path) == 'com.apple.LSSharedFileList.ProjectsItems.sfl2': # Only has Tag/color info
+        if os.path.basename(input_path).startswith('com.apple.LSSharedFileList.ProjectsItems.'): # Only has Tag/color info
             log.info('Skipping ' + input_path)
             continue
 
