@@ -749,6 +749,8 @@ class MacInfo:
             If failed to get values, success=False
             UID & GID are returned as strings
         '''
+        if self.use_native_hfs_parser:
+            return self.hfs_native.GetUserAndGroupIDForFolder(path)
         success, uid, gid = False, 0, 0
         try:
             path_dir = self.macos_FS.open_dir(path)
@@ -765,6 +767,8 @@ class MacInfo:
             If failed to get values, success=False
             UID & GID are returned as strings
         '''
+        if self.use_native_hfs_parser:
+            return self.hfs_native.GetUserAndGroupIDForFile(path)
         success, uid, gid = False, 0, 0
         try:
             path_file = self.macos_FS.open(path)
@@ -962,6 +966,7 @@ class MacInfo:
                 path = '/private/var/folders/' + unknown1_name + "/" + unknown2_name
 
                 success, uid, gid = self.GetUserAndGroupIDForFolder(path)
+                #log.debug(f'UID={uid} GID={gid} DARWIN FOLDER={path}')
                 if success:
                     found_user = False
                     for user in self.users:

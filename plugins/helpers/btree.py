@@ -33,7 +33,7 @@ class BTree(object):
         #TODO: do more testing when nodeSize != blockSize
         self.nodeSize = self.header.nodeSize
         self.nodesInBlock = file.blockSize // self.header.nodeSize
-        self.blocksForNode = self.header.nodeSize // file.blockSize
+        self.blocksForNode = max(1, self.header.nodeSize // file.blockSize)
         #print (file.blockSize , self.header.nodeSize)
         self.lastRecordNumber = 0
         type, (hdr, maprec) = self.readBtreeNode(0)
