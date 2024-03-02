@@ -45,6 +45,7 @@ log = logging.getLogger('MAIN.' + __Plugin_Name) # Do not rename or remove this 
 #  Processes FXDesktopVolumePositions & FXRecentFolders from <USER>/Library/Preferences/com.apple.finder.plist
 #  Processes systemitems.volumeslist and favoriteservers from <USER>/Library/Preferences/com.apple.sidebarlists.plist
 
+# TODO : seen SGTRecentFileSearches in  <USER>/Library/Preferences/com.google.chrome.plist
 class RecentType(IntEnum):
     UNKNOWN = 0
     HOST = 1
