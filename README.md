@@ -62,6 +62,7 @@ QUARANTINE | Reads the quarantine database and .LastGKReject file
 QUICKLOOK | Reads the QuickLook index.sqlite and carves thumbnails from thumbnails.data
 RECENTITEMS | Recently accessed Servers, Documents, Hosts, Volumes & Applications from .plist and .sfl files. Also gets recent searches and places for each user
 SAFARI | Internet history, downloaded file information, cookies and more from Safari caches
+SCREENSHARING | Reads the list of connected hosts with Screen Sharing
 SAVEDSTATE | Gets window titles from Saved Application State info
 SCREENTIME | Reads ScreenTime database for program and app usage
 SPOTLIGHT | Reads the spotlight index databases

@@ -413,7 +413,7 @@ def PrintAll(browser, chromium_artifacts, output_params, source_path):
                   ]
 
     data_list = []
-    log.info (f"{len(chromium_artifacts)} {browser} artifact(s) found")
+    log.info (f"{len(chromium_artifacts)} {browser} item(s) found")
     for item in chromium_artifacts:
         url = item.url
         data_list.append( [ str(item.type), item.name, url,
