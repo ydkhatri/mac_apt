@@ -134,13 +134,13 @@ def ParseCFURLEntry(db, cfurl_cache_artifacts, username, app_bundle_id, cfurl_ca
             for row in cursor:
                 http_req_method, req_headers = ParseRequestObject(row['request_object'])
                 http_status, resp_headers = ParseResponseObject(row['response_object'])
-                if type(row['receiver_data']) == bytes:
+                if (row['receiver_data'] is None) or (type(row['receiver_data']) is bytes):
                     received_data = row['receiver_data']
-                elif type(row['receiver_data']) == str:
+                elif type(row['receiver_data']) is str:
                     received_data = row['receiver_data'].encode()
                 else:
                     log.error('Unknown type of "receiver_data": {}'.format(type(row['receiver_data'])))
-                    continue
+                    received_data = row['receiver_data']
 
                 item = CfurlCacheItem(row['time_stamp'], row['request_key'], http_req_method, req_headers, 
                                         http_status, resp_headers, row['isDataOnFS'], received_data, 
