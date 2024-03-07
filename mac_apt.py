@@ -18,23 +18,25 @@
 '''
 
 import argparse
+import collections
 import logging
 import os
-import plugins.helpers.macinfo as macinfo
-import pyewf
-import pytsk3
-import pyvmdk
 import sys
 import textwrap
 import time
-import traceback
+from uuid import UUID
+
+import pyewf
+import pytsk3
+import pyvmdk
+
+import plugins.helpers.macinfo as macinfo
+from plugin import *
 from plugins.helpers.aff4_helper import EvidenceImageStream
 from plugins.helpers.apfs_reader import ApfsContainer, ApfsDbInfo
 from plugins.helpers.apple_sparse_image import AppleSparseImage
-from plugins.helpers.writer import *
 from plugins.helpers.disk_report import *
-from plugin import *
-from uuid import UUID
+from plugins.helpers.writer import *
 from version import __VERSION
 
 __PROGRAMNAME = "macOS Artifact Parsing Tool"
@@ -51,33 +53,34 @@ def IsItemPresentInList(collection, item):
 
 def CheckInputType(input_type):
     input_type = input_type.upper()
-    return input_type in ['AFF4','E01','DD','DMG','VMDK','MOUNTED','SPARSE','AXIOMZIP']
+    return input_type in ['AFF4', 'E01', 'DD', 'DMG', 'VMDK', 'MOUNTED', 'SPARSE', 'AXIOMZIP']
 
 ######### FOR HANDLING E01 file ###############
 class ewf_Img_Info(pytsk3.Img_Info):
-  def __init__(self, ewf_handle):
-    self._ewf_handle = ewf_handle
-    super(ewf_Img_Info, self).__init__(
-        url="", type=pytsk3.TSK_IMG_TYPE_EXTERNAL)
+    def __init__(self, ewf_handle):
+        self._ewf_handle = ewf_handle
+        super(ewf_Img_Info, self).__init__(
+            url="", type=pytsk3.TSK_IMG_TYPE_EXTERNAL)
 
-  def close(self):
-    self._ewf_handle.close()
+    def close(self):
+        self._ewf_handle.close()
 
-  def read(self, offset, size):
-    self._ewf_handle.seek(offset)
-    return self._ewf_handle.read(size)
+    def read(self, offset, size):
+        self._ewf_handle.seek(offset)
+        return self._ewf_handle.read(size)
 
-  def get_size(self):
-    return self._ewf_handle.get_media_size()
+    def get_size(self):
+        return self._ewf_handle.get_media_size()
 
 def PrintAttributes(obj, useTypeName=False):
     for attr in dir(obj):
-        if str(attr).endswith("__"): continue
-        if hasattr( obj, attr ):
+        if str(attr).endswith("__"):
+            continue
+        if hasattr(obj, attr):
             if useTypeName:
-                log.info( "%s.%s = %s" % (type(obj).__name__, attr, getattr(obj, attr)))
+                log.info("%s.%s = %s" % (type(obj).__name__, attr, getattr(obj, attr)))
             else:
-                log.info( "%s = %s" % (attr, getattr(obj, attr)))
+                log.info("%s = %s" % (attr, getattr(obj, attr)))
 
 # Call this function instead of pytsk3.Img_Info() for E01 files
 def GetImgInfoObjectForE01(path):
@@ -91,20 +94,20 @@ def GetImgInfoObjectForE01(path):
 
 ######### FOR HANDLING VMDK file ###############
 class vmdk_Img_Info(pytsk3.Img_Info):
-  def __init__(self, vmdk_handle):
-    self._vmdk_handle = vmdk_handle
-    super(vmdk_Img_Info, self).__init__(
-        url="", type=pytsk3.TSK_IMG_TYPE_EXTERNAL)
+    def __init__(self, vmdk_handle):
+        self._vmdk_handle = vmdk_handle
+        super(vmdk_Img_Info, self).__init__(
+            url="", type=pytsk3.TSK_IMG_TYPE_EXTERNAL)
 
-  def close(self):
-    self._vmdk_handle.close()
+    def close(self):
+        self._vmdk_handle.close()
 
-  def read(self, offset, size):
-    self._vmdk_handle.seek(offset)
-    return self._vmdk_handle.read(size)
+    def read(self, offset, size):
+        self._vmdk_handle.seek(offset)
+        return self._vmdk_handle.read(size)
 
-  def get_size(self):
-    return self._vmdk_handle.get_media_size()
+    def get_size(self):
+        return self._vmdk_handle.get_media_size()
 
 def OpenExtentDataFiles(vmdk_handle, base_directory):
     '''Because vmdk_handle.open_extent_data_files() is broken in 20170226'''
@@ -150,20 +153,20 @@ def GetImgInfoObjectForVMDK(path):
 
 ######### FOR HANDLING AFF4 file ###############
 class aff4_Img_Info(pytsk3.Img_Info):
-  def __init__(self, aff4_stream):
-    self._aff4_stream = aff4_stream
-    super(aff4_Img_Info, self).__init__(
-        url="", type=pytsk3.TSK_IMG_TYPE_EXTERNAL)
+    def __init__(self, aff4_stream):
+        self._aff4_stream = aff4_stream
+        super(aff4_Img_Info, self).__init__(
+            url="", type=pytsk3.TSK_IMG_TYPE_EXTERNAL)
 
-  def close(self):
-    self._aff4_stream.close()
+    def close(self):
+        self._aff4_stream.close()
 
-  def read(self, offset, size):
-    self._aff4_stream.seek(offset)
-    return self._aff4_stream.read(size)
+    def read(self, offset, size):
+        self._aff4_stream.seek(offset)
+        return self._aff4_stream.read(size)
 
-  def get_size(self):
-    return self._aff4_stream.size
+    def get_size(self):
+        return self._aff4_stream.size
 
 # Call this function instead of pytsk3.Img_Info() for AFF4 files
 def GetImgInfoObjectForAff4(path):
@@ -175,22 +178,22 @@ def GetImgInfoObjectForAff4(path):
 
 ##### FOR HANDLING Apple .sparseimage file ####
 class sparse_Img_Info(pytsk3.Img_Info):
-  def __init__(self, sparse_image):
-    self._sparse_image = sparse_image
-    super(sparse_Img_Info, self).__init__(
-        url="", type=pytsk3.TSK_IMG_TYPE_EXTERNAL)
+    def __init__(self, sparse_image):
+        self._sparse_image = sparse_image
+        super(sparse_Img_Info, self).__init__(
+            url="", type=pytsk3.TSK_IMG_TYPE_EXTERNAL)
 
-  def close(self):
-    self._sparse_image.close()
+    def close(self):
+        self._sparse_image.close()
 
-  def read(self, offset, size):
-    return self._sparse_image.read(offset, size)
+    def read(self, offset, size):
+        return self._sparse_image.read(offset, size)
 
-  #def seek(self, offset):
-  #  pass
+    #def seek(self, offset):
+    #  pass
 
-  def get_size(self):
-    return self._sparse_image.size
+    def get_size(self):
+        return self._sparse_image.size
 
 # Call this function instead of pytsk3.Img_Info() for .sparseimage files
 def GetImgInfoObjectForSparse(path):
@@ -204,36 +207,36 @@ def GetImgInfoObjectForSparse(path):
 def FindMacOsFiles(mac_info):
     if mac_info.IsValidFilePath('/System/Library/CoreServices/SystemVersion.plist'):
         if mac_info.IsValidFilePath("/System/Library/Kernels/kernel") or \
-            mac_info.IsValidFilePath( "/mach_kernel"):
-            log.info ("Found valid OSX/macOS kernel")
+            mac_info.IsValidFilePath("/mach_kernel"):
+            log.info("Found valid OSX/macOS kernel")
         else:
-            log.info ("Could not find OSX/macOS kernel!")# On partial/corrupted images, this may not be found
+            log.info("Could not find OSX/macOS kernel!")# On partial/corrupted images, this may not be found
         mac_info._GetSystemInfo()
         mac_info._GetUserInfo()
         return True
     else:
-        log.info ("Could not find OSX/macOS installation!")
+        log.info("Could not find OSX/macOS installation!")
     return False
 
 def IsMacOsPartition(img, partition_start_offset, mac_info):
     '''Determines if the partition contains macOS installation'''
     try:
-        fs = pytsk3.FS_Info(img, offset=partition_start_offset)    
+        fs = pytsk3.FS_Info(img, offset=partition_start_offset)
         fs_info = fs.info # TSK_FS_INFO
         if fs_info.ftype not in (pytsk3.TSK_FS_TYPE_HFS, pytsk3.TSK_FS_TYPE_HFS_DETECT):
-            log.info (" Skipping non-HFS partition")
+            log.info(" Skipping non-HFS partition")
             return False
 
         # Found HFS partition, now look for macOS files & folders
-        try: 
+        try:
             folders = fs.open_dir("/")
             mac_info.macos_FS = fs
             mac_info.macos_partition_start_offset = partition_start_offset
             mac_info.hfs_native.Initialize(mac_info.pytsk_image, mac_info.macos_partition_start_offset)
             return FindMacOsFiles(mac_info)
         except Exception:
-            log.error ("Could not open / (root folder on partition)")
-            log.debug ("Exception info", exc_info=True)
+            log.error("Could not open / (root folder on partition)")
+            log.debug("Exception info", exc_info=True)
     except Exception as ex:
         log.exception("Exception")
     return False
@@ -250,7 +253,7 @@ def IsApfsBootContainer(img, gpt_part_offset):
             log.debug(f'Got UUID={uuid}, not a bootable APFS container!, defined in GPT at {gpt_part_offset}')
     except:
         raise ValueError('Cannot seek into image @ offset {}'.format(gpt_part_offset))
-    return False    
+    return False
 
 def IsApfsContainer(img, partition_start_offset):
     '''Checks if this is an APFS container'''
@@ -343,7 +346,7 @@ def FindMacOsPartitionInApfsContainer(img, vol_info, container_size, container_s
         mac_info.output_params.apfs_db_path = apfs_sqlite_path
 
         if mac_info.apfs_sys_volume: # catalina or above
-            if mac_info.apfs_data_volume == None:
+            if mac_info.apfs_data_volume is None:
                 log.error('Found system volume, but no Data volume!')
                 return False
             return FindMacOsFiles(mac_info)
@@ -373,15 +376,15 @@ def FindMacOsPartition(img, vol_info, vs_info):
         elif (int(part.flags) & pytsk3.TSK_VS_PART_FLAG_ALLOC):
             partition_start_offset = vs_info.block_size * part.start
             if part.desc.decode('utf-8').upper() == "EFI SYSTEM PARTITION":
-                log.debug ("Skipping EFI System Partition @ offset {}".format(partition_start_offset))
+                log.debug("Skipping EFI System Partition @ offset {}".format(partition_start_offset))
                 continue # skip this
             elif part.desc.decode('utf-8').upper() == "APPLE_PARTITION_MAP":
-                log.debug ("Skipping Apple_partition_map @ offset {}".format(partition_start_offset))
+                log.debug("Skipping Apple_partition_map @ offset {}".format(partition_start_offset))
                 continue # skip this
             else:
-                log.info ("Looking at FS with volume label '{}'  @ offset {}".format(part.desc.decode('utf-8'), partition_start_offset)) 
-            
-            if  IsApfsContainer(img, partition_start_offset):
+                log.info("Looking at FS with volume label '{}'  @ offset {}".format(part.desc.decode('utf-8'), partition_start_offset))
+
+            if IsApfsContainer(img, partition_start_offset):
                 if IsApfsBootContainer(img, gpt_partitions_offset + (128 * part.slot_num)):
                     uuid = GetApfsContainerUuid(img, partition_start_offset)
                     log.info('Found an APFS container with uuid: {}'.format(str(uuid).upper()))
@@ -389,7 +392,7 @@ def FindMacOsPartition(img, vol_info, vs_info):
 
             elif IsMacOsPartition(img, partition_start_offset, mac_info): # Assumes there is only one single macOS installation partition
                 return True
-                
+
     return False
 
 def Exit(message=''):
@@ -413,9 +416,9 @@ def SetupExportLogger(output_params):
     export_sqlite_path = SqliteWriter.CreateSqliteDb(os.path.join(output_params.export_path, "Exported_Files_Log.db"))
     writer = SqliteWriter(asynchronous=True)
     writer.OpenSqliteDb(export_sqlite_path)
-    column_info = collections.OrderedDict([ ('SourcePath',DataType.TEXT), ('ExportPath',DataType.TEXT),
-                                            ('InodeModifiedTime',DataType.DATE),('ModifiedTime',DataType.DATE),
-                                            ('CreatedTime',DataType.DATE),('AccessedTime',DataType.DATE) ])
+    column_info = collections.OrderedDict([ ('SourcePath', DataType.TEXT), ('ExportPath', DataType.TEXT),
+                                            ('InodeModifiedTime', DataType.DATE), ('ModifiedTime', DataType.DATE),
+                                            ('CreatedTime', DataType.DATE), ('AccessedTime', DataType.DATE) ])
     writer.CreateTable(column_info, 'ExportedFileInfo')
     output_params.export_log_sqlite = writer
 
@@ -433,7 +436,7 @@ plugins = []
 log = None
 plugin_count = ImportPlugins(plugins, 'MACOS')
 if plugin_count == 0:
-    Exit ("No plugins could be added ! Exiting..")
+    Exit("No plugins could be added ! Exiting..")
 
 plugin_name_list = ['ALL', 'FAST']
 plugins_info = f"The following {len(plugins)} plugins are available:"
@@ -445,8 +448,8 @@ for plugin in plugins:
 plugins_info += "\n    " + "-"*76 + "\n" +\
                  " "*4 + "FAST" + " "*16 + "Runs all plugins except IDEVICEBACKUPS, SPOTLIGHT, UNIFIEDLOGS\n" + \
                  " "*4 + "ALL" + " "*17 + "Runs all plugins"
-arg_parser = argparse.ArgumentParser(description='mac_apt is a framework to process macOS forensic artifacts\n'\
-                                                 f'You are running {__PROGRAMNAME} version {__VERSION}\n\n'\
+arg_parser = argparse.ArgumentParser(description='mac_apt is a framework to process macOS forensic artifacts\n'
+                                                 f'You are running {__PROGRAMNAME} version {__VERSION}\n\n'
                                                  'Note: The default output is now sqlite, no need to specify it now',
                                     epilog=plugins_info, formatter_class=argparse.RawTextHelpFormatter)
 arg_parser.add_argument('input_type', help='Specify Input type as either DD, DMG, E01, VMDK, AFF4, SPARSE, AXIOMZIP or MOUNTED')
@@ -469,7 +472,7 @@ if args.output_path:
             args.output_path = os.path.expanduser(args.output_path)
 
     args.output_path = os.path.abspath(args.output_path)
-    print ("Output path was : {}".format(args.output_path))
+    print("Output path was : {}".format(args.output_path))
     if not CheckOutputPath(args.output_path):
         Exit()
 else:
@@ -477,7 +480,7 @@ else:
 
 if args.log_level:
     args.log_level = args.log_level.upper()
-    if not args.log_level in ['INFO','DEBUG','WARNING','ERROR','CRITICAL']: # TODO: change to just [info, debug, error]
+    if args.log_level not in ['INFO', 'DEBUG', 'WARNING', 'ERROR', 'CRITICAL']: # TODO: change to just [info, debug, error]
         Exit("Invalid input type for log level. Valid values are INFO, DEBUG, WARNING, ERROR, CRITICAL")
     else:
         if args.log_level == "INFO": args.log_level = logging.INFO
@@ -495,23 +498,38 @@ log.debug(' '.join(sys.argv))
 LogLibraryVersions(log)
 
 # Check inputs
-if not CheckInputType(args.input_type): 
+if not CheckInputType(args.input_type):
     Exit("Exiting -> 'input_type' " + args.input_type + " not recognized")
 
-plugins_to_run = [x.upper() for x in args.plugin]  # convert all plugin names entered by user to uppercase
-process_all = IsItemPresentInList(plugins_to_run, 'ALL')
-if not process_all:
+plugins_to_run = list()
+plugins_not_to_run = list()
+for plugin_name in [x.upper() for x in args.plugin]:  # convert all plugin names entered by user to uppercase
+    if plugin_name.endswith('-'):
+        plugins_not_to_run.append(plugin_name[:-1])
+    else:
+        plugins_to_run.append(plugin_name)
+
+if IsItemPresentInList(plugins_to_run, 'ALL'):
+    plugins_to_run = plugin_name_list
+    plugins_to_run.remove('ALL')
+    plugins_to_run.remove('FAST')
+else:
     if IsItemPresentInList(plugins_to_run, 'FAST'): # check for FAST
         plugins_to_run = plugin_name_list
         plugins_to_run.remove('ALL')
         plugins_to_run.remove('FAST')
-        plugins_to_run.remove('IDEVICEBACKUPS')
-        plugins_to_run.remove('SPOTLIGHT')
-        plugins_to_run.remove('UNIFIEDLOGS')
+        plugins_not_to_run = ['IDEVICEBACKUPS', 'SPOTLIGHT', 'UNIFIEDLOGS']
     else:
         #Check for invalid plugin names or ones not Found
-        if not CheckUserEnteredPluginNames(plugins_to_run, plugins):
+        if not CheckUserEnteredPluginNames(plugins_to_run + plugins_not_to_run, plugins):
             Exit("Exiting -> Invalid plugin name entered.")
+
+for plugin_name in plugins_not_to_run:
+    if IsItemPresentInList(plugins_to_run, plugin_name):
+        plugins_to_run.remove(plugin_name)
+
+log.info(f'Plugins to run: {", ".join(plugins_to_run)}')
+log.info(f'Plugins not to run: {", ".join(plugins_not_to_run)}')
 
 # Check outputs, create output files
 output_params = macinfo.OutputParams()
@@ -527,7 +545,7 @@ except Exception as ex:
     log.exception('Exception occurred when trying to create Sqlite db')
     Exit()
 
-if args.xlsx: 
+if args.xlsx:
     try:
         xlsx_path = os.path.join(output_params.output_path, "mac_apt.xlsx")
         output_params.xlsx_writer = ExcelWriter()
@@ -538,10 +556,10 @@ if args.xlsx:
         log.exception('Exception occurred when trying to create XLSX file')
 
 if args.csv:
-    output_params.write_csv  = True
+    output_params.write_csv = True
 if args.tsv:
-    output_params.write_tsv  = True
-  
+    output_params.write_tsv = True
+
 # At this point, all looks good, lets mount the image
 img = None
 found_macos = False
@@ -589,7 +607,7 @@ if args.password_file:
 elif args.password:
     mac_info.password = args.password
 
-if args.input_type.upper() not in ('MOUNTED','AXIOMZIP'):
+if args.input_type.upper() not in ('MOUNTED', 'AXIOMZIP'):
     mac_info.pytsk_image = img
     mac_info.use_native_hfs_parser = True #False if args.use_tsk else True
     mac_info.dont_decrypt = True if args.dont_decrypt else False
@@ -616,23 +634,24 @@ if found_macos:
     if not mac_info.is_apfs:
         mac_info.hfs_native.Initialize(mac_info.pytsk_image, mac_info.macos_partition_start_offset)
     for plugin in plugins:
-        if process_all or IsItemPresentInList(plugins_to_run, plugin.__Plugin_Name):
+        if IsItemPresentInList(plugins_to_run, plugin.__Plugin_Name):
             log.info("-"*50)
             log.info("Running plugin " + plugin.__Plugin_Name)
             try:
                 plugin.Plugin_Start(mac_info)
             except Exception as ex:
-                log.exception ("An exception occurred while running plugin - {}".format(plugin.__Plugin_Name))
+                log.exception("An exception occurred while running plugin - {}".format(plugin.__Plugin_Name))
 else:
-    log.warning (":( Could not find a partition having a macOS installation on it")
+    log.warning(":( Could not find a partition having a macOS installation on it")
 
 log.info("-"*50)
 
 # Final cleanup
-if img != None: img.close()
+if img is not None:
+    img.close()
 if args.xlsx:
     output_params.xlsx_writer.CommitAndCloseFile()
-if mac_info.is_apfs and mac_info.apfs_db != None:
+if mac_info.is_apfs and mac_info.apfs_db is not None:
     mac_info.apfs_db.CloseDb()
 if output_params.export_log_sqlite:
     output_params.export_log_sqlite.CloseDb()
