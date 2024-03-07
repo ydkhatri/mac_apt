@@ -518,7 +518,8 @@ else:
         plugins_to_run = plugin_name_list
         plugins_to_run.remove('ALL')
         plugins_to_run.remove('FAST')
-        plugins_not_to_run = ['IDEVICEBACKUPS', 'SPOTLIGHT', 'UNIFIEDLOGS']
+        for plugin in ('IDEVICEBACKUPS', 'SPOTLIGHT', 'UNIFIEDLOGS'):
+            plugins_not_to_run.append(plugin)
     else:
         #Check for invalid plugin names or ones not Found
         if not CheckUserEnteredPluginNames(plugins_to_run + plugins_not_to_run, plugins):
