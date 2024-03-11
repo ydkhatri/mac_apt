@@ -101,6 +101,7 @@ def PrintAll(xp_diag_artifacts, output_params, source_path):
                     ('User', DataType.TEXT), ('Source', DataType.TEXT)]
 
     data_list = []
+    log.info(f"{len(xp_diag_artifacts)} XProtect diagnostics item(s) found")
     for item in xp_diag_artifacts:
         data_list.append([item.timestamp, item.signature_name, item.user_action, item.app_bundle_id, item.data_url, 
                             item.origin_url, item.download_timestamp, item.username, item.source])

@@ -154,7 +154,7 @@ def PrintAll(utmpx_artifacts, output_params, source_path):
                   ('Type', DataType.INTEGER), ('Type_Name', DataType.TEXT), ('Date', DataType.DATE), ('Hostname', DataType.TEXT)]
 
     data_list = []
-    log.info(f"{len(utmpx_artifacts)} utmpx artifact(s) found")
+    log.info(f"{len(utmpx_artifacts)} utmpx item(s) found")
     for item in utmpx_artifacts:
         type_name = UtmpxType.get(item.type, 'N/A')
         date = CommonFunctions.ReadUnixTime(item.date + (item.date_microseconds * 10**-6))

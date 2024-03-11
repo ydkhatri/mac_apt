@@ -11,13 +11,12 @@
    Although access permissions are stored as file system metadata (permission and extended permission), this plugin does not support them yet.
 '''
 
+import logging
 import os
 
 from plugins.helpers.common import CommonFunctions
 from plugins.helpers.macinfo import *
 from plugins.helpers.writer import *
-
-import logging
 
 __Plugin_Name = "FILESHARING" # Cannot have spaces, and must be all caps!
 __Plugin_Friendly_Name = "file sharing"
@@ -71,7 +70,7 @@ def PrintAll(filesharing_artifacts, output_params, source_path):
     filesharing_info = [('Name', DataType.TEXT), ('Directory_Path', DataType.TEXT), ('SMB_Guest_Access', DataType.TEXT), ('AFP_Guest_Access', DataType.TEXT), ('Source', DataType.TEXT)]
 
     data_list = []
-    log.info(f"{len(filesharing_artifacts)} filesharing artifact(s) found")
+    log.info(f"{len(filesharing_artifacts)} filesharing item(s) found")
     for item in filesharing_artifacts:
         data_list.append([item.name, item.directory_path, item.smb_guestaccess, item.afp_guestaccess, item.source])
 
