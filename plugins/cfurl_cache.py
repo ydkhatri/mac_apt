@@ -84,7 +84,7 @@ def CheckSchemaVersion(db):
     query = "SELECT schema_version FROM cfurl_cache_schema_version"
     cursor = db.execute(query)
     for row in cursor:
-        schema_version = row['schema_version']
+        schema_version = int(row['schema_version'])
 
     if schema_version in KnownSchemaVersion:
         log.debug("Schema version = {}".format(schema_version))
@@ -119,14 +119,14 @@ def ParseResponseObject(object_data):
 def ParseCFURLEntry(db, cfurl_cache_artifacts, username, app_bundle_id, cfurl_cache_db_path):
     db.row_factory = sqlite3.Row
     tables = CommonFunctions.GetTableNames(db)
-    schema_version = 0
+    schema_version = None
     if 'cfurl_cache_schema_version' in tables:
         schema_version = CheckSchemaVersion(db)
     else:
         log.debug('There is no cfurl_cache_schema_version table.')
 
     if 'cfurl_cache_response' in tables:
-        if schema_version in (0, 202):
+        if schema_version in (None, 202, ):
             query = """SELECT entry_ID, time_stamp, request_key, request_object, response_object, isDataOnFS, receiver_data 
                         FROM cfurl_cache_response JOIN cfurl_cache_blob_data USING (entry_ID) 
                         JOIN cfurl_cache_receiver_data USING (entry_ID)"""
