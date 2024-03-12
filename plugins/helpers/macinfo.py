@@ -25,6 +25,7 @@ from uuid import UUID
 
 import nska_deserialize as nd
 import pytsk3
+
 from plugins.helpers import decryptor
 from plugins.helpers.apfs_reader import *
 from plugins.helpers.common import *
@@ -339,6 +340,7 @@ class MacInfo:
         # for encrypted volumes
         self.password = password
         self.dont_decrypt = dont_decrypt # To force turning off decryption in case a 3rd party tool has already decrypted image but container and volume flags still say its enc
+        self.timezone = 'UTC'
 
     # Public functions, plugins can use these
     def GetAbsolutePath(self, current_abs_path, dest_rel_path):
