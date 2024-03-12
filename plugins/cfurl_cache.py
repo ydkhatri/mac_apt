@@ -22,7 +22,7 @@ from plugins.helpers.writer import *
 
 __Plugin_Name = "CFURLCACHE" # Cannot have spaces, and must be all caps!
 __Plugin_Friendly_Name = "CFURL cache"
-__Plugin_Version = "1.0"
+__Plugin_Version = "1.1"
 __Plugin_Description = "Parses CFURL cache and extract date, URL, request, response, and received data."
 __Plugin_Author = "Minoru Kobayashi"
 __Plugin_Author_Email = "unknownbit@gmail.com"
