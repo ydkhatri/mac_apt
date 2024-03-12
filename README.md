@@ -74,6 +74,7 @@ UNIFIEDLOGS | Reads macOS unified logging logs from .tracev3 files
 USERS | Local & Domain user information - name, UID, UUID, GID, account creation & password set dates, pass hints, homedir & Darwin paths
 UTMPX | Reads utmpx file
 WIFI | Gets wifi network information
+XPROTECTBEHAVIOR | Reads XProtect Behavior Service database
 XPROTECTDIAG | Reads XProtect diagnostic files
 
 ### Coming soon..
