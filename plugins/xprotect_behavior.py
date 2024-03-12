@@ -139,6 +139,11 @@ def ParseXPdb(db: sqlite3.Connection, xbs_artifacts: list[XPdbItem], xpdb_path: 
                                 row['responsible_path'], row['responsible_cdhash'], row['responsible_signing_id'], row['responsible_team_id'], row['responsible_sha256'], row['responsible_is_notarized'],
                                 row['reported'], row['profile_hash'], xpdb_path)
                 xbs_artifacts.append(item)
+        else:
+            if schema_version is not None:
+                log.error(f"Unsupported schema version: {schema_version}")
+            else:
+                log.error("No schema version found")
 
 
 def ExtractAndReadXPdb(mac_info: MacInfo, xbs_artifacts: list[XPdbItem], xpdb_path: str):
