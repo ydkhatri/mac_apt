@@ -144,6 +144,8 @@ def ParseXPdb(db: sqlite3.Connection, xbs_artifacts: list[XPdbItem], xpdb_path: 
                 log.error(f"Unsupported schema version: {schema_version}")
             else:
                 log.error("No schema version found")
+    else:
+        log.error('There is no events table.')
 
 
 def ExtractAndReadXPdb(mac_info: MacInfo, xbs_artifacts: list[XPdbItem], xpdb_path: str):
