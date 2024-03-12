@@ -146,6 +146,11 @@ def ParseCFURLEntry(db, cfurl_cache_artifacts, username, app_bundle_id, cfurl_ca
                                         http_status, resp_headers, row['isDataOnFS'], received_data, 
                                         username, app_bundle_id, cfurl_cache_db_path)
                 cfurl_cache_artifacts.append(item)
+        else:
+            if schema_version is not None:
+                log.error("Unsupported schema version: {}".format(schema_version))
+    else:
+        log.error("There is no cfurl_cache_response table.")
 
 
 def ExtractAndReadCFURLCache(mac_info, cfurl_cache_artifacts, username, app_bundle_id, folder_path):
