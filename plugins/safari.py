@@ -6,22 +6,25 @@
    terms of the MIT License.
    
 '''
+from __future__ import annotations
 
 import io
-import os
 import logging
-import nska_deserialize as nd
-from plugins.helpers import macinfo
-import plugins.helpers.ccl_bplist as ccl_bplist
-
+import os
+import sqlite3
 from enum import IntEnum
+
+import nska_deserialize as nd
+
+# import plugins.helpers.ccl_bplist as ccl_bplist
+# from plugins.helpers import macinfo
 from plugins.helpers.common import CommonFunctions
 from plugins.helpers.macinfo import *
 from plugins.helpers.writer import *
 
 __Plugin_Name = "SAFARI"
 __Plugin_Friendly_Name = "Internet history, downloaded file information, cookies and more from Safari caches"
-__Plugin_Version = "2.0"
+__Plugin_Version = "2.1"
 __Plugin_Description = "Gets internet history, downloaded file information, cookies and more from Safari caches"
 __Plugin_Author = "Yogesh Khatri"
 __Plugin_Author_Email = "yogesh@swiftforensics.com"
@@ -62,6 +65,7 @@ class SafariItemType(IntEnum):
     CLOUDTAB = 12
     TAB = 13 # From BrowserState
     TABHISTORY = 14 # Tab session history from BrowserState
+    TAB_SNAPSHOT = 15
 
     def __str__(self):
         return self.name
@@ -76,10 +80,18 @@ class SafariItem:
         self.user = user
         self.source = source
 
+
+class SafariProfile:
+    def __init__(self, profile_uuid: str, profile_name: str, extension_uuid: str) -> None:
+        self.profile_uuid = profile_uuid  # named 'external_uuid' in SafariTabs.db
+        self.profile_name = profile_name  # named 'title' in SafariTabs.db
+        self.extension_uuid = extension_uuid  # named 'server_id' in SafariTabs.db
+
+
 def PrintAll(safari_items, output_params, source_path):
     safari_info = [ ('Type',DataType.TEXT),('Name_or_Title',DataType.TEXT),('URL',DataType.TEXT),
                     ('Date', DataType.DATE),('Other_Info', DataType.TEXT),('User', DataType.TEXT),
-                    ('Source',DataType.TEXT) 
+                    ('Source',DataType.TEXT)
                   ]
 
     data_list = []
@@ -90,7 +102,7 @@ def PrintAll(safari_items, output_params, source_path):
         data_list.append( [ str(item.type), item.name, url, item.date, item.other_info, item.user, item.source ] )
 
     WriteList("safari information", "Safari", data_list, safari_info, output_params, source_path)
-    
+
 def ReadSafariPlist(plist, safari_items, source, user):
     '''Read com.apple.safari.plist'''
     try:
@@ -113,7 +125,7 @@ def ReadSafariPlist(plist, safari_items, source, user):
         except ValueError as ex:
             log.exception('Error reading RecentWebSearches from plist')
     except KeyError: # Not found
-        pass        
+        pass
     try:
         freq_sites = plist['FrequentlyVisitedSitesCache'] # seen in  El Capitan
         try:
@@ -124,7 +136,7 @@ def ReadSafariPlist(plist, safari_items, source, user):
         except ValueError as ex:
             log.exception('Error reading FrequentlyVisitedSitesCache from plist')
     except KeyError: # Not found
-        pass     
+        pass
     try:
         download_path = plist['DownloadsPath']
         si = SafariItem(SafariItemType.GENERAL, '', download_path, None, 'DOWNLOADS_PATH', user, source)
@@ -154,18 +166,21 @@ def ReadSafariPlist(plist, safari_items, source, user):
         si = SafariItem(SafariItemType.GENERAL, '', '', time, 'SuccessfulLaunchTimestamp', user, source)
         safari_items.append(si)
     except KeyError: # Not found
-        pass        
+        pass
 
-def ProcessSafariPlist(mac_info, source_path, user, safari_items, read_plist_function):
+def ProcessSafariPlist(mac_info, source_path, user, safari_items, read_plist_function, safari_profile=SafariProfile('', '', '')):
     mac_info.ExportFile(source_path, __Plugin_Name, user + "_", False)
     success, plist, error = mac_info.ReadPlist(source_path)
     if success:
-        read_plist_function(plist, safari_items, source_path, user)
+        if read_plist_function in (ReadExtensionsPlist, ):
+            read_plist_function(plist, safari_items, source_path, user, safari_profile)
+        else:
+            read_plist_function(plist, safari_items, source_path, user)
     else:
         log.info('Failed to open plist: {}'.format(source_path))
     pass
 
-def ReadHistoryDb(conn, safari_items, source_path, user):
+def ReadHistoryDb(conn, safari_items, source_path, user, safari_profile=SafariProfile('', '', '')):
     try:
         conn.row_factory = sqlite3.Row
         cursor = conn.execute("select title, url, load_successful, visit_time as time_utc from "
@@ -173,8 +188,9 @@ def ReadHistoryDb(conn, safari_items, source_path, user):
         try:
             for row in cursor:
                 try:
-                    si = SafariItem(SafariItemType.HISTORY, row['url'], row['title'], 
-                                    CommonFunctions.ReadMacAbsoluteTime(row['time_utc']),'', user, source_path)
+                    info = f"Profile: {safari_profile.profile_name}" if safari_profile.profile_uuid else ''
+                    si = SafariItem(SafariItemType.HISTORY, row['url'], row['title'],
+                                    CommonFunctions.ReadMacAbsoluteTime(row['time_utc']), info, user, source_path)
                     safari_items.append(si)
                 except sqlite3.Error as ex:
                     log.exception ("Error while fetching row data")
@@ -215,7 +231,7 @@ def ReadCloudTabsDb(conn, safari_items, source_path, user):
                                 nd.biplist.InvalidPlistException, plistlib.InvalidFileException,
                                 nd.ccl_bplist.BplistError, ValueError, TypeError, OSError, OverflowError) as ex:
                             log.exception('plist deserialization error')
-                             
+
                     si = SafariItem(SafariItemType.CLOUDTAB, row['url'], row['title'], created,
                                     f'Modified={modified}' + (' pinned=1' if pinned else ''),
                                     user, source_path)
@@ -228,11 +244,79 @@ def ReadCloudTabsDb(conn, safari_items, source_path, user):
     except sqlite3.Error as ex:
         log.exception ("Sqlite error")
 
+
+def GetSafariProfiles(mac_info: MacInfo, folder_path: str) -> dict[str, SafariProfile]:
+    safaritabs_db_path = folder_path + '/SafariTabs.db'
+    if mac_info.IsValidFilePath(safaritabs_db_path) and mac_info.GetFileSize(safaritabs_db_path) > 0 and \
+       mac_info.IsValidFolderPath(folder_path + '/Profiles'):
+        try:
+            log.debug(f"Looking for Safari profiles in {folder_path}/Profiles: {mac_info.IsValidFolderPath(folder_path + '/Profiles')}")
+
+            safari_profiles: dict[str, SafariProfile] = {}
+            folders_list = mac_info.ListItemsInFolder(folder_path + '/Profiles', EntryType.FOLDERS, include_dates=False)
+            uuids = [item['name'] for item in folders_list]
+
+            for uuid in uuids:
+                log.debug(f"Finding History.db in {folder_path}/Profiles/{uuid}")
+                if mac_info.IsValidFilePath(folder_path + f'/Profiles/{uuid}/History.db'):
+                    if uuid not in safari_profiles.keys():
+                        log.debug(f"Found Safari profile uuid candidate: {uuid}")
+                        safari_profiles[uuid] = SafariProfile(uuid, '', '')
+
+            sqlite = SqliteWrapper(mac_info)
+            conn = sqlite.connect(safaritabs_db_path)
+            conn.row_factory = sqlite3.Row
+            cursor = conn.execute(
+                """SELECT title, external_uuid, server_id
+                    FROM bookmarks
+                    WHERE parent == 0 AND type == 1 AND subtype == 2""")
+
+            for row in cursor:
+                for profile_uuid in safari_profiles.keys():
+                    if row['external_uuid'] == profile_uuid:
+                        safari_profiles[profile_uuid].profile_name = row['title']
+                        safari_profiles[profile_uuid].extension_uuid = row['server_id']
+                        log.info(f"Safari profile: {safari_profiles[profile_uuid].profile_name} "
+                                 f"(Profile UUID={profile_uuid} / Extension UUID={safari_profiles[profile_uuid].extension_uuid})")
+                        break
+
+            conn.close()
+
+            for profile_uuid in safari_profiles:
+                if safari_profiles[profile_uuid].profile_name == '':
+                    log.warning(f"Profile UUID {profile_uuid} has no name")
+
+            return dict(**{'': SafariProfile('', '', '')}, **safari_profiles)
+
+        except sqlite3.Error:
+            log.exception("Sqlite error in SafariTabs.db")
+
+    return {'': SafariProfile('', '', '')}
+
+
+def FindSafariProfileByBookmarksId(conn: sqlite3.Connection, bookmarks_id: int) -> str:
+    try:
+        conn.row_factory = sqlite3.Row
+        log.debug(f"Fetching bookmarks record: id = {bookmarks_id}")
+        cursor = conn.execute(f"SELECT id, special_id, parent, type, subtype, title, url FROM bookmarks WHERE id = {bookmarks_id}")
+        for row in cursor:
+            if row['parent'] is None:
+                return ''
+            elif row['parent'] == 0 and row['type'] == 1 and row['subtype'] == 2 and row['url'] == '':
+                return row['title']
+            else:
+                profile_name = FindSafariProfileByBookmarksId(conn, row['parent'])
+                return profile_name
+    except sqlite3.Error:
+        log.exception("Sqlite error in SafariTabs.db while fetching profile name")
+    return ''
+
+
 def ReadSafariTabsDb(conn, safari_items, source_path, user):
     try:
         conn.row_factory = sqlite3.Row
         cursor = conn.execute(
-            """SELECT title, url, local_attributes, date_closed
+            """SELECT id, special_id, parent, type, subtype, title, url, local_attributes, date_closed
                 FROM bookmarks WHERE url not like '' """)
         try:
             for row in cursor:
@@ -248,9 +332,10 @@ def ReadSafariTabsDb(conn, safari_items, source_path, user):
                             last_visit_ended = plist.get('DateClosed', '')
                         else:
                             log.error(error)
+                    profile_name = FindSafariProfileByBookmarksId(conn, row['parent'])
+                    info = f'Visit_end={last_visit_ended}' + f', Profile: {profile_name}' if profile_name else f'Visit_end={last_visit_ended}'
                     si = SafariItem(SafariItemType.TAB, row['url'], row['title'], last_visit_start,
-                                    f'Visit_end={last_visit_ended}',
-                                    user, source_path)
+                                    info, user, source_path)
                     safari_items.append(si)
                 except sqlite3.Error as ex:
                     log.exception ("Error while fetching row data")
@@ -286,12 +371,12 @@ def ReadBrowserStateDb(conn, safari_items, source_path, user):
                                     title = entry.get('SessionHistoryEntryTitle', '')
                                     if url == row['url']:
                                         continue # same as current tab, skip it
-                                    si = SafariItem(SafariItemType.TABHISTORY, url, title, '', 
+                                    si = SafariItem(SafariItemType.TABHISTORY, url, title, '',
                                                     f'Tab UUID={row["uuid"]} index={index}', user, source_path)
                                     safari_items.append(si)
                         else:
                             log.error(f'Failed to read plist for tab {row["uuid"]}, {row["id"]}. {error}')
-                     
+
                 except sqlite3.Error as ex:
                     log.exception ("Error while fetching row data")
         except sqlite3.Error as ex:
@@ -300,7 +385,34 @@ def ReadBrowserStateDb(conn, safari_items, source_path, user):
     except sqlite3.Error as ex:
         log.exception ("Sqlite error")
 
-def ReadExtensionsPlist(plist, safari_items, source_path, user):
+
+def ReadSafariTabSnapshotsDb(conn: sqlite3.Connection, safari_items: list[SafariItem], source_path: str, user: str) -> None:
+    try:
+        conn.row_factory = sqlite3.Row
+        cursor = conn.execute('SELECT date_created, filename, url FROM snapshot_metadata')
+        for row in cursor:
+            date = CommonFunctions.ReadMacAbsoluteTime(row['date_created']).strftime("%Y-%m-%d %H:%M:%S.%f")
+            si = SafariItem(SafariItemType.TAB_SNAPSHOT, row['url'], row['filename'], date, '', user, source_path)
+            safari_items.append(si)
+    except sqlite3.Error:
+        log.exception(f"Sqlite error in {source_path}")
+
+
+def ProcessTabSnapshotsFolder(mac_info: MacInfo, folder_path: str, user: str, safari_items: list[SafariItem]) -> None:
+    if mac_info.IsValidFilePath(folder_path + '/Metadata.db'):
+        log.debug(f"Exporting Safari TabSnapshots from {folder_path}")
+        files_list = mac_info.ListItemsInFolder(folder_path, EntryType.FILES, include_dates=False)
+        png_files = [file_item['name'] for file_item in files_list if file_item['name'].endswith('.png')]
+
+        log.info(f"Found {len(png_files)} TabSnapshots in {folder_path}")
+        for png_file in png_files:
+            log.debug(f"Exporting TabSnapshots: {png_file}")
+            mac_info.ExportFile(folder_path + '/' + png_file, __Plugin_Name + '/TabSnapshots', user + '_', False)
+
+        ReadDbFromImage(mac_info, folder_path + '/Metadata.db', user, safari_items, ReadSafariTabSnapshotsDb, 'Safari TabSnapshots')
+
+
+def ReadExtensionsPlist(plist, safari_items, source_path, user, safari_profile=SafariProfile('', '', '')):
     try:
         extensions = plist['Installed Extensions']
         for item in extensions:
@@ -310,7 +422,7 @@ def ReadExtensionsPlist(plist, safari_items, source_path, user):
             apple_signed = item.get('Apple-signed', '')
             if apple_signed != '':
                 info = ', '.join([info, 'Apple-signed: ' + str(apple_signed)])
-            si = SafariItem(SafariItemType.EXTENSION, '', item.get('Archive File Name', ''), 
+            si = SafariItem(SafariItemType.EXTENSION, '', item.get('Archive File Name', ''),
                             None, info, user, source_path)
             safari_items.append(si)
         return
@@ -326,7 +438,9 @@ def ReadExtensionsPlist(plist, safari_items, source_path, user):
                 info += 'Enabled:' + str(enabled)
             for key, val in ext.get('WebsiteAccess', {}).items():
                 info += f', {key}:{val}'
-            si = SafariItem(SafariItemType.EXTENSION, '', ext_name, 
+            if safari_profile.profile_uuid:
+                info = f'Profile: {safari_profile.profile_name}, {info}'
+            si = SafariItem(SafariItemType.EXTENSION, '', ext_name,
                             None, info, user, source_path)
             safari_items.append(si)
     except (KeyError, ValueError, TypeError) as ex:
@@ -338,7 +452,7 @@ def ReadHistoryPlist(plist, safari_items, source_path, user):
         if version != 1:
             log.warning('WebHistoryFileVersion is {}, this may not parse properly!'.format(version))
     except KeyError:
-        log.error('WebHistoryFileVersion not found')        
+        log.error('WebHistoryFileVersion not found')
     try:
         history_dates = plist['WebHistoryDates']
         for item in history_dates:
@@ -495,9 +609,9 @@ def ReadRecentlyClosedTabsPlist(plist, safari_items, source_path, user):
             else:
                 log.error('Key PersistentState not present!')
     except KeyError as ex:
-        log.error('ClosedTabOrWindowPersistentStates not found or unable to parse. Error was {}'.format(str(ex)))   
+        log.error('ClosedTabOrWindowPersistentStates not found or unable to parse. Error was {}'.format(str(ex)))
 
-def ProcessSafariFolder(mac_info, folder_path, user, safari_items):
+def ProcessSafariFolder(mac_info, folder_path, user, safari_items, safari_profiles={'': SafariProfile('', '', '')}):
     files_list = [ ['History.plist', ReadHistoryPlist] , ['Downloads.plist', ReadDownloadsPlist], 
                     ['Bookmarks.plist', ReadBookmarksPlist], ['TopSites.plist', ReadTopSitesPlist], 
                     ['LastSession.plist', ReadLastSessionPlist], ['Extensions/Extensions.plist', ReadExtensionsPlist],
@@ -508,32 +622,48 @@ def ProcessSafariFolder(mac_info, folder_path, user, safari_items):
             ProcessSafariPlist(mac_info, source_path, user, safari_items, item[1])
         else:
             log.debug('Safari File not found : {}'.format(source_path))
-    # Yosemite onwards there is History.db
-    ReadDbFromImage(mac_info, folder_path + '/History.db', user, safari_items, ReadHistoryDb, 'safari history')
+
+    for safari_profile in safari_profiles.values():
+        if safari_profile.profile_uuid:
+            history_db_path = folder_path + f'/Profiles/{safari_profile.profile_uuid}/History.db'
+        else:
+            history_db_path = folder_path + '/History.db'
+        # Yosemite onwards there is History.db
+        ReadDbFromImage(mac_info, history_db_path, user, safari_items, ReadHistoryDb, 'safari history', safari_profile)
+
+    # CloudTabs.db, SafariTabs.db, BrowserState.db are used as common databases for all profiles
     ReadDbFromImage(mac_info, folder_path + '/CloudTabs.db', user, safari_items, ReadCloudTabsDb, 'safari CloudTabs')
     ReadDbFromImage(mac_info, folder_path + '/SafariTabs.db', user, safari_items, ReadSafariTabsDb, 'safari Tabs')
-    ReadDbFromImage(mac_info, folder_path + '/BrowserState.db', user, safari_items, ReadBrowserStateDb, 'safari BrowserState')    
+    ReadDbFromImage(mac_info, folder_path + '/BrowserState.db', user, safari_items, ReadBrowserStateDb, 'safari BrowserState')
 
-def ReadDbFromImage(mac_info, source_path, user, safari_items, processing_func, description):
+def ReadDbFromImage(mac_info, source_path, user, safari_items, processing_func, description, safari_profile=SafariProfile('', '', '')):
     if mac_info.IsValidFilePath(source_path) and mac_info.GetFileSize(source_path, 0) > 0:
-        mac_info.ExportFile(source_path, __Plugin_Name, user + "_")
+        if safari_profile.profile_uuid:
+            prefix = user + "_" + safari_profile.profile_name + '_'
+        else:
+            prefix = user + '_'
+        mac_info.ExportFile(source_path, __Plugin_Name, prefix)
         try:
             sqlite = SqliteWrapper(mac_info)
             conn = sqlite.connect(source_path)
             if conn:
-                processing_func(conn, safari_items, source_path, user)
+                if processing_func in (ReadHistoryDb, ):
+                    processing_func(conn, safari_items, source_path, user, safari_profile)
+                else:
+                    processing_func(conn, safari_items, source_path, user)
         except (sqlite3.Error, OSError) as ex:
             log.exception ("Failed to open {} database '{}', is it a valid SQLITE DB?".format(description, source_path))
 
 def Plugin_Start(mac_info):
     '''Main Entry point function for plugin'''
     safari_items = []
-    user_safari_plist_paths = ('{}/Library/Preferences/com.apple.safari.plist',\
+    user_safari_plist_paths = ('{}/Library/Preferences/com.apple.safari.plist',
                             '{}/Library/Containers/com.apple.Safari/Data/Library/Preferences/com.apple.Safari.plist')
     user_safari_path = '{}/Library/Safari'
     user_safari_path_15 = '{}/Library/Containers/com.apple.Safari/Data/Library/Safari' # Safari 15 moved some data here
-    user_safari_extensions = ('{}/Library/Containers/com.apple.Safari/Data/Library/Safari/AppExtensions/Extensions.plist',\
-                            '{}/Library/Containers/com.apple.Safari/Data/Library/Safari/WebExtensions/Extensions.plist')
+    user_safari_extensions = ('{}/Library/Containers/com.apple.Safari/Data/Library/Safari/{}AppExtensions/Extensions.plist',
+                            '{}/Library/Containers/com.apple.Safari/Data/Library/Safari/{}WebExtensions/Extensions.plist')
+    user_safari_tabsnapshots_path = '{}/Library/Containers/com.apple.Safari/Data/Library/Caches/com.apple.Safari/TabSnapshots'
     processed_paths = []
     for user in mac_info.users:
         user_name = user.user_name
@@ -552,15 +682,24 @@ def Plugin_Start(mac_info):
         source_path = user_safari_path.format(user.home_dir)
         if mac_info.IsValidFolderPath(source_path):
             ProcessSafariFolder(mac_info, source_path, user_name, safari_items)
-        
+
+        # Safari 17 supports multi profiles
         source_path = user_safari_path_15.format(user.home_dir)
+        safari_profiles = GetSafariProfiles(mac_info, source_path)
         if mac_info.IsValidFolderPath(source_path):
-            ProcessSafariFolder(mac_info, source_path, user_name, safari_items)
-        
+            ProcessSafariFolder(mac_info, source_path, user_name, safari_items, safari_profiles)
+
         for ext_path in user_safari_extensions:
-            source_path = ext_path.format(user.home_dir)
-            if mac_info.IsValidFilePath(source_path):
-                ProcessSafariPlist(mac_info, source_path, user_name, safari_items, ReadExtensionsPlist)
+            for safari_profile in safari_profiles.values():
+                if safari_profile.extension_uuid:
+                    source_path = ext_path.format(user.home_dir, safari_profile.extension_uuid + '/')
+                else:
+                    source_path = ext_path.format(user.home_dir, '')
+                if mac_info.IsValidFilePath(source_path):
+                    ProcessSafariPlist(mac_info, source_path, user_name, safari_items, ReadExtensionsPlist, safari_profile)
+
+        source_path = user_safari_tabsnapshots_path.format(user.home_dir)
+        ProcessTabSnapshotsFolder(mac_info, source_path, user_name, safari_items)
 
     if len(safari_items) > 0:
         PrintAll(safari_items, mac_info.output_params, '')
@@ -599,37 +738,45 @@ def Plugin_Start_Standalone(input_files_list, output_params):
             except ValueError as ex:
                 log.exception('Failed to open file: {}'.format(input_path))
         elif input_path.endswith('History.db'):
-            log.info ("Processing file " + input_path)
+            log.info("Processing file " + input_path)
             try:
                 conn = CommonFunctions.open_sqlite_db_readonly(input_path)
-                log.debug ("Opened database successfully")
+                log.debug("Opened database successfully")
                 ReadHistoryDb(conn, safari_items, input_path, '')
             except (sqlite3.Error, OSError) as ex:
-                log.exception ("Failed to open database, is it a valid SQLITE DB?")
+                log.exception("Failed to open database, is it a valid SQLITE DB?")
         elif input_path.endswith('CloudTabs.db'):
-            log.info ("Processing file " + input_path)
+            log.info("Processing file " + input_path)
             try:
                 conn = CommonFunctions.open_sqlite_db_readonly(input_path)
-                log.debug ("Opened database successfully")
+                log.debug("Opened database successfully")
                 ReadCloudTabsDb(conn, safari_items, input_path, '')
             except (sqlite3.Error, OSError) as ex:
-                log.exception ("Failed to open database, is it a valid SQLITE DB?")
+                log.exception("Failed to open database, is it a valid SQLITE DB?")
         elif input_path.endswith('SafariTabs.db'):
-            log.info ("Processing file " + input_path)
+            log.info("Processing file " + input_path)
             try:
                 conn = CommonFunctions.open_sqlite_db_readonly(input_path)
-                log.debug ("Opened database successfully")
+                log.debug("Opened database successfully")
                 ReadSafariTabsDb(conn, safari_items, input_path, '')
             except (sqlite3.Error, OSError) as ex:
-                log.exception ("Failed to open database, is it a valid SQLITE DB?")
+                log.exception("Failed to open database, is it a valid SQLITE DB?")
         elif input_path.endswith('BrowserState.db'):
-            log.info ("Processing file " + input_path)
+            log.info("Processing file " + input_path)
             try:
                 conn = CommonFunctions.open_sqlite_db_readonly(input_path)
-                log.debug ("Opened database successfully")
+                log.debug("Opened database successfully")
                 ReadBrowserStateDb(conn, safari_items, input_path, '')
             except (sqlite3.Error, OSError) as ex:
-                log.exception ("Failed to open database, is it a valid SQLITE DB?")
+                log.exception("Failed to open database, is it a valid SQLITE DB?")
+        elif input_path.endswith('Metadata.db'):
+            log.info("Processing file " + input_path)
+            try:
+                conn = CommonFunctions.open_sqlite_db_readonly(input_path)
+                log.debug("Opened database successfully")
+                ReadSafariTabSnapshotsDb(conn, safari_items, input_path, '')
+            except (sqlite3.Error, OSError) as ex:
+                log.exception("Failed to open database, is it a valid SQLITE DB?")
         else:
             log.error('Input file {} is not a recognized name of a Safari artifact!'.format(input_path))
         if len(safari_items) > 0:
@@ -660,4 +807,4 @@ def Plugin_Start_Ios(ios_info):
         log.info('No safari items were found!')
 
 if __name__ == '__main__':
-    print ("This plugin is a part of a framework and does not run independently on its own!")
+    print("This plugin is a part of a framework and does not run independently on its own!")
