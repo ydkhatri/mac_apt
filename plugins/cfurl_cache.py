@@ -171,7 +171,7 @@ def PrintAll(cfurl_cache_artifacts, output_params, source_path):
                         ('User', DataType.TEXT), ('App_Bundle_ID', DataType.TEXT), ('Source', DataType.TEXT)]
 
     data_list = []
-    log.info(f"{len(cfurl_cache_artifacts)} CFURL cache artifact(s) found")
+    log.info(f"{len(cfurl_cache_artifacts)} CFURL cache item(s) found")
     for item in cfurl_cache_artifacts:
         data_list.append([item.date, item.url, item.method, item.req_header, item.http_status, item.resp_header, item.isDataOnFS, item.received_data, item.username, item.app_bundle_id, item.source])
 

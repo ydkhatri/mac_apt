@@ -170,7 +170,7 @@ def PrintAll(tcc_artifacts, output_params, source_path):
                     ('User', DataType.TEXT), ('Source', DataType.TEXT)]
 
     data_list = []
-    log.info(f"{len(tcc_artifacts)} TCC artifact(s) found")
+    log.info(f"{len(tcc_artifacts)} TCC item(s) found")
     if tcc_db_type == TccDbType.MACOS1015:
         for item in tcc_artifacts:
             data_list.append([item.last_modified, item.service, item.client, item.client_type, item.allowed, 
