@@ -6,7 +6,7 @@
 * Adam Ferrante (@ferran7e) - Plugin Documentation on wiki and wrote DOCKITEMS & BLUETOOTH plugins
 * Jack Farley (@JackFarley248) - Added Encryption support and plugins - IDEVICE_BACKUPS, IDEVICE_INFO, PRINTJOBS, IMESSAGE, SCREENTIME, QUICKLOOK
 * Michael Geyer - Wrote the WIFI plugin
-* Nicole Ibrahim (@nicoleibrahim) - Wrote the DOCUMENTREVISIONS plugin
+* Nicole Ibrahim (@nicoleibrahim) - Wrote the DOCUMENTREVISIONS plugin, bug fix for disk decryption
 * Minoru Kobayashi (@mnrkbys) - Bugfixes, parsers, and writing the UTMPX, CFURL_CACHE, FILESHARING plugins
 * Brandon Mignini - Wrote the AUTOSTART plugin
 * Noah Sidall (@noah_sidd) - Wrote the INSTALLHISTORY plugin

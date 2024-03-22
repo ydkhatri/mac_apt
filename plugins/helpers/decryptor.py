@@ -475,6 +475,9 @@ class EncryptedVol:
             # KEK unwrapping
             if kek_enc_type == 2: # for 128 bit keys, when filevauled HFS upgraded to APFS
                 unwrapped_kek = unwrap(wrapped_kek[:24], user_password_key[:16])
+            elif kek_enc_type == 16:
+                unwrapped_kek = unwrap(wrapped_kek, user_password_key)
+                unwrapped_kek = unwrapped_kek.replace(b'\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00',b'')
             else:
                 unwrapped_kek = unwrap(wrapped_kek, user_password_key)
             log.debug('KEK unwrapped successfully!')
