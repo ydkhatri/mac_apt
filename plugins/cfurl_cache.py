@@ -22,7 +22,7 @@ from plugins.helpers.writer import *
 
 __Plugin_Name = "CFURLCACHE" # Cannot have spaces, and must be all caps!
 __Plugin_Friendly_Name = "CFURL cache"
-__Plugin_Version = "1.0"
+__Plugin_Version = "1.1"
 __Plugin_Description = "Parses CFURL cache and extract date, URL, request, response, and received data."
 __Plugin_Author = "Minoru Kobayashi"
 __Plugin_Author_Email = "unknownbit@gmail.com"
@@ -84,7 +84,7 @@ def CheckSchemaVersion(db):
     query = "SELECT schema_version FROM cfurl_cache_schema_version"
     cursor = db.execute(query)
     for row in cursor:
-        schema_version = row['schema_version']
+        schema_version = int(row['schema_version'])
 
     if schema_version in KnownSchemaVersion:
         log.debug("Schema version = {}".format(schema_version))
@@ -119,14 +119,14 @@ def ParseResponseObject(object_data):
 def ParseCFURLEntry(db, cfurl_cache_artifacts, username, app_bundle_id, cfurl_cache_db_path):
     db.row_factory = sqlite3.Row
     tables = CommonFunctions.GetTableNames(db)
-    schema_version = 0
+    schema_version = None
     if 'cfurl_cache_schema_version' in tables:
         schema_version = CheckSchemaVersion(db)
     else:
         log.debug('There is no cfurl_cache_schema_version table.')
 
     if 'cfurl_cache_response' in tables:
-        if schema_version in (0, 202):
+        if schema_version in (None, 202, ):
             query = """SELECT entry_ID, time_stamp, request_key, request_object, response_object, isDataOnFS, receiver_data 
                         FROM cfurl_cache_response JOIN cfurl_cache_blob_data USING (entry_ID) 
                         JOIN cfurl_cache_receiver_data USING (entry_ID)"""
@@ -134,18 +134,23 @@ def ParseCFURLEntry(db, cfurl_cache_artifacts, username, app_bundle_id, cfurl_ca
             for row in cursor:
                 http_req_method, req_headers = ParseRequestObject(row['request_object'])
                 http_status, resp_headers = ParseResponseObject(row['response_object'])
-                if type(row['receiver_data']) == bytes:
+                if (row['receiver_data'] is None) or (type(row['receiver_data']) is bytes):
                     received_data = row['receiver_data']
-                elif type(row['receiver_data']) == str:
+                elif type(row['receiver_data']) is str:
                     received_data = row['receiver_data'].encode()
                 else:
                     log.error('Unknown type of "receiver_data": {}'.format(type(row['receiver_data'])))
-                    continue
+                    received_data = row['receiver_data']
 
                 item = CfurlCacheItem(row['time_stamp'], row['request_key'], http_req_method, req_headers, 
                                         http_status, resp_headers, row['isDataOnFS'], received_data, 
                                         username, app_bundle_id, cfurl_cache_db_path)
                 cfurl_cache_artifacts.append(item)
+        else:
+            if schema_version is not None:
+                log.error("Unsupported schema version: {}".format(schema_version))
+    else:
+        log.error("There is no cfurl_cache_response table.")
 
 
 def ExtractAndReadCFURLCache(mac_info, cfurl_cache_artifacts, username, app_bundle_id, folder_path):
