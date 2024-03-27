@@ -10,6 +10,7 @@
 import logging
 import os
 import sqlite3
+
 from plugins.helpers.common import *
 from plugins.helpers.disk_report import Disk_Info
 from plugins.helpers.macinfo import *
@@ -166,6 +167,7 @@ def GetTimezone(mac_info):
                 tz_symlink_path = tz_symlink_path[20:]
             elif tz_symlink_path.startswith('/var/db/timezone/zoneinfo/'): # on HighSierra
                 tz_symlink_path = tz_symlink_path[26:]
+            mac_info.timezone = tz_symlink_path
             basic_data.append(['TIMEZONE', 'TimeZone Set', tz_symlink_path, 'Timezone on machine', '/private/etc/localtime'])
         except (IndexError, ValueError, TypeError) as ex:
             log.error('Error trying to read timezone information - ' + str(ex))
