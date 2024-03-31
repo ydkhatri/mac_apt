@@ -9,7 +9,7 @@ mac_apt is a DFIR (Digital Forensics and Incident Response) tool to process Mac 
 
 mac_apt now also includes **[ios_apt](https://swiftforensics.com/2020/12/introducing-iosapt-ios-artifact-parsing.html)**, for processing ios images.
 
-#### Requirements: Python 3.7 or above (64 bit)
+#### Requirements: Python 3.9 or above (64 bit)
 _Note: certain dependencies do not work on Python 3.11 ! So use 3.9 or 3.10 for now._
 #### Features
 * Cross platform (no dependency on pyobjc)
@@ -23,7 +23,7 @@ _Note: certain dependencies do not work on Python 3.11 ! So use 3.9 or 3.10 for 
 #### Latest
 :heavy_check_mark: Can read Axiom created targeted collection zip files  
 :heavy_check_mark: ios_apt can read GrayKey extracted file system  
-:heavy_check_mark: Can read [RECON](https://sumuri.com/software/recon-itr/) created .sparseimage files  
+:heavy_check_mark: Can read [RECON](https://sumuri.com/software/recon-itr/) ans [ASLA](https://github.com/giuseppetotaro/asla) created .sparseimage files  
 :heavy_check_mark: Support for macOS Big Sur Sealed volumes (11.0)  
 :heavy_check_mark: Introducing **ios_apt** for processing iOS/ipadOS images  
 :heavy_check_mark: FAST mode :hourglass_flowing_sand:   
