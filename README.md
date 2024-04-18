@@ -1,4 +1,4 @@
-# mac_apt - macOS (and iOS) Artifact Parsing Tool  
+# mac_apt - macOS (and iOS) Artifact Parsing Tool
 [![Latest version](https://img.shields.io/badge/version-v1.5.8-blue)](https://github.com/ydkhatri/mac_apt/releases/tag/v1.5.8-dev)
 [![status](https://img.shields.io/badge/status-stable-green)]()
 
@@ -13,7 +13,7 @@ mac_apt now also includes **[ios_apt](https://swiftforensics.com/2020/12/introdu
 _Note: certain dependencies do not work on Python 3.11 ! So use 3.9 or 3.10 for now._
 #### Features
 * Cross platform (no dependency on pyobjc)
-* Works on E01, VMDK, AFF4, DD, split-DD, DMG (no compression), SPARSEIMAGE & mounted images  
+* Works on E01, VMDK, AFF4, DD, split-DD, DMG (no compression), SPARSEIMAGE & mounted images
 * XLSX, CSV, TSV, Sqlite outputs
 * Analyzed files/artifacts are exported for later review
 * zlib, lzvn, lzfse compressed files are supported!
@@ -21,17 +21,17 @@ _Note: certain dependencies do not work on Python 3.11 ! So use 3.9 or 3.10 for 
 * Reads the Spotlight database and Unified Logging (tracev3) files
 
 #### Latest
-:heavy_check_mark: Can read Axiom created targeted collection zip files  
-:heavy_check_mark: ios_apt can read GrayKey extracted file system  
-:heavy_check_mark: Can read [RECON](https://sumuri.com/software/recon-itr/) ans [ASLA](https://github.com/giuseppetotaro/asla) created .sparseimage files  
-:heavy_check_mark: Support for macOS Big Sur Sealed volumes (11.0)  
-:heavy_check_mark: Introducing **ios_apt** for processing iOS/ipadOS images  
-:heavy_check_mark: FAST mode :hourglass_flowing_sand:   
-:heavy_check_mark: Encrypted :lock: APFS images can now be processed using password/recovery-key :key:   
-:heavy_check_mark: macOS Catalina (10.15+) separately mounted SYSTEM & DATA volumes now supported  
+:heavy_check_mark: Can read Axiom created targeted collection zip files
+:heavy_check_mark: ios_apt can read GrayKey extracted file system
+:heavy_check_mark: Can read [RECON](https://sumuri.com/software/recon-itr/) ans [ASLA](https://github.com/giuseppetotaro/asla) created .sparseimage files
+:heavy_check_mark: Support for macOS Big Sur Sealed volumes (11.0)
+:heavy_check_mark: Introducing **ios_apt** for processing iOS/ipadOS images
+:heavy_check_mark: FAST mode :hourglass_flowing_sand:
+:heavy_check_mark: Encrypted :lock: APFS images can now be processed using password/recovery-key :key:
+:heavy_check_mark: macOS Catalina (10.15+) separately mounted SYSTEM & DATA volumes now supported
 :heavy_check_mark: AFF4 images (including macquisition created) are supported
 
-Available Plugins (artifacts parsed) | Description 
+Available Plugins (artifacts parsed) | Description
 ------------------ | ---------------
 APPLIST | Reads apps & printers installed and/or available for each user from appList.dat
 ARD | Reads ARD (Apple Remote Desktop) cached databases about app usage
@@ -53,6 +53,7 @@ IMESSAGE | Read iMessage chats
 INETACCOUNTS | Retrieve configured internet accounts (iCloud, Google, Linkedin, facebook..)
 INSTALLHISTORY | Software Installation History
 MSOFFICE | Reads Word, Excel, Powerpoint and other office MRU/accessed file paths
+MSRDC | Reads connection history from Microsoft Remote Desktop database and extracts thumbnails
 NETUSAGE | Read network usage data statistics per application
 NETWORKING | Interfaces, last IP address, MAC address, DHCP ..
 NOTES | Reads notes databases
