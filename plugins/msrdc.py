@@ -198,11 +198,11 @@ def Plugin_Start(mac_info: MacInfo) -> None:
         processed_paths.add(user.home_dir)
         msrdc_db_path = msrdc_db_base_path.format(user.home_dir)
         if mac_info.IsValidFilePath(msrdc_db_path):
-            ExtractAndReadMSRDC(mac_info, msrdc_artifacts, user, msrdc_db_path)
+            ExtractAndReadMSRDC(mac_info, msrdc_artifacts, user.user_name, msrdc_db_path)
 
         msrdc_thumbs_path = msrdc_thumbs_base_path.format(user.home_dir)
         if mac_info.IsValidFolderPath(msrdc_thumbs_path):
-            mac_info.ExportFolder(msrdc_thumbs_path, os.path.join(__Plugin_Name, user), overwrite=True)
+            mac_info.ExportFolder(msrdc_thumbs_path, os.path.join(__Plugin_Name, user.user_name), overwrite=True)
 
     if len(msrdc_artifacts) > 0:
         PrintAll(msrdc_artifacts, mac_info.output_params, "")
