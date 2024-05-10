@@ -82,7 +82,6 @@ def GetAutoLoginUser(mac_info):
             log.error('Failed to read plist ' + loginwindow_plist_path + " Error was : " + error_message)
     return user
 
-#Not sure if this still exists post 10.9
 def GetDeletedUsers(mac_info):
     deleted_users = []
     plist_path = '/Library/Preferences/com.apple.preferences.accounts.plist'

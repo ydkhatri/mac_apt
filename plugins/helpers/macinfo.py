@@ -987,6 +987,17 @@ class MacInfo:
                             break
                     if not found_user:
                         log.error('Could not find username for UID={} GID={} PATH={}'.format(uid, gid, path))
+                        log.info(f'Creating new user as unknown_uid_{uid}')
+                        deleted_user = UserInfo()
+                        deleted_user.DARWIN_USER_DIR       = path + '/0'
+                        deleted_user.DARWIN_USER_CACHE_DIR = path + '/C'
+                        deleted_user.DARWIN_USER_TEMP_DIR  = path + '/T'
+                        deleted_user.real_name = f'unknown_uid_{uid}'
+                        deleted_user.user_name = f'unknown_uid_{uid}'
+                        deleted_user.home_dir = '/UNKNOWN/'
+                        deleted_user.UID = str(uid)
+                        deleted_user.GID = str(gid)
+                        self.users.append(deleted_user)
 
     def _GetSystemInfo(self):
         ''' Gets system version information'''
