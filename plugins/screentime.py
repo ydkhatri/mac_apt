@@ -95,10 +95,10 @@ def findDb(mac_info):
         else:
             darwin_user_folders = user.DARWIN_USER_DIR.split(',')
             for darwin_user_dir in darwin_user_folders:
-                db_path = (darwin_user_dir + '/com.apple.ScreenTimeAgent/Store/RMAdminStore-Local.sqlite')
-                if not mac_info.IsValidFilePath(db_path): continue
-                else:
-                    db_path_arr.append(db_path)
+                for db_name in ('RMAdminStore-Local.sqlite', 'RMAdminStore-Cloud.sqlite'):
+                    db_path = f'{darwin_user_dir}/com.apple.ScreenTimeAgent/Store/{db_name}'
+                    if mac_info.IsValidFilePath(db_path):
+                        db_path_arr.append(db_path)
     return db_path_arr
 
 def ReadScreenTime(db, screen_time_arr, source):
