@@ -289,9 +289,9 @@ def Plugin_Start(mac_info):
                         mac_info.ExportFile(db_path, __Plugin_Name, user_name + '_')
                         break
             
-    elif (version_dict['major'] == 10 and version_dict['minor'] >= 10) or version_dict['major'] == 11: # Yosemite or higher
+    elif (version_dict['major'] == 10 and version_dict['minor'] >= 10) or version_dict['major'] >= 11: # Yosemite or higher
         screentime_strings_dict = None
-        if (version_dict['major'] == 10 and version_dict['minor'] >= 15) or version_dict['major'] == 11: #Catalina or higher
+        if (version_dict['major'] == 10 and version_dict['minor'] >= 15) or version_dict['major'] >= 11: #Catalina or higher
             screentime_strings_dict = GetScreenTimeStrings(mac_info)
         for user in mac_info.users:
             if not user.DARWIN_USER_DIR or not user.user_name: continue # TODO: revisit this later!
