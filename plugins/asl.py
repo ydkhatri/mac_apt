@@ -18,13 +18,13 @@ import logging
 
 __Plugin_Name = "ASL"
 __Plugin_Friendly_Name = "Asl"
-__Plugin_Version = "1.0"
+__Plugin_Version = "1.1"
 __Plugin_Description = 'Reads macOS ASL (Apple System Log) from asl.log, asl.db, and ".asl" files.'
 __Plugin_Author = "Yuya Hashimoto"
 __Plugin_Author_Email = "yhashimoto0707@gmail.com"
 
-__Plugin_Modes = "MACOS"
-__Plugin_ArtifactOnly_Usage = ""
+__Plugin_Modes = "MACOS,ARTIFACTONLY"
+__Plugin_ArtifactOnly_Usage = "Provide the path to folder containing asl files"
 
 log = logging.getLogger('MAIN.' + __Plugin_Name) # Do not rename or remove this ! This is the logger object
 
@@ -52,21 +52,21 @@ _ASL_FILE_TYPE_STR = 1
 _ASL_LEVEL = ["Emergency", "Alert", "Critical", "Error", "Warning", "Notice", "Info", "Debug"]
 
 data_name_text = "asl_text"
-data_description_text = "asl.log (in text format)"
+data_description_text = "asl.log (in text format) entries"
 data_type_info_text = [ ("Time",DataType.TEXT), ("Facility",DataType.TEXT), ("Sender",DataType.TEXT),
                    ("PID", DataType.INTEGER), ("Message",DataType.TEXT), ("Level", DataType.TEXT),
                    ("UID", DataType.INTEGER), ("GID", DataType.INTEGER), ("Host",DataType.TEXT),
                    ("Source",DataType.TEXT)]
 
 data_name_legacy = "asl_legacy"
-data_description_legacy = "asl.db (legacy)"
+data_description_legacy = "asl.db (legacy) entries"
 data_type_info_legacy = [ ("Time",DataType.DATE), ("Host",DataType.TEXT), ("Sender",DataType.TEXT),
                           ("Facility",DataType.TEXT), ("Level", DataType.TEXT), ("PID", DataType.INTEGER),
                           ("UID", DataType.INTEGER), ("GID", DataType.INTEGER), ("ID", DataType.INTEGER),
                           ("Message",DataType.TEXT), ("Key_Value",DataType.TEXT), ("Source",DataType.TEXT) ]
 
 data_name_ver2 = "asl_ver2"
-data_description_ver2 = ".asl (version 2)"
+data_description_ver2 = "asl (version 2) entries"
 data_type_info_ver2 = [ ("Timestamp",DataType.DATE), ("Nano",DataType.INTEGER), ("ID", DataType.INTEGER),
                         ("Flags", DataType.INTEGER), ("Host", DataType.TEXT), ("Sender", DataType.TEXT),
                         ("Facility", DataType.TEXT), ("Level", DataType.TEXT), ("PID", DataType.INTEGER),
@@ -339,12 +339,11 @@ class Asl:
     def get_version(self):
         return self.version
 
-    def __init__(self, mac_info, file):
-        self.mac_info = mac_info
+    def __init__(self, fd, size, file):
         self.version = -1
         try:
-            _fd = self.mac_info.Open(file)
-            _size = self.mac_info.GetFileSize(file)
+            _fd = fd
+            _size = size
         except Exception as ex:
             log.exception("Could not open file '{0}' ({1})".format(file, ex))
             return
@@ -380,8 +379,12 @@ class Asl:
                 self.msg_ids = dict(sorted(self.msg_ids.items()))
 
             elif self.version == _DB_VERSION_2:
-                self.first_rec, = struct.unpack(">Q", self.fd.read(8))
-                self.time = datetime.datetime.fromtimestamp(0).timestamp() + struct.unpack(">q", self.fd.read(8))[0]
+                self.first_rec, td = struct.unpack(">Qq", self.fd.read(16))
+                try:
+                    timedelta = datetime.timedelta(seconds=td)
+                    self.time = datetime.datetime.fromtimestamp(0) + timedelta
+                except:
+                    log.exception('Time exception')
                 self.string_cache_size, = struct.unpack(">I", self.fd.read(4))
                 self.fd.read(1)
                 self.last_rec, = struct.unpack(">Q", self.fd.read(8))
@@ -397,15 +400,14 @@ class Asl:
                     _current_rec = _next_rec
 
         else:
-            _fd = self.mac_info.Open(file)
-            if _fd.read(5).decode(errors="ignore") == "[Time":
+            self.fd.seek(0)
+            if self.fd.read(5).decode(errors="ignore") == "[Time":
                 self.version = _DB_VERSION_TXT
-                self.fd = _fd
-                self.fd.seek(0)
+            self.fd.seek(0)
 
     def __iter__(self):
         if self.version == _DB_VERSION_TXT:
-            for l in self.fd:
+            for l in self.fd: # BUG? won't work as file is opened in 'b' mode
                 yield AslText(self.file, l)
         if self.version == _DB_VERSION_LEGACY_1:
             for id, pos in self.msg_ids.items():
@@ -462,11 +464,22 @@ def CreateSqliteDb(output_path, out_params):
 def Process_Asl_File(mac_info, out_params, asl_file, writer, data_description, data_name, data_type_info):
 
     msgs = []
-    try:
-        asl = Asl(mac_info, asl_file)
-    except Exception as e:
-        log.exception("Could not read file as ASL DB '{0}' ({1}): Skipping this file".format(file, e))
-        return
+    if mac_info is None: # for artifact_only
+        try:
+            size = os.path.getsize(asl_file)
+            fd = open(asl_file, 'rb')
+            asl = Asl(fd, size, asl_file)
+        except Exception as e:
+            log.exception("Could not read file as ASL DB '{0}' ({1}): Skipping this file".format(asl_file, e))
+            return
+    else:
+        try:
+            size = mac_info.GetFileSize(asl_file)
+            fd = mac_info.Open(asl_file)
+            asl = Asl(fd, size, asl_file)
+        except Exception as e:
+            log.exception("Could not read file as ASL DB '{0}' ({1}): Skipping this file".format(asl_file, e))
+            return
 
     _v = asl.get_version()
     if _v == _DB_VERSION_TXT or _v == _DB_VERSION_LEGACY_1 or _v == _DB_VERSION_2:
@@ -501,9 +514,6 @@ def Recurse_Process_Asl_Files(mac_info, out_params, asl_files):
 def Plugin_Start(mac_info):
     '''Main Entry point function for plugin'''
 
-    log.info("Current OS is: " + os.name)
-    log.info("Mac version is : {}".format(mac_info.os_version))
-
     # asl path
     asl_text_path = "/private/var/log/asl.log"
     asl_legacy_path = "/private/var/log/asl.db"
@@ -534,6 +544,37 @@ def Plugin_Start(mac_info):
             Recurse_Process_Asl_Files(mac_info, out_params, asl_files)
     except:
         log.exception('')
+
+def Plugin_Start_Standalone(input_files_list, output_params):
+    log.info("Module Started as standalone")
+    asl_files = {}
+    asl_ver2_files = []
+    asl_text_files = []
+    for input_path in input_files_list:
+        if not os.path.isdir(input_path):
+            log.error(f'Input path is not a folder: {input_path}')
+            continue
+        log.debug("Input folder passed was: " + input_path)
+        for name in os.listdir(input_path):
+            file_path = os.path.join(input_path, name)
+            if name.lower().endswith(".asl"):
+                asl_ver2_files.append(file_path)
+            elif name.lower().endswith("asl.log"):
+                asl_text_files.append(file_path)
+            if asl_text_files:
+                asl_files[_DB_VERSION_TXT] = asl_text_files
+            if asl_ver2_files:
+                asl_files[_DB_VERSION_2] = asl_ver2_files
+    if asl_files:
+        try:
+            output_path = output_params.output_path
+            out_params = CopyOutputParams(output_params)
+            if CreateSqliteDb(output_path, out_params):
+                Recurse_Process_Asl_Files(None, out_params, asl_files)
+        except:
+            log.exception('')
+    else:
+        log.info('Nothing to process, no suitable asl files found.')
 
 if __name__ == '__main__':
     print ("This plugin is a part of a framework and does not run independently on its own!")
