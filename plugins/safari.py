@@ -651,6 +651,7 @@ def ReadDbFromImage(mac_info, source_path, user, safari_items, processing_func, 
                     processing_func(conn, safari_items, source_path, user, safari_profile)
                 else:
                     processing_func(conn, safari_items, source_path, user)
+            conn.close()
         except (sqlite3.Error, OSError) as ex:
             log.exception ("Failed to open {} database '{}', is it a valid SQLITE DB?".format(description, source_path))
 
