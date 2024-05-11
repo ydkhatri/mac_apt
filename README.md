@@ -21,15 +21,15 @@ _Note: Tested upto Python 3.12 on Windows and macOS._
 * Reads the Spotlight database and Unified Logging (tracev3) files
 
 #### Latest
-:heavy_check_mark: Can read Axiom created targeted collection zip files
-:heavy_check_mark: ios_apt can read GrayKey extracted file system
-:heavy_check_mark: Can read [RECON](https://sumuri.com/software/recon-itr/) and [ASLA](https://github.com/giuseppetotaro/asla) created .sparseimage files
-:heavy_check_mark: Support for macOS Big Sur Sealed volumes (11.0)
-:heavy_check_mark: Introducing **ios_apt** for processing iOS/ipadOS images
-:heavy_check_mark: FAST mode :hourglass_flowing_sand:
-:heavy_check_mark: Encrypted :lock: APFS images can now be processed using password/recovery-key :key:
-:heavy_check_mark: macOS Catalina (10.15+) separately mounted SYSTEM & DATA volumes now supported
-:heavy_check_mark: AFF4 images (including macquisition created) are supported
+:heavy_check_mark: Can read Axiom created targeted collection zip files  
+:heavy_check_mark: ios_apt can read GrayKey extracted file system  
+:heavy_check_mark: Can read [RECON](https://sumuri.com/software/recon-itr/) and [ASLA](https://github.com/giuseppetotaro/asla) created .sparseimage files  
+:heavy_check_mark: Support for macOS Big Sur Sealed volumes (11.0)  
+:heavy_check_mark: Introducing **ios_apt** for processing iOS/ipadOS images  
+:heavy_check_mark: FAST mode :hourglass_flowing_sand:  
+:heavy_check_mark: Encrypted :lock: APFS images can now be processed using password/recovery-key :key:  
+:heavy_check_mark: macOS Catalina (10.15+) separately mounted SYSTEM & DATA volumes now supported  
+:heavy_check_mark: AFF4 images (including macquisition created) are supported  
 
 Available Plugins (artifacts parsed) | Description
 ------------------ | ---------------
