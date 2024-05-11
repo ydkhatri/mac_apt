@@ -451,10 +451,10 @@ def CopyOutputParams(output_params):
 def CreateSqliteDb(output_path, out_params):
 
     try:
-        sqlite_path = os.path.join(output_path, "ASL.db")
-        log.info("Creating sqlite db for asl @ {}".format(sqlite_path))
         sqlite_writer = SqliteWriter()
+        sqlite_path = os.path.join(output_path, "ASL.db")
         out_params.output_db_path = sqlite_writer.CreateSqliteDb(sqlite_path)
+        log.info("Creating sqlite db for asl @ {}".format(out_params.output_db_path))
         return True
     except sqlite3.Error as ex:
         log.error('Sqlite db could not be created at : ' + sqlite_path)
@@ -517,7 +517,7 @@ def Plugin_Start(mac_info):
     # asl path
     asl_text_path = "/private/var/log/asl.log"
     asl_legacy_path = "/private/var/log/asl.db"
-    asl_ver2_folder_path = "/private/var/log/asl/"
+    asl_ver2_folder_paths = ("/private/var/log/asl/", "/private/var/log/DiagnosticMessages/")
     asl_files = {}
 
     if mac_info.IsValidFilePath(asl_text_path):
@@ -528,13 +528,15 @@ def Plugin_Start(mac_info):
         mac_info.ExportFile(asl_legacy_path, __Plugin_Name, "", False, False)
         asl_files[_DB_VERSION_LEGACY_1] = [asl_legacy_path]
 
-    if mac_info.IsValidFolderPath(asl_ver2_folder_path):
-        _items = mac_info.ListItemsInFolder(asl_ver2_folder_path, EntryType.FILES)
-        asl_ver2_files = []
-        for _i in _items:
-            if _i['name'].endswith(".asl"):
-                mac_info.ExportFile(asl_ver2_folder_path + _i['name'], __Plugin_Name, "", False, False)
-                asl_ver2_files.append(asl_ver2_folder_path + _i['name'])
+    asl_ver2_files = []
+    for asl_ver2_folder_path in asl_ver2_folder_paths:    
+        if mac_info.IsValidFolderPath(asl_ver2_folder_path):
+            _items = mac_info.ListItemsInFolder(asl_ver2_folder_path, EntryType.FILES)
+            for _i in _items:
+                if _i['name'].endswith(".asl"):
+                    mac_info.ExportFile(asl_ver2_folder_path + _i['name'], __Plugin_Name, "", False, False)
+                    asl_ver2_files.append(asl_ver2_folder_path + _i['name'])
+    if asl_ver2_files:
         asl_files[_DB_VERSION_2] = asl_ver2_files
 
     try:
