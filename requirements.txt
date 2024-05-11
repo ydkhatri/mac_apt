@@ -1,6 +1,6 @@
 anytree
 biplist
-construct==2.9.45
+construct==2.10.70
 cryptography
 kaitaistruct
 libewf-python
@@ -14,4 +14,4 @@ pycryptodome
 pyliblzfse
 pytsk3==20230125
 xlsxwriter
-other_dependencies/pyaff4-0.31-yk.zip
+other_dependencies/pyaff4-0.31-yk-20240511.zip
