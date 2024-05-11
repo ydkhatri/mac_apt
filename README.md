@@ -2,7 +2,7 @@
 [![Latest version](https://img.shields.io/badge/version-v1.5.8-blue)](https://github.com/ydkhatri/mac_apt/releases/tag/v1.5.8-dev)
 [![status](https://img.shields.io/badge/status-stable-green)]()
 
-[![Latest version](https://img.shields.io/badge/version-v1.6.dev-blue)](https://github.com/ydkhatri/mac_apt/releases/tag/v1.6.dev)
+[![Latest version](https://img.shields.io/badge/version-v1.7.5.dev-blue)](https://github.com/ydkhatri/mac_apt/releases/tag/v1.7.5.dev)
 [![status](https://img.shields.io/badge/status-development-orange)]()
 
 mac_apt is a DFIR (Digital Forensics and Incident Response) tool to process Mac computer full disk images (**or _live_ machines**) and extract data/metadata useful for forensic investigation. It is a python based framework, which has plugins to process individual artifacts (such as Safari internet history, Network interfaces, Recently accessed files & volumes, ..)
@@ -10,7 +10,7 @@ mac_apt is a DFIR (Digital Forensics and Incident Response) tool to process Mac 
 mac_apt now also includes **[ios_apt](https://swiftforensics.com/2020/12/introducing-iosapt-ios-artifact-parsing.html)**, for processing ios images.
 
 #### Requirements: Python 3.9 or above (64 bit)
-_Note: certain dependencies do not work on Python 3.11 ! So use 3.9 or 3.10 for now._
+_Note: Tested upto Python 3.12 on Windows and macOS._
 #### Features
 * Cross platform (no dependency on pyobjc)
 * Works on E01, VMDK, AFF4, DD, split-DD, DMG (no compression), SPARSEIMAGE & mounted images
@@ -23,7 +23,7 @@ _Note: certain dependencies do not work on Python 3.11 ! So use 3.9 or 3.10 for 
 #### Latest
 :heavy_check_mark: Can read Axiom created targeted collection zip files
 :heavy_check_mark: ios_apt can read GrayKey extracted file system
-:heavy_check_mark: Can read [RECON](https://sumuri.com/software/recon-itr/) ans [ASLA](https://github.com/giuseppetotaro/asla) created .sparseimage files
+:heavy_check_mark: Can read [RECON](https://sumuri.com/software/recon-itr/) and [ASLA](https://github.com/giuseppetotaro/asla) created .sparseimage files
 :heavy_check_mark: Support for macOS Big Sur Sealed volumes (11.0)
 :heavy_check_mark: Introducing **ios_apt** for processing iOS/ipadOS images
 :heavy_check_mark: FAST mode :hourglass_flowing_sand:
@@ -35,6 +35,7 @@ Available Plugins (artifacts parsed) | Description
 ------------------ | ---------------
 APPLIST | Reads apps & printers installed and/or available for each user from appList.dat
 ARD | Reads ARD (Apple Remote Desktop) cached databases about app usage
+ASL | Reads ASL (Apple System Log) from asl.log, asl.db and ".asl" files
 AUTOSTART | Retrieves programs, daemons, services set to start at boot/login
 BASICINFO | Basic machine & OS configuration like SN, timezone, computer name, last logged in user, HFS info
 BLUETOOTH | Gets Bluetooth Artifacts

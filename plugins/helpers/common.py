@@ -251,11 +251,11 @@ class CommonFunctions:
 
     @staticmethod
     def replace_all_hex_int_with_int(xml_text):
-        '''
+        r'''
             Returns string replacing all instances of hex integers
             in xml to their decimal equivalent 
-            like \<integer>0x55\</integer>
-            with \<integer>85\</integer>
+            like <integer>0x55</integer>
+            with <integer>85</integer>
             
             Exceptions: ValueError (for invalid int conversions)
         '''

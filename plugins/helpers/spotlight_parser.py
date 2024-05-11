@@ -1250,7 +1250,7 @@ if __name__ == "__main__":
                     "For iOS databases, you will need to have the files that begin with 'dbStr'\n"\
                     "in the same folder as store.db. These files will natively be found in the\n"\
                     "same folder as store.db and are specific to that instance of store.db.\n\n"\
-                    "Example:  python.exe spotlight_parser.py c:\store.db  c:\store_output\n\n"\
+                    "Example:  python.exe spotlight_parser.py c:\\store.db  c:\\store_output\n\n"\
                     "Send bugs/comments to yogesh@swiftforensics.com "
 
     arg_parser = argparse.ArgumentParser(description='Spotlight Parser version {} - {}'.format(__VERSION__, description), formatter_class=argparse.RawTextHelpFormatter)

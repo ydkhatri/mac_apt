@@ -36,7 +36,7 @@ log = logging.getLogger('MAIN.' + __Plugin_Name) # Do not rename or remove this 
 
 #---- Do not change the variable names in above section ----#
 
-''' Mavericks had History.plist, Yosemite has History.db
+r''' Mavericks had History.plist, Yosemite has History.db
 <Home_DIR>/Library/Preferences/com.apple.safari.plist
   RecentSearchStrings[], SuccessfulLaunchTimestamp, DownloadsPath, HomePage, FrequentlyVisitedSitesCache
 <Home_DIR>/Library/Safari/ --> Bookmarks.plist, Downloads.plist, History.plist, Form Values (Encrypted!), 

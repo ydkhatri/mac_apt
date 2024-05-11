@@ -13,5 +13,6 @@ pybindgen==0.21.0
 pycryptodome
 pyliblzfse
 pytsk3==20230125
+setuptools
 xlsxwriter
 other_dependencies/pyaff4-0.31-yk-20240511.zip

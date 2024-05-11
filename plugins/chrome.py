@@ -459,7 +459,7 @@ def Plugin_Start(mac_info):
                          'Brave': '{}/Library/Application Support/BraveSoftware/Brave-Browser/',
                          'Arc': '{}/Library/Application Support/Arc/User Data/'}
 
-    profile_regex = '(Default|Profile \d+|Guest Profile)'
+    profile_regex = r'(Default|Profile \d+|Guest Profile)'
 
     for browser, chromium_profile_base_path in chromium_browsers.items():
         processed_paths = []
