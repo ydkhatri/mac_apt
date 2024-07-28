@@ -7,14 +7,12 @@
    
 '''
 
-import codecs
-import sqlite3
 import logging
 import os
-import sys
+import sqlite3
 import uuid
-
 from io import BytesIO
+
 from plugins.helpers.common import *
 from plugins.helpers.macinfo import *
 from plugins.helpers.writer import *
@@ -39,6 +37,9 @@ For High Sierra, this is at:
 /private/var/folders/<xx>/<yyyyyyy>/0/com.apple.notificationcenter/db2/db
 
  where the path <xx>/<yyyyyyy> represents the DARWIN_USER_DIR for a user
+
+For Sequoia, this is at:
+/Users/<profile>/Library/Group Containers/group.com.apple.usernoted/db2/db
 '''
 log = logging.getLogger('MAIN.' + __Plugin_Name) # Do not rename or remove this ! This is the logger object
 
@@ -270,8 +271,12 @@ def Plugin_Start(mac_info):
     version_dict = mac_info.GetVersionDictionary()
     processed_paths = []
 
-    if version_dict['major'] == 10 and version_dict['minor'] <= 9:   # older than yosemite, ie, mavericks or earlier
-        notification_path = '{}/Library/Application Support/NotificationCenter'
+    if (version_dict['major'] == 10 and version_dict['minor'] <= 9) or version_dict['major'] >= 15:  # older than yosemite, ie, mavericks or earlier, or newer than Sequoia
+        if version_dict["major"] >= 15:
+            notification_path = "{}/Library/Group Containers/group.com.apple.usernoted/db2/db"
+            screentime_strings_dict = GetScreenTimeStrings(mac_info)
+        else:
+            notification_path = "{}/Library/Application Support/NotificationCenter"
         for user in mac_info.users:
             user_name = user.user_name
             if user.home_dir == '/private/var': continue # Optimization, nothing should be here!
@@ -279,7 +284,10 @@ def Plugin_Start(mac_info):
             if user.home_dir in processed_paths: continue # Avoid processing same folder twice (some users have same folder! (Eg: root & daemon))
             processed_paths.append(user.home_dir)
             user_notification_path = notification_path.format(user.home_dir)
-            if mac_info.IsValidFolderPath(user_notification_path):
+            if version_dict["major"] >= 15 and mac_info.IsValidFilePath(user_notification_path):
+                ProcessNotificationDb_Wrapper(user_notification_path, mac_info, screentime_strings_dict)
+                mac_info.ExportFile(user_notification_path, __Plugin_Name, user_name + "_")
+            elif version_dict["major"] < 15 and mac_info.IsValidFolderPath(user_notification_path):
                 files = mac_info.ListItemsInFolder(user_notification_path, EntryType.FILES)
                 for db in files:
                     # Not sure if this is the only file here
@@ -323,3 +331,4 @@ def Plugin_Start_Standalone(input_files_list, output_params):
 ## 
 if __name__ == '__main__':
     print("This plugin is a part of a framework and does not run independently on its own!")
+
