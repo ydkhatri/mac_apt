@@ -414,7 +414,7 @@ class MacInfo:
             return self.hfs_native.GetExtendedAttributes(path)
 
     def ExportFolder(self, artifact_path, subfolder_name, overwrite):
-        '''Export an artifact folder to the output\Export\subfolder_name folder. This
+        r'''Export an artifact folder to the output\Export\subfolder_name folder. This
            will export the entire folder and subfolders recursively. 
            This does not export Xattr. Return value is boolean (False if it encountered
            any errors).
@@ -459,7 +459,7 @@ class MacInfo:
         return ret
 
     def ExportFile(self, artifact_path, subfolder_name, file_prefix='', check_for_sqlite_files=True, overwrite=False):
-        '''Export an artifact (file) to the output\Export\subfolder_name folder.
+        r'''Export an artifact (file) to the output\Export\subfolder_name folder.
            Ideally subfolder_name should be the name of the plugin.
            If 'overwrite' is set to True, it will not check for existing files. The
            default behaviour is to check and rename the newly exported file if there
@@ -784,12 +784,12 @@ class MacInfo:
     # Private (Internal) functions, plugins should not use these
 
     def _GetSafeFilename(self, name):
-        '''
+        r'''
            Removes illegal characters from filenames
            Eg: Windows does not like ?<>/\:*"! in filename
         '''
         try:
-            unsafe_chars = '?<>/\:*"!\r\n' if self.is_windows else '/'
+            unsafe_chars = '?<>/\\:*"!\r\n' if self.is_windows else '/'
             return ''.join([c for c in name if c not in unsafe_chars])
         except:
             pass
@@ -1162,7 +1162,7 @@ class ApfsMacInfo(MacInfo):
                                     if index < num_uuid_folders:
                                         continue
                                     log.error(f"No decryption key found. Did you enter the right password? Volume '{vol.volume_name}' cannot be decrypted! " + \
-                                        "If the password contains special chars like ^ or \ or / use the password file option (-pf) instead.")
+                                        "If the password contains special chars like ^ or \\ or / use the password file option (-pf) instead.")
                                     if vol.role == vol.container.apfs.VolumeRoleType.data.value:
                                         sys.exit('Decryption failed for DATA volume, cannot proceed!')
                                 else:
@@ -1393,7 +1393,7 @@ class MountedMacInfo(MacInfo):
                         'This is a limitation of Python. Created timestamps shown/seen will actually be same as Last_Modified timestamps.')
 
     def BuildFullPath(self, path_in_image):
-        '''
+        r'''
         Takes path inside image as input and returns the full path on current volume
         Eg: Image mounted at D:\Images\mac_osx\  Path=\etc\hosts  Return= D:\Images\mac_osx\etc\hosts
         '''
@@ -1739,7 +1739,7 @@ class MountedMacInfoSeperateSysData(MountedMacInfo):
         f.close()
 
     def BuildFullPath(self, path_in_image):
-        '''
+        r'''
         Takes path inside image as input and returns the full path on current volume
         Eg: Image mounted at D:\Images\mac_osx\  Path=\etc\hosts  Return= D:\Images\mac_osx\etc\hosts
         Takes into account firmlinks and accordingly switches to SYS or DATA volume.
