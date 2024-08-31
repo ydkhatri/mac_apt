@@ -214,7 +214,9 @@ def ProcessStoreDb(input_file_path, input_file, output_path, output_params, item
 
                     store.ParsePropertiesFromFileData(prop_map_data, prop_map_offsets, prop_map_header)
                     store.ParseCategoriesFromFileData(cat_map_data, cat_map_offsets, cat_map_header)
+                    log.debug('Trying to ParseIndexesFromFileData(1)')
                     store.ParseIndexesFromFileData(idx_1_map_data, idx_1_map_offsets, idx_1_map_header, store.indexes_1)
+                    log.debug('Trying to ParseIndexesFromFileData(2)')
                     store.ParseIndexesFromFileData(idx_2_map_data, idx_2_map_offsets, idx_2_map_header, store.indexes_2, has_extra_byte=True)
 
                     store.ReadPageIndexesAndOtherDefinitions(True)
@@ -537,7 +539,7 @@ def Plugin_Start_Standalone(input_files_list, output_params):
             except (OSError):
                 log.exception('Failed to open input file ' + input_path)
         else:
-            log.info("Unknown file type: {}".format(os.path.basename()))
+            log.info("Unknown file type: {}".format(os.path.basename(input_path)))
 
 
 def Plugin_Start_Ios(ios_info):

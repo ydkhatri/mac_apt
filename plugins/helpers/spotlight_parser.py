@@ -134,7 +134,7 @@ class FileMetaDataListing:
     
     def ReadVarSizeNum(self):
         '''Returns num and bytes_read'''
-        num, bytes_read = SpotlightStore.ReadVarSizeNum(self.data[self.pos : min(self.size, 9 + self.size)])
+        num, bytes_read = SpotlightStore.ReadVarSizeNum(self.data[self.pos : min(self.size, 9 + self.pos)])
         self.pos += bytes_read
         return num, bytes_read
 
@@ -142,11 +142,14 @@ class FileMetaDataListing:
         '''Returns single string of data and bytes_read'''
         size, pos = self.ReadVarSizeNum()
         string = self.data[self.pos:self.pos + size]
-        if string[-1] == 0:
-            string = string[:-1] # null character
-        if string.endswith(b'\x16\x02'):
-            string = string[:-2]
-        self.pos += size
+        if size:
+            if string[-1] == 0:
+                string = string[:-1] # null character
+            if string.endswith(b'\x16\x02'):
+                string = string[:-2]
+            self.pos += size
+        else:
+            log.debug('size was 0 in ReadStr()')
         if dont_decode:
             return string, size + pos
         return string.decode('utf8', "backslashreplace"), size + pos
@@ -678,11 +681,11 @@ class SpotlightStore:
     @staticmethod
     def ReadIndexVarSizeNum(data):
         '''Returns num and bytes_read'''
-        byte = struct.unpack("B", data[0:1])[0]
+        byte = data[0] #struct.unpack("B", data[0:1])[0]
         num_bytes_read = 1
         ret = byte & 0x7F # remove top bit
         while (byte & 0x80) == 0x80: # highest bit set, need to read one more
-            byte = struct.unpack("B", data[num_bytes_read:num_bytes_read + 1])[0]
+            byte = data[num_bytes_read] #struct.unpack("B", data[num_bytes_read:num_bytes_read + 1])[0]
             ret |= (byte & 0x7F) << (7 * num_bytes_read)
             num_bytes_read += 1
         return ret, num_bytes_read
@@ -690,7 +693,7 @@ class SpotlightStore:
     @staticmethod
     def ReadVarSizeNum(data):
         '''Returns num and bytes_read'''
-        first_byte = struct.unpack("B", data[0:1])[0]
+        first_byte = data[0] #struct.unpack("B", data[0:1])[0]
         extra = 0
         use_lower_nibble = True
         if first_byte == 0:
@@ -717,7 +720,8 @@ class SpotlightStore:
 
         if extra:
             num = 0
-            num += sum(struct.unpack('B', data[x:x+1])[0] << (extra - x) * 8 for x in range(1, extra + 1))
+            #num += sum(struct.unpack('B', data[x:x+1])[0] << (extra - x) * 8 for x in range(1, extra + 1))
+            num += sum(data[x] << (extra - x) * 8 for x in range(1, extra + 1))
             if use_lower_nibble:
                 num = num + (first_byte << (extra*8))
             return num, extra + 1
@@ -754,7 +758,7 @@ class SpotlightStore:
         # Parse data file
         data_version = struct.unpack("<H", data_content[0:2])
         for index, offset in offsets:
-            entry_size, bytes_moved = SpotlightStore.ReadVarSizeNum(data_content[offset:])
+            entry_size, bytes_moved = SpotlightStore.ReadVarSizeNum(data_content[offset : min(offset + 9, data_len)])
             value_type, prop_type = struct.unpack("<BB", data_content[offset + bytes_moved : offset + bytes_moved + 2])
             name = data_content[offset + bytes_moved + 2:offset + bytes_moved + entry_size].split(b'\x00')[0]
             self.properties[index] = [name.decode('utf-8', 'backslashreplace'), prop_type, value_type]
@@ -797,7 +801,7 @@ class SpotlightStore:
             if offset >= len(data_content):
                 log.error(f'Index ({index}) Offset ({offset})> filesize ({len(data_content)}) in ParseCategoriesFromFileData()')
                 continue
-            entry_size, bytes_moved = SpotlightStore.ReadVarSizeNum(data_content[offset:])
+            entry_size, bytes_moved = SpotlightStore.ReadVarSizeNum(data_content[offset : min(offset + 9, data_len)])
             name = data_content[offset + bytes_moved:offset + bytes_moved + entry_size].split(b'\x00')[0]
             self.categories[index] = name
 
@@ -822,7 +826,7 @@ class SpotlightStore:
         header_len = len(header_content)
 
         header = DbStrMapHeader()
-        header.Parse(header_content)               
+        header.Parse(header_content)
         
         # Parse offsets file
         offsets = self.ReadOffsets(offsets_content)
@@ -831,13 +835,15 @@ class SpotlightStore:
         data_version = struct.unpack("<H", data_content[0:2])
         pos = 0
         for index, offset in offsets:
+            if index % 100000 == 0:
+                log.debug(f'{index}, {100 - ((len(offsets)+1 - index)*100/(len(offsets)+1))} % done (ParseIndexesFromFileData)' )
             pos = offset
-            if pos >= len(data_content):
-                log.error(f'Index ({index}) Offset ({offset})> filesize ({len(data_content)}) in ParseIndexesFromFileData()')
+            if pos >= data_len:
+                log.error(f'Index ({index}) Offset ({offset})> filesize ({data_len}) in ParseIndexesFromFileData()')
                 continue
-            entry_size, bytes_moved = SpotlightStore.ReadIndexVarSizeNum(data_content[pos:])
+            entry_size, bytes_moved = SpotlightStore.ReadIndexVarSizeNum(data_content[pos : min(pos + 9, data_len)])
             pos += bytes_moved
-            index_size, bytes_moved = SpotlightStore.ReadVarSizeNum(data_content[pos:])
+            index_size, bytes_moved = SpotlightStore.ReadVarSizeNum(data_content[pos : min(pos + 9, data_len)])
             pos += bytes_moved
             if entry_size - index_size > 2:
                 log.debug("ReadIndexVarSizeNum() read the number incorrectly?") 
@@ -858,12 +864,13 @@ class SpotlightStore:
 
     def ParseIndexes(self, block, dictionary):
         data = block.data
+        data_len = len(data)
         pos = 32
         size = block.logical_size
         while pos < size:
             index = struct.unpack("<I", data[pos : pos+4])[0]
             pos += 4
-            index_size, bytes_moved = SpotlightStore.ReadVarSizeNum(data[pos:])
+            index_size, bytes_moved = SpotlightStore.ReadVarSizeNum(data[pos : min(pos + 9, data_len)])
             pos += bytes_moved
             
             padding = index_size % 4
