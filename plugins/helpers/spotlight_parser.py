@@ -383,6 +383,8 @@ class FileMetaDataListing:
             if prop_skip_index == 0:
                 log.warning("Maybe something went wrong, skip index was 0 @ {} or rest of struct is slack".format(filepos))
                 break
+            elif prop_skip_index == 0xFFFFFFFF: # end of props, only slack/junk data after this
+                break
             prop_index += prop_skip_index
             last_prop = prop # for debug only
             prop = properties.get(prop_index, None)
@@ -418,13 +420,13 @@ class FileMetaDataListing:
                     #    print("") 
                 elif value_type == 8 and prop_name != 'kMDStoreAccumulatedSizes':
                     if prop_type & 2 == 2:
-                        singles = [self.ReadSingleByte() for x in range(4)]
+                        singles = [self.ReadVarSizeNum()[0] for x in range(4)]
                         value = singles
                     #     num_values = (self.ReadVarSizeNum()[0])
                     #     singles = [self.ReadSingleByte() for x in range(num_values)]
                     #     value = singles
                     else:
-                        value = self.ReadSingleByte()
+                        value = self.ReadVarSizeNum()[0]
                 elif value_type == 9:
                     if prop_type & 2 == 2:
                         num_values = (self.ReadVarSizeNum()[0])//4
