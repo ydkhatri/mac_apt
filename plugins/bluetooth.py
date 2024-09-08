@@ -216,10 +216,11 @@ def ParseClassOfDevice(cod_number):
 
 
 class BluetoothCacheItem:
-    def __init__(self, bluetooth_address, name, displayname, manufacturer, batterypercent, connected, vendorid, productid, cod, lastnameupdate, services, supportfeatures, lastservicesupdate, last_seen, source):
+    def __init__(self, bluetooth_address, name, usernamekey, displayname, manufacturer, batterypercent, connected, vendorid, productid, cod, lastnameupdate, services, supportfeatures, lastservicesupdate, last_seen, source):
 
         self.bluetooth_address = bluetooth_address
         self.name = name
+        self.usernamekey = usernamekey
         self.displayname = displayname
         self.manufacturer = manufacturer
         self.batterypercent = batterypercent
@@ -235,7 +236,7 @@ class BluetoothCacheItem:
         self.source = source
 
 def PrintAll(bluetooth_devices, output_params, input_path=''):
-    bluetooth_info = [   ('Bluetooth Address',DataType.TEXT),('Name',DataType.TEXT),
+    bluetooth_info = [   ('Bluetooth Address',DataType.TEXT),('Name',DataType.TEXT),('UserNameKey',DataType.TEXT),
                     ('Display Name',DataType.TEXT),('Manufacturer', DataType.TEXT),('Battery Percent',DataType.REAL),
                     ('Connected',DataType.TEXT), ('Vendor ID',DataType.INTEGER), ('Product ID',DataType.INTEGER),
                     ('Class of Device',DataType.INTEGER), ('CoD_Device',DataType.TEXT), ('CoD_Service',DataType.TEXT),
@@ -251,7 +252,7 @@ def PrintAll(bluetooth_devices, output_params, input_path=''):
 
     for device in bluetooth_devices:
         cod_device, cod_service = ParseClassOfDevice(device.classofdevice)
-        single_bt_instance = [device.bluetooth_address, device.name,
+        single_bt_instance = [device.bluetooth_address, device.name, device.usernamekey,
                             device.displayname, device.manufacturer, device.batterypercent,
                             device.connected, device.vendorid, device.productid, 
                             device.classofdevice, cod_device, cod_service, device.lastnameupdate,
@@ -284,6 +285,7 @@ def ReadBluetoothPlist(plist, source_path):
                 cache_item = BluetoothCacheItem(
                     cached_device,
                     cache_data.get('Name', '').upper(),
+                    cache_data.get('UserNameKey', ''),
                     cache_data.get('displayName', ''),
                     cache_data.get('Manufacturer', ''),
                     cache_data.get('BatteryPercent', None), 
@@ -319,6 +321,7 @@ def ReadMobileBluetoothPlist(plist, mobile_bluetooth_path, cache_list):
                 device_mac_address.upper(), 
                 device_details.get('DefaultName', ''),
                 device_details.get('Name', ''),
+                device_details.get('UserNameKey', ''),
                 '',
                 '',
                 'Yes',
