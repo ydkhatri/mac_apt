@@ -285,6 +285,14 @@ def Plugin_Start(mac_info):
         file_list = mac_info.ListItemsInFolder('/System/Volumes/Data/.fseventsd', EntryType.FILES, True)
         ProcessFsevents(logs, '/System/Volumes/Data/.fseventsd', file_list, mac_info)
     
+    # Also seen an fseventsd here, maybe from CoreSimulator!
+    path3 = '/private/var/db/fseventsd'
+    if mac_info.IsValidFolderPath(path3):
+        file_list = mac_info.ListItemsInFolder(path3, EntryType.FILES, True)
+        if file_list:
+            log.info(f'Found fsevents at {path3}')
+            ProcessFsevents(logs, path3, file_list, mac_info)
+
     if len(logs) > 0:
         PrintAll(logs)
     if total_logs_processed > 0:
