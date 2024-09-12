@@ -33,10 +33,10 @@ log = logging.getLogger('MAIN.' + __Plugin_Name) # Do not rename or remove this 
 #---- Do not change the variable names in above section ----#
 
 class SavedState:
-    def __init__(self, window_title, dock_files, bundle, last_mod_date, user, source):
+    def __init__(self, window_title, dock_items, bundle, last_mod_date, user, source):
         self.window_title = window_title
         self.app = ''
-        self.dock_files = dock_files
+        self.dock_items = dock_items
         self.bundle = bundle
         self.last_mod_date = last_mod_date
         self.user = user
@@ -55,7 +55,7 @@ def PrintAll(saved_states, output_params, source_path):
     log.info("Found {} saved state(s)".format(len(saved_states)))
     data_list = []
     for item in saved_states:
-        data_list.append( [ item.app, item.window_title, item.dock_files, item.last_mod_date, item.bundle, item.user, item.source ] )
+        data_list.append( [ item.app, item.window_title, item.dock_items, item.last_mod_date, item.bundle, item.user, item.source ] )
 
     WriteList("Saved state information", "SavedState", data_list, saved_info, output_params, source_path)
 
@@ -79,7 +79,6 @@ def ProcessFolder(mac_info, saved_states, user, folder_path):
                     title = item.get('NSTitle', '')
                     if title:
                         found_at_least_one_title = True
-                        #saved_states.append(SavedState(title, bundle, file_entry['dates']['m_time'], user, file_path))
                         titles.add(title)
                     for dockitem in item.get('NSDockMenu', []):
                         name = dockitem.get('name', '')
@@ -91,7 +90,6 @@ def ProcessFolder(mac_info, saved_states, user, folder_path):
                                         dock_items.add(f'RECENT: {name}')
                             else:
                                 dock_items.add(name)
-                            #saved_states.append(SavedState('', bundle, file_entry['dates']['m_time'], user, file_path))
             else:
                 log.error(f'Failed to read plist {file_path}, error was {error}')
             if found_at_least_one_title:
