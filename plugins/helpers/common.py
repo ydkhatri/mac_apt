@@ -272,7 +272,7 @@ class CommonFunctions:
         return xml_text
 
     @staticmethod
-    def ReadPlist(path_or_file, deserialize=False):
+    def ReadPlist(path_or_file, deserialize=False, top_level_is_dict=False):
         '''
             Safely open and read a plist.
             Returns a tuple (True/False, plist/None, "error_message")
@@ -294,7 +294,8 @@ class CommonFunctions:
         if f:
             if deserialize:
                 try:
-                    plist = nd.deserialize_plist(f)
+                    plist_type = dict if top_level_is_dict else list
+                    plist = nd.deserialize_plist(f, True, format=plist_type)
                     f.close()
                     return (True, plist, '')
                 except (nd.DeserializeError, nd.biplist.NotBinaryPlistException, nd.biplist.InvalidPlistException,

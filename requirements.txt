@@ -6,7 +6,7 @@ kaitaistruct
 libewf-python
 libvmdk-python
 lz4
-nska_deserialize
+nska_deserialize==1.5.0
 pillow
 plistutils
 pybindgen==0.21.0

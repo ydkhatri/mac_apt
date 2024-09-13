@@ -516,18 +516,17 @@ class MacInfo:
             log.info("Failed to export '" + artifact_path + "' to '" + export_path + "'")
         return False
 
-    def ReadPlist(self, path, deserialize=False):
+    def ReadPlist(self, path, deserialize=False, top_level_is_dict=False):
         '''Safely open and read a plist; returns tuple (True/False, plist/None, "error_message")
             If deserialize=True, returns a deserialized version of an NSKeyedArchive plist.
         '''
         log.debug("Trying to open plist file : " + path)
         error = ''
-        plist = None
         try:
             f = self.Open(path)
             if f != None:
                 log.debug("Trying to read plist file : " + path)
-                return CommonFunctions.ReadPlist(f, deserialize)
+                return CommonFunctions.ReadPlist(f, deserialize, top_level_is_dict)
             else:
                 error = 'Failed to open file'
         except OSError as ex:
