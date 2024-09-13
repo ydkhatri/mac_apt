@@ -7,12 +7,18 @@
 
    savedstate.py
    ---------------
-   This module gets window titles from saved application state
+   This module gets window titles and Dock items (seen when right-clicked) from saved application state
    files.
 '''
 
+import io
+import nska_deserialize as nd
 import os
+import plistlib
+import struct
 
+from Crypto.Cipher import AES
+from plugins.helpers.common import CommonFunctions
 from plugins.helpers.macinfo import *
 from plugins.helpers.writer import *
 
@@ -20,7 +26,7 @@ import logging
 
 __Plugin_Name = "SAVEDSTATE"
 __Plugin_Friendly_Name = "Saved State"
-__Plugin_Version = "1.1"
+__Plugin_Version = "1.2"
 __Plugin_Description = "Gets window titles from Saved Application State info"
 __Plugin_Author = "Yogesh Khatri"
 __Plugin_Author_Email = "yogesh@swiftforensics.com"
@@ -48,7 +54,7 @@ class SavedState:
             pass
 
 def PrintAll(saved_states, output_params, source_path):
-    saved_info = [ ('App',DataType.TEXT),('Window Title',DataType.TEXT),
+    saved_info = [ ('App',DataType.TEXT),('Window Titles',DataType.TEXT),
                     ('Dock Items',DataType.TEXT),('Source Last Modified Date',DataType.TEXT),
                     ('Bundle', DataType.TEXT),('User', DataType.TEXT),('Source',DataType.TEXT)
                    ]
@@ -62,6 +68,11 @@ def PrintAll(saved_states, output_params, source_path):
 def ProcessFolder(mac_info, saved_states, user, folder_path):
     files_list = mac_info.ListItemsInFolder(folder_path, EntryType.FILES, include_dates=True)
     bundle = os.path.basename(folder_path)
+    data_path = ''
+    for file_entry in files_list:
+        if file_entry['name'] == 'data.data' and file_entry['size'] > 0:
+            data_path = folder_path + '/data.data'
+            break
 
     for file_entry in files_list:
         if file_entry['size'] == 0: 
@@ -72,33 +83,143 @@ def ProcessFolder(mac_info, saved_states, user, folder_path):
 
             file_path = folder_path + '/windows.plist'
             mac_info.ExportFile(file_path, __Plugin_Name, user + '_', False)
-            found_at_least_one_title = False
             success, plist, error = mac_info.ReadPlist(file_path)
             if success:
                 for item in plist:
-                    title = item.get('NSTitle', '')
+                    title = item.get('NSTitle', '').strip()
                     if title:
-                        found_at_least_one_title = True
                         titles.add(title)
                     for dockitem in item.get('NSDockMenu', []):
-                        name = dockitem.get('name', '')
+                        name = dockitem.get('name', '').strip()
                         if name and name not in titles and name not in ('New Window', 'New Window '):
                             if name == 'Open Recent' : # MS Office apps
                                 for recent in dockitem.get('sub', []):
-                                    recent_name = recent.get('name', '')
-                                    if recent_name:
-                                        dock_items.add(f'RECENT: {name}')
+                                    recent_name = recent.get('name', '').strip()
+                                    if recent_name and recent_name != 'More...':
+                                        dock_items.add(f'RECENT: {recent_name}')
                             else:
                                 dock_items.add(name)
+
+                if data_path:
+                    all_data_file = mac_info.Open(data_path)
+                    if all_data_file:
+                        all_data = all_data_file.read()
+                        find_additional_titles(plist, all_data, titles, data_path, bundle)
+                    else:
+                        log.error('Failed to open data.data file - {}'.format(data_path)) 
             else:
                 log.error(f'Failed to read plist {file_path}, error was {error}')
-            if found_at_least_one_title:
-                for title in titles:
-                    saved_states.append(SavedState(title, ', '.join(dock_items), bundle, file_entry['dates']['m_time'], user, file_path))
-            else:
-                saved_states.append(SavedState('', ', '.join(dock_items), bundle, file_entry['dates']['m_time'], user, file_path))
+
+            saved_states.append(SavedState('\n'.join(titles), '\n'.join(dock_items), bundle, file_entry['dates']['m_time'], user, file_path))
             
             break
+
+def get_decoded_plist_data(data):
+    data_size = len(data)
+    name = ''
+    if data_size > 8:
+        name_len = struct.unpack('>I', data[4:8])[0]
+        if name_len > 64:
+            log.error('Name too long, likely garbage/enc data')
+            return (data[8 : 8 + 64], None)
+        name = data[8 : 8 + name_len]
+        log.debug('NSName = {}'.format(name))
+        rchv = data[8 + name_len : 12 + name_len] # "rchv"
+        if rchv != b"rchv":
+            log.warning('magic was not "rchv", it was {}'.format(str(rchv)))
+            return (name, None)
+        nsa_plist_len = struct.unpack('>I', data[12 + name_len : 16 + name_len])[0]
+        nsa_plist = data[16 + name_len : 16 + name_len + nsa_plist_len]
+
+        f = io.BytesIO(nsa_plist)
+        try:
+            deserialized_plist = nd.deserialize_plist(f, True, format=dict)
+        except (nd.DeserializeError, nd.biplist.NotBinaryPlistException, 
+                nd.biplist.InvalidPlistException,nd.plistlib.InvalidFileException,
+                nd.ccl_bplist.BplistError, ValueError, TypeError, 
+                OSError, OverflowError) as ex:
+            log.exception("")
+            f.close()
+            return (name, None)
+        f.close()
+        return (name, deserialized_plist)
+    else:
+        log.warning('Plist seems empty!')
+    return (name, None)
+
+def get_key_and_title_for_window_id(plist, ns_window_id):
+    key = None
+    title = ''
+    for item in plist:
+        w_id = item.get('NSWindowID', None)
+        if w_id == ns_window_id:
+            key = item.get('NSDataKey', None)
+            title = item.get('NSTitle', '')
+            if key == None:
+                log.error("Error fetching key, key was not found for windowID={}!".format(ns_window_id))
+            break
+    return key, title
+
+def decrypt(enc_data, key, iv):
+    '''Decrypts the data given encrypted data, key and IV'''
+    try:
+        cipher = AES.new(key, AES.MODE_CBC, iv)
+        dec_data = cipher.decrypt(enc_data)
+        return dec_data
+    except (KeyError, ValueError) as ex:
+        log.exception('Decryption error:')
+    return b''
+
+def find_additional_titles(windows_plist, all_data, titles, input_path, bundle_name):
+    iv = struct.pack("<IIII", 0, 0, 0, 0)
+
+    pos = 0
+    # Parsing data.data
+    size_data = len(all_data)
+    while (pos + 16) < size_data:
+        magic = all_data[pos:pos+8]
+        ns_window_id, rec_length = struct.unpack(">II", all_data[pos+8:pos+16])
+        pos += 16
+        rec_length -= 16
+        if (pos + rec_length) <= size_data:
+            enc_data = all_data[pos:pos + rec_length]
+            if magic != b"NSCR1000":
+                log.error("Unknown header:" + str(magic))
+                return
+                
+            key, title = get_key_and_title_for_window_id(windows_plist, ns_window_id)
+
+            if key:
+                dec_data = decrypt(enc_data, key, iv)
+                #f = open(f'{out_path}/{bundle_name}.{ns_window_id}.{pos}.dec', 'wb')
+                #f.write(dec_data)
+                #f.close()
+                log.info(f"Processing {bundle_name}.{ns_window_id}.{pos}")
+                data_name, data_plist = get_decoded_plist_data(dec_data)
+                if data_name and data_plist:
+                    #out_file = open(f'/tmp/{bundle_name}.{ns_window_id}.{pos}.{data_name}.plist', 'wb')
+                    #plistlib.dump(data_plist, out_file, fmt=plistlib.FMT_BINARY)
+                    #out_file.close()
+
+                    if b'_NSWindow'== data_name:
+                        embedded_ns_title = data_plist.get('NSTitle', '').strip()
+                        if bundle_name == 'com.apple.finder.savedState':
+                            url = data_plist.get('WindowState', {}).get('TargetURL', '')
+                            if url:
+                                embedded_ns_title += f" -> {url}"
+                        elif bundle_name == 'com.apple.Preview.savedState':
+                            url = data_plist.get('currentMediaContainerFileReferenceURL', {}).get('NS.relative', '')
+                            if url:
+                                embedded_ns_title += f" -> {url}"
+                        elif bundle_name == 'com.vmware.fusion.savedState':
+                            restorationID = data_plist.get('restorationID', '')
+                            if restorationID:
+                                embedded_ns_title += f" -> {restorationID}"
+                        if embedded_ns_title:
+                            titles.add(embedded_ns_title)
+            else:
+                log.debug(f'key not found for window_id={ns_window_id} for {bundle_name}.{ns_window_id}.{pos}, title={title}')
+        pos += rec_length
 
 def Plugin_Start(mac_info):
     '''Main Entry point function for plugin'''
@@ -117,12 +238,12 @@ def Plugin_Start(mac_info):
         if mac_info.IsValidFolderPath(source_path):
             files_list = mac_info.ListItemsInFolder(source_path, EntryType.FILES_AND_FOLDERS, include_dates=False)
             for file_entry in files_list:
+                file_path = source_path + '/' + file_entry['name']
                 if file_entry['type'] == EntryType.FOLDERS:
-                    processed_saved_state_paths.add(source_path + '/' + file_entry['name'])
-                    ProcessFolder(mac_info, saved_states, user_name, source_path + '/' + file_entry['name'])
+                    processed_saved_state_paths.add(file_path)
+                    ProcessFolder(mac_info, saved_states, user_name, file_path)
                 else:
                     # Must be an alias (symlink)
-                    file_path = source_path + '/' + file_entry['name']
                     if mac_info.IsSymbolicLink(file_path):
                         target_path = mac_info.ReadSymLinkTargetPath(file_path)
                         processed_saved_state_paths.add(target_path)

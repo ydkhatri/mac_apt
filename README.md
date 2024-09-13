@@ -29,7 +29,7 @@ _Note: Tested upto Python 3.12 on Windows and macOS._
 :heavy_check_mark: FAST mode :hourglass_flowing_sand:  
 :heavy_check_mark: Encrypted :lock: APFS images can now be processed using password/recovery-key :key:  
 :heavy_check_mark: macOS Catalina (10.15+) separately mounted SYSTEM & DATA volumes now supported  
-:heavy_check_mark: AFF4 images (including macquisition created) are supported  
+:heavy_check_mark: AFF4 images (including Macquisition/DigitalCollector created) are supported  
 
 Available Plugins (artifacts parsed) | Description
 ------------------ | ---------------
@@ -39,9 +39,11 @@ ASL | Reads ASL (Apple System Log) from asl.log, asl.db and ".asl" files
 AUTOSTART | Retrieves programs, daemons, services set to start at boot/login
 BASICINFO | Basic machine & OS configuration like SN, timezone, computer name, last logged in user, HFS info
 BLUETOOTH | Gets Bluetooth Artifacts
-CHROMIUM | Read Chromium Browsers (Edge, Chrome, Opera,..) History, Top Sites, Downloads and Extension info
+CALLHISTORY | Reads call history database
 CFURLCACHE | Reads CFURL cache to URLs, requests and responses
+CHROMIUM | Read Chromium Browsers (Edge, Chrome, Opera,..) History, Top Sites, Downloads and Extension info
 COOKIES | Reads .binarycookies, .cookies files and HSTS.plist for each user
+CRASHREPORTER | Reads crash reporter plists
 DOCKITEMS | Reads the Dock plist for every user
 DOCUMENTREVISIONS | Reads DocumentRevisions database
 DOMAINS | Active Directory Domain(s) that the mac is connected to
@@ -64,8 +66,8 @@ QUARANTINE | Reads the quarantine database and .LastGKReject file
 QUICKLOOK | Reads the QuickLook index.sqlite and carves thumbnails from thumbnails.data
 RECENTITEMS | Recently accessed Servers, Documents, Hosts, Volumes & Applications from .plist and .sfl files. Also gets recent searches and places for each user
 SAFARI | Internet history, downloaded file information, cookies and more from Safari caches
-SCREENSHARING | Reads the list of connected hosts with Screen Sharing
 SAVEDSTATE | Gets window titles from Saved Application State info
+SCREENSHARING | Reads the list of connected hosts with Screen Sharing
 SCREENTIME | Reads ScreenTime database for program and app usage
 SPOTLIGHT | Reads the spotlight index databases
 SPOTLIGHTSHORTCUTS | User typed data in the spotlight bar & targeted document/app
