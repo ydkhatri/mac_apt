@@ -165,8 +165,9 @@ def process_places(firefox_artifacts, db, user, file_path):
             moz_places.frecency AS Frecency,
             moz_places.preview_image_url AS PreviewImageURL
             FROM moz_historyvisits
-            LEFT JOIN moz_places ON moz_places.origin_id = moz_historyvisits.id
-            LEFT JOIN moz_places_metadata ON moz_places.id = moz_places_metadata.id
+            LEFT JOIN moz_places ON moz_places.id = moz_historyvisits.place_id
+            --LEFT JOIN moz_places ON moz_places.origin_id = moz_historyvisits.id
+            --LEFT JOIN moz_places_metadata ON moz_places.id = moz_places_metadata.id
             WHERE url is not NULL
             ORDER BY
             moz_historyvisits.visit_date ASC 

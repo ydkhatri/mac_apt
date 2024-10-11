@@ -17,6 +17,7 @@ import re
 import sqlite3
 import sys
 #import pytz
+
 from enum import IntEnum
 from sqlite3 import Error as sqlite3Error
 from xml.parsers.expat import ExpatError
@@ -42,6 +43,23 @@ class CommonFunctions:
     #     local_timezone = get_localzone()
     #     #local_tz = get_localzone()
     #     return d_utc.replace(tzinfo=pytz.utc).astimezone(local_timezone)
+
+    @staticmethod
+    def GetTimeTakenString(start_time, end_time, include_milliseconds=True):
+        '''Returns the difference between two datetime objects as a string as HH:MM:SS'''
+        time_taken = end_time - start_time
+        if include_milliseconds:
+            format = "%H:%M:%S.%f"
+        else:
+            format = "%H:%M:%S"
+        try:
+            run_time_hms = (datetime.datetime(1970,1,1,0,0) + datetime.timedelta(seconds=time_taken.seconds, days=time_taken.days)).strftime(format)
+            if time_taken.days:
+                run_time_hms = f'{time_taken.days} days {run_time_hms}'
+        except (OSError, ValueError) as ex:
+            log.error('Failed to calculate time string '+ str(ex))
+            run_time_hms = f''
+        return run_time_hms
 
     @staticmethod
     def ReadMacAbsoluteTime(mac_abs_time): # Mac Absolute time is time epoch beginning 2001/1/1
@@ -92,7 +110,7 @@ class CommonFunctions:
                     unix_time = float(unix_time)
                 return datetime.datetime(1970, 1, 1) + datetime.timedelta(seconds=unix_time/1000.)
             except (ValueError, OverflowError, TypeError) as ex:
-                log.error("ReadUnixTime() Failed to convert timestamp from value " + str(unix_time) + " Error was: " + str(ex))
+                log.error("ReadUnixMillisecondsTime() Failed to convert timestamp from value " + str(unix_time) + " Error was: " + str(ex))
         return ''
 
     @staticmethod
@@ -104,7 +122,7 @@ class CommonFunctions:
                     unix_time = float(unix_time)
                 return datetime.datetime(1970, 1, 1) + datetime.timedelta(seconds=unix_time/1000000.)
             except (ValueError, OverflowError, TypeError) as ex:
-                log.error("ReadUnixTime() Failed to convert timestamp from value " + str(unix_time) + " Error was: " + str(ex))
+                log.error("ReadUnixMicrosecondsTime() Failed to convert timestamp from value " + str(unix_time) + " Error was: " + str(ex))
         return ''
 
     @staticmethod
@@ -223,7 +241,7 @@ class CommonFunctions:
             for row in cursor:
                 return True
         except sqlite3Error as ex:
-            log.error ("In ColumnExists({}, {}). Failed to list tables of db. Error Details:{}".format(table_name, col_name, str(ex)) )
+            log.error ("In ColumnExists({}, {}). Failed to list columns of db. Error Details:{}".format(table_name, col_name, str(ex)) )
         return False
 
     @staticmethod
