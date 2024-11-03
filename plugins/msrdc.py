@@ -106,8 +106,10 @@ def ParseMSRDCdb(db: sqlite3.Connection, msrdc_artifacts: list[MSRDCItem], msrdc
                     LEFT JOIN ZCREDENTIALENTITY ON ZBOOKMARKENTITY.ZCREDENTIAL = ZCREDENTIALENTITY.Z_PK"""
         cursor = db.execute(query)
         for row in cursor:
-            last_connected = nd.deserialize_plist_from_string(row["ZLASTCONNECTED"])["root"].strftime("%Y-%m-%d %H:%M:%S.%f")
-
+            try:
+                last_connected = nd.deserialize_plist_from_string(row["ZLASTCONNECTED"])["root"]
+            except (nd.DeserializeError, nd.biplist.NotBinaryPlistException, nd.ccl_bplist.BplistError, nd.plistlib.InvalidFileException, ValueError, TypeError, OSError, OverflowError):
+                last_connected = ''
             folder_redirection_info = [
                 f"Path: {folder_redirection['path']}, Name: {folder_redirection['name']}, ReadOnly: {folder_redirection['readOnly']}"
                 for folder_redirection in nd.deserialize_plist_from_string(row["ZFOLDERREDIRECTIONCOLLECTION"])
@@ -142,11 +144,14 @@ def ParseMSRDCdb(db: sqlite3.Connection, msrdc_artifacts: list[MSRDCItem], msrdc
         for row in cursor:
             start_time = CommonFunctions.ReadMacAbsoluteTime(row["ZSTARTTIME"]).strftime("%Y-%m-%d %H:%M:%S.%f")
 
-            folder_redirection_info = [
-                f"Path: {folder_redirection['path']}, Name: {folder_redirection['name']}, ReadOnly: {folder_redirection['readOnly']}"
-                for folder_redirection in nd.deserialize_plist_from_string(row["ZFOLDERREDIRECTIONCOLLECTION"])
-            ]
-            folder_redirection_collection = "; ".join(folder_redirection_info)
+            if row["ZFOLDERREDIRECTIONCOLLECTION"] is None:
+                folder_redirection_info = []
+            else:
+                folder_redirection_info = [
+                    f"Path: {folder_redirection['path']}, Name: {folder_redirection['name']}, ReadOnly: {folder_redirection['readOnly']}"
+                    for folder_redirection in nd.deserialize_plist_from_string(row["ZFOLDERREDIRECTIONCOLLECTION"])
+                ]
+                folder_redirection_collection = "; ".join(folder_redirection_info)
 
             item = MSRDCItem(start_time, row["ZMINUTESCONNECTED"], row['ZHOSTNAME'], row['ZID'], row['FriendlyPCName'], row['ZTITLE'],
                              row['Credential'], row['FriendlyAccountName'], row['ZUSERNAME'],
@@ -159,8 +164,8 @@ def ParseMSRDCdb(db: sqlite3.Connection, msrdc_artifacts: list[MSRDCItem], msrdc
 def ExtractAndReadMSRDC(mac_info: MacInfo, msrdc_artifacts: list[MSRDCItem], username: str, msrdc_path: str) -> None:
     db, wrapper = OpenDbFromImage(mac_info, msrdc_path)
     if db:
-        ParseMSRDCdb(db, msrdc_artifacts, msrdc_path)
         mac_info.ExportFile(msrdc_path, __Plugin_Name, username + "_", overwrite=True)
+        ParseMSRDCdb(db, msrdc_artifacts, msrdc_path)
         db.close()
 
 
