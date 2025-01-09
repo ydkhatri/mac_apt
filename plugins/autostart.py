@@ -11,7 +11,6 @@ import logging
 import os
 import posixpath
 
-import nska_deserialize as nd
 from plistutils.alias import AliasParser
 
 from plugins.helpers.bookmark import *
@@ -36,6 +35,7 @@ log = logging.getLogger('MAIN.' + __Plugin_Name) # Do not rename or remove this 
 #     /private/var/at/jobs/  <--- CRONTAB
 #  Login & Logout hooks- https://developer.apple.com/library/archive/documentation/MacOSX/Conceptual/BPSystemStartup/Chapters/CustomLogin.html
 # Good resource -> https://www.launchd.info/
+# For explanation on StartupTypes, see https://keith.github.io/xcode-man-pages/launchd.plist.5.html
 
 
 class PersistentProgram:
@@ -298,8 +298,16 @@ def process_dir(mac_info, path, persistent_programs, method, user_name, uid):
 
 def get_run_when(plist, method):
     run_when = []
-    run_at_load = plist.get('RunAtLoad', None)
-    if run_at_load == True:
+    run_at_load = plist.get('RunAtLoad', False)
+    keep_alive = plist.get('KeepAlive', False)
+    # This can be a dictionary. If AfterInitialDemand is True in this dict, then it is loaded but not started, ie, manual start.
+    if isinstance(keep_alive, dict):
+        after_initial_demand = keep_alive.get('AfterInitialDemand', False)
+        if after_initial_demand == True:
+            keep_alive = False
+        else:
+            keep_alive = True
+    if run_at_load or keep_alive:
         #run_when.append('RunAtLoad') # if run_at_load else '') # 'DontRunAtLoad'
         #For daemons this means execution at boot time, for agents execution at login.
         if method == 'Daemon':
@@ -307,8 +315,9 @@ def get_run_when(plist, method):
         elif method == 'Agents':
             run_when.append('Run at Login')
     for item in ('StartInterval', 'StartCalendarInterval', 'StartOnMount', 'WatchPaths', 'QueueDirectories'):
-        if plist.get(item, ''):
-            run_when.append(item)
+        val = plist.get(item, '')
+        if val:
+            run_when.append(f'{item}={str(val)}')
     return ', '.join(run_when)
 
 def process_file(mac_info, file_path, persistent_programs, file_name):
