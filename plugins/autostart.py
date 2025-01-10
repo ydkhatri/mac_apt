@@ -211,7 +211,7 @@ def process_backgrounditems_btm(mac_info, btm_path, user, uid, persistent_progra
                     btm_team_identifier = entry.get('teamIdentifier', '')
                     name = entry.get('name', '')
 
-                    if btm_type == 0x20:
+                    if btm_type & 0x20 == 0x20:
                         continue # We don't care about 0x20:'developer', these aren't autostart entries
                     
                     executable_path = entry.get('executablePath', '')
@@ -331,8 +331,8 @@ def process_dir(mac_info, path, persistent_programs, method, user_name, uid):
                         program.disabled = disabled_param
 
                     program_path = plist.get('Program', '')
+                    program_args = plist.get('ProgramArguments', [])
                     if not program_path:
-                        program_args = plist.get('ProgramArguments', None)
                         if program_args:
                             program_path = program_args[0]
                     program.app_path = program_path
