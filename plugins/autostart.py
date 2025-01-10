@@ -19,13 +19,13 @@ from plugins.helpers.writer import *
 
 __Plugin_Name = "AUTOSTART" # Cannot have spaces, and must be all caps!
 __Plugin_Friendly_Name = "Auto start"
-__Plugin_Version = "1.1"
+__Plugin_Version = "2.0"
 __Plugin_Description = "Retrieves persistent and auto-start programs, daemons, services"
 __Plugin_Author = "Brandon Mignini, Yogesh Khatri, Minoru Kobayashi"
 __Plugin_Author_Email = "brandon.mignini@mymail.champlain.edu, khatri@champlain.edu, unknownbit@gmail.com"
-__Plugin_Modes = "MACOS"
+__Plugin_Modes = "MACOS,ARTIFACTONLY"
 __Plugin_Standalone = False
-__Plugin_ArtifactOnly_Usage = ""
+__Plugin_ArtifactOnly_Usage = "Provide individual .btm file found at /private/var/db/com.apple.backgroundtaskmanagement/BackgroundItems-v*.btm"
 
 log = logging.getLogger('MAIN.' + __Plugin_Name) # Do not rename or remove this ! This is the logger object
 
@@ -37,9 +37,31 @@ log = logging.getLogger('MAIN.' + __Plugin_Name) # Do not rename or remove this 
 # Good resource -> https://www.launchd.info/
 # For explanation on StartupTypes, see https://keith.github.io/xcode-man-pages/launchd.plist.5.html
 
+DispositionValues = {
+    0x01: 'Enabled',
+    0x02: 'Allowed',
+    0x04: 'Hidden',
+    0x08: 'Notified'
+}
+
+# Types as per sfltool dumpbtm output
+TypeValues = {
+    0x01: 'user item',
+    0x02: 'app',
+    0x04: 'login item',
+    0x08: 'agent',
+    0x10: 'daemon',
+    0x20: 'developer',
+    0x40: 'spotlight',
+    0x800: 'quicklook',
+    0x80000: 'curated',
+    0x10000: 'legacy'
+}
 
 class PersistentProgram:
-    def __init__(self, source, name, full_name, persistence_type, user, uid, disabled, app_path):
+    def __init__(self, source, name, full_name, persistence_type, user, uid, disabled, app_path,
+                 app_args='', btm_disp=0, btm_type=0, btm_flags=0, btm_developer='', btm_container='',
+                 btm_exec_mod_date=0, btm_dev_identifier=''):
         self.source = source
         self.name = name
         self.full_name = full_name
@@ -49,6 +71,14 @@ class PersistentProgram:
         self.disabled = disabled
         self.start_when = ''
         self.app_path = app_path
+        self.app_args = app_args
+        self.btm_disposition = btm_disp
+        self.btm_type = btm_type
+        self.btm_flags = btm_flags
+        self.btm_developer = btm_developer
+        self.btm_container = btm_container
+        self.btm_exec_mod_date = btm_exec_mod_date
+        self.btm_dev_identifier = btm_dev_identifier
 
 def process_loginitems_plist(mac_info, plist_path, user, uid, persistent_programs):
     mac_info.ExportFile(plist_path, __Plugin_Name, user + "_", False)
@@ -90,9 +120,13 @@ def process_loginitems_plist(mac_info, plist_path, user, uid, persistent_program
         log.error("Problem reading plist for {} - {}".format(plist_path, error))
 
 def process_backgrounditems_btm(mac_info, btm_path, user, uid, persistent_programs):
-    mac_info.ExportFile(btm_path, __Plugin_Name, user + "_", False)
-
-    success, plist, error = mac_info.ReadPlist(btm_path, deserialize=True)
+    global DispositionValues
+    global TypeValues
+    if mac_info:
+        mac_info.ExportFile(btm_path, __Plugin_Name, user + "_", False)
+        success, plist, error = mac_info.ReadPlist(btm_path, deserialize=True)
+    else:
+        success, plist, error = CommonFunctions.ReadPlist(btm_path, deserialize=True)
     if success:
         # >= macOS 10.13 and <= macOS 12
         if isinstance(plist, dict) and plist['version'] == 2:
@@ -147,13 +181,15 @@ def process_backgrounditems_btm(mac_info, btm_path, user, uid, persistent_progra
 
         # >= macOS 13
         elif isinstance(plist, list) and plist[0].get('version', 0) >= 3:
+            log.info(f'BTM version is {plist[0]["version"]}')
             for uuid in plist[1]['store']['itemsByUserIdentifier'].keys():
                 user_name = ''
-                for user_info in mac_info.users:
-                    if uuid == user_info.UUID:
-                        user_name = user_info.user_name
-                        user_uid = user_info.UID
-                        break
+                if mac_info:
+                    for user_info in mac_info.users:
+                        if uuid == user_info.UUID:
+                            user_name = user_info.user_name
+                            user_uid = user_info.UID
+                            break
 
                 if not user_name:
                     user_name = 'unknown (' + uuid + ')'
@@ -165,9 +201,21 @@ def process_backgrounditems_btm(mac_info, btm_path, user, uid, persistent_progra
                         url_relative = entry['url'].get('NS.relative', '')
                     else:
                         url_relative = ''
+                    app_arguments = ' '.join(entry.get('programArguments', []))
+                    btm_disp = entry.get('disposition', 0)
+                    btm_type = entry.get('type', 0)
+                    btm_flags = entry.get('flags', 0)
+                    btm_dev = entry.get('developerName', '')
+                    btm_container = entry.get('container', '')
+                    btm_exec_mod_date = entry.get('executableModificationDate', '')
+                    btm_team_identifier = entry.get('teamIdentifier', '')
+                    name = entry.get('name', '')
+
+                    if btm_type == 0x20:
+                        continue # We don't care about 0x20:'developer', these aren't autostart entries
+                    
                     executable_path = entry.get('executablePath', '')
                     items = entry.get('items', '')
-                    name = entry.get('name', '')
 
                     start_when = ''
                     if url_relative.endswith('.plist'):
@@ -184,7 +232,9 @@ def process_backgrounditems_btm(mac_info, btm_path, user, uid, persistent_progra
                     else:
                         file_path = 'unknown'
 
-                    program = PersistentProgram(btm_path, name, file_path, 'Background Task Management Agent', user_name, user_uid, '', file_path)
+                    program = PersistentProgram(btm_path, name, file_path, 'Background Task Management Agent', user_name, user_uid, 
+                                                '' if btm_disp & 0x1 == 1 else '1', file_path, app_arguments, 
+                                                btm_disp, btm_type, btm_flags, btm_dev, btm_container, btm_exec_mod_date, btm_team_identifier)
                     program.start_when = start_when
                     persistent_programs.append(program)
 
@@ -286,8 +336,7 @@ def process_dir(mac_info, path, persistent_programs, method, user_name, uid):
                         if program_args:
                             program_path = program_args[0]
                     program.app_path = program_path
-                    #keep_alive = isinstance(plist.get('KeepAlive', None), dict)
-                    #if keep_alive or run_at_load:
+                    program.app_args = ' '.join(program_args)
                     persistent_programs.append(program)
                     program.start_when = get_run_when(plist, method)
                     program.user = plist.get('UserName', program.user) # plist can override this, so get that value
@@ -374,15 +423,38 @@ def ProcessLoginRestartApps(mac_info, persistent_programs):
                     else:
                         log.error("Problem reading plist {} - {}".format(full_path, error))
 
+def GetEventFlagsString(flags, flag_values):
+    '''Get string names of all flags set'''
+    list_flags = []
+    for k, v in list(flag_values.items()):
+        if (k & flags) != 0:
+            list_flags.append(v)
+    return '|'.join(list_flags)
+
 def print_all(programs, output_params, source_path):
+    global DispositionValues
+    global TypeValues
     program_info = [ ('Type',DataType.TEXT),('Name',DataType.TEXT),
                      ('User',DataType.TEXT),('StartupType',DataType.TEXT),('Disabled',DataType.TEXT),
-                     ('AppPath',DataType.TEXT),('Source',DataType.TEXT) ]
+                     ('AppPath',DataType.TEXT),('AppArguments',DataType.TEXT),
+                     ('BTM_Disposition',DataType.TEXT),('BTM_Type',DataType.TEXT),
+                     #('BTM_Flags',DataType.TEXT),
+                     ('BTM_Developer',DataType.TEXT),('BTM_TeamIdentifier',DataType.TEXT),
+                     ('BTM_Container',DataType.TEXT),('BTM_ExecutableModDate',DataType.DATE),
+                     ('Source',DataType.TEXT) ]
     data_list = []
     log.info("Found {} autostart item(s)".format(len(programs)))
     for program in programs:
+        disp_str = GetEventFlagsString(program.btm_disposition, DispositionValues)
+        if disp_str.find('Allowed') < 0:
+            disp_str = '|'.join(('NOT Allowed', disp_str))
         data_list.append([program.persistence_type, program.name, program.user, program.start_when, 
-                          program.disabled, program.app_path, program.source])
+                          program.disabled, program.app_path, program.app_args,
+                          disp_str, GetEventFlagsString(program.btm_type, TypeValues),
+                          program.btm_developer, program.btm_dev_identifier, program.btm_container, 
+                          CommonFunctions.ReadMacAbsoluteTime(program.btm_exec_mod_date), 
+                          #program.flags,
+                          program.source])
     WriteList("autostart information", "AutoStart", data_list, program_info, output_params, source_path)
 
 def Plugin_Start(mac_info):
@@ -489,3 +561,19 @@ def Plugin_Start(mac_info):
     ProcessLoginRestartApps(mac_info, persistent_programs)
 
     print_all(persistent_programs, mac_info.output_params, '')
+
+def Plugin_Start_Standalone(input_files_list, output_params):
+    '''Main entry point function when used on single artifacts (mac_apt_singleplugin), not on a full disk image'''
+    log.info("Module Started as standalone")
+    for input_path in input_files_list:
+        log.debug("Input path passed was: " + input_path)
+        persistent_programs = []
+        if input_path.lower().endswith('.btm'):
+            process_backgrounditems_btm(None, input_path, '', 0, persistent_programs)
+        else:
+            log.error('Did not process file as it does not end in ".btm"')
+
+        if len(persistent_programs) > 0:
+            print_all(persistent_programs, output_params, input_path)
+        else:
+            log.info('No autostart artifacts found in {}'.format(input_path))
