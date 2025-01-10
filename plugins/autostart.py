@@ -60,8 +60,8 @@ TypeValues = {
 
 class PersistentProgram:
     def __init__(self, source, name, full_name, persistence_type, user, uid, disabled, app_path,
-                 app_args='', btm_disp=0, btm_type=0, btm_flags=0, btm_developer='', btm_container='',
-                 btm_exec_mod_date=0, btm_dev_identifier=''):
+                 app_args='', btm_disp='', btm_type='', btm_flags='', btm_developer='', btm_container='',
+                 btm_exec_mod_date='', btm_dev_identifier=''):
         self.source = source
         self.name = name
         self.full_name = full_name
@@ -122,6 +122,7 @@ def process_loginitems_plist(mac_info, plist_path, user, uid, persistent_program
 def process_backgrounditems_btm(mac_info, btm_path, user, uid, persistent_programs):
     global DispositionValues
     global TypeValues
+
     if mac_info:
         mac_info.ExportFile(btm_path, __Plugin_Name, user + "_", False)
         success, plist, error = mac_info.ReadPlist(btm_path, deserialize=True)
@@ -232,9 +233,13 @@ def process_backgrounditems_btm(mac_info, btm_path, user, uid, persistent_progra
                     else:
                         file_path = 'unknown'
 
+                    disp_str = GetEventFlagsString(btm_disp, DispositionValues)
+                    if disp_str.find('Allowed') < 0:
+                        disp_str = '|'.join(('NOT Allowed', disp_str))
                     program = PersistentProgram(btm_path, name, file_path, 'Background Task Management Agent', user_name, user_uid, 
                                                 '' if btm_disp & 0x1 == 1 else '1', file_path, app_arguments, 
-                                                btm_disp, btm_type, btm_flags, btm_dev, btm_container, btm_exec_mod_date, btm_team_identifier)
+                                                disp_str, GetEventFlagsString(btm_type, TypeValues), 
+                                                btm_flags, btm_dev, btm_container, btm_exec_mod_date, btm_team_identifier)
                     program.start_when = start_when
                     persistent_programs.append(program)
 
@@ -432,8 +437,6 @@ def GetEventFlagsString(flags, flag_values):
     return '|'.join(list_flags)
 
 def print_all(programs, output_params, source_path):
-    global DispositionValues
-    global TypeValues
     program_info = [ ('Type',DataType.TEXT),('Name',DataType.TEXT),
                      ('User',DataType.TEXT),('StartupType',DataType.TEXT),('Disabled',DataType.TEXT),
                      ('AppPath',DataType.TEXT),('AppArguments',DataType.TEXT),
@@ -445,12 +448,9 @@ def print_all(programs, output_params, source_path):
     data_list = []
     log.info("Found {} autostart item(s)".format(len(programs)))
     for program in programs:
-        disp_str = GetEventFlagsString(program.btm_disposition, DispositionValues)
-        if disp_str.find('Allowed') < 0:
-            disp_str = '|'.join(('NOT Allowed', disp_str))
         data_list.append([program.persistence_type, program.name, program.user, program.start_when, 
                           program.disabled, program.app_path, program.app_args,
-                          disp_str, GetEventFlagsString(program.btm_type, TypeValues),
+                          program.btm_disposition, program.btm_type,
                           program.btm_developer, program.btm_dev_identifier, program.btm_container, 
                           CommonFunctions.ReadMacAbsoluteTime(program.btm_exec_mod_date), 
                           #program.flags,
