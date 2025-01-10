@@ -63,7 +63,7 @@ class CommonFunctions:
 
     @staticmethod
     def ReadMacAbsoluteTime(mac_abs_time): # Mac Absolute time is time epoch beginning 2001/1/1
-        '''Returns datetime object, or empty string upon error'''
+        '''Returns Cocoa datetime object (epoch 2001), or empty string upon error'''
         if mac_abs_time not in ( 0, None, ''):
             try:
                 if isinstance(mac_abs_time, str):
@@ -79,7 +79,7 @@ class CommonFunctions:
 
     @staticmethod
     def ReadMacHFSTime(mac_hfs_time): # Mac HFS+ timestamp is time epoch beginning 1904/1/1
-        '''Returns datetime object, or empty string upon error'''
+        '''Returns datetime object (epoch 1904), or empty string upon error'''
         if mac_hfs_time not in ( 0, None, ''):
             try:
                 if isinstance(mac_hfs_time, str):
@@ -91,7 +91,7 @@ class CommonFunctions:
 
     @staticmethod
     def ReadAPFSTime(mac_apfs_time): # Mac APFS timestamp is nano second time epoch beginning 1970/1/1
-        '''Returns datetime object, or empty string upon error'''
+        '''Returns nanosecond APFS datetime object, or empty string upon error'''
         if mac_apfs_time not in ( 0, None, ''):
             try:
                 if isinstance(mac_apfs_time, str):
