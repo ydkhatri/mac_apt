@@ -10,6 +10,7 @@
 import binascii
 import collections
 import csv
+import jsonlines
 import logging
 import os
 import sqlite3
@@ -35,6 +36,7 @@ class DataWriter:
         if self.csv: self.csv_writer.Cleanup()
         if self.tsv: self.tsv_writer.Cleanup()
         if self.sql: self.sql_writer.CloseDb()
+        if self.jsonl: self.jsonl_writer.Cleanup()
 
     def __init__(self, output_params, name, column_info, artifact_source=''):
         '''
@@ -59,6 +61,8 @@ class DataWriter:
         self.csv_writer = None
         self.tsv = False
         self.tsv_writer = None
+        self.jsonl = False
+        self.jsonl_writer = None
         self.xlsx = False
         self.xlsx_writer = None
         self.sql = False
@@ -79,6 +83,10 @@ class DataWriter:
             self.tsv = True
             self.tsv_writer = CsvWriter(is_tsv=True)
             self.tsv_writer.CreateCsvFile(os.path.join(self.output_path, name + ".tsv"))
+        if output_params.write_jsonl:
+            self.jsonl = True
+            self.jsonl_writer = JsonlWriter()
+            self.jsonl_writer.CreateJsonlFile(os.path.join(self.output_path, name + ".jsonl"))
         if output_params.write_xlsx:
             self.xlsx = True
             self.xlsx_writer = output_params.xlsx_writer
@@ -107,13 +115,15 @@ class DataWriter:
             i += 1
 
     def WriteHeaders(self):
-        '''Writes Headings for csv/tsv, creates Table for sqlite, creates Sheet for XLSX'''
+        '''Writes Headings for csv/tsv/jsonl, creates Table for sqlite, creates Sheet for XLSX'''
         if self.csv:
             self.csv_writer.WriteRow(self.column_info)
         if self.tsv:
             self.tsv_writer.WriteRow(self.column_info)
         if self.sql:
             self.sql_writer.CreateTable(self.column_info, self.name, self.column_info_extra_keywords)
+        if self.jsonl:
+            self.jsonl_writer.AddHeaders(self.column_info)
         if self.xlsx:
             self.xlsx_writer.CreateSheet(self.name)
             self.xlsx_writer.AddHeaders(self.column_info)
@@ -144,12 +154,13 @@ class DataWriter:
                     self.sql_writer.WriteRow(row_copy)
                 else:
                     self.sql_writer.WriteRow(row)
-            if self.csv or self.tsv or self.xlsx: # This routine modifies row
+            if self.csv or self.tsv or self.jsonl or self.xlsx: # This routine modifies row
                 if self.cols_with_blobs:
                     for col_name, index in self.cols_with_blobs:
                         row[index] = self.BlobToHex(row[index])
                 if self.csv: self.csv_writer.WriteRow(row)
                 if self.tsv: self.tsv_writer.WriteRow(row)
+                if self.jsonl: self.jsonl_writer.WriteRow(row)
                 if self.xlsx: self.xlsx_writer.WriteRow(row)
         else: # Must be Dictionary!
             #list_to_write = [ row.get(col, None if self.column_info[col] in (DataType.INTEGER, DataType.BLOB, DataType.REAL) else '') \
@@ -162,12 +173,13 @@ class DataWriter:
                         row_copy[index] = bytes(row_copy[index]) if row_copy[index] else b''
                     self.sql_writer.WriteRow(row_copy)
                 else: self.sql_writer.WriteRow(list_to_write)
-            if self.csv or self.tsv or self.xlsx:
+            if self.csv or self.tsv or self.jsonl or self.xlsx:
                 if self.cols_with_blobs:
                     for col_name, index in self.cols_with_blobs:
                         list_to_write[index] = self.BlobToHex(list_to_write[index])
                 if self.csv: self.csv_writer.WriteRow(list_to_write)
                 if self.tsv: self.tsv_writer.WriteRow(list_to_write)
+                if self.jsonl: self.jsonl_writer.WriteRow(list_to_write)
                 if self.xlsx: self.xlsx_writer.WriteRow(list_to_write)
         self.row_count += 1
 
@@ -192,13 +204,14 @@ class DataWriter:
                     self.sql_writer.WriteRows(rows_copy)
                 else:
                     self.sql_writer.WriteRows(rows)
-            if self.csv or self.tsv or self.xlsx: # This routine modifies rows
+            if self.csv or self.tsv or self.jsonl or self.xlsx: # This routine modifies rows
                 if self.cols_with_blobs:
                     for row in rows:
                         for col_name, index in self.cols_with_blobs:
                             row[index] = self.BlobToHex(row[index])
                 if self.csv: self.csv_writer.WriteRows(rows)
                 if self.tsv: self.tsv_writer.WriteRows(rows)
+                if self.jsonl: self.jsonl_writer.WriteRows(rows)
                 if self.xlsx: self.xlsx_writer.WriteRows(rows)
         else: # Must be Dictionary!
             list_to_write = []
@@ -218,13 +231,14 @@ class DataWriter:
                     self.sql_writer.WriteRows(rows_copy)
                 else:
                     self.sql_writer.WriteRows(list_to_write)
-            if self.csv or self.tsv or self.xlsx: # This routine modifies list_to_write
+            if self.csv or self.tsv or self.jsonl or self.xlsx: # This routine modifies list_to_write
                 if self.cols_with_blobs:
                     for list_row in list_to_write:
                         for col_name, index in self.cols_with_blobs:
                             list_row[index] = self.BlobToHex(list_row[index])           
                 if self.csv: self.csv_writer.WriteRows(list_to_write)
                 if self.tsv: self.tsv_writer.WriteRows(list_to_write)
+                if self.jsonl: self.jsonl_writer.WriteRows(list_to_write)
                 if self.xlsx: self.xlsx_writer.WriteRows(list_to_write)
         self.row_count += row_len
 
@@ -502,6 +516,80 @@ class CsvWriter:
     #     if self.file_handle != None:
     #         self.Cleanup()
 
+class JsonlWriter:
+    def __init__(self, delete_empty_files=True):
+        self.filepath = ''
+        self.jsonl_writer = None
+        self.column_info = None
+        self.column_names = None
+        self.delete_empty_files = delete_empty_files
+    
+    def CreateJsonlFile(self, filepath):
+        '''
+        Creates a jsonl file with suggested name, 
+        if name is not available, get the next available name
+        eg: name01.jsonl or name02.jsonl or ..
+        '''
+        self.filepath = CommonFunctions.GetNextAvailableFileName(filepath)
+        try:
+            self.jsonl_writer = jsonlines.open(self.filepath, mode='w')
+        except (OSError) as ex:
+            log.error(f'Failed to create JSONL file at path {self.filepath}')
+            log.exception('Error details')
+            raise ex
+
+    def AddHeaders(self, column_info):
+        self.column_info = column_info
+        self.column_names = self.column_info.keys()
+
+    def WriteRow(self, row):
+        try:
+            if isinstance(row, list):
+                #to_write = dict(self.column_info.keys())
+                #for i, k in enumerate(to_write.keys()):
+                #    to_write[k] = row[i]
+                to_write = dict(zip(self.column_names, row))
+                for k, v in to_write.items():
+                    if v is None:
+                        to_write[k] = ''
+                    elif not (isinstance(v, str) or 
+                            isinstance(v, int) or 
+                            isinstance(v, float)):
+                        to_write[k] = str(v)
+            else: # must be dict
+                to_write = dict(row)
+                for k, v in to_write.items():
+                    if v is None:
+                        to_write[k] = ''
+                    elif not (isinstance(v, str) or 
+                            isinstance(v, int) or 
+                            isinstance(v, float)):
+                        to_write[k] = str(v)
+            self.jsonl_writer.write(to_write)
+        except (OSError, TypeError, KeyError, ValueError) as ex:
+            log.exception('Failed to write jsonl row ' + str(row))
+
+    def WriteRows(self, rows):
+        for row in rows:
+            self.WriteRow(row)
+
+    def GetFileSize(self):
+        '''Return jsonl filesize or None if error'''
+        try:
+            return os.path.getsize(self.filepath)
+        except OSError as ex:
+            log.warning(f'Failed to retrieve file size for JSONL: {self.filepath}')
+        return None
+    
+    def Cleanup(self):
+        if self.jsonl_writer != None:
+            self.jsonl_writer.close()
+        if self.delete_empty_files:
+            file_size = self.GetFileSize()
+            if file_size != None and file_size == 0:
+                log.debug("Deleting empty file : " + self.filepath)
+                os.remove(self.filepath)
+
 class ExcelSheetInfo:
     def __init__(self, name):
         self.name = name
@@ -768,9 +856,10 @@ if __name__ == '__main__': # TESTING ONLY
         op = OutputParams()
         op.write_csv = True
         op.write_tsv = True
+        op.write_jsonl = True
         op.write_sql = True
         op.write_xlsx = True
-        op.output_path = "/Users/ykhatri/Desktop/code/test" #"C:\\temp\\out"
+        op.output_path = "/Users/ykhatri/Desktop/code/test_writer" #"C:\\temp\\out"
         op.output_db_path = SqliteWriter.CreateSqliteDb(os.path.join(op.output_path, "TESTINGWRITER.db"))
         op.xlsx_writer = ExcelWriter()
         op.xlsx_writer.CreateXlsxFile(os.path.join(op.output_path, "TESTINGWRITER.xlsx"))

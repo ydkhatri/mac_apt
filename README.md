@@ -14,7 +14,7 @@ _Note: Tested upto Python 3.12 on Windows and macOS._
 #### Features
 * Cross platform (no dependency on pyobjc)
 * Works on E01, VMDK, AFF4, DD, split-DD, DMG (no compression), SPARSEIMAGE & mounted images
-* XLSX, CSV, TSV, Sqlite outputs
+* XLSX, CSV, TSV, JSONL, Sqlite outputs
 * Analyzed files/artifacts are exported for later review
 * zlib, lzvn, lzfse compressed files are supported!
 * Native HFS & APFS parser

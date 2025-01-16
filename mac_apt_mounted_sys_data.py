@@ -114,7 +114,7 @@ arg_parser.add_argument('-o', '--output_path', help='Path where output files wil
 arg_parser.add_argument('-x', '--xlsx', action="store_true", help='Save output in Excel spreadsheet')
 arg_parser.add_argument('-c', '--csv', action="store_true", help='Save output as CSV files')
 arg_parser.add_argument('-t', '--tsv', action="store_true", help='Save output as TSV files (tab separated)')
-#arg_parser.add_argument('-s', '--sqlite', action="store_true", help='Save output in an sqlite database')
+arg_parser.add_argument('-j', '--jsonl', action="store_true", help='Save output as JSONL files')
 arg_parser.add_argument('-l', '--log_level', help='Log levels: INFO, DEBUG, WARNING, ERROR, CRITICAL (Default is INFO)')#, choices=['INFO','DEBUG','WARNING','ERROR','CRITICAL'])
 arg_parser.add_argument('plugin', nargs="+", help="Plugins to run (space separated). 'FAST' will run most plugins")
 args = arg_parser.parse_args()
@@ -197,6 +197,8 @@ if args.csv:
     output_params.write_csv  = True
 if args.tsv:
     output_params.write_tsv  = True
+if args.jsonl:
+    output_params.write_jsonl = True
 
 # At this point, all looks good, lets mount the image
 found_macos = False

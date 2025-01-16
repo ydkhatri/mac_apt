@@ -48,6 +48,7 @@ class OutputParams:
         self.write_tsv = False
         self.write_sql = False
         self.write_xlsx = False
+        self.write_jsonl = False
         self.xlsx_writer = None
         self.output_db_path = ''
         self.export_path = '' # For artifact source files

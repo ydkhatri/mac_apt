@@ -2,6 +2,7 @@ anytree
 biplist
 construct==2.10.70
 cryptography
+jsonlines
 kaitaistruct
 libewf-python
 libvmdk-python

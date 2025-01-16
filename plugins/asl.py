@@ -437,6 +437,7 @@ def CopyOutputParams(output_params):
     op_copy.write_tsv = output_params.write_tsv
     op_copy.write_sql = output_params.write_sql
     op_copy.write_xlsx = output_params.write_xlsx
+    op_copy.write_jsonl = output_params.write_jsonl
     if op_copy.write_xlsx:
         op_copy.xlsx_writer = CreateXlsxFile(op_copy.output_path)
     else:

@@ -192,6 +192,7 @@ def CopyOutputParams(output_params):
     op_copy.write_tsv = output_params.write_tsv
     op_copy.write_sql = output_params.write_sql
     op_copy.write_xlsx = output_params.write_xlsx
+    op_copy.write_jsonl = output_params.write_jsonl
     op_copy.xlsx_writer = output_params.xlsx_writer
     op_copy.output_db_path = output_params.output_db_path
     op_copy.export_path = output_params.export_path
@@ -289,6 +290,7 @@ def Plugin_Start(mac_info):
         out_params.write_csv = False
         out_params.write_tsv = False
         out_params.write_sql = True
+        out_params.write_jsonl = False
         if CreateSqliteDb(output_path, out_params):
             writer = DataWriter(out_params, "UnifiedLogs", data_type_info, traceV3_path)
             large_data_cache = {}
