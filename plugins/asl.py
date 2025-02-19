@@ -465,6 +465,7 @@ def CreateSqliteDb(output_path, out_params):
 def Process_Asl_File(mac_info, out_params, asl_file, writer, data_description, data_name, data_type_info):
 
     msgs = []
+    log.info(f'Reading {asl_file}')
     if mac_info is None: # for artifact_only
         try:
             size = os.path.getsize(asl_file)
