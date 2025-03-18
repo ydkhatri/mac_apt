@@ -47,7 +47,7 @@ chooseInstallation_Dir () {
 # ----------------------------------------------------------------------------------- #
 
 echo "" # Space for script legibility
-echo "[*] mac_apt Installation Script for macOS - Version 2.4"
+echo "[*] mac_apt Installation Script for macOS - Version 2.5"
 echo "-----------------------------------------------------------"
 
 # Use ping to loopback address to prompt user for sudo password
