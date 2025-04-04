@@ -79,7 +79,7 @@ def Plugin_Start(mac_info):
         input_path = crashreporter_path.format(user.home_dir)
         user_name = user.user_name
         if mac_info.IsValidFolderPath(input_path):
-            file_names = mac_info.ListItemsInFolder(input_path, EntryType.FILES)
+            file_names = mac_info.ListItemsInFolder(input_path, EntryType.FILES, include_dates=True)
             for item in file_names:
                 if item['name'].endswith('.plist'):
                     target_path = input_path + '/' + item['name']
