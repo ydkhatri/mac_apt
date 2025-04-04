@@ -86,6 +86,9 @@ def OpenLocalDbAndRead(wifi_artifacts, user, file_path, parser_function):
 
 def process_wifi(wifi_artifacts, db, user, file_path):
     try:
+        if not CommonFunctions.TableExists(db, 'wifiContextEvents'):
+            log.warning('Table "wifiContextEvents" does not exist in db!')
+            return
         db.row_factory = sqlite3.Row
         cursor = db.cursor()
         query = \
