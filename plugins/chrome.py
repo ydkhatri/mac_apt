@@ -546,7 +546,7 @@ def Plugin_Start_Standalone(input_files_list, output_params):
                     ProcessExtensionsLocal(chromium_artifacts, '', file_path)
 
             if len(chromium_artifacts) > 0:
-                PrintAll(chromium_artifacts, output_params, input_path)
+                PrintAll('', chromium_artifacts, output_params, input_path)
             else:
                 log.info('No chrome/chromium artifacts found in {}'.format(input_path))
         else:
