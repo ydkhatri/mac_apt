@@ -1696,6 +1696,32 @@ class MountedMacInfo(MacInfo):
                             log.error(f'Could not find {font_reg_db}, Cannot map darwin folder to user profile!')
             self.users.extend(domain_users)
 
+class MountedVRZip(MountedMacInfo):
+    '''Same as MountedMacInfo, but will return correct file MACB times'''
+    def __init__(self, root_folder_path, metadata_collection, output_params):
+        super().__init__(root_folder_path, output_params)
+        self.metadata_collection = metadata_collection
+        
+    def GetFileMACTimes(self, file_path):
+        '''Gets MAC timestamps for a file or folder.
+           Assumes file_path starts with /
+        '''
+        metadata = self.metadata_collection.get(file_path.lower(), None)
+        if metadata:
+            times = {
+                'c_time': metadata['MetadataChanged'],
+                'm_time': metadata['Modified'],
+                'cr_time':metadata['Created'],
+                'a_time': metadata['LastAccessed']
+            }
+        else:
+            times = { 'c_time':None, 'm_time':None, 'cr_time':None, 'a_time':None }
+            # Only log error if this is a file. Folders will not be collected in zips,
+            # hence timestamps won't exist there.
+            if os.path.isfile(file_path):
+                log.error(f'Failed to retrieve original timestamps for {file_path}')
+        return times
+
 class MountedMacInfoSeperateSysData(MountedMacInfo):
     '''Same as MountedMacInfo, but takes into account two volumes (SYS, DATA) mounted separately'''
 

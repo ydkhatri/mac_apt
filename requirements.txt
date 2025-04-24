@@ -15,5 +15,7 @@ pycryptodome
 pyliblzfse
 pytsk3==20230125
 setuptools
+win32_setctime
 xlsxwriter
+zipfile_deflate64
 other_dependencies/pyaff4-0.31-yk-20240511.zip

@@ -37,6 +37,7 @@ from plugins.helpers.apfs_reader import ApfsContainer, ApfsDbInfo
 from plugins.helpers.apple_sparse_image import AppleSparseImage
 from plugins.helpers.disk_report import *
 from plugins.helpers.writer import *
+from plugins.helpers.extract_vr_zip import extract_zip
 from version import __VERSION
 
 __PROGRAMNAME = "macOS Artifact Parsing Tool"
@@ -53,7 +54,7 @@ def IsItemPresentInList(collection, item):
 
 def CheckInputType(input_type):
     input_type = input_type.upper()
-    return input_type in ['AFF4', 'E01', 'DD', 'DMG', 'VMDK', 'MOUNTED', 'SPARSE', 'AXIOMZIP']
+    return input_type in ['AFF4', 'AXIOMZIP', 'DD', 'DMG', 'E01', 'MOUNTED', 'SPARSE', 'VMDK', 'VR']
 
 ######### FOR HANDLING E01 file ###############
 class ewf_Img_Info(pytsk3.Img_Info):
@@ -452,7 +453,7 @@ arg_parser = argparse.ArgumentParser(description='mac_apt is a framework to proc
                                                  f'You are running {__PROGRAMNAME} version {__VERSION}\n\n'
                                                  'Note: The default output is now sqlite, no need to specify it now',
                                     epilog=plugins_info, formatter_class=argparse.RawTextHelpFormatter)
-arg_parser.add_argument('input_type', help='Specify Input type as either DD, DMG, E01, VMDK, AFF4, SPARSE, AXIOMZIP or MOUNTED')
+arg_parser.add_argument('input_type', help='Specify Input type as either AFF4, AXIOMZIP, DD, DMG, E01, MOUNTED, SPARSE, VMDK or VR')
 arg_parser.add_argument('input_path', help='Path to macOS image/volume')
 arg_parser.add_argument('-o', '--output_path', help='Path where output files will be created')
 arg_parser.add_argument('-x', '--xlsx', action="store_true", help='Save output in Excel spreadsheet')
@@ -576,6 +577,17 @@ try:
     elif args.input_type.upper() == 'VMDK':
         img = GetImgInfoObjectForVMDK(args.input_path)
         mac_info = macinfo.MacInfo(output_params)
+    elif args.input_type.upper() == 'VR':
+        if os.path.isfile(args.input_path):
+            zip_extraction_folder = os.path.join(output_params.export_path, 'Extraction')
+            success, metadata_collection = extract_zip(args.input_path, zip_extraction_folder)
+            if success:
+                mac_info = macinfo.MountedVRZip(zip_extraction_folder, metadata_collection, output_params)
+                found_macos = FindMacOsFiles(mac_info)
+            else:
+                Exit("Exiting -> Could not extract/read zip file!")
+        else:
+            Exit("Exiting -> Cannot browse mounted image at " + args.input_path)
     elif args.input_type.upper() == 'AFF4':
         img = GetImgInfoObjectForAff4(args.input_path)
         mac_info = macinfo.MacInfo(output_params)
@@ -599,7 +611,7 @@ try:
             Exit("Exiting -> Cannot read Axiom Targeted collection zip image at " + args.input_path)
     log.info("Opened image " + args.input_path)
 except Exception as ex:
-    log.error("Failed to load image. Error Details are: " + str(ex))
+    log.exception("Failed to load image.")
     Exit()
 
 if args.password_file:
@@ -611,7 +623,7 @@ if args.password_file:
 elif args.password:
     mac_info.password = args.password
 
-if args.input_type.upper() not in ('MOUNTED', 'AXIOMZIP'):
+if args.input_type.upper() not in ('MOUNTED', 'AXIOMZIP', 'VR'):
     mac_info.pytsk_image = img
     mac_info.use_native_hfs_parser = True #False if args.use_tsk else True
     mac_info.dont_decrypt = True if args.dont_decrypt else False
