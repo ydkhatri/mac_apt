@@ -42,7 +42,7 @@ log = logging.getLogger('MAIN.' + __Plugin_Name) # Do not rename or remove this 
 #          .SFL files are keyed archives.
 #      All have Bookmark blobs to parse.
 #  Processes NSNavRecentPlaces and SGTRecentFileSearches from <USER>/Library/Preferences/.GlobalPreferences.plist
-#  Processes FXDesktopVolumePositions & FXRecentFolders from <USER>/Library/Preferences/com.apple.finder.plist
+#  Processes FXDesktopVolumePositions, SGTRecentFileSearches & FXRecentFolders from <USER>/Library/Preferences/com.apple.finder.plist
 #  Processes systemitems.volumeslist and favoriteservers from <USER>/Library/Preferences/com.apple.sidebarlists.plist
 
 # TODO : seen SGTRecentFileSearches in  <USER>/Library/Preferences/com.google.chrome.plist
@@ -60,6 +60,8 @@ class RecentType(IntEnum):
     TAG = 10
     FAVORITE_SERVER = 11
     FAVORITE_ITEM = 12
+    FAVORITE_VOLUME = 13
+    APP_RECENT_DOC = 14
 
     def __str__(self):
         return self.name # This returns 'UNKNOWN' instead of 'RecentType.UNKNOWN'
@@ -430,6 +432,7 @@ def ReadFinderPlist(plist, recent_items, source, user=''):
     ReadFinderBulkRenameSettings(plist, recent_items, source, user)
     ReadFinderRecentMoveCopyDest(plist, recent_items, source, user)
     ReadFinderGotoHistory(plist, recent_items, source, user)
+    ReadSGTRecentFileSearches(plist, recent_items, source, user)
 
     vol_dict = plist.get('FXDesktopVolumePositions', [])
     for vol in vol_dict:
@@ -529,6 +532,18 @@ def ReadFinderBulkRenameSettings(plist, recent_items, source, user=''):
             ri = RecentItem(data, '', prefix + item, source, RecentType.BULKRENAME, user)
             recent_items.append(ri)
 
+def ReadSGTRecentFileSearches(plist, recent_items, source, user=''):
+    try:
+        recent_searches = plist['SGTRecentFileSearches']
+        try:
+            for search in recent_searches:
+                ri = RecentItem(search['name'], '', 'SGTRecentFileSearches:' + search['type'],  source, RecentType.SEARCH, user)
+                recent_items.append(ri)
+        except (KeyError, ValueError) as ex:
+            log.exception('Error reading SGTRecentFileSearches from plist')
+    except KeyError: # Not found
+        pass
+
 def ReadGlobalPrefPlist(plist, recent_items, source='', user=''):
     try:
         recent_places = plist['NSNavRecentPlaces']
@@ -540,17 +555,8 @@ def ReadGlobalPrefPlist(plist, recent_items, source='', user=''):
             log.exception('Error reading NSNavRecentPlaces from plist')
     except KeyError: # Not found
         pass
-    try:
-        recent_searches = plist['SGTRecentFileSearches']
-        try:
-            for search in recent_searches:
-                ri = RecentItem(search['name'], '', 'SGTRecentFileSearches:' + search['type'],  source, RecentType.SEARCH, user)
-                recent_items.append(ri)
-        except (KeyError, ValueError) as ex:
-            log.exception('Error reading SGTRecentFileSearches from plist')
-
-    except KeyError: # Not found
-        pass
+    
+    ReadSGTRecentFileSearches(plist, recent_items, source, user)
 
     for k, v in plist.items():
         if isinstance(v, str) and v == '1' and not k.startswith('Apple'):
@@ -613,10 +619,11 @@ def ReadSFL2Plist(file_handle, recent_items, source, user=''):
             elif basename.find('recenthosts') >=0 : recent_type = RecentType.HOST
             elif basename.find('recentdocuments') >=0 : recent_type = RecentType.DOCUMENT
             elif basename.find('recentapplications') >=0 : recent_type = RecentType.APPLICATION
-            elif basename.find('favoritevolumes') >=0 : recent_type = RecentType.VOLUME
+            elif basename.find('favoritevolumes') >=0 : recent_type = RecentType.FAVORITE_VOLUME
             elif basename.find('projectitems') >=0 : recent_type = RecentType.TAG
             elif basename.find('favoriteservers') >=0 : recent_type = RecentType.FAVORITE_SERVER
             elif basename.find('favoriteitems') >=0 : recent_type = RecentType.FAVORITE_ITEM
+            elif basename.find('applicationrecentdocuments') >=0 : recent_type = RecentType.APP_RECENT_DOC
             ri = RecentItem(name, '', 'uuid={}'.format(uuid), source, recent_type, user)
             recent_items.append(ri)
 
