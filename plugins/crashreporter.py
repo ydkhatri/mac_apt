@@ -49,7 +49,7 @@ def PrintAll(crashreporter_artifacts, output_params, source_path):
     for item in crashreporter_artifacts:
         data_list.append( [ item.name, item.date, item.force_quit_date, item.file_created_date,
                              item.path, item.user, item.source ] )
-    WriteList("crashreporter", "crashreporter", data_list, crashreporter_info, output_params, source_path)
+    WriteList("crashreporter", "Crashreporter", data_list, crashreporter_info, output_params, source_path)
 
 def ProcessPlist(plist, crashreporter_artifacts, app_name, cr_date, user_name, target_path):
     crashreporter_artifacts.append(

@@ -46,7 +46,7 @@ def PrintAll(wifi_artifacts, output_params, source_path):
     for item in wifi_artifacts:
         data_list.append( [ item.site, item.connect_date, item.disconnect_date, item.duration,
                             item.user, item.source ] )
-    WriteList("wifi_intelligence", "wifi_intelligence", data_list, wifi_info, output_params, source_path)
+    WriteList("wifi_intelligence", "Wifi_Intelligence", data_list, wifi_info, output_params, source_path)
 
 def OpenDb(inputPath):
     log.info ("Processing file " + inputPath)
