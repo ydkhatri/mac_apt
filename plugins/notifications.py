@@ -245,26 +245,34 @@ def WriteOutput(output_params):
 
 def  GetScreenTimeStrings(mac_info):
     strings = {}
-    path_1 = '/System/Library/UserNotifications/Bundles/com.apple.ScreenTimeNotifications.bundle/Contents/Resources/en.lproj/Localizable.strings'
-    path_2 = '/System/Library/UserNotifications/Bundles/com.apple.ScreenTimeNotifications.bundle/Contents/Resources/en.lproj/InfoPlist.strings'
-    if mac_info.IsValidFilePath(path_1):
-        success, plist, error = mac_info.ReadPlist(path_1)
-        if success:
-            strings.update(plist)
+    old_paths = ('/System/Library/UserNotifications/Bundles/com.apple.ScreenTimeNotifications.bundle/Contents/Resources/en.lproj/Localizable.strings',
+                '/System/Library/UserNotifications/Bundles/com.apple.ScreenTimeNotifications.bundle/Contents/Resources/en.lproj/InfoPlist.strings')
+    new_paths = ('/System/Library/UserNotifications/Bundles/com.apple.ScreenTimeNotifications.bundle/Contents/Resources/InfoPlist.loctable',
+                '/System/Library/UserNotifications/Bundles/com.apple.ScreenTimeNotifications.bundle/Contents/Resources/Localizable.loctable')
+    
+    for path in old_paths:
+        if mac_info.IsValidFilePath(path):
+            success, plist, error = mac_info.ReadPlist(path)
+            if success:
+                strings.update(plist)
+            else:
+                log.error(f"Failed to read plist {path}")
         else:
-            log.error(f"Failed to read plist {path_1}")
-    else:
-        log.debug('Did not find path - ' + path_1)
+            log.debug('Did not find path - ' + path)
 
-    if mac_info.IsValidFilePath(path_2):
-        success, plist, error = mac_info.ReadPlist(path_2)
-        if success:
-            strings.update(plist)
+    for path in new_paths:
+        if mac_info.IsValidFilePath(path):
+            success, plist, error = mac_info.ReadPlist(path)
+            if success:
+                # Only seen en_GB and en_AU, but just en and en_US too
+                for lang in ('en_GB', 'en', 'en_US', 'en_AU'):
+                    if lang in plist:
+                        strings.update(plist[lang])
+                        break
+            else:
+                log.error(f"Failed to read plist {path}")
         else:
-            log.error(f"Failed to read plist {path_2}")
-    else:
-        log.debug('Did not find path - ' + path_2)
-
+            log.debug('Did not find path - ' + path)
     return strings
 
 def Plugin_Start(mac_info):
