@@ -49,7 +49,7 @@ notifications = []
 data_info = [('User', DataType.TEXT),('Date', DataType.DATE),('Shown', DataType.INTEGER), \
             ('Bundle', DataType.TEXT),('AppPath', DataType.TEXT),('UUID', DataType.TEXT), \
             ('Title', DataType.TEXT),('SubTitle', DataType.TEXT),('Message', DataType.TEXT), \
-            ('Source', DataType.TEXT)]
+            ('Identifier', DataType.TEXT),('Source', DataType.TEXT)]
 
 def RemoveTabsNewLines(obj):
     if isinstance(obj, str):
@@ -154,6 +154,7 @@ def Parse_ver_17_Db(conn, inputPath, user, timezone, screentime_strings_dict):
                             title = RemoveTabsNewLines(req.get('titl', ''))
                             subtitle = RemoveTabsNewLines(req.get('subt', ''))
                             message = RemoveTabsNewLines(req.get('body', ''))
+                            identifier = req.get('iden', '')
                     except (KeyError, AttributeError) as ex: log.debug('Error reading field req - ' + str(ex))
                     try:
                         log.debug('Unknown field orig = {}'.format(plist['orig']))
@@ -163,7 +164,7 @@ def Parse_ver_17_Db(conn, inputPath, user, timezone, screentime_strings_dict):
 
                 notifications.append([user, CommonFunctions.ReadMacAbsoluteTime(row['delivered_date']) , 
                                         row['presented'], row['app'], '', GetText(row['uuid']), 
-                                        title, subtitle, message, inputPath])       
+                                        title, subtitle, message, identifier, inputPath])       
         except sqlite3.Error as ex:
             log.error ("Db cursor error while reading file " + inputPath)
             log.exception("Exception Details")
@@ -216,7 +217,7 @@ def ParseDb(conn, inputPath, user, timezone, screentime_strings_dict):
 
                 notifications.append([user, CommonFunctions.ReadMacAbsoluteTime(row['time_utc']) , 
                                     row['shown'], row['bundle'], row['appPath'], GetText(row['uuid']), 
-                                    title, subtitle, message, inputPath])
+                                    title, subtitle, message, '', inputPath])
         except sqlite3.Error as ex:
             log.error ("Db cursor error while reading file " + inputPath)
             log.exception("Exception Details")
@@ -273,6 +274,7 @@ def  GetScreenTimeStrings(mac_info):
                 log.error(f"Failed to read plist {path}")
         else:
             log.debug('Did not find path - ' + path)
+
     return strings
 
 def Plugin_Start(mac_info):
