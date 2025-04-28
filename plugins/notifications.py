@@ -285,7 +285,7 @@ def Plugin_Start(mac_info):
             processed_paths.append(user.home_dir)
             user_notification_path = notification_path.format(user.home_dir)
             if version_dict["major"] >= 15 and mac_info.IsValidFilePath(user_notification_path):
-                ProcessNotificationDb_Wrapper(user_notification_path, mac_info, screentime_strings_dict)
+                ProcessNotificationDb_Wrapper(user_notification_path, mac_info, user_name, screentime_strings_dict)
                 mac_info.ExportFile(user_notification_path, __Plugin_Name, user_name + "_")
             elif version_dict["major"] < 15 and mac_info.IsValidFolderPath(user_notification_path):
                 files = mac_info.ListItemsInFolder(user_notification_path, EntryType.FILES)
