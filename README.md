@@ -18,6 +18,7 @@ _Note: Tested upto Python 3.12 on Windows and macOS._
 * Reads the Spotlight database and Unified Logging (tracev3) files
 
 #### Latest
+:heavy_check_mark: Can read Velociraptor created targeted collection zip (MacOS.Search.FileFinder)  
 :heavy_check_mark: Can read Axiom created targeted collection zip files  
 :heavy_check_mark: ios_apt can read GrayKey extracted file system  
 :heavy_check_mark: Can read [RECON](https://sumuri.com/software/recon-itr/) and [ASLA](https://github.com/giuseppetotaro/asla) created .sparseimage files  
@@ -80,7 +81,7 @@ WIFI_INTELLIGENCE | Gets Wifi connect/disconnect information from Apple Intellig
 XPROTECT | Reads XProtect diagnostic files and XProtect Behavior Service database
 
 ### Coming soon..
-* More plugins
+* Plugins for BIOME and KnowledgeC
 * More documentation
 
 For installation (to run from code) see https://github.com/ydkhatri/mac_apt/wiki/Installation-for-Python3  
