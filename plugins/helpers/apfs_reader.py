@@ -736,7 +736,7 @@ class ApfsFileSystemParser:
                     self.num_records_read_batch += 1
                     self.num_records_read_total += 1
                     self.extent_records.append([oid, xid, entry.key.obj_id, entry.key.content.offset, entry.data.size, entry.data.phys_block_num, debug_parent_listing_str, None])
-                elif entry_type == self.dir_rec_type: #container.apfs.EntryType.dir_rec.value:  
+                elif entry_type == self.dir_rec_type: #container.apfs.EntryType.dir_rec.value:
                     self.num_records_read_batch += 1
                     self.num_records_read_total += 1
                     rec = entry.data
@@ -1151,7 +1151,8 @@ class ApfsVolume:
         ###
         apfs_file_meta = self.GetApfsFileMeta(path)
         if apfs_file_meta:
-            return apfs_file_meta.item_type in (8, 10) # will also return true for symlink which may point to folder!
+            return ApfsFileMeta.IsFile(apfs_file_meta.mode) or \
+                    ApfsFileMeta.IsSymlink(apfs_file_meta.mode) # will also return true for symlink which may point to folder!
         return False
 
     def DoesFolderExist(self, path):
@@ -1164,19 +1165,26 @@ class ApfsVolume:
             path = path[:-1]
         apfs_file_meta = self.GetApfsFileMeta(path)
         if apfs_file_meta:
-            return apfs_file_meta.item_type in (4, 10) # will also return true for symlink which may point to file!
+            return ApfsFileMeta.IsFolder(apfs_file_meta.mode) or \
+                    ApfsFileMeta.IsSymlink(apfs_file_meta.mode) # will also return true for symlink which may point to file!
         return False
 
     def DoesPathExist(self, path, type=EntryType.FILES_AND_FOLDERS):
         '''Returns True if path exists'''
-        if not path: 
-            return None
+        if not path:
+            return False
         if not path.startswith('/'): 
             path = '/' + path
 
         apfs_file_meta = self.GetApfsFileMeta(path)
         if apfs_file_meta:
-            return apfs_file_meta.item_type in (4, 8, 10) # folder, file, symlink
+            ret = ApfsFileMeta.IsFile(apfs_file_meta.mode) or \
+                    ApfsFileMeta.IsFolder(apfs_file_meta.mode) or \
+                    ApfsFileMeta.IsSymlink(apfs_file_meta.mode)
+            if ret == False:
+                log.warning(f'File path {path} returned as neither file/folder/symlink, mode={apfs_file_meta.mode}')
+                return False
+            return apfs_file_meta # folder, file, symlink
         return False
 
     def GetFileMetadataByCnid(self, cnid):
@@ -1208,12 +1216,11 @@ class ApfsVolume:
                 " a.Extent_CNID as xCNID, a.XID as xXID, ex.Offset as xExOff, ex.Size as xExSize, ex.Block_Num as xBlock_Num, "\
                 " p.CNID, p.Path, i.Parent_CNID, i.Extent_CNID, i.XID as iXID, i.Name, i.Created, i.Modified, i.Changed, i.Accessed, i.Flags, "\
                 " i.Links_or_Children, i.BSD_flags, i.UID, i.GID, i.Mode, i.Logical_Size, i.Physical_Size, "\
-                " d.ItemType, d.DateAdded, e.XID as eXID, e.Offset as Extent_Offset, e.Size as Extent_Size, e.Block_Num as Extent_Block_Num, "\
+                " e.XID as eXID, e.Offset as Extent_Offset, e.Size as Extent_Size, e.Block_Num as Extent_Block_Num, "\
                 " c.Uncompressed_size, c.Data, c.Extent_Logical_Size, "\
                 " ec.Offset as compressed_Extent_Offset, ec.Size as compressed_Extent_Size, ec.Block_Num as compressed_Extent_Block_Num "\
                 " from \"{0}_Paths\" as p "\
                 " left join \"{0}_Inodes\" as i on i.CNID = p.CNID "\
-                " left join \"{0}_DirEntries\" as d on d.CNID = p.CNID "\
                 " left join \"{0}_Extents\" as e on e.CNID = i.Extent_CNID "\
                 " left join \"{0}_Compressed_Files\" as c on c.CNID = i.CNID "\
                 " left join \"{0}_Extents\" as ec on ec.CNID = c.Extent_CNID "\
@@ -1240,9 +1247,8 @@ class ApfsVolume:
                     apfs_file_meta = ApfsFileMeta(row['Name'], row['Path'], row['CNID'], row['Parent_CNID'], CommonFunctions.ReadAPFSTime(row['Created']), \
                                         CommonFunctions.ReadAPFSTime(row['Modified']), CommonFunctions.ReadAPFSTime(row['Changed']), \
                                         CommonFunctions.ReadAPFSTime(row['Accessed']), \
-                                        CommonFunctions.ReadAPFSTime(row['DateAdded']), \
                                         row['Flags'], row['Links_or_Children'], row['BSD_flags'], row['UID'], row['GID'], row['Mode'], \
-                                        row['Logical_Size'], row['Physical_Size'], row['ItemType'])
+                                        row['Logical_Size'], row['Physical_Size'])
 
                     if row['Uncompressed_size'] != None:
                         # if row['Logical_Size'] > 0:
@@ -1343,7 +1349,6 @@ class ApfsVolume:
         query = "SELECT count(DISTINCT p.cnid)"\
                 " from \"{0}_Paths\" as p "\
                 " left join \"{0}_Inodes\" as i on i.CNID = p.CNID "\
-                " left join \"{0}_DirEntries\" as d on d.CNID = p.CNID "\
                 " left join \"{0}_Extents\" as e on e.CNID = i.Extent_CNID "\
                 " left join \"{0}_Compressed_Files\" as c on c.CNID = i.CNID "\
                 " left join \"{0}_Extents\" as ec on ec.CNID = c.Extent_CNID "\
@@ -1364,12 +1369,11 @@ class ApfsVolume:
                 " a.Extent_CNID as xCNID, a.XID as xXID, ex.Offset as xExOff, ex.Size as xExSize, ex.Block_Num as xBlock_Num, "\
                 " p.CNID, p.Path, i.Parent_CNID, i.Extent_CNID, i.XID as iXID, i.Name, i.Created, i.Modified, i.Changed, i.Accessed, i.Flags, "\
                 " i.Links_or_Children, i.BSD_flags, i.UID, i.GID, i.Mode, i.Logical_Size, i.Physical_Size, "\
-                " d.ItemType, d.DateAdded, e.XID as eXID, e.Offset as Extent_Offset, e.Size as Extent_Size, e.Block_Num as Extent_Block_Num, "\
+                " e.XID as eXID, e.Offset as Extent_Offset, e.Size as Extent_Size, e.Block_Num as Extent_Block_Num, "\
                 " c.Uncompressed_size, c.Data, c.Extent_Logical_Size, "\
                 " ec.Offset as compressed_Extent_Offset, ec.Size as compressed_Extent_Size, ec.Block_Num as compressed_Extent_Block_Num "\
                 " from \"{0}_Paths\" as p "\
                 " left join \"{0}_Inodes\" as i on i.CNID = p.CNID "\
-                " left join \"{0}_DirEntries\" as d on d.CNID = p.CNID "\
                 " left join \"{0}_Extents\" as e on e.CNID = i.Extent_CNID "\
                 " left join \"{0}_Compressed_Files\" as c on c.CNID = i.CNID "\
                 " left join \"{0}_Extents\" as ec on ec.CNID = c.Extent_CNID "\
@@ -1417,9 +1421,8 @@ class ApfsVolume:
                         apfs_file_meta = ApfsFileMeta(row['Name'], row['Path'], row['CNID'], row['Parent_CNID'], CommonFunctions.ReadAPFSTime(row['Created']), \
                                             CommonFunctions.ReadAPFSTime(row['Modified']), CommonFunctions.ReadAPFSTime(row['Changed']), \
                                             CommonFunctions.ReadAPFSTime(row['Accessed']), \
-                                            CommonFunctions.ReadAPFSTime(row['DateAdded']), \
                                             row['Flags'], row['Links_or_Children'], row['BSD_flags'], row['UID'], row['GID'], row['Mode'], \
-                                            row['Logical_Size'], row['Physical_Size'], row['ItemType'])
+                                            row['Logical_Size'], row['Physical_Size'])
 
                         if row['Uncompressed_size'] != None:
                             if row['eXID'] and (row['eXID'] > row['xXID']): # extent_xid > attrib_xid, so it was compressed earlier, now it's not
@@ -1498,13 +1501,14 @@ class ApfsVolume:
             where_clause = "where path like '{}/%' and path NOT like '{}/%/%'".format(path, path)
 
         for meta_item in self.GetManyFileMetadata(where_clause):
-            item = { 'name':meta_item.name, 'size':meta_item.logical_size, 
-                    'type':ApfsFileMeta.ItemTypeString(meta_item.item_type) }
+            item = { 'name': meta_item.name, 
+                     'size':meta_item.logical_size, 
+                     'type': EntryType.FILES if ApfsFileMeta.IsFile(meta_item.mode) else EntryType.FOLDERS 
+                    }
             item['dates'] = { 'c_time':meta_item.changed,
                                 'm_time':meta_item.modified, 
                                 'cr_time':meta_item.created, 
-                                'a_time':meta_item.accessed,
-                                'i_time':meta_item.date_added }
+                                'a_time':meta_item.accessed }
             items.append(item) 
         return items
 
@@ -2392,11 +2396,11 @@ class ApfsFileCompressed(ApfsFile):
         return data[:requested_size]
 
 class ApfsFileMeta:
-    __slots__ = ['name', 'path', 'cnid', 'parent_cnid', 'created', 'modified', 'changed', 'accessed', 'date_added', 
+    __slots__ = ['name', 'path', 'cnid', 'parent_cnid', 'created', 'modified', 'changed', 'accessed', 
                 'flags', 'links', 'bsd_flags', 'uid', 'gid', 'mode', 'logical_size', 'compressed_extent_size', 
-                'physical_size', 'is_symlink', 'item_type', 'decmpfs', 'attributes', 'extents', 'is_compressed']
-    def __init__(self, name, path, cnid, parent_cnid, created, modified, changed, accessed, date_added, 
-                flags, links, bsd_flags, uid, gid, mode, logical_size, physical_size, item_type):
+                'physical_size', 'is_symlink', 'decmpfs', 'attributes', 'extents', 'is_compressed']
+    def __init__(self, name, path, cnid, parent_cnid, created, modified, changed, accessed, 
+                flags, links, bsd_flags, uid, gid, mode, logical_size, physical_size):
         self.name = name
         self.path = path
         self.cnid = cnid
@@ -2406,7 +2410,6 @@ class ApfsFileMeta:
         self.modified = modified
         self.changed = changed
         self.accessed = accessed
-        self.date_added = date_added
         self.flags = flags
         self.links = links
         self.bsd_flags = bsd_flags
@@ -2416,8 +2419,7 @@ class ApfsFileMeta:
         self.logical_size = logical_size
         self.compressed_extent_size = 0
         self.physical_size = physical_size
-        self.is_symlink = (item_type == 10)
-        self.item_type = item_type
+        self.is_symlink = (mode & 0o0120000) == 0o0120000
         self.decmpfs = None 
         self.attributes = {}
         self.extents = []
@@ -2425,15 +2427,13 @@ class ApfsFileMeta:
         #self.is_hardlink = False
 
     @staticmethod
-    def ItemTypeString(item_type):
-        type_str = ''
-        if   item_type == 1: type_str = 'Named Pipe'
-        elif item_type == 2: type_str = 'Character Special File'
-        elif item_type == 4: type_str = 'Folder'
-        elif item_type == 6: type_str = 'Block Special File'
-        elif item_type == 8: type_str = 'File'
-        elif item_type ==10: type_str = 'SymLink'
-        elif item_type ==12: type_str = 'Socket'
-        elif item_type ==14: type_str = 'Whiteout'
-        else:                type_str = 'Unknown_' + str(item_type)
-        return type_str
+    def IsFolder(mode):
+        return (mode & 0o170000) == 0o0040000 # 0o170000 is S_IFMT mask
+    
+    @staticmethod
+    def IsFile(mode):
+        return (mode & 0o0170000) == 0o0100000  # 0o170000 is S_IFMT mask
+    
+    @staticmethod
+    def IsSymlink(mode):
+        return (mode & 0o0170000) == 0o0120000  # 0o170000 is S_IFMT mask

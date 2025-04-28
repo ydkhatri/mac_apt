@@ -1188,7 +1188,6 @@ class ApfsMacInfo(MacInfo):
                 times['m_time'] = apfs_file_meta.modified
                 times['cr_time'] = apfs_file_meta.created
                 times['a_time'] = apfs_file_meta.accessed
-                times['i_time'] = apfs_file_meta.date_added
             else:
                 log.debug('File not found in GetFileMACTimes() query!, path was ' + file_path)
         except Exception as ex:
@@ -1277,13 +1276,11 @@ class ApfsMacInfo(MacInfo):
 
             elif types_to_fetch == EntryType.FILES:
                 for x in all_items:
-                    if x['type'] in ('File', 'SymLink'):
-                        x['type'] = EntryType.FILES
+                    if x['type'] == EntryType.FILES:
                         items.append(dict(x))
             else: # Folders
                 for x in all_items:
-                    if x['type'] == 'Folder':
-                        x['type'] = EntryType.FOLDERS
+                    if x['type'] == EntryType.FOLDERS:
                         items.append(dict(x))
         return items
 

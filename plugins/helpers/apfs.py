@@ -148,9 +148,9 @@ class Apfs(KaitaiStruct):
         folder = 4
         block_special_file = 6
         regular_file = 8
-        symlink = 10
-        socket = 12
-        whiteout = 14
+        symlink  = 0o12 # 0xA = 10
+        socket   = 0o14 # 0xC = 12
+        whiteout = 0o16 # 0xE = 14
 
     class EntryType(Enum):
         location = 0 # any
