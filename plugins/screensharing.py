@@ -139,7 +139,7 @@ def Plugin_Start(mac_info: MacInfo) -> None:
         ss_plist_path = screen_sharing_plist_base_path.format(user.home_dir)
 
         if mac_info.IsValidFilePath(ss_plist_path):
-            ExtractAndReadScreenSharingPlist(mac_info, screen_sharing_artifacts, user.username, ss_plist_path)
+            ExtractAndReadScreenSharingPlist(mac_info, screen_sharing_artifacts, user.user_name, ss_plist_path)
 
     if len(screen_sharing_artifacts) > 0:
         PrintAll(screen_sharing_artifacts, mac_info.output_params, "")
