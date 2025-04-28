@@ -293,6 +293,7 @@ def parseDbNewSinglePlug(c, quicklook_array, source, path_to_thumbnails, export)
         bitmapdata_location, bitmapdata_length
         FROM thumbnails LEFT JOIN basic_files 
         ON (basic_files.fileId | -9223372036854775808) == thumbnails.file_id
+        WHERE fileId is not NULL
         group by fileId
     """
 
@@ -303,13 +304,14 @@ def parseDbNewSinglePlug(c, quicklook_array, source, path_to_thumbnails, export)
         bitmapdata_location, bitmapdata_length
         FROM thumbnails LEFT JOIN basic_files 
         ON (basic_files.fileId | -9223372036854775808) == thumbnails.file_id
+        WHERE fileId is not NULL
         group by fileId
     """
 
     c.execute(pref_ver_query)
     log.info("preference version = {}".format(pref_ver))
     pref_ver = int(c.fetchone()[0])
-    if pref_ver == 11:
+    if pref_ver >= 11:
         combined_query = pref_v11_query
     else:
         combined_query = pref_v10_query
@@ -330,7 +332,7 @@ def parseDbNewSinglePlug(c, quicklook_array, source, path_to_thumbnails, export)
             # Carve out thumbnails with no iNode
             bitmapdata_location = entries[8]
             bitmapdata_length = entries[9]
-            computed_width = computeWidth(entries[6]) if pref_ver == 11 else entries[6]
+            computed_width = computeWidth(entries[6]) if pref_ver >= 11 else entries[6]
             height = entries[7]
             name = "Unknown" + str(unknown_count)
             hit_count = entries[3]
@@ -379,6 +381,7 @@ def parseDbNew(c, quicklook_array, source, path_to_thumbnails, export, user_name
         bitmapdata_location, bitmapdata_length
         FROM thumbnails LEFT JOIN basic_files 
         ON (basic_files.fileId | -9223372036854775808) == thumbnails.file_id
+        WHERE fileId is not NULL
         group by fileId
     """
 
@@ -389,13 +392,14 @@ def parseDbNew(c, quicklook_array, source, path_to_thumbnails, export, user_name
         bitmapdata_location, bitmapdata_length
         FROM thumbnails LEFT JOIN basic_files 
         ON (basic_files.fileId | -9223372036854775808) == thumbnails.file_id
+        WHERE fileId is not NULL
         group by fileId
     """
 
     c.execute(pref_ver_query)
     pref_ver = int(c.fetchone()[0])
     log.info("preference version = {}".format(pref_ver))
-    if pref_ver == 11:
+    if pref_ver >= 11:
         combined_query = pref_v11_query
     else:
         combined_query = pref_v10_query
@@ -411,7 +415,7 @@ def parseDbNew(c, quicklook_array, source, path_to_thumbnails, export, user_name
         for entries in combined_files:
             bitmapdata_location = entries[8]
             bitmapdata_length = entries[9]
-            computed_width = computeWidth(entries[6]) if pref_ver == 11 else entries[6]
+            computed_width = computeWidth(entries[6]) if pref_ver >= 11 else entries[6]
             height = entries[7]
             hit_count = entries[3]
             last_hit_date = entries[4]
@@ -466,7 +470,7 @@ def parseDbNew(c, quicklook_array, source, path_to_thumbnails, export, user_name
             thumbfile.close()
 
 def findDb(mac_info):
-    log.debug("Finding QuickLook databases and caches now in user cache dirs")
+    log.debug("Finding QuickLook databases and caches in user cache dirs")
     db_path_arr = []
     thumbnail_path_array = []
     users = []
