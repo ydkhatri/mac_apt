@@ -250,6 +250,8 @@ class CommonFunctions:
         try:
             cursor = db_conn.execute("SELECT group_concat(name) from sqlite_master WHERE type='table'")
             for row in cursor:
+                if row[0] == None:
+                    return ''
                 return row[0]
         except sqlite3Error as ex:
             log.error ("Failed to list tables on db. Error Details: {}".format(str(ex)))
