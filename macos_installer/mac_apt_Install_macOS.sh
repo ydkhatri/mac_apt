@@ -3,11 +3,11 @@
 # Author: Zachary Burnham (@zmbf0r3ns1cs), Yogesh Khatri (@swiftforensics)
 #------------------------------------------------------------------------------
 # Script to auto-download Yogesh Khatri's mac_apt tool from GitHub (with necessary 
-# dependencies) and install
-# https://github.com/ydkhatri/mac_apt 
+# dependencies) and install https://github.com/ydkhatri/mac_apt 
 
-# Run as '. ./mac_apt_Install_macOS.sh' to avoid subshell execution
-# --- This script will require sudo ---
+# Run as './mac_apt_Install_macOS.sh'
+
+PYTHONVER="python3.13"
 
 # Define function to verify validity of user directory input
 verifyDir () {
@@ -50,13 +50,15 @@ echo "" # Space for script legibility
 echo "[*] mac_apt Installation Script for macOS - Version 2.6"
 echo "-----------------------------------------------------------"
 
-# Use ping to loopback address to prompt user for sudo password
-# *Homebrew does not support running script as sudo for security purposes --> this is a workaround*
-echo "[!] This script requires sudo privileges."
-sudo ping -c 1 127.0.0.1 &> /tmp/mac_apt_installer_output.txt
 # Print macOS version
 echo -n "[*] macOS version is "
 sw_vers -productversion
+sw_vers -productversion &> /tmp/mac_apt_installer_output.txt
+
+# Print processor architecture (ARM/x64)
+echo -n "[*] architecture is "
+uname -m
+uname -a &> /tmp/mac_apt_installer_output.txt
 
 # Prompt user to choose default installation or custom directory
 chooseInstallation_Dir
@@ -77,26 +79,18 @@ fi
 echo "[~] Ensuring Homebrew is up-to-date..."
 brew update &> /tmp/mac_apt_installer_output.txt
 
-# Check for python3.12, install if not found
-if test ! $(which python3.12); then
-    echo "[+] Installing python3.12..."
-    brew install python@3.12 git &> /tmp/mac_apt_installer_output.txt
+# Check for specfic python version, install if not found
+if which "$PYTHONVER" > /dev/null 2>&1; then
+    echo "[*] $PYTHONVER is already installed"
+else
+    echo "[+] Installing $PYTHONVER..."
+    brew install "${PYTHONVER/python/python@}" git &> /tmp/mac_apt_installer_output.txt
     # Check for successful install
     if [[ $? -ne 0 ]]; then
-        echo "[!] Installation of python3.12 failed due to an error."
+        echo "[!] Installation of $PYTHONVER failed due to an error."
         echo "[!] Please report this to the developer. Send /tmp/mac_apt_installer_output.txt"
         exit 1; 
     fi
-fi
-
-# Install virtualenv --> https://virtualenv.pypa.io/en/stable/userguide/
-echo "[+] Installing virtualenv..."
-sudo pip3.12 install --upgrade virtualenv &> /tmp/mac_apt_installer_output.txt
-# Ensure installation is successful
-if [[ $? -ne 0 ]]; then
-    echo "[!] Installation of virtualenv failed due to an error. Please check to ensure the embedded pip query is valid and try again."
-    echo "[!] If correct, please report this to the developer. Send /tmp/mac_apt_installer_output.txt"
-    exit 1; 
 fi
 
 # Download mac_apt from GitHub to Desktop
@@ -110,17 +104,16 @@ if [[ $? -ne 0 ]]; then
 #    echo "[!] Please report this to the developer."
     exit 1; 
 fi
+
 cd mac_apt
-virtualenv --python python3.12 env &> /tmp/mac_apt_installer_output.txt
+echo "[+] Creating virtual environment with virtualenv..."
+$PYTHONVER -m venv env &> /tmp/mac_apt_installer_output.txt
 
 # Activate env with virtualenv to install within virtual environment
-echo "[+] Creating virtual environment with virtualenv..."
-cd $userDir
-cd mac_apt
 source env/bin/activate
 
 # Install dependencies
-echo "[+] Installing dependencies..."
+echo "[+] Installing dependencies...this may take a few minutes..."
 pip3 install pybindgen==0.21.0 --no-cache-dir &> /tmp/mac_apt_installer_output.txt
 pip3 install -r requirements.txt --no-cache-dir &> /tmp/mac_apt_installer_output.txt
 if [[ $? -ne 0 ]]; then
@@ -137,3 +130,6 @@ echo " and then enter the virtual environment using the following command "
 echo "   source env/bin/activate "
 echo " Then run mac_apt as you would normally "
 echo "   python3 mac_apt.py ...."
+echo " "
+echo " When finished, exit the virtual environment using the command"
+echo "   deactivate"
