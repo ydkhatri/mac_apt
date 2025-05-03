@@ -1,5 +1,5 @@
 #!/bin/bash
-# mac_apt Installation Script for macOS - Version 2.5
+# mac_apt Installation Script for macOS - Version 2.6
 # Author: Zachary Burnham (@zmbf0r3ns1cs), Yogesh Khatri (@swiftforensics)
 #------------------------------------------------------------------------------
 # Script to auto-download Yogesh Khatri's mac_apt tool from GitHub (with necessary 
@@ -47,7 +47,7 @@ chooseInstallation_Dir () {
 # ----------------------------------------------------------------------------------- #
 
 echo "" # Space for script legibility
-echo "[*] mac_apt Installation Script for macOS - Version 2.5"
+echo "[*] mac_apt Installation Script for macOS - Version 2.6"
 echo "-----------------------------------------------------------"
 
 # Use ping to loopback address to prompt user for sudo password
@@ -77,13 +77,13 @@ fi
 echo "[~] Ensuring Homebrew is up-to-date..."
 brew update &> /tmp/mac_apt_installer_output.txt
 
-# Check for python3.10, install if not found
-if test ! $(which python3.10); then
-    echo "[+] Installing python3.10..."
-    brew install python@3.10 git &> /tmp/mac_apt_installer_output.txt
+# Check for python3.12, install if not found
+if test ! $(which python3.12); then
+    echo "[+] Installing python3.12..."
+    brew install python@3.12 git &> /tmp/mac_apt_installer_output.txt
     # Check for successful install
     if [[ $? -ne 0 ]]; then
-        echo "[!] Installation of python3.10 failed due to an error."
+        echo "[!] Installation of python3.12 failed due to an error."
         echo "[!] Please report this to the developer. Send /tmp/mac_apt_installer_output.txt"
         exit 1; 
     fi
@@ -91,7 +91,7 @@ fi
 
 # Install virtualenv --> https://virtualenv.pypa.io/en/stable/userguide/
 echo "[+] Installing virtualenv..."
-sudo pip3.10 install --upgrade virtualenv &> /tmp/mac_apt_installer_output.txt
+sudo pip3.12 install --upgrade virtualenv &> /tmp/mac_apt_installer_output.txt
 # Ensure installation is successful
 if [[ $? -ne 0 ]]; then
     echo "[!] Installation of virtualenv failed due to an error. Please check to ensure the embedded pip query is valid and try again."
@@ -111,7 +111,7 @@ if [[ $? -ne 0 ]]; then
     exit 1; 
 fi
 cd mac_apt
-virtualenv --python python3.10 env &> /tmp/mac_apt_installer_output.txt
+virtualenv --python python3.12 env &> /tmp/mac_apt_installer_output.txt
 
 # Activate env with virtualenv to install within virtual environment
 echo "[+] Creating virtual environment with virtualenv..."
