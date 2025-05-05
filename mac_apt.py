@@ -448,7 +448,9 @@ for plugin in plugins:
 
 plugins_info += "\n    " + "-"*76 + "\n" +\
                  " "*4 + "FAST" + " "*16 + "Runs all plugins except IDEVICEBACKUPS, SPOTLIGHT, UNIFIEDLOGS\n" + \
-                 " "*4 + "ALL" + " "*17 + "Runs all plugins"
+                 " "*4 + "ALL" + " "*17 + "Runs all plugins\n" +\
+                 "\nIt is now possible to disable certain plugins from FAST or ALL by appending - to the name\n" +\
+                 "Eg: 'ALL UNIFIEDLOGS- WIFI-' will run ALL plugins except UNIFIEDLOGS and WIFI"
 arg_parser = argparse.ArgumentParser(description='mac_apt is a framework to process macOS forensic artifacts\n'
                                                  f'You are running {__PROGRAMNAME} version {__VERSION}\n\n'
                                                  'Note: The default output is now sqlite, no need to specify it now',
