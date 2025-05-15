@@ -22,7 +22,7 @@ import sqlite3
 
 __Plugin_Name = "DOCUMENTREVISIONS"
 __Plugin_Friendly_Name = "DocumentRevisions"
-__Plugin_Version = "1.0"
+__Plugin_Version = "1.1"
 __Plugin_Description = "Reads DocumentRevisions database"
 __Plugin_Author = "Nicole Ibrahim"
 __Plugin_Author_Email = "nicoleibrahim.us@gmail.com"
@@ -37,7 +37,8 @@ log = logging.getLogger('MAIN.' + __Plugin_Name) # Do not rename or remove this 
 
 class Revisions:
 
-    def __init__(self, inode, storage_id, path, exists, last_seen, generation_added, generation_path, source):
+    def __init__(self, inode, storage_id, path, exists, last_seen, generation_added, generation_path, 
+                 genstore_orig_display_name, genstore_orig_posix_name, source):
         self.inode = inode
         self.storage_id = storage_id
         self.path = path
@@ -45,14 +46,18 @@ class Revisions:
         self.last_seen = last_seen
         self.generation_added = generation_added
         self.generation_path = generation_path
+        self.genstore_orig_display_name = genstore_orig_display_name
+        self.genstore_orig_posix_name = genstore_orig_posix_name
         self.source_file = source
 
 def PrintAll(revisions, output_params):
 
     revisions_info = [ ('File_Inode',DataType.INTEGER),('Storage_ID',DataType.INTEGER),('File_Path',DataType.TEXT),
-                        ('Exists_On_Disk',DataType.TEXT),
+                        ('Rev_Exists_On_Disk',DataType.TEXT),
                         ('File_Last_Seen_UTC',DataType.DATE),('Generation_Added_UTC',DataType.DATE),
-                        ('Generation_Path',DataType.TEXT),('Source',DataType.TEXT)
+                        ('Generation_Path',DataType.TEXT),
+                        ('Genstore_Orig_Display_Name', DataType.TEXT), ('Genstore_Orig_Posix_Name', DataType.TEXT),
+                        ('Source',DataType.TEXT)
                       ]
 
     log.info (str(len(revisions)) + " revision item(s) found")
@@ -60,7 +65,7 @@ def PrintAll(revisions, output_params):
     for q in revisions:
         q_item =  [ q.inode, q.storage_id, q.path, q.exists,
                     CommonFunctions.ReadUnixTime(q.last_seen), CommonFunctions.ReadUnixTime(q.generation_added), 
-                    q.generation_path, q.source_file
+                    q.generation_path, q.genstore_orig_display_name, q.genstore_orig_posix_name, q.source_file
                   ]
         revisions_list.append(q_item)
     WriteList("revisions information", "DocumentRevisions", revisions_list, revisions_info, output_params, '')
@@ -78,7 +83,7 @@ def ReadRevisionsdB(db, revisions, source):
         for row in cursor:
             try:
                 q_event = Revisions(row['inode'], row['storage_id'], row['path'], '', row['file_last_seen_utc'], 
-                                    row['generation_add_time_utc'], row['generation_path'], source)
+                                    row['generation_add_time_utc'], row['generation_path'], '', '', source)
                 revisions.append(q_event)
             except (sqlite3.Error, KeyError):
                 log.exception('Error fetching row data')
@@ -120,22 +125,27 @@ def CheckForRevisionExistence(mac_info, revisions, root):
     if not root.endswith('/'):
         root += '/'
     for rev in revisions:
-        if mac_info.IsValidFilePath(root + rev.generation_path):
+        path = root + rev.generation_path
+        if mac_info.IsValidFilePath(path) or \
+            mac_info.IsValidFolderPath(path):
             rev.exists = 'Yes'
+            xattrs = mac_info.GetExtendedAttributes(path)
+            rev.genstore_orig_display_name = xattrs.get('com.apple.genstore.origdisplayname', b'').decode('utf8', 'ignore')
+            rev.genstore_orig_posix_name = xattrs.get('com.apple.genstore.origposixname', b'').decode('utf8', 'ignore')
         else:
-            log.debug(f'Did not FIND -> {root + rev.generation_path}')
+            log.debug(f'Did not FIND -> {path}')
             rev.exists = 'No'
 
 def Plugin_Start(mac_info):
     '''Main Entry point function for plugin'''
     revisions = []
-    revisions_path = '/.DocumentRevisions-V100/db-V1/db.sqlite'
-    ProcessDbFromPath(mac_info, revisions, revisions_path)
-    CheckForRevisionExistence(mac_info, revisions, '/.DocumentRevisions-V100')
-
-    revisions_path_2 = '/System/Volumes/Data/.DocumentRevisions-V100/db-V1/db.sqlite'
-    ProcessDbFromPath(mac_info, revisions, revisions_path_2)
-    CheckForRevisionExistence(mac_info, revisions, '/System/Volumes/Data/.DocumentRevisions-V100')
+    revisions_paths = ('/.DocumentRevisions-V100/db-V1/db.sqlite',
+                       '/System/Volumes/Data/.DocumentRevisions-V100/db-V1/db.sqlite')
+    for rev_path in revisions_paths:
+        revs = []
+        ProcessDbFromPath(mac_info, revs, rev_path)
+        CheckForRevisionExistence(mac_info, revs, '/.DocumentRevisions-V100')
+        revisions.extend(revs)
 
     if len(revisions) > 0:
         PrintAll(revisions, mac_info.output_params)
