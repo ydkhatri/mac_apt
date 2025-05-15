@@ -318,11 +318,11 @@ def ProcessOfficePlist(plist, office_items, user, source):
     if mru_list and len(mru_list):
         ProcessMRU(office_items, 'Powerpoint', mru_list, user, source)
 
-def ProcessAppPlists(mac_info, home_dir, office_items, user, source):
+def ProcessAppPlists(mac_info, home_dir, office_items, user):
     # ~\Library\Containers\com.microsoft.<OFFICEAPP>\Data\Library\Preferences\com.microsoft.<APP>.plist
     app_container_path = '{}/Library/Containers'
     path_partial = app_container_path.format(home_dir)
-    if mac_info.IsValidFilePath(path_partial):
+    if mac_info.IsValidFolderPath(path_partial):
         folders_list = mac_info.ListItemsInFolder(path_partial, EntryType.FOLDERS, False)
         for folder in folders_list:
             if folder['name'].startswith('com.microsoft.'):
@@ -333,7 +333,7 @@ def ProcessAppPlists(mac_info, home_dir, office_items, user, source):
                     mac_info.ExportFile(plist_path, __Plugin_Name, user, False)
                     success, plist, error = mac_info.ReadPlist(plist_path)
                     if success:
-                        ProcessOfficeAppPlist(plist, office_items, app_name, user, source)
+                        ProcessOfficeAppPlist(plist, office_items, app_name, user, plist_path)
                     else:
                         log.error("Problem reading plist {} - {}".format(plist_path, error))
                 #securebookmarks
@@ -342,7 +342,7 @@ def ProcessAppPlists(mac_info, home_dir, office_items, user, source):
                     mac_info.ExportFile(plist_path, __Plugin_Name, user, False)
                     success, plist, error = mac_info.ReadPlist(plist_path)
                     if success:
-                        ProcessOfficeAppSecureBookmarksPlist(plist, office_items, app_name, user, source)
+                        ProcessOfficeAppSecureBookmarksPlist(plist, office_items, app_name, user, plist_path)
                     else:
                         log.error("Problem reading plist {} - {}".format(plist_path, error))
                 
@@ -372,6 +372,8 @@ def Plugin_Start(mac_info):
 
         reg_path_partial = office_reg_path_partial.format(user.home_dir)
         if mac_info.IsValidFolderPath(reg_path_partial):
+            ProcessAppPlists(mac_info, user.home_dir, office_items, user_name)
+            continue ## DEBUG ONLY
             folders_list = mac_info.ListItemsInFolder(reg_path_partial, EntryType.FOLDERS, False)
             for folder in folders_list:
                 if folder['name'].endswith('.Office'):
