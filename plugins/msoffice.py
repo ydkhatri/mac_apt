@@ -373,7 +373,6 @@ def Plugin_Start(mac_info):
         reg_path_partial = office_reg_path_partial.format(user.home_dir)
         if mac_info.IsValidFolderPath(reg_path_partial):
             ProcessAppPlists(mac_info, user.home_dir, office_items, user_name)
-            continue ## DEBUG ONLY
             folders_list = mac_info.ListItemsInFolder(reg_path_partial, EntryType.FOLDERS, False)
             for folder in folders_list:
                 if folder['name'].endswith('.Office'):
