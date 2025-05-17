@@ -19,6 +19,7 @@ from plugins.helpers.common import CommonFunctions
 from plugins.helpers.macinfo import *
 from plugins.helpers.writer import *
 from plugins.helpers.bookmark import *
+from urllib.parse import unquote
 
 __Plugin_Name = "MSOFFICE"
 __Plugin_Friendly_Name = "MSOffice"
@@ -170,9 +171,10 @@ def PrintRegItems(office_items, output_params):
 
 class MSOfficeItem:
 
-    def __init__(self, office_app, timestamp, name, data, info, user, source):
+    def __init__(self, office_app, timestamp, last_used_date, name, data, info, user, source):
         self.office_app = office_app
         self.timestamp = timestamp
+        self.last_used_date = last_used_date
         self.name = name
         self.data = data
         self.info = info
@@ -181,7 +183,8 @@ class MSOfficeItem:
 
 def PrintItems(office_items, output_params):
 
-    office_info = [ ('App',DataType.TEXT),('TimeStamp',DataType.DATE),('Name',DataType.TEXT),
+    office_info = [ ('App',DataType.TEXT),('TimeStamp',DataType.DATE),
+                        ('LastUsed',DataType.DATE),('Name',DataType.TEXT),
                         ('Data',DataType.TEXT),('Info',DataType.TEXT),
                         ('User', DataType.TEXT),('Source',DataType.TEXT)
                       ]
@@ -189,7 +192,10 @@ def PrintItems(office_items, output_params):
     log.info (str(len(office_items)) + " office item(s) found")
     office_list = []
     for q in office_items:
-        q_item =  [ q.office_app, q.timestamp, q.name, q.data, q.info, 
+        data = q.data
+        if isinstance(data, str) and data.startswith('file:///'):
+            data = unquote(data)[7:]
+        q_item =  [ q.office_app, q.timestamp, q.last_used_date, q.name, data, q.info, 
                     q.user, q.source_file
                   ]
         office_list.append(q_item)
@@ -214,7 +220,7 @@ def ProcessMRU(office_items, app_name, mru_list, user, source):
                     path = alias_properties.get('path', '')
                 except (IndexError, ValueError, KeyError, TypeError):
                     log.exception('')
-                o_item = MSOfficeItem(app_name, access_time, 'MRU', path, '', user, source)
+                o_item = MSOfficeItem(app_name, access_time, None, 'MRU', path, '', user, source)
                 office_items.append(o_item)
         except (ValueError, TypeError):
             log.exception('')
@@ -228,7 +234,7 @@ def ProcessOfficeAppPlist(plist, office_items, app_name, user, source):
             if item == 'SessionDuration': 
                 pass # Get item_val in HH:MM:SS
             elif item == 'SessionStartTime': info = 'Local time?'
-            o_item = MSOfficeItem(app_name, None, item, item_val, info, user, source)
+            o_item = MSOfficeItem(app_name, None, None, item, item_val, info, user, source)
             office_items.append(o_item)
 
     bookmark_data = plist.get('LastSaveFilePathBookmark', None)
@@ -257,7 +263,7 @@ def ProcessOfficeAppPlist(plist, office_items, app_name, user, source):
                 except (IndexError, ValueError):
                     pass
 
-            o_item = MSOfficeItem(app_name, file_creation_date, 'LastSaveFilePathBookmark', file_path, 'Date is FileCreated', user, source)
+            o_item = MSOfficeItem(app_name, file_creation_date, None, 'LastSaveFilePathBookmark', file_path, 'TimeStamp is FileCreated', user, source)
             office_items.append(o_item)
         except (IndexError, ValueError):
             log.exception('Error processing BookmarkData from {}'.format(source))
@@ -269,6 +275,7 @@ def ProcessOfficeAppSecureBookmarksPlist(plist, office_items, app_name, user, so
         data = v.get('kBookmarkDataKey', None)
 
         file_creation_date = None
+        last_used_date = v.get('kLastUsedDateKey', None)
         try:
             bm = Bookmark.from_bytes(data)
             file_creation_date = bm.tocs[0][1].get(BookmarkKey.FileCreationDate, '')
@@ -283,19 +290,19 @@ def ProcessOfficeAppSecureBookmarksPlist(plist, office_items, app_name, user, so
             log.exception('Error processing BookmarkData from {}'.format(source))
             log.debug(bm)
 
-        o_item = MSOfficeItem(app_name, file_creation_date, 'SecureBookmark', k, 'Date is FileCreated', user, source)
+        o_item = MSOfficeItem(app_name, file_creation_date, last_used_date, 'SecureBookmark', k, 'TimeStamp is FileCreated', user, source)
         office_items.append(o_item)
 
 def ProcessOfficePlist(plist, office_items, user, source):
     for item in ('UserName', 'UserInitials', 'UserOrganization'):
         item_val = plist.get('14\\UserInfo\\{}'.format(item), None)
         if item_val:
-            o_item = MSOfficeItem('', None, item, item_val, '', user, source)
+            o_item = MSOfficeItem('', None, None, item, item_val, '', user, source)
             office_items.append(o_item)
     
     for item in plist:
         if item.startswith('14\\Web\\TypedURLs\\url'):
-            o_item = MSOfficeItem('', None, 'TypedURLs', plist[item], '', user, source)
+            o_item = MSOfficeItem('', None, None, 'TypedURLs', plist[item], '', user, source)
             office_items.append(o_item)
         elif item.find('Most Recent MRU File Name') > 0:
             o_app = ''
@@ -303,7 +310,7 @@ def ProcessOfficePlist(plist, office_items, user, source):
                 o_app = item[0:-26].split('\\')[-1]
             except (IndexError, ValueError):
                 pass
-            o_item = MSOfficeItem(o_app, None, item, plist[item], '', user, source)
+            o_item = MSOfficeItem(o_app, None, None, item, plist[item], '', user, source)
             office_items.append(o_item)
 
     mru_list = plist.get('14\\File MRU\\XCEL', None)
