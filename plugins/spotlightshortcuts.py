@@ -73,17 +73,13 @@ def ReadShortcutPlist(plist, shortcuts, source='', user=''):
 def Plugin_Start(mac_info):
     '''Main Entry point function for plugin'''
     shortcuts = []
-    user_plist_rel_path = '{}/Library/Preferences/com.apple.spotlight.plist' # Mavericks (10.9) or older
-    version = mac_info.GetVersionDictionary()
-    if version['major'] == 10:
-        if version['minor'] >= 10 and version['minor'] < 15:
-            user_plist_rel_path = '{}/Library/Application Support/com.apple.spotlight.Shortcuts'
-        elif version['minor'] >= 15:
-            user_plist_rel_path = '{}/Library/Application Support/com.apple.spotlight/com.apple.spotlight.Shortcuts'
-    elif version['major'] >= 11:
-        user_plist_rel_path = '{}/Library/Application Support/com.apple.spotlight/com.apple.spotlight.Shortcuts.v3'
-    elif version['major'] >= 14: # may have been earlier too!
-        user_plist_rel_path = '{}/Library/Group Containers/group.com.apple.spotlight/com.apple.spotlight.Shortcuts.v3'
+    user_plist_rel_paths = (
+        '{}/Library/Preferences/com.apple.spotlight.plist', # Mavericks (10.9) or older
+        '{}/Library/Application Support/com.apple.spotlight.Shortcuts', # 10.10 - 10.14
+        '{}/Library/Application Support/com.apple.spotlight/com.apple.spotlight.Shortcuts',  # 10.15
+        '{}/Library/Application Support/com.apple.spotlight/com.apple.spotlight.Shortcuts.v3', # 11 - 13?
+        '{}/Library/Group Containers/group.com.apple.spotlight/com.apple.spotlight.Shortcuts.v3' # >= 14
+    )
 
     processed_paths = set()
     for user in mac_info.users:
@@ -92,18 +88,21 @@ def Plugin_Start(mac_info):
         elif user.home_dir == '/private/var/root': user_name = 'root' # Some other users use the same root folder, we will list such all users as 'root', as there is no way to tell
         if user.home_dir in processed_paths: continue # Avoid processing same folder twice (some users have same folder! (Eg: root & daemon))
         processed_paths.add(user.home_dir)
-        source_path = user_plist_rel_path.format(user.home_dir)
-        if mac_info.IsValidFilePath(source_path):
-            mac_info.ExportFile(source_path, __Plugin_Name, user_name + "_", False)
-            success, plist, error = mac_info.ReadPlist(source_path)
-            if success:
-                ReadShortcutPlist(plist, shortcuts, source_path, user_name)
+        for user_plist_rel_path in user_plist_rel_paths:
+            source_path = user_plist_rel_path.format(user.home_dir)
+            if mac_info.IsValidFilePath(source_path):
+                mac_info.ExportFile(source_path, __Plugin_Name, user_name + "_", False)
+                success, plist, error = mac_info.ReadPlist(source_path)
+                if success:
+                    user_shortcuts = []
+                    ReadShortcutPlist(plist, user_shortcuts, source_path, user_name)
+                    shortcuts.extend(user_shortcuts)
+                else:
+                    log.error('Could not open plist ' + source_path)
+                    log.error('Error was: ' + error)
             else:
-                log.error('Could not open plist ' + source_path)
-                log.error('Error was: ' + error)
-        else:
-            if not user_name.startswith('_'):
-                log.debug('File not found: {}'.format(source_path))
+                if not user_name.startswith('_'):
+                    log.debug('File not found: {}'.format(source_path))
 
     if len(shortcuts) > 0:
         PrintAll(shortcuts, mac_info.output_params, source_path)
