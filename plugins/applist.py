@@ -50,7 +50,8 @@ def PrintAll(apps, output_params, input_path=''):
 
     apps_list_final = []
     for item in apps:
-        single_app = [item.display_name, item.bundle_id, item.url, 
+        single_app = [item.display_name, item.bundle_id, 
+                      CommonFunctions.url_decode(item.url), 
                         item.user, item.path ]
         apps_list_final.append(single_app)
 

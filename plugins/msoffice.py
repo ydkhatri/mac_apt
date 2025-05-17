@@ -19,7 +19,6 @@ from plugins.helpers.common import CommonFunctions
 from plugins.helpers.macinfo import *
 from plugins.helpers.writer import *
 from plugins.helpers.bookmark import *
-from urllib.parse import unquote
 
 __Plugin_Name = "MSOFFICE"
 __Plugin_Friendly_Name = "MSOffice"
@@ -192,10 +191,7 @@ def PrintItems(office_items, output_params):
     log.info (str(len(office_items)) + " office item(s) found")
     office_list = []
     for q in office_items:
-        data = q.data
-        if isinstance(data, str) and data.startswith('file:///'):
-            data = unquote(data)[7:]
-        q_item =  [ q.office_app, q.timestamp, q.last_used_date, q.name, data, q.info, 
+        q_item =  [ q.office_app, q.timestamp, q.last_used_date, q.name, CommonFunctions.url_decode(q.data), q.info, 
                     q.user, q.source_file
                   ]
         office_list.append(q_item)

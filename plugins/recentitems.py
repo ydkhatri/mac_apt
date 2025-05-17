@@ -355,12 +355,8 @@ def PrintAll(recent_items, output_params, source_path):
 
     data_list = []
     for item in recent_items:
-        url = item.URL
-        if url.startswith('file://'):
-            url = url[7:]
-        name = item.Name
-        if name.startswith('file://'):
-            name = name[7:]
+        url = CommonFunctions.url_decode(item.URL)
+        name = CommonFunctions.url_decode(item.Name)
         if name == '' and url != '':
             name = os.path.basename(url)
         data_list.append( [ str(item.Type), name, url, item.Info, item.User, item.Source ] )

@@ -20,6 +20,7 @@ import sys
 
 from enum import IntEnum
 from sqlite3 import Error as sqlite3Error
+from urllib.parse import unquote
 from xml.parsers.expat import ExpatError
 #from tzlocal import get_localzone
 
@@ -269,6 +270,15 @@ class CommonFunctions:
             num = num - 4294967296
         return num
 
+    @staticmethod
+    def url_decode(url):
+        if isinstance(url, str) and url.startswith('file:///'):
+            try:
+                url = unquote(url)[7:]
+            except UnicodeDecodeError as ex:
+                log.error(f"UnicodeDecodeError from url_decode, URL='{url}' Exception: {str(ex)}")
+        return url
+    
     @staticmethod
     def replace_all_hex_int_with_int(xml_text):
         r'''
