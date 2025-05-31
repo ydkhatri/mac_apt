@@ -15,15 +15,13 @@
 '''
 
 import logging
-import struct
 from enum import Enum
-from pkg_resources import parse_version
-
+from packaging.version import parse
 from kaitaistruct import __version__ as ks_version, KaitaiStruct, KaitaiStream, BytesIO
 
 log = logging.getLogger('MAIN.HELPERS.APFS')
 
-if parse_version(ks_version) < parse_version('0.7'):
+if parse(ks_version) < parse('0.7'):
     raise Exception("Incompatible Kaitai Struct Python API: 0.7 or later is required, but you have %s" % (ks_version))
 # FLAGS
 BTNODE_ROOT = 1
