@@ -1,5 +1,5 @@
 # mac_apt - macOS (and iOS) Artifact Parsing Tool
-[![Latest version](https://img.shields.io/badge/version-v1.13.5-blue)](https://github.com/ydkhatri/mac_apt/releases/tag/v1.13.5)
+[![Latest version](https://img.shields.io/badge/version-v1.13.6-blue)](https://github.com/ydkhatri/mac_apt/releases/tag/v1.13.6)
 [![status](https://img.shields.io/badge/status-stable-green)]()
 
 mac_apt is a DFIR (Digital Forensics and Incident Response) tool to process Mac computer full disk images (**or _live_ machines**) and extract data/metadata useful for forensic investigation. It is a python based framework, which has plugins to process individual artifacts (such as Safari internet history, Network interfaces, Recently accessed files & volumes, ..)
@@ -18,7 +18,7 @@ _Note: Tested upto Python 3.13 on Windows and macOS (ARM and x64)._
 * Reads the Spotlight database and Unified Logging (tracev3) files
 
 #### Latest
-:heavy_check_mark: Can read Velociraptor created targeted collection zip (MacOS.Search.FileFinder)  
+:heavy_check_mark: Can read Velociraptor created targeted collection zip \(when created via [MacOS.Search.FileFinder](https://docs.velociraptor.app/artifact_references/pages/macos.search.filefinder/)\)   
 :heavy_check_mark: Can read Axiom created targeted collection zip files  
 :heavy_check_mark: ios_apt can read GrayKey extracted file system  
 :heavy_check_mark: Can read [RECON](https://sumuri.com/software/recon-itr/) and [ASLA](https://github.com/giuseppetotaro/asla) created .sparseimage files  
