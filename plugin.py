@@ -14,6 +14,7 @@
 import logging
 import os
 import sys
+import platform
 import pyewf
 import pytsk3
 import pyvmdk
@@ -27,7 +28,13 @@ def ImportPlugins(plugins, mode):
         Returns a list containing all plugin names that satisfy the mode
     '''
     #print ("Trying to import plugins")
-    plugin_path = os.path.join(os.path.dirname(os.path.realpath(sys.argv[0])), "plugins")
+    if getattr(sys, 'frozen', False):
+    # Running in a bundle
+        base_path = sys._MEIPASS
+    else:
+        # Running in normal Python environment
+        base_path = os.path.dirname(os.path.abspath(__file__))
+    plugin_path = os.path.join(base_path, "plugins")
     sys.path.append(plugin_path)
 
     try:
@@ -140,3 +147,21 @@ def LogLibraryVersions(log):
     log.info('Pyewf  version = {}'.format(pyewf.get_version()))
     log.info('Pyvmdk version = {}'.format(pyvmdk.get_version()))
     log.info('PyAFF4 version = {}'.format(pyaff4._version.raw_versions()['version']))
+
+def LogPlatformInfo(log):
+    if getattr(sys, 'frozen', False):
+        log.info('Running from a (compiled) version')
+
+    if platform.system == 'Darwin':
+        ver = platform.mac_ver()
+        if ver is not None and len(ver) > 2:
+            log.info(f"Running on macOS {ver[0]}, Architecture {ver[2]}")
+        else:
+            log.error(f"Running on macOS but platform.mac_ver() failed to return valid data! {str(platform.mac_ver())}")
+    elif platform.system == 'Windows':
+        ver = platform.win32_ver()
+        if ver is not None and len(ver) > 3:
+            log.info(f"Running on Windows {ver[0]}, Version={ver[1]}, Service Pack={ver[2]}, Other={ver[3]}")
+    else:
+        log.info(f"Running on Linux, uname info={platform.uname()}")
+    log.info()
