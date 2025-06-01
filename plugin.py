@@ -152,16 +152,15 @@ def LogPlatformInfo(log):
     if getattr(sys, 'frozen', False):
         log.info('Running from a (compiled) version')
 
-    if platform.system == 'Darwin':
+    if platform.system() == 'Darwin':
         ver = platform.mac_ver()
         if ver is not None and len(ver) > 2:
             log.info(f"Running on macOS {ver[0]}, Architecture {ver[2]}")
         else:
             log.error(f"Running on macOS but platform.mac_ver() failed to return valid data! {str(platform.mac_ver())}")
-    elif platform.system == 'Windows':
+    elif platform.system() == 'Windows':
         ver = platform.win32_ver()
         if ver is not None and len(ver) > 3:
             log.info(f"Running on Windows {ver[0]}, Version={ver[1]}, Service Pack={ver[2]}, Other={ver[3]}")
     else:
         log.info(f"Running on Linux, uname info={platform.uname()}")
-    log.info()

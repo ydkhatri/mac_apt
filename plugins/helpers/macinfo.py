@@ -19,6 +19,7 @@ import struct
 import sys
 import tempfile
 import time
+import xattr
 import zipfile
 from io import BytesIO
 from uuid import UUID
@@ -409,11 +410,17 @@ class MacInfo:
     def GetExtendedAttribute(self, path, att_name):
         if self.use_native_hfs_parser:
             return self.hfs_native.GetExtendedAttribute(path, att_name)
+        else:
+            log.error("GetExtendedAttribute() Not implemented")
+            return None
 
     def GetExtendedAttributes(self, path):
         if self.use_native_hfs_parser:
             return self.hfs_native.GetExtendedAttributes(path)
-
+        else:
+            log.error("GetExtendedAttributes() Not implemented")
+            return {}
+        
     def ExportFolder(self, artifact_path, subfolder_name, overwrite):
         r'''Export an artifact folder to the output\Export\subfolder_name folder. This
            will export the entire folder and subfolders recursively. 
@@ -1471,6 +1478,26 @@ class MountedMacInfo(MacInfo):
 
     def GetUserAndGroupIDForFolder(self, path):
         return self._GetUserAndGroupID(self.BuildFullPath(path))
+    
+    def GetExtendedAttribute(self, path, att_name):
+        path = self.BuildFullPath(path)
+        try:
+            log.debug("In GetExtendedAttribute()")
+            return xattr.getxattr(path, att_name)
+        except OSError as ex:
+            log.error(f"Failed to retrieve attribute {att_name}, error was: {str(ex)}")
+        return None
+
+    def GetExtendedAttributes(self, path):
+        xattrs = {}
+        try:
+            log.debug("In GetExtendedAttributes()")
+            xattrs_all = xattr.xattr(path)
+            for att_name in xattrs_all:
+                xattrs[att_name] = xattr.getxattr(path, att_name)
+        except OSError as ex:
+            log.error(f"Failed to retrieve attributes for {path}, error was: {str(ex)}")
+        return xattrs
 
     def ListItemsInFolder(self, path='/', types_to_fetch=EntryType.FILES_AND_FOLDERS, include_dates=False):
         '''
