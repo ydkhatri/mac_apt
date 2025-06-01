@@ -159,8 +159,9 @@ def Plugin_Start(mac_info):
     for rev_path in revisions_paths:
         revs = []
         ProcessDbFromPath(mac_info, revs, rev_path)
-        CheckForRevisionExistence(mac_info, revs, '/.DocumentRevisions-V100')
-        revisions.extend(revs)
+        if revs:
+            CheckForRevisionExistence(mac_info, revs, '/.DocumentRevisions-V100')
+            revisions.extend(revs)
 
     if len(revisions) > 0:
         PrintAll(revisions, mac_info.output_params)
