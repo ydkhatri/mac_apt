@@ -1482,7 +1482,6 @@ class MountedMacInfo(MacInfo):
     def GetExtendedAttribute(self, path, att_name):
         path = self.BuildFullPath(path)
         try:
-            log.debug("In GetExtendedAttribute()")
             return xattr.getxattr(path, att_name)
         except OSError as ex:
             log.error(f"Failed to retrieve attribute {att_name}, error was: {str(ex)}")
@@ -1491,7 +1490,6 @@ class MountedMacInfo(MacInfo):
     def GetExtendedAttributes(self, path):
         xattrs = {}
         try:
-            log.debug("In GetExtendedAttributes()")
             xattrs_all = xattr.xattr(path)
             for att_name in xattrs_all:
                 xattrs[att_name] = xattr.getxattr(path, att_name)

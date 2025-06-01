@@ -24,8 +24,8 @@ __Plugin_Name = "DOCUMENTREVISIONS"
 __Plugin_Friendly_Name = "DocumentRevisions"
 __Plugin_Version = "1.1"
 __Plugin_Description = "Reads DocumentRevisions database"
-__Plugin_Author = "Nicole Ibrahim"
-__Plugin_Author_Email = "nicoleibrahim.us@gmail.com"
+__Plugin_Author = "Nicole Ibrahim, Yogesh Khatri"
+__Plugin_Author_Email = "nicoleibrahim.us@gmail.com, yogesh@swiftforensics.com"
 
 __Plugin_Modes = "MACOS,ARTIFACTONLY"
 __Plugin_ArtifactOnly_Usage = 'Provide DocumentRevisions sqlite database as input to process. This is '\
@@ -122,17 +122,32 @@ def ProcessDbFromPath(mac_info, revisions, source_path):
             db.close()
     
 def CheckForRevisionExistence(mac_info, revisions, root):
+    try_alternate_path = False
+    if not hasattr(mac_info, 'apfs_db') or \
+           isinstance(mac_info, ZipMacInfo) or \
+           isinstance(mac_info, MountedVRZip):
+        log.warning("This is MOUNTED or ZIP or VR mode, will try searching paths with /System/Volumes/Data first")
+        try_alternate_path = True
+
     if not root.endswith('/'):
         root += '/'
     for rev in revisions:
         path = root + rev.generation_path
-        if mac_info.IsValidFilePath(path) or \
-            mac_info.IsValidFolderPath(path):
-            rev.exists = 'Yes'
-            xattrs = mac_info.GetExtendedAttributes(path)
-            rev.genstore_orig_display_name = xattrs.get('com.apple.genstore.origdisplayname', b'').decode('utf8', 'ignore')
-            rev.genstore_orig_posix_name = xattrs.get('com.apple.genstore.origposixname', b'').decode('utf8', 'ignore')
-        else:
+        paths = [path]
+        if try_alternate_path:
+            alternate_path = "/System/Volumes/Data" + path
+            paths.insert(0, alternate_path)
+        found = False    
+        for path in paths:
+            if mac_info.IsValidFilePath(path) or \
+                mac_info.IsValidFolderPath(path):
+                rev.exists = 'Yes'
+                found = True
+                xattrs = mac_info.GetExtendedAttributes(path)
+                rev.genstore_orig_display_name = xattrs.get('com.apple.genstore.origdisplayname', b'').decode('utf8', 'ignore')
+                rev.genstore_orig_posix_name = xattrs.get('com.apple.genstore.origposixname', b'').decode('utf8', 'ignore')
+                continue
+        if found == False:
             log.debug(f'Did not FIND -> {path}')
             rev.exists = 'No'
 
