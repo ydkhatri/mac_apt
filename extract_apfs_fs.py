@@ -393,7 +393,7 @@ log.info("Started {}, version {}".format(__PROGRAMNAME, __VERSION))
 log.info("Dates and times are in UTC unless the specific artifact being parsed saves it as local time!")
 log.debug(' '.join(sys.argv))
 LogLibraryVersions(log)
-LogPlatformInfo()
+LogPlatformInfo(log)
 
 # Check inputs
 if not CheckInputType(args.input_type): 
