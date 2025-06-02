@@ -113,6 +113,64 @@ def ReadSerialFromDb(mac_info, source):
         log.debug("File not found: {}".format(source))
     return (found_serial, serial_number)
 
+def ReadArchFromPlist(f, source_plist):
+    arch = ''
+    success, plist, error = CommonFunctions.ReadPlist(f)
+    if success:
+        try:
+            manifest = plist['BuildIdentities'][0]['Manifest']
+            if 'x86,SystemVolume' in manifest:
+                arch = 'x86_64 (Intel)'
+                return arch
+            try:
+                ramdiskpath = manifest['RestoreRamDisk']['Info']['Path']
+                if ramdiskpath.find('arm64'):
+                    arch = 'ARM64 (Apple Silicon)'
+                else:
+                    arch = 'x86_64 (Intel)'
+            except (KeyError, ValueError, OSError) as ex:
+                log.error('Could not find path (BuildIdentities[0]/Manifest/RestoreRamDisk/Info/Path) in plist')
+        except (KeyError, ValueError, OSError) as ex:
+            log.error('Could not find path (BuildIdentities[0]/Manifest) in plist')
+    else:
+        log.error("Could not read plist. Error=" + error)
+    return arch
+
+def GetArchitecture(mac_info):
+    '''Figure out if the host is ARM64 or x86_64'''
+    if isinstance(mac_info, ApfsMacInfo):
+        arch = ''
+        uuid = mac_info.apfs_data_volume.uuid
+        source_plist = f'/Preboot/{uuid}/restore/BuildManifest.plist'
+        f = mac_info.apfs_preboot_volume.open(source_plist)
+        if f != None:
+            arch = ReadArchFromPlist(f, source_plist)
+            f.close()
+        else:
+            log.error(f"Could not open plist file to get architecture info: {source_plist}")
+    elif isinstance(mac_info, MountedMacInfo) and mac_info.macos_root_folder == '/':
+        uuid_folders = []
+        preboot_dir = mac_info.ListItemsInFolder('/System/Volumes/Preboot')
+        for items in preboot_dir:
+            if len(items['name']) == 36: # UUID Named folder
+                if items['name'] != "00000000-0000-0000-0000-000000000000":
+                    uuid_folders.append(items['name'])
+        for uuid_folder in uuid_folders:
+            source_plist = f'/System/Volumes/Preboot/{uuid_folder}/restore/BuildManifest.plist'
+            f = mac_info.Open(source_plist)
+            if f != None:
+                arch = ReadArchFromPlist(f, source_plist)
+                f.close()
+                if arch:
+                    break
+            else:
+                log.error(f"Could not open plist file to get architecture info: {source_plist}")
+    else:
+        log.warning('Cannot get platform architecture for this type of evidence.')
+    if arch:
+        basic_data.append(['HARDWARE', 'Platform', arch, 'Architecture', source_plist])
+        mac_info.ExportFile(source_plist, __Plugin_Name, '')
+
 def GetMacSerialNum(mac_info):
     sn_sources = (
         '/private/var/folders/zz/zyxvpxvq6csfxvn_n00000sm00006d/C/consolidated.db',
@@ -265,6 +323,7 @@ def GetMacOSVersion(mac_info):
 def Plugin_Start(mac_info):
     '''Main Entry point function for plugin'''
     GetMacOSVersion(mac_info)
+    GetArchitecture(mac_info)
     GetMacSerialNum(mac_info)
     GetModelAndHostNameFromPreference(mac_info, '/Library/Preferences/SystemConfiguration/preferences.plist')
     GetTimezone(mac_info)
