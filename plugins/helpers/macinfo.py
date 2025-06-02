@@ -8,8 +8,10 @@
 '''
 
 import logging
+import nska_deserialize as nd
 import os
 import posixpath
+import pytsk3
 import random
 import shutil
 import sqlite3
@@ -19,13 +21,9 @@ import struct
 import sys
 import tempfile
 import time
-import xattr
 import zipfile
 from io import BytesIO
 from uuid import UUID
-
-import nska_deserialize as nd
-import pytsk3
 
 from plugins.helpers import decryptor
 from plugins.helpers.apfs_reader import *
@@ -36,6 +34,8 @@ from plugins.helpers.structs import *
 
 if sys.platform == 'linux':
     from plugins.helpers.statx import statx
+if sys.platform != "win32": # xattr only works on non-windows platforms (macOS, Linux)
+    import xattr
 
 log = logging.getLogger('MAIN.HELPERS.MACINFO')
 
@@ -1480,6 +1480,9 @@ class MountedMacInfo(MacInfo):
         return self._GetUserAndGroupID(self.BuildFullPath(path))
     
     def GetExtendedAttribute(self, path, att_name):
+        if sys.platform == "win32":
+            log.warning('ERR: Windows does not support extended attributes.')
+            return None
         path = self.BuildFullPath(path)
         try:
             return xattr.getxattr(path, att_name)
@@ -1489,6 +1492,9 @@ class MountedMacInfo(MacInfo):
 
     def GetExtendedAttributes(self, path):
         xattrs = {}
+        if sys.platform == "win32":
+            log.warning('ERR: Windows does not support extended attributes.')
+            return xattrs
         try:
             xattrs_all = xattr.xattr(path)
             for att_name in xattrs_all:
