@@ -553,7 +553,7 @@ def PrintAllExtensionInfo(browser, ext_artifacts, output_params, source_path):
     for item in ext_artifacts:
         data_list.append( [ item.id, item.name, item.version, item.description, item.author,
                             item.install_date, item.last_update_date,
-                            item.install_location, item.install_location_raw
+                            item.install_location, item.install_location_raw,
                             item.enabled, item.disable_reasons, item.disable_reasons_raw,
                             item.user, item.source ] )
 
