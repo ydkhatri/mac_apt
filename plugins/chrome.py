@@ -50,6 +50,7 @@ log = logging.getLogger('MAIN.' + __Plugin_Name) # Do not rename or remove this 
 # Last Session, Current Session - binary format
 # Last Tabs, Current Tabs - binary format
 # Secure Preferences
+# Preferences
 
 #---- Do not change the variable names in above section ----#
 
@@ -80,6 +81,15 @@ NavigationEntry = Struct (
     "timestamp_internal_value" / Int64ul
 )
 
+class Account:
+    def __init__(self, name, id, email, pic_url, user, source):
+        self.name = name
+        self.id = id
+        self.email = email
+        self.picture_url = pic_url
+        self.user = user
+        self.source = source
+
 class ChromiumItemType(IntEnum):
     UNKNOWN = 0
     HISTORY = 1
@@ -91,6 +101,7 @@ class ChromiumItemType(IntEnum):
     EXTENSION = 7
     LASTSESSION = 8
     CURRENTSESSION = 9
+    PROFILE = 10
 
     def __str__(self):
         return self.name
@@ -107,6 +118,88 @@ class ChromiumItem:
         self.other_info = other
         self.user = user
         self.source = source
+
+class Extension:
+    def __init__(self, id, name, version, description, author, install_date, last_update_date, install_location, enabled, disable_reasons, user, source):
+        global ExtDisableReasonValues
+        global ExtLocationValues
+
+        self.id = id
+        self.name = name
+        self.version = version
+        self.description = description
+        self.author = author
+        self.install_date = install_date
+        self.install_location_raw = install_location
+        self.install_location = ExtLocationValues.get(install_location, f"Unknown value: {install_location}")
+        self.enabled = enabled
+        self.last_update_date = last_update_date
+        self.user = user
+        self.source = source
+        self.disable_reasons_raw = disable_reasons
+
+        if disable_reasons:
+            self.disable_reasons = GetFlagsString(disable_reasons, ExtDisableReasonValues)
+        else:
+            self.disable_reasons = ''
+
+ExtDisableReasonValues = {
+    0x0001: "Disabled by user",
+    0x0002: "DISABLE_PERMISSIONS_INCREASE",
+    0x0004: "DISABLE_RELOAD",
+    0x0008: "DISABLE_UNSUPPORTED_REQUIREMENT",
+    0x0010: "DISABLE_SIDELOAD_WIPEOUT",
+    0x0020: "DEPRECATED_DISABLE_UNKNOWN_FROM_SYNC",
+    0x0040: "DISABLE_PERMISSIONS_CONSENT",
+    0x0080: "DISABLE_KNOWN_DISABLED",
+    0x0100: "Disabled because we could not verify the install.",
+    0x0200: "DISABLE_GREYLIST",
+    0x0400: "DISABLE_CORRUPTED",
+    0x0800: "DISABLE_REMOTE_INSTALL",
+    0x1000: "DISABLE_INACTIVE_EPHEMERAL_APP",
+    0x2000: "External extensions might be disabled for user prompting.",
+    0x4000: "Doesn't meet minimum version requirement.",
+    0x8000: "Supervised user needs approval by custodian.",
+    0x10000: "Blocked due to management policy.",
+    0x20000: "DISABLE_BLOCKED_MATURE",
+    0x40000: "DISABLE_REMOTELY_FOR_MALWARE",
+    0x80000: "DISABLE_REINSTALL",
+    0x100000: "Disabled by Safe Browsing extension allowlist enforcement.",
+    0x200000: "Deprecated, do not use in new code.",
+    0x400000: "Disabled by policy when the extension is unpublished from the web store.",    
+    0x800000: "Disabled because the extension uses an unsupported manifest version.",
+    0x1000000: "Disabled because the extension is a \"developer extension\"(for example, an unpacked extension) while the developer mode is OFF.",
+    0x2000000: "Disabled because of an unknown reason. This can happen when newer versions"\
+                "of the browser sync reasons which are not known to the current version. We"\
+                "never actually write this to prefs. This is used to indicate (at runtime)"\
+                "that unknown reasons are present in the prefs."            
+}
+
+ExtLocationValues= {
+    0: "Invalid",
+    1: "Installed by the user from the Chrome Web Store or as a .crx file",
+    2: "Installed via external preferences (e.g., managed by IT)",
+    3: "Installed via Windows registry",
+    4: "Loaded unpacked (developer mode)",
+    5: "Bundled with Chrome as a component extension",
+    6: "Installed by enterprise policy (downloaded)",
+    7: "Installed by enterprise policy (local)",
+    8: "Loaded via command line",
+    9: "ExternalPolicy ",
+    10: "ExternalComponent"
+}
+
+def GetFlagsString(flags, flag_values):
+    '''Get string names of all flags set'''
+    list_flags = []
+    if flags is not None:
+        if not isinstance(flags, int):
+            log.error(f'flags {flags} is not an integer, it is {str(type(flags))}!')
+            return ''
+        for k, v in list(flag_values.items()):
+            if (k & flags) != 0:
+                list_flags.append(v)
+    return '|'.join(list_flags)
 
 def InsertUnique(chromium_items_list, item):
     for x in chromium_items_list:
@@ -359,88 +452,6 @@ def ReadJson(data):
         log.error('Failed to parse json. Input Data was ' + str(data))
     return {}
 
-ExtDisableReasonValues = {
-    0x0001: "Disabled by user",
-    0x0002: "DISABLE_PERMISSIONS_INCREASE",
-    0x0004: "DISABLE_RELOAD",
-    0x0008: "DISABLE_UNSUPPORTED_REQUIREMENT",
-    0x0010: "DISABLE_SIDELOAD_WIPEOUT",
-    0x0020: "DEPRECATED_DISABLE_UNKNOWN_FROM_SYNC",
-    0x0040: "DISABLE_PERMISSIONS_CONSENT",
-    0x0080: "DISABLE_KNOWN_DISABLED",
-    0x0100: "Disabled because we could not verify the install.",
-    0x0200: "DISABLE_GREYLIST",
-    0x0400: "DISABLE_CORRUPTED",
-    0x0800: "DISABLE_REMOTE_INSTALL",
-    0x1000: "DISABLE_INACTIVE_EPHEMERAL_APP",
-    0x2000: "External extensions might be disabled for user prompting.",
-    0x4000: "Doesn't meet minimum version requirement.",
-    0x8000: "Supervised user needs approval by custodian.",
-    0x10000: "Blocked due to management policy.",
-    0x20000: "DISABLE_BLOCKED_MATURE",
-    0x40000: "DISABLE_REMOTELY_FOR_MALWARE",
-    0x80000: "DISABLE_REINSTALL",
-    0x100000: "Disabled by Safe Browsing extension allowlist enforcement.",
-    0x200000: "Deprecated, do not use in new code.",
-    0x400000: "Disabled by policy when the extension is unpublished from the web store.",    
-    0x800000: "Disabled because the extension uses an unsupported manifest version.",
-    0x1000000: "Disabled because the extension is a \"developer extension\"(for example, an unpacked extension) while the developer mode is OFF.",
-    0x2000000: "Disabled because of an unknown reason. This can happen when newer versions"\
-                "of the browser sync reasons which are not known to the current version. We"\
-                "never actually write this to prefs. This is used to indicate (at runtime)"\
-                "that unknown reasons are present in the prefs."            
-}
-
-ExtLocationValues= {
-    0: "Invalid",
-    1: "Installed by the user from the Chrome Web Store or as a .crx file",
-    2: "Installed via external preferences (e.g., managed by IT)",
-    3: "Installed via Windows registry",
-    4: "Loaded unpacked (developer mode)",
-    5: "Bundled with Chrome as a component extension",
-    6: "Installed by enterprise policy (downloaded)",
-    7: "Installed by enterprise policy (local)",
-    8: "Loaded via command line",
-    9: "ExternalPolicy ",
-    10: "ExternalComponent"
-}
-
-def GetFlagsString(flags, flag_values):
-    '''Get string names of all flags set'''
-    list_flags = []
-    if flags is not None:
-        if not isinstance(flags, int):
-            log.error(f'flags {flags} is not an integer, it is {str(type(flags))}!')
-            return ''
-        for k, v in list(flag_values.items()):
-            if (k & flags) != 0:
-                list_flags.append(v)
-    return '|'.join(list_flags)
-
-class Extension:
-    def __init__(self, id, name, version, description, author, install_date, last_update_date, install_location, enabled, disable_reasons, user, source):
-        global ExtDisableReasonValues
-        global ExtLocationValues
-
-        self.id = id
-        self.name = name
-        self.version = version
-        self.description = description
-        self.author = author
-        self.install_date = install_date
-        self.install_location_raw = install_location
-        self.install_location = ExtLocationValues.get(install_location, f"Unknown value: {install_location}")
-        self.enabled = enabled
-        self.last_update_date = last_update_date
-        self.user = user
-        self.source = source
-        self.disable_reasons_raw = disable_reasons
-
-        if disable_reasons:
-            self.disable_reasons = GetFlagsString(disable_reasons, ExtDisableReasonValues)
-        else:
-            self.disable_reasons = ''
-
 def ReadSecurePreferencesFile(ext_info, f, file_size, user, file_path):
     """Reads the 'Secure Preferences' json file
 
@@ -489,6 +500,8 @@ def ReadSecurePreferencesFile(ext_info, f, file_size, user, file_path):
             author = str(manifest.get('author', ''))
             e = Extension(ext_id, name, version, description, author, first_install_time, last_update_time, location, enabled, disable_reasons, user, file_path)
             ext_info.append(e)
+        elif len(ext) < 3:
+            pass
         else:
             log.error(f'Could not find manifest for extension {ext_id}')
 
@@ -537,6 +550,108 @@ def ProcessExtensions(mac_info, chromium_artifacts, user, source, browser):
                 else:
                     log.error(f"Failed to open {manifest_path}")
                 break
+      
+def ReadProfileInfo(artifacts, f, file_size, user, file_path):
+    """Reads the profile information from 'Preferences' json file
+
+    Args:
+        ext_info (list): _description_
+        f (file): file ptr opened as 'rb'
+        file_size (int): size of file
+        user (str): user
+        file_path (str): source file path
+
+    Returns:
+        None: 
+    """
+    data = f.read().decode('utf8', 'ignore')
+    try:
+        data = json.loads(data)
+    except json.decoder.JSONDecodeError:
+        log.error('Failed to parse json. Input Data was ' + str(data))
+        return
+    
+    profile = data.get('profile', {})
+    if profile:
+        creation_time = CommonFunctions.ReadChromeTime(profile.get('creation_time', None))
+        last_engagement_time = CommonFunctions.ReadChromeTime(profile.get('last_engagement_time', None))
+        name = profile.get('name', '')
+        #log.debug(f"Profile: {name}, Creation: {creation_time}, Last Engagement Time: {last_engagement_time}")
+        artifacts.append(ChromiumItem(ChromiumItemType.PROFILE, '', name, creation_time, last_engagement_time, '', '', 'Date is creation_time, End Date is last_engagement_time', user, file_path))
+
+def ReadPreferencesFile(accounts, f, file_size, user, file_path):
+    """Reads the 'Preferences' json file
+
+    Args:
+        ext_info (list): _description_
+        f (file): file ptr opened as 'rb'
+        file_size (int): size of file
+        user (str): user
+        file_path (str): source file path
+
+    Returns:
+        None: 
+    """
+    data = f.read().decode('utf8', 'ignore')
+    try:
+        data = json.loads(data)
+    except json.decoder.JSONDecodeError:
+        log.error('Failed to parse json. Input Data was ' + str(data))
+        return
+    
+    # profile = data.get('profile', {})
+    # if profile:
+    #     creation_time = CommonFunctions.ReadChromeTime(profile.get('creation_time', None))
+    #     last_engagement_time = CommonFunctions.ReadChromeTime(profile.get('last_engagement_time', None))
+    #     name = profile.get('name', '')
+    #     log.info(f"Profile: {name}, Creation: {creation_time}, Last Engagement Time: {last_engagement_time}")
+    
+    account_info = data.get('account_info', [])
+    for a in account_info:
+        account_gaia_id = a.get('account_id', '')
+        account_email = a.get('email', '')
+        account_name = a.get('full_name', '')
+        account_pic_url = a.get('picture_url', '')
+        p = Account(account_name, account_gaia_id, account_email, account_pic_url, user, file_path)
+        accounts.append(p)
+
+    account_data = data.get('gaia_cookie', {}).get('last_list_accounts_data',[])
+    if account_data:
+        try:
+            account_data = json.loads(account_data)
+        except json.decoder.JSONDecodeError:
+            log.error('Failed to parse json. Input Data was ' + str(account_data))
+        try:
+            for item in account_data[1]:
+                if item[0] == 'gaia.l.a':
+                    account_name = item[2]
+                    account_email = item[3]
+                    account_pic_url = item[4]
+                    account_gaia_id = item[10]
+                    p = Account(account_name, account_gaia_id, account_email, account_pic_url, user, file_path)
+                    found = False
+                    for account in accounts:
+                        if account.email == account_email and account.user == user:
+                            found = True
+                            break
+                    if not found:
+                        accounts.append(p)
+        except KeyError:
+            pass
+
+def PrintAllAccountInfo(browser, accounts, output_params, source_path):
+    ext_info = [ ('Name',DataType.TEXT),('Email',DataType.TEXT),('ID',DataType.TEXT),
+                    ('Picture URL',DataType.TEXT),
+                    ('User', DataType.TEXT),('Source',DataType.TEXT) 
+                  ]
+
+    data_list = []
+    log.info (f"{len(accounts)} {browser} account(s) found")
+    for item in accounts:
+        data_list.append( [ item.name, item.email, item.id, item.picture_url,
+                            item.user, item.source ] )
+
+    WriteList(f"{browser}_Accounts", f"{browser}_Accounts", data_list, ext_info, output_params, source_path)
 
 def PrintAllExtensionInfo(browser, ext_artifacts, output_params, source_path):
     ext_info = [ ('ID',DataType.TEXT),('Name',DataType.TEXT),('Version',DataType.TEXT),
@@ -586,7 +701,7 @@ def ExtractAndReadDb(mac_info, chromium_artifacts, user, file_path, file_size, p
         db.close()
 
 def ExtractAndReadFile(mac_info, chromium_artifacts, user, file_path, file_size, parser_function, browser):
-    mac_info.ExportFile(file_path, os.path.join(__Plugin_Name, browser), user + '_')
+    mac_info.ExportFile(file_path, os.path.join(__Plugin_Name, browser), user + '_', overwrite=True)
     log.info (f"Processing {browser} file {file_path} for user {user}")
     f = mac_info.Open(file_path)
     if f:
@@ -620,6 +735,7 @@ def Plugin_Start(mac_info):
         processed_paths = []
         chromium_artifacts = []
         chromium_extension_artifacts = []
+        chromium_accounts = []
         for user in mac_info.users:
             user_name = user.user_name
             if user.home_dir == '/private/var/empty': continue # Optimization, nothing should be here!
@@ -661,6 +777,9 @@ def Plugin_Start(mac_info):
                                 ExtractAndReadFile(mac_info, chromium_artifacts, user_profile_name, source_path + '/Last Session', file_entry['size'], ReadTabsFile, browser)
                             elif file_entry['name'] == 'Current Session':
                                 ExtractAndReadFile(mac_info, chromium_artifacts, user_profile_name, source_path + '/Current Session', file_entry['size'], ReadTabsFile, browser)
+                            elif file_entry['name'] == 'Preferences':
+                                ExtractAndReadFile(mac_info, chromium_accounts, user_profile_name, source_path + '/Preferences', file_entry['size'], ReadPreferencesFile, browser)
+                                ExtractAndReadFile(mac_info, chromium_artifacts, user_profile_name, source_path + '/Preferences', file_entry['size'], ReadProfileInfo, browser)
                             elif file_entry['name'] == 'Secure Preferences':
                                 ExtractAndReadFile(mac_info, chromium_extension_artifacts, user_profile_name, source_path + '/Secure Preferences', file_entry['size'], ReadSecurePreferencesFile, browser)
                         else: # Folder
@@ -683,7 +802,11 @@ def Plugin_Start(mac_info):
         if len(chromium_extension_artifacts) > 0:
             PrintAllExtensionInfo(browser, chromium_extension_artifacts, mac_info.output_params, chromium_profile_base_path)
         else:
-            log.info(f'No {browser} extensions were found!')
+            log.debug(f'No {browser} extensions were found!')
+        if len(chromium_accounts) > 0:
+            PrintAllAccountInfo(browser, chromium_accounts, mac_info.output_params, chromium_profile_base_path)
+        else:
+            log.debug(f'No {browser} accounts were found!')
 
 def Plugin_Start_Standalone(input_files_list, output_params):
     '''Main entry point function when used on single artifacts (mac_apt_singleplugin), not on a full disk image'''
@@ -692,6 +815,7 @@ def Plugin_Start_Standalone(input_files_list, output_params):
         log.debug("Input file passed was: " + input_path)
         chromium_artifacts = []
         chromium_extension_artifacts = []
+        chromium_accounts = []
         if os.path.isdir(input_path):
             file_names = os.listdir(input_path)
             for file_name in file_names:
@@ -707,16 +831,23 @@ def Plugin_Start_Standalone(input_files_list, output_params):
                     OpenLocalFileAndRead(chromium_artifacts, '', file_path, file_size, ReadTabsFile)
                 elif file_name == 'Extensions' and os.path.isdir(file_path):
                     ProcessExtensionsLocal(chromium_artifacts, '', file_path)
+                elif file_name == 'Preferences':
+                    OpenLocalFileAndRead(chromium_accounts, '', file_path, file_size, ReadPreferencesFile)
+                    OpenLocalFileAndRead(chromium_artifacts, '', file_path, file_size, ReadProfileInfo)
                 elif file_name == 'Secure Preferences':
                     OpenLocalFileAndRead(chromium_extension_artifacts, '', file_path, file_size, ReadSecurePreferencesFile)
             if len(chromium_artifacts) > 0:
-                PrintAll('', chromium_artifacts, output_params, input_path)
+                PrintAll('Browser', chromium_artifacts, output_params, input_path)
             else:
                 log.info('No chrome/chromium artifacts found in {}'.format(input_path))
             if len(chromium_extension_artifacts) > 0:
-                PrintAllExtensionInfo('', chromium_extension_artifacts, output_params, input_path)
+                PrintAllExtensionInfo('Browser', chromium_extension_artifacts, output_params, input_path)
             else:
-                log.info('No chrome/chromium extensions found in {}'.format(input_path))
+                log.debug('No chrome/chromium extensions found in {}'.format(input_path))
+            if len(chromium_accounts) > 0:
+                PrintAllAccountInfo('Browser', chromium_accounts, output_params, input_path)
+            else:
+                log.debug('No chrome/chromium accounts found in {}'.format(input_path))
         else:
             log.error(f"Argument passed was not a folder : {input_path}")
 
