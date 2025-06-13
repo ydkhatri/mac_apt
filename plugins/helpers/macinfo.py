@@ -1744,6 +1744,18 @@ class MountedVRZip(MountedMacInfo):
                 log.error(f'Failed to retrieve original timestamps for {file_path}')
         return times
 
+    def GetExtendedAttribute(self, path, att_name):
+        metadata = self.metadata_collection.get(path.lower(), None)
+        if metadata:
+            return metadata.get('XAttr', {}).get(att_name, None)
+        return None
+    
+    def GetExtendedAttributes(self, path):
+        metadata = self.metadata_collection.get(path.lower(), None)
+        if metadata:
+            return metadata.get('XAttr', {})
+        return None
+
 class MountedMacInfoSeperateSysData(MountedMacInfo):
     '''Same as MountedMacInfo, but takes into account two volumes (SYS, DATA) mounted separately'''
 

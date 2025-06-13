@@ -75,11 +75,14 @@ def get_meta_info(zip):
                     if len(dest_file) == 0: 
                         continue
 
+                    extended_attributes = k.get("XAttr", {})
+
                     meta[dest_file.lower()] = {
                         "Created": convert_str_to_epoch(k.get("BTime", default_ts)), 
                         "Modified": convert_str_to_epoch(k.get("MTime", default_ts)),
                         "LastAccessed": convert_str_to_epoch(k.get("ATime", default_ts)),
-                        "MetadataChanged": convert_str_to_epoch(k.get("CTime", default_ts))
+                        "MetadataChanged": convert_str_to_epoch(k.get("CTime", default_ts)),
+                        "XAttr": extended_attributes
                     }
                 break
     return meta
