@@ -1108,6 +1108,9 @@ class ApfsMacInfo(MacInfo):
                 log.error("Could not open plist to get system version info!")
                 return info
             
+            if uuid == '':
+                uuid = self.apfs_data_volume.uuid
+
             preboot_plist_path = f'/{uuid}/cryptex1/current/SystemVersion.plist'
             log.debug(f"Trying to get RSR patch version from {preboot_plist_path}")
             f = self.apfs_preboot_volume.open(preboot_plist_path)
@@ -1117,7 +1120,10 @@ class ApfsMacInfo(MacInfo):
                     self.os_version_extra = plist.get('ProductVersionExtra', '')
                     self.os_version = plist.get('ProductVersion', self.os_version)
                     self.os_build = plist.get('ProductBuildVersion', self.os_build)
-                    log.info (f'macOS RSR patch version detected is: {self.os_version} {self.os_version_extra}')
+                    if self.os_version_extra:
+                        log.info(f'macOS RSR patch version detected is: {self.os_version} {self.os_version_extra}')
+                    else:
+                        log.info('No RSR patch.')
                     f.close()
                 else:
                     log.error("Could not read plist. Error=" + error)
