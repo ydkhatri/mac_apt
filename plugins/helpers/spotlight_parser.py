@@ -843,15 +843,12 @@ class SpotlightStore:
             if pos >= data_len:
                 log.error(f'Index ({index}) Offset ({offset})> filesize ({data_len}) in ParseIndexesFromFileData()')
                 continue
-            entry_size, bytes_moved = SpotlightStore.ReadIndexVarSizeNum(data_content[pos : min(pos + 9, data_len)])
-            pos += bytes_moved
+            entry_size, entry_size_bytes_moved = SpotlightStore.ReadIndexVarSizeNum(data_content[pos : min(pos + 9, data_len)])
+            pos += entry_size_bytes_moved
             index_size, bytes_moved = SpotlightStore.ReadVarSizeNum(data_content[pos : min(pos + 9, data_len)])
             pos += bytes_moved
-            if entry_size - index_size > 2:
-                log.debug("ReadIndexVarSizeNum() read the number incorrectly?") 
-            #else:
-            #    log.debug("index={}, offset={}, entry_size=0x{:X}, index_size=0x{:X}".format(index, offset, entry_size, index_size))
-
+            if entry_size - index_size - entry_size_bytes_moved != 0:
+                log.debug(f"diff in entry_size and index_size, diff={entry_size - index_size - entry_size_bytes_moved} for index={index}, offset={offset}, entry_size=0x{entry_size:X}, index_size=0x{index_size:X}")
             if has_extra_byte:
                 pos += 1
 
