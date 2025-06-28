@@ -29,7 +29,7 @@ __Plugin_Author = "Yogesh Khatri"
 __Plugin_Author_Email = "yogesh@swiftforensics.com"
 
 __Plugin_Modes = "MACOS,ARTIFACTONLY"
-__Plugin_ArtifactOnly_Usage = 'Provide the ...'
+__Plugin_ArtifactOnly_Usage = 'Provide the path to files /private/var/db/RemoteManagement/caches/UserAcct.tmp, /private/var/db/RemoteManagement/caches/AppUsage.plist or /private/var/db/RemoteManagement/caches/AppUsage.tmp'
 
 log = logging.getLogger('MAIN.' + __Plugin_Name) # Do not rename or remove this ! This is the logger object
 
