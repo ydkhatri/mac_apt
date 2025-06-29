@@ -386,6 +386,8 @@ def Plugin_Start(mac_info):
                             log.debug('SYMLINK {} <==> {}'.format(reg_path, target_path))
                             if target_path.startswith('../') or target_path.startswith('./'):
                                 reg_path = mac_info.GetAbsolutePath(posixpath.split(reg_path)[0], target_path)
+                            elif target_path.startswith('/var/'):
+                                reg_path = '/private' + target_path
                             else:
                                 reg_path = target_path
                             if not mac_info.IsValidFilePath(reg_path):
