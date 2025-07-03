@@ -38,7 +38,7 @@ def PrintAll(cups_list, output_params, source_path):
 
     cups_info = [ ('Job',DataType.TEXT),('Owner',DataType.TEXT),('Job ID',DataType.INTEGER),
                     ('Destination Printer', DataType.TEXT),('Application',DataType.TEXT),('Time of Creation',DataType.DATE),
-                    ('Time at Processing',DataType.DATE),('Time of Competion',DataType.DATE),
+                    ('Time at Processing',DataType.DATE),('Time of Completion',DataType.DATE),
                     ('Copies', DataType.INTEGER),('Document Format', DataType.TEXT),
                     ('Origin Host Name', DataType.TEXT),('State', DataType.TEXT),('Sheets printed', DataType.INTEGER),
                     ('Printer state msg', DataType.TEXT),('Printer state reason', DataType.TEXT),('PrinterURI',DataType.TEXT),
