@@ -253,7 +253,7 @@ def ProcessStoreDb(input_file_path, input_file, output_path, output_params, item
                 create_views_for_ios_db(writer.sql_writer.filepath, writer.sql_writer.table_name)
             
             # Write Paths db as tsv
-            if (not store.is_ios_store) and (not store.version==1) and (not no_path_file):
+            if (not store.version==1) and (not no_path_file):
                 path_type_info = [ ('ID',DataType.INTEGER),('FullPath',DataType.TEXT) ]
                 fullpath_writer = DataWriter(out_params, "Spotlight-" + file_name_prefix + '-paths', path_type_info, input_file_path)
                 with open(output_path_full_paths, 'wb') as output_paths_file:
