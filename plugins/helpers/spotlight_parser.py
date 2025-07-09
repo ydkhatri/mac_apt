@@ -1,6 +1,6 @@
 # Parse the Spotlight store.db file from mac OSX
 #
-#  (c) Yogesh Khatri - 2018 www.swiftforensics.com
+#  (c) Yogesh Khatri - 2018-2025 www.swiftforensics.com
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -17,7 +17,7 @@
 #
 # Script Name  : spotlight_parser.py
 # Author       : Yogesh Khatri
-# Last Updated : 17/06/2023
+# Last Updated : 09/07/2025
 # Requirement  : Python 3.7, modules ( lz4, pyliblzfse )
 #                Dependencies can be installed using the command 'pip install lz4 pyliblzfse' 
 # 
@@ -68,6 +68,10 @@ except ImportError:
 __VERSION__ = '1.0.2'
 
 log = logging.getLogger('SPOTLIGHT_PARSER')
+
+class InvalidFileException(Exception):
+    """Custom exception"""
+    pass
 
 class FileMetaDataListing:
     def __init__(self, file_pos, data, size):
@@ -553,7 +557,7 @@ class StoreBlock0:
         self.data = data
         self.signature = struct.unpack("<I", data[0:4])[0]
         if self.signature not in [0x64626D31, 0x64626D32]:  #  1mbd or 2mbd (block 0)
-            raise Exception("Unknown signature {:X} in block0! Can't parse".format(self.signature))
+            raise ValueError("Unknown signature {:X} in block0! Can't parse".format(self.signature))
         self.physical_size = struct.unpack("<I", data[4:8])[0]
         self.item_count    = struct.unpack("<I", data[8:12])[0]
         self.unk_zero      = struct.unpack("<I", data[12:16])[0]
@@ -607,13 +611,12 @@ class DbStrMapHeader:
         if self.sig != 0x0000446174615000:
             log.warning("Header signature is different for DbStrMapHeader. Sig=0x{:X}".format(self.sig))
 
-
 class SpotlightStore:
     def __init__(self, file_pointer):
         self.file = file_pointer
         #self.pos = 0
         if not self.IsValidStore():
-            raise Exception('Not a version 1 or 2 Spotlight store.db file, invalid format!')
+            raise InvalidFileException('Not a version 1 or 2 Spotlight store.db file, invalid format!')
         self.file.seek(0)
         self.header = self.file.read(0x1000)
         if self.header[0:4] == b'\x38\x74\x73\x64': # version 2
@@ -1016,7 +1019,7 @@ class SpotlightStore:
                                             log.warning("Repeat item has different name, existing={}, new={}".format(existing_item[2], name))
                             else: # Not adding repeat elements
                                 items[md_item.id] = [md_item.id, md_item.parent_id, md_item.GetFileName(), None, md_item.date_updated] # id, parent_id, name, path, date
-                    except:
+                    except (KeyError, ValueError, OSError):
                         log.exception('Error trying to process item @ block {:X} offset {}'.format(index[1] * 0x1000 + 20, pos))
                     pos += item_size_2
                     count += 1
@@ -1044,7 +1047,7 @@ class SpotlightStore:
                                             log.warning("Repeat item has different name, existing={}, new={}".format(existing_item[2], name))
                             else: # Not adding repeat elements
                                 items[md_item.id] = [md_item.id, md_item.parent_id, md_item.GetFileName(), None, md_item.date_updated] # id, parent_id, name, path, date
-                    except:
+                    except (KeyError, ValueError, OSError):
                         log.exception('Error trying to process item @ block {:X} offset {}'.format(index[1] * 0x1000 + 20, pos))
                     pos += item_size + 4
                     count += 1
@@ -1199,7 +1202,7 @@ def ProcessStoreDb(input_file_path, output_path, file_name_prefix='store'):
                     store.ParseIndexesFromFileData(idx_2_map_data, idx_2_map_offsets, idx_2_map_header, store.indexes_2, has_extra_byte=True)
 
                     store.ReadPageIndexesAndOtherDefinitions(True)
-                except:
+                except (KeyError, ValueError, OSError):
                     log.exception('Failed to find or process one or more dependency files. Cannot proceed!')
                     f.close()
                     return

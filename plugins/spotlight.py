@@ -69,7 +69,7 @@ def ProcessStoreItem(item, id_as_hex):
             data_dict[k] = v
 
         return data_dict
-    except Exception as ex:
+    except (OSError, KeyError, ValueError) as ex:
         log.exception ("Failed while processing row data before writing")
 
 def ProcessStoreItems(store_items, id_as_hex=False):
@@ -81,7 +81,7 @@ def ProcessStoreItems(store_items, id_as_hex=False):
             if data:
                 data_list.append(data)
         writer.WriteRows(data_list)
-    except Exception as ex:
+    except (OSError, KeyError, ValueError) as ex:
         log.exception ("Failed to write row data")
 
 def Get_Column_Info(store):
@@ -220,7 +220,7 @@ def ProcessStoreDb(input_file_path, input_file, output_path, output_params, item
                     store.ParseIndexesFromFileData(idx_2_map_data, idx_2_map_offsets, idx_2_map_header, store.indexes_2, has_extra_byte=True)
 
                     store.ReadPageIndexesAndOtherDefinitions(True)
-                except:
+                except (OSError, ValueError, KeyError):
                     log.exception('Failed to find or process one or more dependency files. Cannot proceed!')
                     return None
             ##
@@ -268,8 +268,15 @@ def ProcessStoreDb(input_file_path, input_file, output_path, output_params, item
                         CreateViewAndIndexes(data_type_info, fullpath_writer.sql_writer, file_name_prefix)
                 fullpath_writer.FinishWrites()                
             return items
-    except Exception as ex:
-        log.exception('Exception processing spotlight store db file')
+    except spotlight_parser.InvalidFileException as ex:
+        # If this is for NSFileProtectionCompleteUnlessOpen/index.spotlightV3/.store.db or 
+        # NSFileProtectionComplete/index.spotlightV3/.store.db, then these are expected to be encrypted.
+        if input_file_path.find('NSFileProtectionComplete') >= 0 and input_file_path.find('NSFileProtectionCompleteUntilFirstUserAuthentication') == -1:
+            log.warning(f'File signature not matching, this file is expected to be encrypted, so skipping it!')
+        else:
+            log.error(str(ex))
+    except (KeyError, ValueError, OSError) as ex:
+        log.exception(f'Exception processing spotlight store db file -> {str(ex)}')
 
 def CreateViewAndIndexes(data_type_info, sql_writer, file_name_prefix):
     desired = ['kMDItemContentTypeTree', 'kMDItemContentType', 'kMDItemKind', 'kMDItemMediaTypes', 
@@ -348,23 +355,17 @@ def DropReadme(output_folder, message, filename='Readme.txt'):
     except OSError as ex:
         log.exception('Exception writing file - {}'.format(filename))
 
-def ReadVolumeConfigPlistFromImage(mac_info, file_path):
+def ReadVolumeConfigPlistFromImage(mac_info, configs_list, file_path):
     success, plist, error = mac_info.ReadPlist(file_path)
     if success:
-        ReadVolumeConfigPlist(plist, mac_info.output_params, file_path)
+        ReadVolumeConfigPlist(plist, file_path, configs_list)
     else:
         log.error('Failed to read plist {} \r\nError was: {}'.format(file_path, error))
 
-def ReadVolumeConfigPlist(plist, output_params, file_path):
+def ReadVolumeConfigPlist(plist, file_path, configs_list):
     '''Reads VolumeConfiguration.plist and gets store configurations'''
     log.info("Trying to get spotlight configuration from {}".format(file_path))
-    config_info = [('StoreUUID',DataType.TEXT),('StoreCreationDate',DataType.DATE),
-                    ('Version',DataType.TEXT),('IndexVersion',DataType.INTEGER),
-                    ('PartialPath',DataType.TEXT),('ConfigurationModificationDate',DataType.DATE),
-                    ('ConfigurationModificationVersion',DataType.TEXT),('ConfigurationVolumeUUID',DataType.TEXT),
-                    ('Source',DataType.TEXT)
-                    ]
-    configs_list = []
+
     stores = plist.get('Stores', None)
     if stores:
         log.info (str(len(stores)) + " store(s) found")
@@ -377,9 +378,18 @@ def ReadVolumeConfigPlist(plist, output_params, file_path):
                         file_path
                     ]
             configs_list.append(config)
-        WriteList("spotlight store configuration", "SpotlightConfig", configs_list, config_info, output_params, file_path)
     else:
         log.info ("No spotlight stores defined in plist!")
+
+def PrintConfigs(configs_list, output_params):
+    config_info = [('StoreUUID',DataType.TEXT),('StoreCreationDate',DataType.DATE),
+                ('Version',DataType.TEXT),('IndexVersion',DataType.INTEGER),
+                ('PartialPath',DataType.TEXT),('ConfigurationModificationDate',DataType.DATE),
+                ('ConfigurationModificationVersion',DataType.TEXT),('ConfigurationVolumeUUID',DataType.TEXT),
+                ('Source',DataType.TEXT)
+                ]
+    if configs_list:
+        WriteList("spotlight store configuration", "SpotlightConfig", configs_list, config_info, output_params)
 
 def ProcessStoreAndDotStore(mac_info, store_path_1, store_path_2, prefix, export_subfolder):
     items_1 = None
@@ -445,8 +455,7 @@ def Process_User_DBs(mac_info):
             prefix = path_split[-4] + '_' + user_name
             ProcessStoreAndDotStore(mac_info, store_path_1, store_path_2, prefix, export_subfolder)
 
-
-def ProcessVolumeStore(mac_info, spotlight_base_path, export_prefix=''):
+def ProcessVolumeStore(mac_info, spotlight_base_path, configs_list, export_prefix=''):
     '''
     Process the main Spotlight-V100 database usually found on the volume's root.
     '''
@@ -461,7 +470,7 @@ def ProcessVolumeStore(mac_info, spotlight_base_path, export_prefix=''):
     vol_config_plist_path = spotlight_base_path + '/VolumeConfiguration.plist'
     if mac_info.IsValidFilePath(vol_config_plist_path):
         mac_info.ExportFile(vol_config_plist_path, __Plugin_Name, export_prefix, False)
-        ReadVolumeConfigPlistFromImage(mac_info, vol_config_plist_path)
+        ReadVolumeConfigPlistFromImage(mac_info, configs_list, vol_config_plist_path)
     folders = mac_info.ListItemsInFolder(spotlight_folder, EntryType.FOLDERS)
     index = 0
     for folder in folders:
@@ -504,34 +513,39 @@ def ProcessVolumeStore(mac_info, spotlight_base_path, export_prefix=''):
         else:
             log.debug('File not found: {}'.format(store_path_2))
 
-
 def Plugin_Start(mac_info):
     '''Main Entry point function for plugin'''
     global mac_info_obj
     mac_info_obj = mac_info
+    configs_list = []
+
     Process_User_DBs(mac_info) # Usually small , 10.13+ only
     spotlight_base_path = '/.Spotlight-V100'
     if mac_info.IsValidFolderPath(spotlight_base_path):
-        ProcessVolumeStore(mac_info, spotlight_base_path)
+        ProcessVolumeStore(mac_info, spotlight_base_path, configs_list, 'DataVolume')
     else:
         # For live/zip volume, Data may need to be accessed here:
         spotlight_base_path = '/System/Volumes/Data/.Spotlight-V100'
         if mac_info.IsValidFolderPath(spotlight_base_path):
-            ProcessVolumeStore(mac_info, spotlight_base_path, 'DataVolume')
+            ProcessVolumeStore(mac_info, spotlight_base_path, configs_list, 'DataVolume')
+
     # For catalina's read-only volume
     spotlight_base_path = '/private/var/db/Spotlight-V100/BootVolume'
     if mac_info.IsValidFolderPath(spotlight_base_path):
-        ProcessVolumeStore(mac_info, spotlight_base_path, 'BootVolume')
+        ProcessVolumeStore(mac_info, spotlight_base_path, configs_list, 'BootVolume')
 
     # For Ventura's Preboot volume
     spotlight_base_path = '/private/var/db/Spotlight-V100/Preboot'
     if mac_info.IsValidFolderPath(spotlight_base_path):
-        ProcessVolumeStore(mac_info, spotlight_base_path, 'Preboot')
-
+        ProcessVolumeStore(mac_info, spotlight_base_path, configs_list, 'Preboot')
+    
+    if configs_list:
+        PrintConfigs(configs_list, mac_info.output_params)
 
 def Plugin_Start_Standalone(input_files_list, output_params):
     log.info("Module Started as standalone")
     for input_path in input_files_list:
+        configs_list = []
         log.debug("Input file passed was: " + input_path)
         if os.path.basename(input_path).lower().endswith('store.db'):
             try:
@@ -539,16 +553,18 @@ def Plugin_Start_Standalone(input_files_list, output_params):
                     output_folder = os.path.join(output_params.output_path, 'SPOTLIGHT_DATA')
                     log.info('Now processing file {}'.format(input_path))
                     ProcessStoreDb(input_path, input_file, output_folder, output_params, None, os.path.basename(input_path), False, False, '')
+                    if configs_list:
+                        PrintConfigs(configs_list, output_params)
             except (OSError):
                 log.exception('Failed to open input file ' + input_path)
         else:
             log.info("Unknown file type: {}".format(os.path.basename(input_path)))
 
-
 def Plugin_Start_Ios(ios_info):
     '''Entry point for ios_apt plugin'''
     global mac_info_obj
     mac_info_obj = ios_info
+    configs_list = []
     ios_spotlight_folders = [
                             '/private/var/mobile/Library/Spotlight/CoreSpotlight/NSFileProtectionComplete/index.spotlightV2',
                             '/private/var/mobile/Library/Spotlight/CoreSpotlight/NSFileProtectionCompleteUnlessOpen/index.spotlightV2',
@@ -559,6 +575,7 @@ def Plugin_Start_Ios(ios_info):
         store_path_2 = os.path.join(folder, '.store.db')
         subfolder = folder.split('/')[-2]
         ProcessStoreAndDotStore(ios_info, store_path_1, store_path_2, subfolder, subfolder)
-
+    if configs_list:
+        PrintConfigs(configs_list, mac_info_obj.output_params)
 if __name__ == '__main__':
     print ("This plugin is a part of a framework and does not run independently on its own!")
