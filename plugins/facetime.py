@@ -17,7 +17,7 @@ from plugins.helpers.writer import *
 
 __Plugin_Name = "FACETIME"
 __Plugin_Friendly_Name = "FaceTime"
-__Plugin_Version = "1.0"
+__Plugin_Version = "1.1"
 __Plugin_Description = "Reads the database for FaceTime call information"
 __Plugin_Author = "Yogesh Khatri"
 __Plugin_Author_Email = "yogesh@swiftforensics.com"
@@ -31,16 +31,7 @@ log = logging.getLogger('MAIN.' + __Plugin_Name) # Do not rename or remove this 
 #---- Do not change the variable names in above section ----#
 
 class FaceTimeRecord:
-    '''(CommonFunctions.ReadMacAbsoluteTime(row['ZCREATIONDATE']),
-        CommonFunctions.ReadMacAbsoluteTime(row['ZEXPIRATIONDATE']),
-        CommonFunctions.ReadMacAbsoluteTime(row['ZDELETIONDATE']),
-        row['ZDELETEREASON'],
-        row['ZVALUE'],
-        row['ZNORMALIZEDVALUE'],
-        row[''],
-        user, 
-        source)
-    '''
+
     def __init__(self, creation_date, exp_date, del_date, del_reason, handle, handle_normalized, user, source):
         self.creation_date = creation_date
         self.exp_date = exp_date
@@ -72,23 +63,32 @@ def PrintAll(facetime_records, output_params):
 def ReadFacetimeDb(db, facetime_records, source, user):
     '''Reads com.apple.LaunchServices.FacetimeEventsV2 sqlite db'''
     try:
-        query = """
-                SELECT 
-                ZCREATIONDATE, ZEXPIRATIONDATE, ZDELETIONDATE, ZDELETEREASON, 
-                --ZGROUPUUID, ZPRIVATEKEY, ZPUBLICKEY, 
-                --ZNAME, ZPSEUDONYM, ZORIGINATORHANDLE, 
-                h.ZVALUE, h.ZNORMALIZEDVALUE
-                FROM ZCONVERSATIONLINK c
-                LEFT JOIN ZHANDLE h ON c.ZORIGINATORHANDLE=h.Z_PK
-                """
         db.row_factory = sqlite3.Row
+        # No db version field exists, so check for ZDELETIONREASON which may be missing in some versions.
+        deletion_reason_exists = CommonFunctions.ColumnExists(db, 'ZCONVERSATIONLINK', 'ZDELETEREASON')
+        if deletion_reason_exists:
+            query = """
+                    SELECT 
+                    ZCREATIONDATE, ZEXPIRATIONDATE, ZDELETIONDATE, ZDELETEREASON,
+                    h.ZVALUE, h.ZNORMALIZEDVALUE
+                    FROM ZCONVERSATIONLINK c
+                    LEFT JOIN ZHANDLE h ON c.ZORIGINATORHANDLE=h.Z_PK
+                    """
+        else:
+            query = """
+                    SELECT 
+                    ZCREATIONDATE, ZEXPIRATIONDATE, ZDELETIONDATE,
+                    h.ZVALUE, h.ZNORMALIZEDVALUE
+                    FROM ZCONVERSATIONLINK c
+                    LEFT JOIN ZHANDLE h ON c.ZORIGINATORHANDLE=h.Z_PK
+                    """
         cursor = db.execute(query)
         for row in cursor:
             try:
                 f_event = FaceTimeRecord(CommonFunctions.ReadMacAbsoluteTime(row['ZCREATIONDATE']),
                                          CommonFunctions.ReadMacAbsoluteTime(row['ZEXPIRATIONDATE']),
                                          CommonFunctions.ReadMacAbsoluteTime(row['ZDELETIONDATE']),
-                                         row['ZDELETEREASON'],
+                                         row['ZDELETEREASON'] if deletion_reason_exists else '',
                                          row['ZVALUE'],
                                          row['ZNORMALIZEDVALUE'],
                                          user, 
@@ -111,7 +111,7 @@ def OpenDb(inputPath):
 
 def OpenDbFromImage(mac_info, inputPath, user):
     '''Returns tuple of (connection, wrapper_obj)'''
-    log.info ("Processing tacetime events for user '{}' from file {}".format(user, inputPath))
+    log.info ("Processing facetime events for user '{}' from file {}".format(user, inputPath))
     try:
         sqlite = SqliteWrapper(mac_info)
         conn = sqlite.connect(inputPath)
@@ -163,4 +163,3 @@ def Plugin_Start_Standalone(input_files_list, output_params):
 
 if __name__ == '__main__':
     print ("This plugin is a part of a framework and does not run independently on its own!")
-
