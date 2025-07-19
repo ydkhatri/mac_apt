@@ -964,6 +964,15 @@ class MacInfo:
         self._GetDomainUserInfo()
         self._GetDarwinFoldersInfo() # This probably does not apply to OSX < Mavericks !
 
+    def _interpret_as_signed_int(self, num):
+        '''Convert a uint32 number to int32, so 0xFFFFFFFF returns -1'''
+        try:
+            num = int(num)
+            num = CommonFunctions.convert_32bit_num_to_signed(num)
+        except (ValueError, OverflowError):
+            pass
+        return num
+
     def _GetDarwinFoldersInfo(self):
         '''Gets DARWIN_*_DIR paths by looking up folder permissions'''
         users_dir = self.ListItemsInFolder('/private/var/folders', EntryType.FOLDERS)
@@ -975,6 +984,8 @@ class MacInfo:
                 path = '/private/var/folders/' + unknown1_name + "/" + unknown2_name
 
                 success, uid, gid = self.GetUserAndGroupIDForFolder(path)
+                uid = str(self._interpret_as_signed_int(uid))
+                gid = str(self._interpret_as_signed_int(gid))
                 #log.debug(f'UID={uid} GID={gid} DARWIN FOLDER={path}')
                 if success:
                     found_user = False
@@ -1623,7 +1634,7 @@ class MountedMacInfo(MacInfo):
             return
 
         for user in self.users:
-            if user.UUID != '' and user.UID not in ('', '-2', '1', '201'): # Users nobody, daemon, guest don't have one
+            if user.UUID != '' and user.UID != '':
                 darwin_path = '/private/var/folders/' + GetDarwinPath2(user.UUID, user.UID)
                 if not self.IsValidFolderPath(darwin_path):
                     darwin_path = '/private/var/folders/' + GetDarwinPath(user.UUID, user.UID)
@@ -2039,7 +2050,7 @@ class ZipMacInfo(MacInfo):
         '''Gets DARWIN_*_DIR paths '''
 
         for user in self.users:
-            if user.UUID != '' and user.UID not in ('', '-2', '1', '201'): # Users nobody, daemon, guest don't have one
+            if user.UUID != '' and user.UID != '':
                 darwin_path = '/private/var/folders/' + GetDarwinPath2(user.UUID, user.UID)
                 if not self.IsValidFolderPath(darwin_path):
                     darwin_path = '/private/var/folders/' + GetDarwinPath(user.UUID, user.UID)
