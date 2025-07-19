@@ -162,6 +162,7 @@ def GetArchitecture(mac_info):
                 arch = ReadArchFromPlist(f, source_plist)
                 f.close()
                 if arch:
+                    mac_info.ExportFile(source_plist, __Plugin_Name, '')
                     break
             else:
                 log.error(f"Could not open plist file to get architecture info: {source_plist}")
@@ -169,7 +170,6 @@ def GetArchitecture(mac_info):
         log.warning('Cannot get platform architecture for this type of evidence.')
     if arch:
         basic_data.append(['HARDWARE', 'Platform', arch, 'Architecture', source_plist])
-        mac_info.ExportFile(source_plist, __Plugin_Name, '')
 
 def GetMacSerialNum(mac_info):
     sn_sources = (
