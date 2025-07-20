@@ -360,6 +360,7 @@ arg_parser.add_argument('input_path', help='Path to disk image/volume')
 arg_parser.add_argument('-o', '--output_path', help='Path where output files will be created')
 arg_parser.add_argument('-l', '--log_level', help='Log levels: INFO, DEBUG, WARNING, ERROR, CRITICAL (Default is INFO)')#, choices=['INFO','DEBUG','WARNING','ERROR','CRITICAL'])
 arg_parser.add_argument('-p', '--password', help='Personal Recovery Key(PRK) or Password for any user (for decrypting encrypted volume). PRK must be exactly how it was shown to you')
+arg_parser.add_argument('-pf', '--password_file', help='Text file containing Personal Recovery Key(PRK) or Password')
 arg_parser.add_argument('-d', '--dont_decrypt', default=False, action="store_true", help='Don\'t decrypt as image is already decrypted!')
 args = arg_parser.parse_args()
 
