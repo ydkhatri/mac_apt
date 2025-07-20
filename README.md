@@ -45,14 +45,18 @@ CRASHREPORTER | Reads crash reporter plists
 DOCKITEMS | Reads the Dock plist for every user
 DOCUMENTREVISIONS | Reads DocumentRevisions database
 DOMAINS | Active Directory Domain(s) that the mac is connected to
+FACETIME | Read available facetime call metadata  
 FILESHARING | Read shared folder info
 FIREFOX | Read internet history from Mozilla Firefox browser
 FSEVENTS | Reads file system event logs (from .fseventsd)
+ICLOUD | Extract items stored in iCloud Drive
 IDEVICEBACKUPS | Reads and exports iPhone/iPad backup databases
 IDEVICEINFO | Reads and exports connected iDevice details
 IMESSAGE | Read iMessage chats
 INETACCOUNTS | Retrieve configured internet accounts (iCloud, Google, Linkedin, facebook..)
 INSTALLHISTORY | Software Installation History
+KEYCHAINS | Reads the System keychain and decrypts stored passwords
+LAUNCHPAD | Reads the launchpad database for every user  
 MSOFFICE | Reads Word, Excel, Powerpoint and other office MRU/accessed file paths
 MSRDC | Reads connection history from Microsoft Remote Desktop database and extracts thumbnails
 NETUSAGE | Read network usage data statistics per application
