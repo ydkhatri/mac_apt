@@ -9,6 +9,7 @@
 
 import collections
 import logging
+import os
 import struct
 import zlib
 from uuid import UUID
@@ -2401,7 +2402,7 @@ class ApfsFileMeta:
                 'physical_size', 'is_symlink', 'decmpfs', 'attributes', 'extents', 'is_compressed']
     def __init__(self, name, path, cnid, parent_cnid, created, modified, changed, accessed, 
                 flags, links, bsd_flags, uid, gid, mode, logical_size, physical_size):
-        self.name = name
+        self.name = os.path.basename(path) # get name from path, otherwise name is that of original file (for hardlinks)
         self.path = path
         self.cnid = cnid
         self.parent_cnid = parent_cnid
