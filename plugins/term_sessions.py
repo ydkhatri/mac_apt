@@ -10,6 +10,8 @@
 
 import binascii
 import logging
+import re
+from plugins.helpers.common import CommonFunctions
 from plugins.helpers.macinfo import *
 from plugins.helpers.writer import *
 
@@ -171,6 +173,19 @@ def ReadHistoryFile(mac_info, history_path, history_type_str, term_sessions, use
     session = BashSession(user_name, history_path, history_type_str)
     term_sessions.append(session)
     session.all_content = ''.join(content)
+    # If EXTENDED_HISTORY was enabled at some point, then timestamps are stored in the .zsh_history file
+    # Look for those and parse
+    regex = re.compile(r'^: ([0-9]+):([0-9]+);(.*)')
+
+    for item in content:
+        if item:
+            matches = regex.match(item)
+            if matches:
+                session = BashSession(user_name, history_path, history_type_str + '_EXTENDED')
+                session.start_date = CommonFunctions.ReadUnixTime(matches.group(1))
+                session.new_content = matches.group(3)
+                term_sessions.append(session)
+
 
 def Plugin_Start(mac_info):
     '''Main Entry point function for plugin'''
