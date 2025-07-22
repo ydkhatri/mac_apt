@@ -18,7 +18,7 @@ import logging
 
 __Plugin_Name = "ASL"
 __Plugin_Friendly_Name = "Asl"
-__Plugin_Version = "1.1"
+__Plugin_Version = "1.2"
 __Plugin_Description = 'Reads macOS ASL (Apple System Log) from asl.log, asl.db, and ".asl" files.'
 __Plugin_Author = "Yuya Hashimoto"
 __Plugin_Author_Email = "yhashimoto0707@gmail.com"
@@ -34,6 +34,7 @@ log = logging.getLogger('MAIN.' + __Plugin_Name) # Do not rename or remove this 
 #      /private/var/log/asl.log (macOS 10.4)
 #      /private/var/log/asl.db (macOS 10.5 - 10.5.5)
 #      /private/var/log/asl/*.asl (macOS 10.5.6 -)
+#      /private/var/log/powermanagement
 
 #_ASL_DB_COOKIE = b"ASL DB\x00\x00\x00\x00\x00\x00"
 _ASL_DB_COOKIE = b"ASL DB"
@@ -519,7 +520,9 @@ def Plugin_Start(mac_info):
     # asl path
     asl_text_path = "/private/var/log/asl.log"
     asl_legacy_path = "/private/var/log/asl.db"
-    asl_ver2_folder_paths = ("/private/var/log/asl/", "/private/var/log/DiagnosticMessages/")
+    asl_ver2_folder_paths = ("/private/var/log/asl/", 
+                            "/private/var/log/DiagnosticMessages/",
+                            "/private/var/log/powermanagement/")
     asl_files = {}
 
     if mac_info.IsValidFilePath(asl_text_path):
