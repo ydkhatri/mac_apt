@@ -16,14 +16,16 @@
 
 import logging
 import re
+import yaml
 
+from importlib.resources import files
 from plugins.helpers.common import CommonFunctions
 from plugins.helpers.macinfo import *
 from plugins.helpers.writer import *
 
 __Plugin_Name = "BLUETOOTH"
 __Plugin_Friendly_Name = "Bluetooth Parser"
-__Plugin_Version = "1.1"
+__Plugin_Version = "1.2"
 __Plugin_Description = "Parses System Bluetooth Artifacts"
 __Plugin_Author = "Adam Ferrante, Yogesh Khatri"
 __Plugin_Author_Email = "adam@ferrante.io, yogesh@swiftforensics.com"
@@ -236,9 +238,25 @@ class BluetoothCacheItem:
         self.source = source
 
 def PrintAll(bluetooth_devices, output_params, input_path=''):
+    # get vendor list from yaml
+    log.debug('Trying to parse vendor list')
+    vendors = {}
+    try:
+        package_files = files('plugins.helpers')
+        yaml_file = package_files.joinpath('bluetooth_company_identifiers.yaml')
+        yaml_text = yaml_file.read_text(encoding='utf-8')
+
+        vendor_data = yaml.safe_load(yaml_text)
+        for c in vendor_data['company_identifiers']:
+            vendors[c['value']] = c['name']
+
+    except (ModuleNotFoundError, FileNotFoundError, yaml.error.YAMLError, KeyError) as ex:
+        log.exception('Error trying to read embedded vendor yaml file')
+    log.debug(f'{len(vendors)} vendor ids read.')
+    
     bluetooth_info = [   ('Bluetooth Address',DataType.TEXT),('Name',DataType.TEXT),('UserNameKey',DataType.TEXT),
                     ('Display Name',DataType.TEXT),('Manufacturer', DataType.TEXT),('Battery Percent',DataType.REAL),
-                    ('Connected',DataType.TEXT), ('Vendor ID',DataType.INTEGER), ('Product ID',DataType.INTEGER),
+                    ('Connected',DataType.TEXT), ('Vendor',DataType.TEXT), ('Vendor ID',DataType.INTEGER), ('Product ID',DataType.INTEGER),
                     ('Class of Device',DataType.INTEGER), ('CoD_Device',DataType.TEXT), ('CoD_Service',DataType.TEXT),
                     ('Last Name Update',DataType.DATE), ('Services',DataType.BLOB),
                     ('Support Features',DataType.BLOB), ('Last Services Update',DataType.DATE),
@@ -252,9 +270,10 @@ def PrintAll(bluetooth_devices, output_params, input_path=''):
 
     for device in bluetooth_devices:
         cod_device, cod_service = ParseClassOfDevice(device.classofdevice)
+        vendor_name = vendors.get(device.vendorid, f"Unknown {device.vendorid}")
         single_bt_instance = [device.bluetooth_address, device.name, device.usernamekey,
                             device.displayname, device.manufacturer, device.batterypercent,
-                            device.connected, device.vendorid, device.productid, 
+                            device.connected, vendor_name, device.vendorid, device.productid, 
                             device.classofdevice, cod_device, cod_service, device.lastnameupdate,
                             device.services, device.supportfeatures, device.lastservicesupdate,
                             device.last_seen,

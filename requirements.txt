@@ -15,6 +15,7 @@ pybindgen==0.21.0
 pycryptodome
 pyliblzfse
 pytsk3==20230125
+pyyaml
 setuptools
 win32_setctime
 xattr; sys_platform != "win32"
