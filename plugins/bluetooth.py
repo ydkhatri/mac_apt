@@ -238,7 +238,8 @@ class BluetoothCacheItem:
         self.source = source
 
 def PrintAll(bluetooth_devices, output_params, input_path=''):
-    # get vendor list from yaml
+    # read vendor list from yaml
+    # https://bitbucket.org/bluetooth-SIG/public/raw/95d7e6796256035562dbf2485d418338cb79f395/assigned_numbers/company_identifiers/company_identifiers.yaml
     log.debug('Trying to parse vendor list')
     vendors = {}
     try:
