@@ -15,7 +15,7 @@ _Note: Tested upto Python 3.13 on Windows and macOS (ARM and x64)._
 * Analyzed files/artifacts are exported for later review
 * zlib, lzvn, lzfse compressed files are supported!
 * Native HFS & APFS parser
-* Reads the Spotlight database and Unified Logging (tracev3) files
+* Reads the Spotlight database
 
 #### Latest
 :heavy_check_mark: Can read Velociraptor created targeted collection zip \(when created via [MacOS.Search.FileFinder](https://docs.velociraptor.app/artifact_references/pages/macos.search.filefinder/)\)   
@@ -77,7 +77,8 @@ SUDOLASTRUN | Gets last time sudo was used and a few other times earlier (if ava
 TCC | Reads Transparency, Consent and Control (TCC) database
 TERMINALSTATE | Reads Terminal saved state files which includes full text content of terminal windows
 TERMSESSIONS | Reads Terminal (bash & zsh) history & sesions for every user
-UNIFIEDLOGS | Reads macOS unified logging logs from .tracev3 files
+~~UNIFIEDLOGS~~ | ~~Reads macOS unified logging logs from .tracev3 files~~ _REMOVED as better options are [available](https://github.com/ydkhatri/UnifiedLogReader/blob/master/README.md#this-tool-is-now-archived-i-havent-had-time-to-update-this-tool-so-its-a-bit-outdated-there-isnt-incentive-to-update-this-any-more-as-python-processing-of-unifiedlogs-is-slow-and-takes-a-very-long-time-a-much-faster-rust-based-alternative-exists-please-use-that-instead-httpsgithubcommandiantmacos-unifiedlogs)_
+UNIFIEDLOGEXPORT | Exports Unifiedlogs and associated files for external processing  
 USERS | Local & Domain user information - name, UID, UUID, GID, account creation & password set dates, pass hints, homedir & Darwin paths
 UTMPX | Reads utmpx file
 WIFI | Gets wifi network information
