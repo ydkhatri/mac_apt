@@ -42,7 +42,7 @@ exe = EXE(
     console=True,
     disable_windowed_traceback=False,
     argv_emulation=False,
-    target_arch="arm64",
+    target_arch="x86_64",
     codesign_identity=None,
     entitlements_file=None,
 )
@@ -53,11 +53,11 @@ coll = COLLECT(
     strip=False,
     upx=True,
     upx_exclude=[],
-    name='mac_apt_arm64',
+    name='mac_apt_x86_64',
 )
 app = BUNDLE(
     coll,
-    name='mac_apt_arm64.app',
+    name='mac_apt_x86_64.app',
     bundle_identifier='com.swiftforensics.macapt',
     version='1.26.1'
 )
