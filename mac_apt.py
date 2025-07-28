@@ -447,10 +447,10 @@ for plugin in plugins:
     plugin_name_list.append(plugin.__Plugin_Name)
 
 plugins_info += "\n    " + "-"*76 + "\n" +\
-                 " "*4 + "FAST" + " "*16 + "Runs all plugins except IDEVICEBACKUPS, SPOTLIGHT, UNIFIEDLOGS\n" + \
+                 " "*4 + "FAST" + " "*16 + "Runs all plugins except IDEVICEBACKUPS, SPOTLIGHT, UNIFIEDLOGEXPORT\n" + \
                  " "*4 + "ALL" + " "*17 + "Runs all plugins\n" +\
                  "\nIt is now possible to disable certain plugins from FAST or ALL by appending - to the name\n" +\
-                 "Eg: 'ALL UNIFIEDLOGS- WIFI-' will run ALL plugins except UNIFIEDLOGS and WIFI"
+                 "Eg: 'ALL IDEVICEBACKUPS- WIFI-' will run ALL plugins except IDEVICEBACKUPS and WIFI"
 arg_parser = argparse.ArgumentParser(description='mac_apt is a framework to process macOS forensic artifacts\n'
                                                  f'You are running {__PROGRAMNAME} version {__VERSION}\n\n'
                                                  'Note: The default output is now sqlite, no need to specify it now',
@@ -523,7 +523,7 @@ else:
         plugins_to_run = plugin_name_list
         plugins_to_run.remove('ALL')
         plugins_to_run.remove('FAST')
-        for plugin in ('IDEVICEBACKUPS', 'SPOTLIGHT', 'UNIFIEDLOGS'):
+        for plugin in ('IDEVICEBACKUPS', 'SPOTLIGHT', 'UNIFIEDLOGEXPORT'):
             plugins_not_to_run.append(plugin)
     else:
         #Check for invalid plugin names or ones not Found
