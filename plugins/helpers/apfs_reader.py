@@ -925,6 +925,10 @@ class ApfsVolume:
     def SetupDecryption(self, key):
         self.algorithm_aes = algorithms.AES(key)
 
+    def get_raw_blocks(self, block_num, num_blocks):
+        """Return raw contiguous blocks of data"""
+        return self.container.get_multiple_blocks(block_num, num_blocks)
+
     def get_raw_decrypted_block(self, block_num, key=None, limit_size=-1):
         """Returns raw block data (without parsing). If key is None, no decryption is performed.
            Use limit_size if you need less than one block of data. It's faster to decrypt less
@@ -1668,6 +1672,11 @@ class ApfsContainer:
         self.seek(idx * self.block_size)
         return self.read(self.block_size)
 
+    def get_multiple_blocks(self, idx, num_blocks):
+        """ Get multiple contiguous blocks at once """
+        self.seek(idx * self.block_size)
+        return self.read(self.block_size * num_blocks)
+
     def read_block(self, block_num):
         """ Parse a single block """
         data = self.get_block(block_num)
@@ -1728,10 +1737,16 @@ class ApfsExtent:
         partial_block_size = self.size % volume.block_size
 
         data = bytearray()
-        for b in range(num_full_blocks_needed):
-            data += volume.get_raw_decrypted_block(self.block_num + b, encryption_key)
-        if partial_block_size > 0:
-            data += volume.get_raw_decrypted_block(self.block_num + num_full_blocks_needed, encryption_key, partial_block_size)
+        if encryption_key is None:
+            total_blocks_needed = num_full_blocks_needed + (1 if partial_block_size else 0)
+            data = volume.get_raw_blocks(self.block_num, total_blocks_needed)
+            if partial_block_size:
+                data = data[:self.size]
+        else:
+            for b in range(num_full_blocks_needed):
+                data += volume.get_raw_decrypted_block(self.block_num + b, encryption_key)
+            if partial_block_size > 0:
+                data += volume.get_raw_decrypted_block(self.block_num + num_full_blocks_needed, encryption_key, partial_block_size)
         return data
     
     def GetSomeData(self, volume, max_size=41943040): # max 40MB
