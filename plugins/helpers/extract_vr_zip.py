@@ -14,8 +14,8 @@ import re
 import time
 import zipfile_deflate64 as zipfile
 
+from datetime import datetime, timedelta
 from dateutil import parser
-from plugins.helpers.common import CommonFunctions
 from win32_setctime import setctime
 
 log = logging.getLogger('MAIN.HELPERS.VR_EXTRACTOR')
@@ -148,6 +148,16 @@ def export_files(zip, out_path, metadata_collection):
             extracted_files = True
     return extracted_files
 
+def get_time_taken_string(start_time, end_time):
+    '''Returns the difference between two floats as a string of form HH:MM:SS'''
+    time_taken = end_time - start_time
+    try:
+        run_time_hms = (datetime(1970, 1, 1, 0, 0) + timedelta(seconds=time_taken)).strftime("%H:%M:%S.%f")
+    except (OSError, ValueError) as ex:
+        log.error('Failed to calculate time string '+ str(ex))
+        run_time_hms = ''
+    return run_time_hms
+
 def extract_zip(input_path: str, output_path: str) -> bool:
     """Main Extract function. Returns tuple (success, metadata)
 
@@ -168,7 +178,7 @@ def extract_zip(input_path: str, output_path: str) -> bool:
             log.error('Could not find client_info.json. Zip is not the one expected!')
         zip.close()
         end_time = time.time()
-        log.info(f'Finished extraction in {CommonFunctions.GetTimeTakenString(start_time, end_time)}!')
+        log.info(f'Finished extraction in {get_time_taken_string(start_time, end_time)}!')
 
     except (zipfile.BadZipFile, OSError, ValueError) as ex:
         log.error(ex)
