@@ -10,9 +10,14 @@ a = Analysis(
         ('..\\version.py', '.')
     ],
     hiddenimports=[
+        'Crypto',
+        'Crypto.Cipher.DES3',
+        'Crypto.Cipher.AES',
+        'lz4.block',
         'plistutils.alias',
         'PIL',
         'PIL.Image',
+        'yaml',
         'zoneinfo'
     ],
     hookspath=['.\\'],

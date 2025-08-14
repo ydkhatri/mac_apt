@@ -77,3 +77,5 @@ create_version_file('mac_apt_artifact_only_version_info.txt',
     "mac_apt_artifact_only", 
     "mac_apt_artifact_only.exe", 
     "mac_apt_artifact_only standalone executable")
+
+print('Version files created')
