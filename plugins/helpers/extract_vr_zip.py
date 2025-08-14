@@ -12,7 +12,7 @@ import logging
 import os
 import re
 import time
-import zipfile_deflate64 as zipfile
+import zipfile_inflate64 as zipfile
 
 from datetime import datetime, timedelta
 from dateutil import parser
