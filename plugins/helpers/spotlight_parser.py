@@ -1,4 +1,4 @@
-# Parse the Spotlight store.db file from mac OSX
+# Parse the Spotlight store.db file from mac OSX / macOS /iOS
 #
 #  (c) Yogesh Khatri - 2018-2025 www.swiftforensics.com
 #
@@ -17,7 +17,7 @@
 #
 # Script Name  : spotlight_parser.py
 # Author       : Yogesh Khatri
-# Last Updated : 09/07/2025
+# Last Updated : 2025-09-03
 # Requirement  : Python 3.7, modules ( lz4, pyliblzfse )
 #                Dependencies can be installed using the command 'pip install lz4 pyliblzfse' 
 # 
@@ -65,7 +65,7 @@ try:
 except ImportError:
     print("liblzfse not found. Won't decompress lzfse/lzvn streams")
 
-__VERSION__ = '1.0.2'
+__VERSION__ = '1.0.3'
 
 log = logging.getLogger('SPOTLIGHT_PARSER')
 
@@ -80,6 +80,7 @@ class FileMetaDataListing:
         self.data = data
         self.size = size
         self.meta_data_dict = {} # { kMDItemxxx: value1, kMCItemyyy: value2, ..}
+        self.meta_data_loc = {} # {kMDItemxxx: location1, kMCItemyyy: location2, ..}
         #
         self.id = 0 # inode number
         self.flags = 0
@@ -118,6 +119,9 @@ class FileMetaDataListing:
         # Date stored as 8 byte double, it is mac absolute time (2001 epoch)
         mac_abs_time = self.ReadDouble()
         if mac_abs_time > 0: # Sometimes, a very large number that needs to be reinterpreted as signed int
+            if mac_abs_time > 18446744073709551615:
+                # this is invalid , larger than the int 64bit.
+                return ""
             old = mac_abs_time
             mac_abs_time = struct.unpack("<q", struct.pack("<Q", int(mac_abs_time)) )[0] # double to signed int64
             if int(old) == mac_abs_time: # int(536198400.512156) == 536198400 = True
@@ -183,9 +187,8 @@ class FileMetaDataListing:
         self.pos += count
         return many
 
-    # No usages
     def ReadManyBytesReturnHexString(self, count, debug_dont_advance = False):
-        '''does not increment file pointer'''
+        '''Returns HEX string'''
         many = self.ReadManyBytes(count, debug_dont_advance)
         ret = ''.join('{:02X}'.format(x) for x in many)
         return ret
@@ -277,7 +280,7 @@ class FileMetaDataListing:
             data_type = self.ReadUint32()
             prop_index = self.ReadUint32()
             if prop_index == 0:
-                log.warning("Maybe something went wrong, skip index was 0 @ {} or rest of struct is slack".format(filepos))
+                log.warning(f"Maybe something went wrong, skip index was 0 @ {filepos} or rest of struct ({self.size - self.pos} bytes) is slack")
                 break
 
             last_prop = prop # for debug only
@@ -355,190 +358,217 @@ class FileMetaDataListing:
                 log.warning(f"Not seen data type: 0x{data_type:X}")
                 pass
             self.meta_data_dict[prop_name] = value
- 
-    def ParseItem(self, properties, categories, indexes_1, indexes_2):
-        self.id = FileMetaDataListing.ConvertUint64ToSigned(self.ReadVarSizeNum()[0])
-        self.flags = self.ReadSingleByte()
-        self.item_id = FileMetaDataListing.ConvertUint64ToSigned(self.ReadVarSizeNum()[0])
-        self.parent_id = FileMetaDataListing.ConvertUint64ToSigned(self.ReadVarSizeNum()[0])
-        self.date_updated = self.ReadVarSizeNum()[0]
 
-        ## type = bytes used
-        #  00 = byte or varNum ?  bool?
-        #  02 = byte or varNum ?
-        #  06 = byte or varNum ?
-        #  07 = varNum
-        #  08 = ?
-        #  09 = float (4 bytes)
-        #  0a = double (8 bytes)
-        #  0b = var (len+data)
-        #  0c = double (8 bytes) --> mac_abs_time
-        #  0e = var (len+data)
-        #  0f = varNum?
-        prop_index = 0
-        last_prop = None # for debug only
-        last_filepos = 0 # for debug only
-        filepos = None
-        prop = None
-        while  self.pos < self.size:
-            last_filepos = filepos
-            filepos = hex(self.file_pos + 0 + self.pos)
-            prop_skip_index = self.ReadVarSizeNum()[0]
-            if prop_skip_index == 0:
-                log.warning("Maybe something went wrong, skip index was 0 @ {} or rest of struct is slack".format(filepos))
-                break
-            elif prop_skip_index == 0xFFFFFFFF: # end of props, only slack/junk data after this
-                break
-            prop_index += prop_skip_index
-            last_prop = prop # for debug only
-            prop = properties.get(prop_index, None)
-            if prop == None:
-                log.error("Error, cannot proceed, invalid property index {}, skip={}".format(prop_index, prop_skip_index))
-                return
-            else:
-                prop_name = prop[0]
-                prop_type = prop[1]
-                value_type = prop[2]
-                value = ''
-                if value_type == 0:
-                    value = self.ReadVarSizeNum()[0]
-                elif value_type == 2:
-                    value = self.ReadVarSizeNum()[0]
-                elif value_type == 6: 
-                    value = self.ReadVarSizeNum()[0] 
-                elif value_type == 7:
-                    #log.debug("Found value_type 7, prop_type=0x{:X} prop={} @ {}, pos 0x{:X}".format(prop_type, prop_name, filepos, self.pos))
-                    if prop_type & 2 == 2: #  == 0x0A:
-                        number = FileMetaDataListing.ConvertUint64ToSigned(self.ReadVarSizeNum()[0])
-                        num_values = number >> 3
-                        value = [FileMetaDataListing.ConvertUint64ToSigned(self.ReadVarSizeNum()[0]) for x in range(num_values)]
-                        discarded_bits = number & 0x07
-                        if discarded_bits != 0:
-                            log.info('Discarded bits value was 0x{:X}'.format(discarded_bits))
-                    else:
-                        # 0x48 (_kMDItemDataOwnerType, _ICItemSearchResultType, kMDItemRankingHint, FPCapabilities)
-                        # 0x4C (_kMDItemStorageSize, _kMDItemApplicationImporterVersion)
-                        # 0x0a (_kMDItemOutgoingCounts, _kMDItemIncomingCounts) firstbyte = 0x20 , then 4 bytes
-                        value = FileMetaDataListing.ConvertUint64ToSigned(self.ReadVarSizeNum()[0])
-                    #if prop_type == 0x48: # Can perhaps be resolved to a category? Need to check.
-                    #    print("") 
-                elif value_type == 8 and prop_name != 'kMDStoreAccumulatedSizes':
-                    if prop_type & 2 == 2:
-                        singles = [self.ReadVarSizeNum()[0] for x in range(4)]
-                        value = singles
-                    #     num_values = (self.ReadVarSizeNum()[0])
-                    #     singles = [self.ReadSingleByte() for x in range(num_values)]
-                    #     value = singles
-                    else:
+    def debugWriteData(self, name):
+        '''For debug only'''
+        with open(f'{name}.bin', 'wb') as f:
+            f.write(self.data)
+
+    def ParseItem(self, properties, categories, indexes_1, indexes_2):
+        try:
+            self.id = FileMetaDataListing.ConvertUint64ToSigned(self.ReadVarSizeNum()[0])
+            self.flags = self.ReadSingleByte()
+            self.item_id = FileMetaDataListing.ConvertUint64ToSigned(self.ReadVarSizeNum()[0])
+            self.parent_id = FileMetaDataListing.ConvertUint64ToSigned(self.ReadVarSizeNum()[0])
+            self.date_updated = self.ReadVarSizeNum()[0]
+
+            ## type = bytes used
+            #  00 = byte or varNum ?  bool?
+            #  02 = byte or varNum ?
+            #  06 = byte or varNum ?
+            #  07 = varNum
+            #  08 = ?
+            #  09 = float (4 bytes)
+            #  0a = double (8 bytes)
+            #  0b = var (len+data)
+            #  0c = double (8 bytes) --> mac_abs_time
+            #  0e = var (len+data)
+            #  0f = varNum?
+            prop_index = 0
+            last_prop = None # for debug only
+            last_filepos = 0 # for debug only
+            filepos = None
+            prop = None
+            prop_location = 0 # for debug only
+            while  self.pos < self.size:
+                prop_location = self.pos
+                last_filepos = filepos
+                filepos = hex(self.file_pos + 0 + self.pos)
+                prop_skip_index = self.ReadVarSizeNum()[0]
+                if prop_skip_index == 0:
+                    log.warning(f"Maybe something went wrong, skip index was 0 @ {filepos} or rest of struct ({self.size - self.pos} bytes) is slack")
+                    #self.debugWriteData(str(self.file_pos))
+                    break
+                elif prop_skip_index == 0xFFFFFFFF: # end of props, only slack/junk data after this
+                    break
+                prop_index += prop_skip_index
+                last_prop = prop # for debug only
+                prop = properties.get(prop_index, None)
+                if prop == None:
+                    log.error("Error, cannot proceed, invalid property index {}, skip={}".format(prop_index, prop_skip_index))
+                    #self.debugWriteData(str(self.file_pos))
+                    return
+                else:
+                    prop_name = prop[0]
+                    prop_type = prop[1]
+                    value_type = prop[2]
+                    value = ''
+                    if value_type == 0:
                         value = self.ReadVarSizeNum()[0]
-                elif value_type == 9:
-                    if prop_type & 2 == 2:
-                        num_values = (self.ReadVarSizeNum()[0])//4
-                        floats = [self.ReadFloat() for x in range(num_values)]
-                        value = floats
-                    else:
-                        value = self.ReadFloat()
-                elif value_type == 0x0A:
-                    if prop_type & 2 == 2:
-                        num_values = (self.ReadVarSizeNum()[0])//8
-                        doubles = [self.ReadDouble() for x in range(num_values)]
-                        value = doubles
-                    else:
-                        value = self.ReadDouble()
-                elif value_type == 0x0B:
-                    value = self.ReadStrings()[0]
-                    if prop_type & 2 != 2:
-                        if len(value) == 0:
-                            value = ''
-                        elif len(value) == 1:
-                            value = value[0]
+                    elif value_type == 2:
+                        value = self.ReadVarSizeNum()[0]
+                    elif value_type == 6: 
+                        value = self.ReadVarSizeNum()[0] 
+                    elif value_type == 7:
+                        #log.debug("Found value_type 7, prop_type=0x{:X} prop={} @ {}, pos 0x{:X}".format(prop_type, prop_name, filepos, self.pos))
+                        if prop_type & 2 == 2: #  == 0x0A:
+                            number = FileMetaDataListing.ConvertUint64ToSigned(self.ReadVarSizeNum()[0])
+                            num_values = number >> 3
+                            value = [FileMetaDataListing.ConvertUint64ToSigned(self.ReadVarSizeNum()[0]) for x in range(num_values)]
+                            discarded_bits = number & 0x07
+                            if discarded_bits != 0:
+                                log.info('Discarded bits value was 0x{:X}'.format(discarded_bits))
                         else:
-                            log.warning('String was multivalue without multivalue bit set')
-                elif value_type == 0x0C:
-                    if prop_type & 2 == 2:
-                        num_dates = (self.ReadVarSizeNum()[0])//8
-                        dates = []
-                        for x in range(num_dates):
-                            dates.append(self.ReadDate())
-                        value = dates
-                    else:
-                        value = self.ReadDate()
-                elif value_type == 0x0E:
-                    if prop_type & 2 == 2:
-                        value = self.ReadStrings(dont_decode=True if prop_name != 'kMDStoreProperties' else False)[0]
-                    else:
-                        value = self.ReadStr(dont_decode=True if prop_name != 'kMDStoreProperties' else False)[0]
-                    if prop_name != 'kMDStoreProperties':
-                        if type(value) == list:
-                            if len(value) == 1:
-                                value = binascii.hexlify(value[0]).decode('ascii').upper()
-                            else:
-                                value = [binascii.hexlify(item).decode('ascii').upper() for item in value]
-                        else: # single string
-                            value = binascii.hexlify(value).decode('ascii').upper()
-                elif value_type == 0x0F:
-                    value = FileMetaDataListing.ConvertUint32ToSigned(self.ReadVarSizeNum()[0])
-                    if value < 0:
-                        if value == -16777217:
-                            value = ''
+                            # 0x48 (_kMDItemDataOwnerType, _ICItemSearchResultType, kMDItemRankingHint, FPCapabilities)
+                            # 0x4C (_kMDItemStorageSize, _kMDItemApplicationImporterVersion)
+                            # 0x0a (_kMDItemOutgoingCounts, _kMDItemIncomingCounts) firstbyte = 0x20 , then 4 bytes
+                            value = FileMetaDataListing.ConvertUint64ToSigned(self.ReadVarSizeNum()[0])
+                        #if prop_type == 0x48: # Can perhaps be resolved to a category? Need to check.
+                        #    print("") 
+                    elif value_type == 8 and prop_name != 'kMDStoreAccumulatedSizes':
+                        if prop_type & 2 == 2:
+                            singles = [self.ReadVarSizeNum()[0] for x in range(4)]
+                            value = singles
+                        #     num_values = (self.ReadVarSizeNum()[0])
+                        #     singles = [self.ReadSingleByte() for x in range(num_values)]
+                        #     value = singles
                         else:
-                            value = 'INVALID ({})'.format(value)
-                    else:
-                        old_value = value
-                        if prop_type & 3 == 3: # in (0x83, 0xC3, 0x03): # ItemKind
-                            value = indexes_2.get(value, None)
-                            if value == None:
-                                value = 'error getting index_2 for value {}'.format(old_value)
+                            value = self.ReadVarSizeNum()[0]
+                    elif value_type == 9:
+                        if prop_type & 2 == 2:
+                            num_values = (self.ReadVarSizeNum()[0])//4
+                            floats = [self.ReadFloat() for x in range(num_values)]
+                            value = floats
+                        else:
+                            value = self.ReadFloat()
+                    elif value_type == 0x0A:
+                        if prop_type & 2 == 2:
+                            num_values = (self.ReadVarSizeNum()[0])//8
+                            doubles = [self.ReadDouble() for x in range(num_values)]
+                            value = doubles
+                        else:
+                            value = self.ReadDouble()
+                    elif value_type == 0x0B:
+                        value = self.ReadStrings()[0]
+                        if prop_type & 2 != 2:
+                            if len(value) == 0:
+                                value = ''
+                            elif len(value) == 1:
+                                value = value[0]
                             else:
-                                for v in value:
-                                    if v < 0: continue
-                                    cat = categories.get(v, None)
-                                    if cat == None:
-                                        #log.error('error getting category for index={}  prop_type={}  prop_name={}'.format(v, prop_type, prop_name))
-                                        value = ''
-                                    else:
-                                        all_translations = cat.split(b'\x16\x02')
-                                        if len(all_translations) > 2:
-                                            log.warning('Encountered more than one control sequence in single translation'
-                                                        'string.')
-                                            #log.debug('Found this list: {}', other)
-                                        value = all_translations[0].decode('utf8', 'backslashreplace')
-                                        break # only get first, rest are language variants!
-                        elif prop_type & 0x2 == 0x2: #== 0x4A: # ContentTypeTree ItemUserTags
-                            value = indexes_1.get(value, None)
-                            if value == None:
-                                value = 'error getting index_1 for value {}'.format(old_value)
+                                log.warning('String was multivalue without multivalue bit set')
+                    elif value_type == 0x0C:
+                        if prop_type & 2 == 2:
+                            num_dates = (self.ReadVarSizeNum()[0])//8
+                            dates = []
+                            for x in range(num_dates):
+                                dates.append(self.ReadDate())
+                            value = dates
+                        else:
+                            value = self.ReadDate()
+                    elif value_type == 0x0E:
+                        if prop_type & 0x80 == 0x80:
+                            # this is binary only, len is one byte less
+                            num_bytes = self.ReadVarSizeNum()[0]
+                            if num_bytes > 0:
+                                value = self.ReadManyBytesReturnHexString(num_bytes - 1)
                             else:
-                                tree = []
-                                for v in value:
-                                    if v < 0: continue
-                                    cat = categories.get(v, None)
+                                log.debug(f'Error in value for prop {prop_name}, num_bytes={num_bytes}')
+                        elif prop_type & 2 == 2:
+                            value = self.ReadStrings(dont_decode=True if prop_name != 'kMDStoreProperties' else False)[0]
+                        else:
+                            value = self.ReadStr(dont_decode=True if prop_name != 'kMDStoreProperties' else False)[0]
+
+                        if  prop_type & 0x80 != 0x80 and \
+                            prop_name != 'kMDStoreProperties':
+                            if type(value) == list:
+                                if len(value) == 1:
+                                    value = value[0].decode('utf8', 'ignore')
+                                else:
+                                    value = [item.decode('utf8', 'ignore') for item in value]
+                            else: # single string
+                                value = value.decode('utf8', 'ignore')
+                    elif value_type == 0x0F:
+                        value = FileMetaDataListing.ConvertUint32ToSigned(self.ReadVarSizeNum()[0])
+                        if value < 0:
+                            if value == -16777217:
+                                value = ''
+                            else:
+                                value = 'INVALID ({})'.format(value)
+                        else:
+                            old_value = value
+                            if prop_type & 3 == 3: # in (0x83, 0xC3, 0x03): # ItemKind
+                                value = indexes_2.get(value, None)
+                                if value == None:
+                                    value = 'error getting index_2 for value {}'.format(old_value)
+                                else:
+                                    for v in value:
+                                        if v < 0: continue
+                                        cat = categories.get(v, None)
+                                        if cat == None:
+                                            #log.error('error getting category for index={}  prop_type={}  prop_name={}'.format(v, prop_type, prop_name))
+                                            value = ''
+                                        else:
+                                            all_translations = cat.split(b'\x16\x02')
+                                            if len(all_translations) > 2:
+                                                log.warning('Encountered more than one control sequence in single translation'
+                                                            'string.')
+                                                #log.debug('Found this list: {}', other)
+                                            value = all_translations[0].decode('utf8', 'backslashreplace')
+                                            break # only get first, rest are language variants!
+                            elif prop_type & 0x2 == 0x2: #== 0x4A: # ContentTypeTree ItemUserTags
+                                value = indexes_1.get(value, None)
+                                if value == None:
+                                    value = 'error getting index_1 for value {}'.format(old_value)
+                                else:
+                                    tree = []
+                                    for v in value:
+                                        if v < 0: continue
+                                        cat = categories.get(v, None)
+                                        if cat == None:
+                                            log.error('error getting category for index={}  prop_type={}  prop_name={}'.format(v, prop_type, prop_name))
+                                        else:
+                                            tree.append(cat.decode('utf8', 'backslashreplace'))
+                                    value = tree
+                            else: #elif prop_type & 8 == 8: #== 0x48: # ContentType
+                                if value >= 0:
+                                    cat = categories.get(value, None)
                                     if cat == None:
                                         log.error('error getting category for index={}  prop_type={}  prop_name={}'.format(v, prop_type, prop_name))
+                                        value = b''
                                     else:
-                                        tree.append(cat.decode('utf8', 'backslashreplace'))
-                                value = tree
-                        else: #elif prop_type & 8 == 8: #== 0x48: # ContentType
-                            if value >= 0:
-                                cat = categories.get(value, None)
-                                if cat == None:
-                                    log.error('error getting category for index={}  prop_type={}  prop_name={}'.format(v, prop_type, prop_name))
-                                    value = b''
+                                        value = cat
+                                    value = value.decode('utf8', 'backslashreplace')
                                 else:
-                                    value = cat
-                                value = value.decode('utf8', 'backslashreplace')
-                            else:
-                                value = ''
-                        #else:
-                        #    log.info("Not seen before value-type 0x0F item, prop_type={:X}, prop={}".format(prop_type, prop_name))
-                else:
-                    if prop_name != 'kMDStoreAccumulatedSizes':
-                        log.info("Pos={}, Unknown value_type {}, PROPERTY={}, PROP_TYPE={} ..RETURNING!".format(filepos, value_type, prop_name, prop_type))
-                    return
-                if prop_name in self.meta_data_dict:
-                    log.warning('Spotlight property {} had more than one entry for inode {}'.format(prop_name, self.id))
-                self.meta_data_dict[prop_name] = value
-                
+                                    value = ''
+                            #else:
+                            #    log.info("Not seen before value-type 0x0F item, prop_type={:X}, prop={}".format(prop_type, prop_name))
+                    else:
+                        if prop_name != 'kMDStoreAccumulatedSizes':
+                            log.info("Pos={}, Unknown value_type {}, PROPERTY={}, PROP_TYPE={} ..RETURNING!".format(filepos, value_type, prop_name, prop_type))
+                        return
+                    if prop_name in self.meta_data_dict:
+                        log.warning('Spotlight property {} had more than one entry for inode {}'.format(prop_name, self.id))
+                    self.meta_data_dict[prop_name] = value
+                    self.meta_data_loc[prop_name] = prop_location
+        except (IndexError, struct.error) as ex:
+            bytes_left = self.size - self.pos
+            self.debugWriteData(f'{self.file_pos}')
+            if bytes_left == 0:
+                log.warning(f'Had exception, exhausted data but entry may be incomplete at {self.file_pos}! Last prop={prop_name}, Last prop pos={prop_location}')
+            else:
+                log.exception(f'filepos={self.file_pos}')
+
 
 class BlockType(IntEnum):
     UNKNOWN_0  = 0
