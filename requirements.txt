@@ -2,6 +2,7 @@ anytree
 biplist
 construct==2.10.70
 cryptography
+inflate64
 jsonlines
 kaitaistruct
 libewf-python
@@ -20,5 +21,4 @@ setuptools
 win32_setctime
 xattr; sys_platform != "win32"
 xlsxwriter
-zipfile-inflate64
 other_dependencies/pyaff4-0.31-yk-20240511.zip

@@ -12,7 +12,7 @@ import logging
 import os
 import re
 import time
-import zipfile_inflate64 as zipfile
+import plugins.helpers.zip_inf64 as zipfile
 
 from datetime import datetime, timedelta
 from dateutil import parser
