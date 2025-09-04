@@ -138,8 +138,8 @@ def ReadArchFromPlist(f, source_plist):
 
 def GetArchitecture(mac_info):
     '''Figure out if the host is ARM64 or x86_64'''
+    arch = ''
     if isinstance(mac_info, ApfsMacInfo):
-        arch = ''
         uuid = mac_info.apfs_data_volume.uuid
         source_plist = f'/{uuid}/restore/BuildManifest.plist'
         f = mac_info.apfs_preboot_volume.open(source_plist)
