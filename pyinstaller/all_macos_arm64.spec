@@ -148,5 +148,5 @@ app = BUNDLE(
     coll,
     name='mac_apt_arm64.app',
     bundle_identifier='com.swiftforensics.macapt',
-    version='1.26.1'
+    version='1.26.8'
 )
