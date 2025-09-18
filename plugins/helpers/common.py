@@ -163,7 +163,7 @@ class CommonFunctions:
         return ''
 
     @staticmethod
-    def IntFromStr(string, base=10, error_val=0):
+    def IntFromStr(string, base=10, error_val=0, suppress_exception=False):
         integer = error_val
         try:
             integer = int(string, base)

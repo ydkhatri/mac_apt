@@ -68,7 +68,6 @@ class DataWriter:
         self.sql = False
         self.sql_writer = None
         self.sql_db_path = output_params.output_db_path
-        self.PYTHON_VER = sys.version_info.major
         self.cols_with_blobs = None
 
         if output_params.write_sql:
@@ -697,9 +696,14 @@ class ExcelWriter:
             if len(name) > 29:
                 sheet_name = name[0:29] # Truncate to 30 char, as excel can only handle 32 char sheetnames
                 log.warning('Sheet name "{}" is in use, and has length > 29 char. Truncating to 29 char to add 2 numerical digits!'.format(name))
-            index = 1
+            index = CommonFunctions.IntFromStr(name[-2:], base=10, error_val=-1, suppress_exception=True)
+            if index == -1:
+                index = 1
+            else:
+                sheet_name = sheet_name[:-2]
+                index += 1
             name = sheet_name + '{0:02d}'.format(index)
-            while (self.SheetExists(name)):
+            while self.SheetExists(name):
                 name = sheet_name + '{0:02d}'.format(index)
                 index += 1
         return name
