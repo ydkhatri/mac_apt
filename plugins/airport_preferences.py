@@ -338,9 +338,14 @@ def ReadKnownNetworksPlist(plist, networks, source):
             net.Captive = details.get('CaptiveProfile', {}).get('CaptiveNetwork', False)
             net.TemporarilyDisabled = details.get('TemporarilyDisabled', False)
         for bss in network.get('BSSList', []):
-            net.BSSIDHistory += ',[MAC={}, {}]'.format(
+            net.BSSIDHistory += ',[MAC={}, {}, Lat={}, Long={}, LocationTimestamp={}, Accuracy={}]'.format(
                                     bss.get('BSSID',''), 
-                                    str(bss.get('LastAssociatedAt', '')) )
+                                    str(bss.get('LastAssociatedAt', '')),
+                                    bss.get('Location', {}).get('LocationLatitude', ''),
+                                    bss.get('Location', {}).get('LocationLongitude', ''),
+                                    str(bss.get('Location', {}).get('LocationTimestamp', '')),
+                                    str(bss.get('Location', {}).get('LocationAccuracy', ''))
+                                    )
         if net.BSSIDHistory:
             net.BSSIDHistory = net.BSSIDHistory.lstrip(',')
         networks.append(net)
