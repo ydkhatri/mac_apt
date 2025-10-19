@@ -448,7 +448,7 @@ def print_all(programs, output_params, source_path):
     data_list = []
     log.info("Found {} autostart item(s)".format(len(programs)))
     for program in programs:
-        data_list.append([program.persistence_type, program.name, program.user, program.start_when, 
+        data_list.append([program.persistence_type, program.name, str(program.user), program.start_when, 
                           program.disabled, program.app_path, program.app_args,
                           program.btm_disposition, program.btm_type,
                           program.btm_developer, program.btm_dev_identifier, program.btm_container, 

@@ -346,7 +346,10 @@ class CommonFunctions:
                         f.seek(0)
                         data = f.read().decode('utf8', 'ignore')
                         f.close()
-                        data = re.sub("<!DOCTYPE ?plist[^>]*>", "", data, flags=re.S).encode('utf8', 'backslashreplace')
+                        data = re.sub(r"<\?xml version=1\.0 encoding=UTF-8\?>", r'<?xml version="1.0" encoding="UTF-8"?>', data, flags=re.I)
+                        data = re.sub(r"<plist version=(?P<version>[0-9\.]+)", r'<plist version="\g<version>"', data, flags=re.I)
+                        data = re.sub(r"<!DOCTYPE ?plist[^>]*>", "", data, flags=re.S)
+                        data = data.encode('utf8', 'backslashreplace')
                         try:
                             if sys.version_info >= (3, 9):
                                 plist = plistlib.loads(data, fmt=plistlib.FMT_XML)
