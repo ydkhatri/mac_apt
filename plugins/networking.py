@@ -88,9 +88,9 @@ def GetNetworkInterface2Info(mac_info, preference_plist_path):
                                 log.info('Found unknown data in plist at /NetworkServices/' + uuid + '/Interface/' + k + ' Value=' + str(v))
                     elif item == 'SMB':
                         for k, v in list(value.items()):
-                            if k in ['NetBIOSName', 'Workgroup', 'Type', 'UserDefinedName']:  interface_info['SMB.'+ k] = v
+                            if k in ['NetBIOSName', 'Workgroup', 'Type', 'UserDefinedName', 'WINSAddresses']:  interface_info['SMB.'+ k] = str(v)
                             else:
-                                log.info('Found unknown data in plist at /NetworkServices/' + uuid + '/SMB/' + k + ' Value=' + v)
+                                log.info('Found unknown data in plist at /NetworkServices/' + uuid + '/SMB/' + k + ' Value=' + str(v))
                 net_interface_details.append(interface_info)
                 '''try:
                     for item, bridge in plist['VirtualNetworkInterfaces']['Bridge'].items():
@@ -116,12 +116,15 @@ def GetNetworkInterfaceInfo(mac_info, path):
     log.debug("Trying to read {}".format(path))
     success, plist, error = mac_info.ReadPlist(path)
     if success:
-        model = plist.get('Model', '')
-        if model:
-            log.info("Model = " + model)
+        # info items
+        info_only = ('Model', '__VERSION__')
+        for info_item in info_only:
+            info_item_value = plist.get(info_item, '')
+            if info_item_value:
+                log.info(f"{info_item} = {info_item_value}")
         for category, cat_array in plist.items(): #value is another array in this dict
             if not category.startswith('Interface'): 
-                if category != 'Model': log.debug('Skipping ' + category)
+                if category not in info_only: log.debug('Skipping ' + category + '=' + str(cat_array))
                 continue
             for interface in cat_array:
                 interface_info = {'Category':category, 'Source':path }
