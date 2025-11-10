@@ -13,6 +13,7 @@ import os
 import posixpath
 import pytsk3
 import random
+import re
 import shutil
 import sqlite3
 import stat
@@ -31,6 +32,7 @@ from plugins.helpers.common import *
 from plugins.helpers.darwin_path_generator import GetDarwinPath, GetDarwinPath2
 from plugins.helpers.hfs_alt import HFSVolume
 from plugins.helpers.structs import *
+from subprocess import CalledProcessError, run
 
 if sys.platform == 'linux':
     from plugins.helpers.statx import statx
@@ -585,6 +587,18 @@ class MacInfo:
         except Exception:
             pass
         return False
+
+    def GetFilePathFromInodeNumber(self, file_inode):
+        '''Searches for file/folder with given inode number under search_path, returns full path if found, else empty string'''
+        # This is only implemented in ApfsMacInfo and MountedMacInfo classes
+        return ''
+
+    def GetFileInodeNumber(self, path):
+        '''Return the inode number'''
+        if self.use_native_hfs_parser:
+            return self.hfs_native.getCnidForPath(path)
+        # if not implemented then return -1
+        return -1
 
     def GetFileSize(self, path, error=None):
         '''For a given file path, gets logical file size, or None if error'''
@@ -1235,6 +1249,23 @@ class ApfsMacInfo(MacInfo):
         xattrs = {}
         apfs_xattrs = self.macos_FS.GetExtendedAttributes(path)
         return { att_name:att.data for att_name,att in apfs_xattrs.items() }
+    
+    def GetFilePathFromInodeNumber(self, inode_number):
+        try:
+            path = self.macos_FS.GetFilePathFromCnid(inode_number)
+            return path
+        except Exception as ex:
+            pass
+        return ''
+
+    def GetFileInodeNumber(self, path):
+        try:
+            apfs_file_meta = self.macos_FS.GetFileMetadataByPath(path)
+            if apfs_file_meta:
+                return apfs_file_meta.cnid
+        except Exception as ex:
+            pass
+        return -1
 
     def GetFileSize(self, full_path, error=None):
         try:
@@ -1402,6 +1433,10 @@ class MountedMacInfo(MacInfo):
     def __init__(self, root_folder_path, output_params):
         super().__init__(output_params)
         self.macos_root_folder = root_folder_path
+        self.volume_inode = None
+        if not self.is_linux and not self.is_windows:
+            self.volume_inode = self._get_volume_inode_from_root(root_folder_path)
+
         # TODO: if os.name == 'nt' and len (root_folder_path) == 2 and root_folder_path[2] == ':': self.macos_root_folder += '\\'
         if self.is_linux:
             log.warning('Since this is a linux (mounted) system, there is no way for python to extract created_date timestamps. '\
@@ -1426,6 +1461,13 @@ class MountedMacInfo(MacInfo):
             log.exception("Exception details")
         #log.debug("req={} final={}".format(path_in_image, full_path))
         return full_path
+
+    def _get_volume_inode_from_root(self, root_path):
+        # stat the root directory to get the device (volume) ID
+        root_stat = os.stat(root_path)
+        # On macOS, st_dev corresponds to the volume inode/serial number for volfs path
+        volume_inode = root_stat.st_dev
+        return volume_inode
 
     def _get_creation_time(self, local_path):
         if self.is_windows:
@@ -1482,6 +1524,39 @@ class MountedMacInfo(MacInfo):
         except OSError as ex:
             log.error("Exception in _GetFileSizeNoPathMod() : " + str(ex))
         return error
+
+    def GetFileInodeNumber(self, path):
+        '''Gets inode number of file/folder at path, returns 0 if error'''
+        inode_number = 0
+        try:
+            inode_number = os.stat(path).st_ino
+        except (FileNotFoundError, PermissionError) as ex:
+            log.error(f"Exception in GetFileInodeNumber() : Path was {path}, Error was {ex}")
+        return inode_number
+    
+    def GetFilePathFromInodeNumber(self, file_inode):
+        '''Searches for file/folder with given inode number under search_path, returns full path if found, else empty string'''
+        # This only works on macOS
+        if self.volume_inode is None:
+            return ''
+        file_path = ''
+        volfs_path = f"/.vol/{self.volume_inode}/{file_inode}"
+        try:
+            result = run(
+                ["/usr/bin/GetFileInfo", volfs_path],
+                capture_output=True,
+                text=True,
+                check=True
+            )
+            
+            match = re.search(r'file: "([^"]+)"', result.stdout)
+            if match:
+                file_path = match.group(1)
+
+        except CalledProcessError as ex:
+            log.error(f"Exception in GetFilePathFromInodeNumber() inode={file_inode}, Error was {ex}")
+            
+        return file_path
 
     def GetFileSize(self, full_path, error=None):
         '''Builds full path, then gets size'''
