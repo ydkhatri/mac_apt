@@ -17,7 +17,7 @@
 #
 # Script Name  : spotlight_parser.py
 # Author       : Yogesh Khatri
-# Last Updated : 2025-09-03
+# Last Updated : 2025-11-20
 # Requirement  : Python 3.7, modules ( lz4, pyliblzfse )
 #                Dependencies can be installed using the command 'pip install lz4 pyliblzfse' 
 # 
@@ -49,7 +49,6 @@ import zlib
 import lz4.block
 import time
 import struct
-import binascii
 import datetime
 import os
 import re
@@ -65,7 +64,7 @@ try:
 except ImportError:
     print("liblzfse not found. Won't decompress lzfse/lzvn streams")
 
-__VERSION__ = '1.0.3'
+__VERSION__ = '1.0.4'
 
 log = logging.getLogger('SPOTLIGHT_PARSER')
 
@@ -418,7 +417,10 @@ class FileMetaDataListing:
                     elif value_type == 2:
                         value = self.ReadVarSizeNum()[0]
                     elif value_type == 6: 
-                        value = self.ReadVarSizeNum()[0] 
+                        if prop_type & 2 == 2:
+                            value = [self.ReadVarSizeNum()[0] for x in range(2)] # Looks to be just 2 bytes _kMDItemRecentAppSearchEngagementRenderPositions
+                        else:
+                            value = self.ReadVarSizeNum()[0] 
                     elif value_type == 7:
                         #log.debug("Found value_type 7, prop_type=0x{:X} prop={} @ {}, pos 0x{:X}".format(prop_type, prop_name, filepos, self.pos))
                         if prop_type & 2 == 2: #  == 0x0A:
@@ -1058,6 +1060,8 @@ class SpotlightStore:
                     item_size = struct.unpack("<I", uncompressed[pos:pos+4])[0]
                     md_item = FileMetaDataListing(pos + 4, uncompressed[pos + 4 : pos + 4 + item_size], item_size)
                     try:
+                        #if pos == 8323:
+                        #    log.debug("hit breakpoint")
                         md_item.ParseItem(self.properties, self.categories, self.indexes_1, self.indexes_2)
                         if items_to_compare and self.ItemExistsInDictionary(items_to_compare, md_item): pass # if md_item exists in compare_dict, skip it, else add
                         else:
