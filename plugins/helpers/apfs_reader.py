@@ -1766,7 +1766,7 @@ class ApfsExtent:
                 for b in range(num_full_blocks_needed):
                     data += volume.get_raw_decrypted_block(block_num, encryption_key)
                     block_num += 1
-                    if data >= max_size:
+                    if len(data) >= max_size:
                         yield data
                         data = b''
                 if partial_block_size > 0:
