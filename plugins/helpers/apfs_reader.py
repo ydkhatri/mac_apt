@@ -1776,6 +1776,88 @@ class ApfsExtent:
         except GeneratorExit:
             pass
 
+    def GetSomeDataAtOffset(self, volume, offset, size=-1, max_chunk_size=4194304): # max 4MB
+        '''Get data from extent starting at offset, for size bytes. 
+           If size=-1, get till end of extent.
+           Data returned may be larger than requested size.
+           Sometimes the data returned may be more than max_chunk_size
+        '''
+        # check offset is within extent bounds
+        if offset < 0 or offset >= self.offset + self.size:
+            raise ValueError("Offset value is out of extent bounds! offset={}, extent_offset={}, extent_size={}".format(offset, self.offset, self.size))
+        #
+        desired_offset = offset
+        # calculate num blocks to skip based on offset
+        offset_within_extent = desired_offset - self.offset
+        offset_within_block = offset_within_extent % volume.block_size
+        blocks_to_skip_at_front = offset_within_extent // volume.block_size
+        blocks_to_skip_at_end = (self.size - (offset_within_extent + size)) // volume.block_size
+        #
+        encryption_key = volume.encryption_key
+        if size == -1:
+            size = self.size - offset_within_extent
+        if size == 0:
+            return b''
+        try:
+            # calculate number of blocks needed to read entire extent
+            num_full_blocks_needed = (self.size // volume.block_size)
+            partial_block_size = self.size % volume.block_size
+
+            num_full_blocks_needed -= (blocks_to_skip_at_front + blocks_to_skip_at_end)
+            block_num = self.block_num + blocks_to_skip_at_front
+            data = b''
+            bytes_left_to_read = size
+
+            if offset_within_block != 0: # offset not at block boundary
+                data = volume.get_raw_decrypted_block(block_num, encryption_key)[offset_within_block: ]
+                block_num += 1
+                bytes_left_to_read -= len(data)
+                if bytes_left_to_read <= 0:
+                    yield data[:size]
+                    return b''
+                if num_full_blocks_needed > 0:
+                    num_full_blocks_needed -= 1
+                else:
+                    ### we shouldn't land here!
+                    log.error("Logic error in extent read with offset!")
+                    raise ValueError("Logic error in extent read with offset!")
+                
+            # Now read remaining full blocks
+            if encryption_key is None:
+                num_blocks_per_read = max_chunk_size // volume.block_size
+                num_reads = num_full_blocks_needed // num_blocks_per_read
+                
+                blocks_read_in_loop = 0
+                for _ in range(num_reads):
+                    partial_data = volume.get_raw_blocks(block_num, num_blocks_per_read)
+                    #bytes_left_to_read -= len(partial_data)
+                    data += partial_data
+                    block_num += num_blocks_per_read
+                    blocks_read_in_loop += num_blocks_per_read
+                    yield data
+                    data = b''
+                if blocks_read_in_loop < num_full_blocks_needed:
+                    remaining_blocks = num_full_blocks_needed - blocks_read_in_loop
+                    partial_data = volume.get_raw_blocks(block_num, remaining_blocks)
+                    data += partial_data
+                    block_num += remaining_blocks
+            else:
+                for _ in range(num_full_blocks_needed):
+                    data += volume.get_raw_decrypted_block(block_num, encryption_key)
+                    block_num += 1
+                    if len(data) >= size:
+                        break # we have enough data now
+                    elif len(data) >= max_chunk_size:
+                        yield data
+                        data = b''
+            if len(data) < size and partial_block_size > 0:
+                data += volume.get_raw_decrypted_block(block_num, encryption_key, partial_block_size)
+            
+            yield data
+
+        except GeneratorExit:
+            pass
+
 class ApfsFile():
     def __init__(self, apfs_file_meta, logical_size, extents, volume):
         self.meta = apfs_file_meta
@@ -1841,16 +1923,12 @@ class ApfsFile():
                 else:
                     # reached desired start offset
                     extent_slice_consumed = 0
-                    for data in extent.GetSomeData(self.volume):
-                        start_pos = offset - bytes_consumed - extent_slice_consumed
-                        if start_pos >= len(data): # Case when extent slicing results in this, we only want let's say 3rd yield onwards!
-                            extent_slice_consumed += len(data)
-                            continue
-                        ext_content = data[start_pos : ] #start_pos + size] # Perhaps return full buffer, let caller truncate buffer!
-                        content += ext_content
-                        ext_content_len = len(ext_content)
+                    asking_for_data_size = min(data_len, size)
+                    for data in extent.GetSomeDataAtOffset(self.volume, offset, asking_for_data_size):
+                        ext_content_len = len(data)
+                        content += data
                         
-                        if ext_content_len >= size: # will be <= size
+                        if len(content) >= desired_size: # will be <= size
                             break_main_loop = True
                             break
                         else:
