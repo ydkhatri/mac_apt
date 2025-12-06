@@ -317,8 +317,10 @@ def FindMacOsPartitionInApfsContainer(img, vol_info, container_size, container_s
                 if mac_info.apfs_sys_volume:
                     mac_info.apfs_data_volume.dbo = mac_info.apfs_db
                     mac_info.apfs_sys_volume.dbo = mac_info.apfs_db
-                    mac_info.apfs_preboot_volume.dbo = mac_info.apfs_db
-                    mac_info.apfs_update_volume.dbo = mac_info.apfs_db
+                    if mac_info.apfs_preboot_volume:
+                        mac_info.apfs_preboot_volume.dbo = mac_info.apfs_db
+                    if mac_info.apfs_update_volume:
+                        mac_info.apfs_update_volume.dbo = mac_info.apfs_db
                     mac_info.UseCombinedVolume()
                 log.info('Found an existing APFS_Volumes.db in the output folder, looks good, will not create a new one!')
             else:
