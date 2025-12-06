@@ -19,7 +19,7 @@ from plugins.helpers.writer import *
 
 __Plugin_Name = "NOTIFICATIONS" # Cannot have spaces, and must be all caps!
 __Plugin_Friendly_Name = "Notifications"
-__Plugin_Version = "1.1"
+__Plugin_Version = "1.2"
 __Plugin_Description = "Reads notification databases"
 __Plugin_Author = "Yogesh Khatri"
 __Plugin_Author_Email = "yogesh@swiftforensics.com"
@@ -150,15 +150,18 @@ def Parse_ver_17_Db(conn, inputPath, user, timezone, screentime_strings_dict):
                         app = plist.get('app', '')
                         if app == 'com.apple.ScreenTimeNotifications' and screentime_strings_dict:
                             title, subtitle, message = ProcessScreenTimeNotifications(req, screentime_strings_dict)
+                            identifier = req.get('iden', '')
                         else:
                             title = RemoveTabsNewLines(req.get('titl', ''))
                             subtitle = RemoveTabsNewLines(req.get('subt', ''))
                             message = RemoveTabsNewLines(req.get('body', ''))
                             identifier = req.get('iden', '')
-                    except (KeyError, AttributeError) as ex: log.debug('Error reading field req - ' + str(ex))
+                    except (KeyError, AttributeError) as ex:
+                        log.debug('Error reading field req - ' + str(ex))
                     try:
                         log.debug('Unknown field orig = {}'.format(plist['orig']))
-                    except (KeyError, ValueError): pass
+                    except (KeyError, ValueError):
+                        pass
                 else:
                     log.error("Invalid plist in table." + error)
 
