@@ -21,4 +21,4 @@ setuptools
 win32_setctime
 xattr; sys_platform != "win32"
 xlsxwriter
-other_dependencies/pyaff4-0.31-yk-20240511.zip
+other_dependencies/pyaff4-0.31.2-yk-20251206.zip
