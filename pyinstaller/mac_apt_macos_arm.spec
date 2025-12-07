@@ -28,10 +28,7 @@ pyz = PYZ(a.pure)
 exe = EXE(
     pyz,
     a.scripts,
-    [
-        ('W ignore::DeprecationWarning', None, 'OPTION'),
-        ('W ignore::UserWarning', None, 'OPTION')
-    ],
+    [],
     [],
     exclude_binaries=True,
     name='mac_apt',

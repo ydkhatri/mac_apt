@@ -33,8 +33,6 @@ exe = EXE(
     pyz,
     a.scripts,
     [
-        ('W ignore::DeprecationWarning', None, 'OPTION'),
-        ('W ignore::UserWarning', None, 'OPTION')
     ],
     a.binaries,
     a.datas,

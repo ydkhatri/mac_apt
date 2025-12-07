@@ -29,8 +29,6 @@ exe = EXE(
     pyz,
     a.scripts,
     [
-        ('W ignore::DeprecationWarning', None, 'OPTION'),
-        ('W ignore::UserWarning', None, 'OPTION')
     ],
     [],
     exclude_binaries=True,
@@ -59,5 +57,5 @@ app = BUNDLE(
     coll,
     name='mac_apt_x86_64.app',
     bundle_identifier='com.swiftforensics.macapt',
-    version='1.26.1'
+    version='1.28.7 (20251206)'
 )

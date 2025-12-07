@@ -76,8 +76,6 @@ a_exe = EXE(
     a_pyz,
     a.scripts,
     [
-        ('W ignore::DeprecationWarning', None, 'OPTION'),
-        ('W ignore::UserWarning', None, 'OPTION')
     ],
     [],
     exclude_binaries=True,
@@ -97,8 +95,6 @@ b_exe = EXE(
     b_pyz,
     b.scripts,
     [
-        ('W ignore::DeprecationWarning', None, 'OPTION'),
-        ('W ignore::UserWarning', None, 'OPTION')
     ],
     [],
     exclude_binaries=True,
@@ -118,8 +114,6 @@ c_exe = EXE(
     c_pyz,
     c.scripts,
     [
-        ('W ignore::DeprecationWarning', None, 'OPTION'),
-        ('W ignore::UserWarning', None, 'OPTION')
     ],
     [],
     exclude_binaries=True,
@@ -148,5 +142,5 @@ app = BUNDLE(
     coll,
     name='mac_apt_arm64.app',
     bundle_identifier='com.swiftforensics.macapt',
-    version='1.26.8'
+    version='1.28.7 (20251206)'
 )

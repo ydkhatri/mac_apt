@@ -13,6 +13,7 @@
 '''
 import importlib.util
 import os
+import re
 from datetime import datetime
 
 def get_version_dict(v_str):
@@ -57,6 +58,27 @@ def create_version_file(output_filename, companyname, productname, internalname,
         with open(os.path.join(base_path, output_filename), 'w', newline='') as out:
             out.write(content)
 
+def fix_mac_spec_files():
+
+    base_path = os.path.dirname(os.path.abspath(__file__))
+    mod_path = os.path.join(base_path, "..", "version.py")
+
+    spec = importlib.util.spec_from_file_location("version", mod_path)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    version_info = module.__VERSION
+    for item in os.listdir(base_path):
+        if item.endswith("x86_64.spec") or item.endswith("arm64.spec"):
+            spec_file = os.path.join(base_path, item)
+            with open(spec_file, 'r', encoding='utf-8') as f:
+                content = f.read()
+            new_content = re.sub(r"version='[0-9\.]+'", f"version='{version_info}'", content)
+            if new_content != content:
+                with open(spec_file, 'w', encoding='utf-8') as f:
+                    f.write(new_content)
+                print(f"Updated version in {item}")
+
+
 create_version_file('mac_apt_version_info.txt', 
     "", 
     "mac_apt - macOS Artifact Parsing Tool", 
@@ -77,5 +99,7 @@ create_version_file('mac_apt_artifact_only_version_info.txt',
     "mac_apt_artifact_only", 
     "mac_apt_artifact_only.exe", 
     "mac_apt_artifact_only standalone executable")
+
+fix_mac_spec_files()
 
 print('Version files created')
