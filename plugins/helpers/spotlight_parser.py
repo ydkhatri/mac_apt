@@ -1060,8 +1060,6 @@ class SpotlightStore:
                     item_size = struct.unpack("<I", uncompressed[pos:pos+4])[0]
                     md_item = FileMetaDataListing(pos + 4, uncompressed[pos + 4 : pos + 4 + item_size], item_size)
                     try:
-                        #if pos == 8323:
-                        #    log.debug("hit breakpoint")
                         md_item.ParseItem(self.properties, self.categories, self.indexes_1, self.indexes_2)
                         if items_to_compare and self.ItemExistsInDictionary(items_to_compare, md_item): pass # if md_item exists in compare_dict, skip it, else add
                         else:
