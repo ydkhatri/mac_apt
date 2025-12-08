@@ -35,7 +35,7 @@ def get_columns_with_data(db, bundle_id, table_name, columns_info):
             if c == bundle_id: continue
             data = row[c]
             if (data is None) or (data == 0.0) or (data == '') or \
-               (data == '0' and c == "Parent_ID_hex"): # EMPTY col
+               (data == '00' and c == "Parent_ID_hex"): # EMPTY col
                 pass
             else:
                 cols_with_data.append(c)

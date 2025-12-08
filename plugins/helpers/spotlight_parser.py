@@ -17,7 +17,7 @@
 #
 # Script Name  : spotlight_parser.py
 # Author       : Yogesh Khatri
-# Last Updated : 2025-11-20
+# Last Updated : 2025-12-08
 # Requirement  : Python 3.7, modules ( lz4, pyliblzfse )
 #                Dependencies can be installed using the command 'pip install lz4 pyliblzfse' 
 # 
@@ -64,7 +64,7 @@ try:
 except ImportError:
     print("liblzfse not found. Won't decompress lzfse/lzvn streams")
 
-__VERSION__ = '1.0.4'
+__VERSION__ = '1.0.5'
 
 log = logging.getLogger('SPOTLIGHT_PARSER')
 
@@ -365,10 +365,13 @@ class FileMetaDataListing:
 
     def ParseItem(self, properties, categories, indexes_1, indexes_2):
         try:
-            self.id = FileMetaDataListing.ConvertUint64ToSigned(self.ReadVarSizeNum()[0])
+            #self.id = FileMetaDataListing.ConvertUint64ToSigned(self.ReadVarSizeNum()[0])
+            self.id = self.ReadVarSizeNum()[0]
             self.flags = self.ReadSingleByte()
-            self.item_id = FileMetaDataListing.ConvertUint64ToSigned(self.ReadVarSizeNum()[0])
-            self.parent_id = FileMetaDataListing.ConvertUint64ToSigned(self.ReadVarSizeNum()[0])
+            #self.item_id = FileMetaDataListing.ConvertUint64ToSigned(self.ReadVarSizeNum()[0])
+            self.item_id = self.ReadVarSizeNum()[0]
+            #self.parent_id = FileMetaDataListing.ConvertUint64ToSigned(self.ReadVarSizeNum()[0])
+            self.parent_id =self.ReadVarSizeNum()[0]
             self.date_updated = self.ReadVarSizeNum()[0]
 
             ## type = bytes used
@@ -1085,7 +1088,7 @@ class SpotlightStore:
                     count += 1
 
             if process_items_func:
-                process_items_func(items_in_block, self.is_ios_store)
+                process_items_func(items_in_block, self)
 
             for md_item in items_in_block:
                 md_item.Print(output_file)

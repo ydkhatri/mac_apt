@@ -17,7 +17,7 @@ from plugins.helpers.writer import *
 
 __Plugin_Name = "SPOTLIGHT"
 __Plugin_Friendly_Name = "Spotlight"
-__Plugin_Version = "1.1"
+__Plugin_Version = "1.2"
 __Plugin_Description = "Reads spotlight indexes (user, volume, iOS)"
 __Plugin_Author = "Yogesh Khatri"
 __Plugin_Author_Email = "yogesh@swiftforensics.com"
@@ -35,25 +35,40 @@ log = logging.getLogger('MAIN.' + __Plugin_Name) # Do not rename or remove this 
 writer = None
 mac_info_obj = None
 spotlight_parser.log = logging.getLogger('MAIN.' + __Plugin_Name + '.SPOTLIGHT_PARSER')
+
+def bswap64(x: int) -> int:
+    '''Converts little-endian to big-endian and vice-versa for 64-bit integer'''
+    x = ((x & 0xFF00000000000000) >> 56) | \
+        ((x & 0x00FF000000000000) >> 40) | \
+        ((x & 0x0000FF0000000000) >> 24) | \
+        ((x & 0x000000FF00000000) >> 8)  | \
+        ((x & 0x00000000FF000000) << 8)  | \
+        ((x & 0x0000000000FF0000) << 24) | \
+        ((x & 0x000000000000FF00) << 40) | \
+        ((x & 0x00000000000000FF) << 56)
+    return x
     
-def ProcessStoreItem(item, id_as_hex):
+def ProcessStoreItem(item, id_as_hex, flip_id_endianness):
     '''Reads a single store item and processes it for output. Returns dictionary'''
     try:
         data_dict = {}
+        id = item.id
+        parent_id = item.parent_id
+        if flip_id_endianness and id != 1:
+            id = bswap64(id)
+            parent_id = bswap64(parent_id)
         if id_as_hex:
-            id_hex_str = f'{(item.id & (2**64-1)):X}'
+            id_hex_str = f'{(id & (2**64-1)):X}'
             if len(id_hex_str) % 2:
                 id_hex_str = '0' + id_hex_str
-            reversed_id = ''
-            for x in range(-1, -len(id_hex_str), -2):
-                reversed_id += id_hex_str[x-1] + id_hex_str[x]
+            parent_id_hex_str = f'{(parent_id & (2**64-1)):X}'
+            if len(parent_id_hex_str) % 2:
+                parent_id_hex_str = '0' + parent_id_hex_str
             data_dict['ID_hex'] = id_hex_str
-            data_dict['Parent_ID_hex'] = f'{(item.parent_id & (2**64-1)):X}'
-            data_dict['ID_hex_reversed'] = reversed_id
-        else:
-            data_dict['ID'] = item.id
-            data_dict['Parent_ID'] = item.parent_id
-            data_dict['Item_ID'] = item.item_id
+            data_dict['Parent_ID_hex'] = parent_id_hex_str
+        data_dict['ID'] = str(id)
+        data_dict['Parent_ID'] = str(parent_id)
+        data_dict['Item_ID'] = str(item.item_id)
         data_dict['Flags'] = item.flags
         data_dict['Date_Updated'] = item.ConvertEpochToUtcDateStr(item.date_updated)
         for k, v in list(item.meta_data_dict.items()):
@@ -72,12 +87,13 @@ def ProcessStoreItem(item, id_as_hex):
     except (OSError, KeyError, ValueError) as ex:
         log.exception ("Failed while processing row data before writing")
 
-def ProcessStoreItems(store_items, id_as_hex=False):
+def ProcessStoreItems(store_items, store):
     global writer
     try:
         data_list = []
         for item in store_items:
-            data = ProcessStoreItem(item, id_as_hex)
+            data = ProcessStoreItem(item, store.is_ios_store, 
+                                    store.flip_id_endianness if hasattr(store, 'flip_id_endianness') else False)
             if data:
                 data_list.append(data)
         writer.WriteRows(data_list)
@@ -87,15 +103,16 @@ def ProcessStoreItems(store_items, id_as_hex=False):
 def Get_Column_Info(store):
     '''Returns a list of columns with data types for use with writer''' 
     if store.is_ios_store:
-        data_info = [ ('ID_hex',DataType.TEXT),('ID_hex_reversed',DataType.TEXT),('Flags',DataType.INTEGER),
+        data_info = [ ('ID',DataType.TEXT),('ID_hex',DataType.TEXT),('Flags',DataType.INTEGER),
+                      ('Parent_ID',DataType.TEXT),
                       ('Parent_ID_hex',DataType.TEXT),('Date_Updated',DataType.TEXT) ]
     else:
         if store.version == 1:
-            data_info = [ ('ID',DataType.INTEGER),('Flags',DataType.INTEGER),
-                      ('Item_ID',DataType.INTEGER),('Date_Updated',DataType.TEXT) ]
+            data_info = [ ('ID',DataType.TEXT),('Flags',DataType.INTEGER),
+                      ('Item_ID',DataType.TEXT),('Date_Updated',DataType.TEXT) ]
         else:
-            data_info = [ ('ID',DataType.INTEGER),('Flags',DataType.INTEGER),
-                        ('Parent_ID',DataType.INTEGER),('Date_Updated',DataType.TEXT) ]
+            data_info = [ ('ID',DataType.TEXT),('Flags',DataType.INTEGER),
+                        ('Parent_ID',DataType.TEXT),('Date_Updated',DataType.TEXT) ]
     if store.version == 1:
         for _, prop in list(store.properties.items()):
             # prop = [name, prop_type, value_type]
@@ -182,7 +199,7 @@ def GetMapDataOffsetHeader(input_folder, id, export_subfolder):
 
     return (map_data, offsets_data, header_data)
 
-def ProcessStoreDb(input_file_path, input_file, output_path, output_params, items_to_compare, file_name_prefix, limit_output_types=True, no_path_file=False, export_subfolder=""):
+def ProcessStoreDb(input_file_path, input_file, output_path, output_params, items_to_compare, file_name_prefix, limit_output_types=True, no_path_file=False, export_subfolder="", flip_id_endianness=False):
     '''Main spotlight store.db processing function
        file_name_prefix is used to name the excel sheet or sqlite table, as well as prefix for name of paths_file.
        limit_output_types=True will only write to SQLITE, else all output options are honored. This is for faster 
@@ -243,7 +260,10 @@ def ProcessStoreDb(input_file_path, input_file, output_path, output_params, item
                 log.exception ("Failed to initilize data writer")
                 return None
 
-            total_items_parsed = store.ParseMetadataBlocks(output_file, items, items_to_compare, ProcessStoreItems)
+            # set flip_id_endianness in store object for use later
+            store.flip_id_endianness = flip_id_endianness
+            total_items_parsed = store.ParseMetadataBlocks(output_file, items, items_to_compare, 
+                                                           process_items_func=ProcessStoreItems)
             writer.FinishWrites()
 
             if total_items_parsed == 0:
@@ -254,7 +274,7 @@ def ProcessStoreDb(input_file_path, input_file, output_path, output_params, item
             
             # Write Paths db as tsv
             if (not store.version==1) and (not no_path_file):
-                path_type_info = [ ('ID',DataType.INTEGER),('FullPath',DataType.TEXT) ]
+                path_type_info = [ ('ID',DataType.TEXT),('FullPath',DataType.TEXT) ]
                 fullpath_writer = DataWriter(out_params, "Spotlight-" + file_name_prefix + '-paths', path_type_info, input_file_path)
                 with open(output_path_full_paths, 'wb') as output_paths_file:
                     log.info('Inodes and Path information being written to {}'.format(output_path_full_paths))
@@ -342,6 +362,7 @@ def WriteFullPaths(items, all_items, output_paths_file, fullpath_writer):
             to_write = str(k) + '\t' + fullpath + '\r\n'
             output_paths_file.write(to_write.encode('utf-8', 'backslashreplace'))
             path_list.append([k, fullpath])
+    path_list = [[str(x[0]), x[1]] for x in path_list] # convert inode numbers to strings
     fullpath_writer.WriteRows(path_list)
 
 def DropReadme(output_folder, message, filename='Readme.txt'):
@@ -455,7 +476,7 @@ def Process_User_DBs(mac_info):
             prefix = path_split[-4] + '_' + user_name
             ProcessStoreAndDotStore(mac_info, store_path_1, store_path_2, prefix, export_subfolder)
 
-def ProcessVolumeStore(mac_info, spotlight_base_path, configs_list, export_prefix=''):
+def ProcessVolumeStore(mac_info, spotlight_base_path, configs_list, export_prefix='', flip_id_endianness=False):
     '''
     Process the main Spotlight-V100 database usually found on the volume's root.
     '''
@@ -490,7 +511,7 @@ def ProcessVolumeStore(mac_info, spotlight_base_path, configs_list, export_prefi
             if input_file != None:
                 table_name = ((export_prefix + '_') if export_prefix else '') + str(index) + '-store'
                 log.info("Spotlight data for uuid='{}' db='{}' will be saved with table/sheet name as {}".format(uuid, 'store.db', table_name))
-                items_1 = ProcessStoreDb(store_path_1, input_file, output_folder, mac_info.output_params, None, table_name, True, False, sub_folder)
+                items_1 = ProcessStoreDb(store_path_1, input_file, output_folder, mac_info.output_params, None, table_name, True, False, sub_folder, flip_id_endianness=flip_id_endianness)
         else:
             log.debug('File not found: {}'.format(store_path_1))
 
@@ -509,7 +530,7 @@ def ProcessVolumeStore(mac_info, spotlight_base_path, configs_list, export_prefi
                                             'file with mac_apt_single_plugin.py and this plugin')
                 table_name = ((export_prefix + '_') if export_prefix else '') + str(index) + '-.store-DIFF'
                 log.info("Spotlight store for uuid='{}' db='{}' will be saved with table/sheet name as {}".format(uuid, '.store.db', table_name))
-                items_2 = ProcessStoreDb(store_path_2, input_file, output_folder, mac_info.output_params, items_1, table_name, True, False, sub_folder)
+                items_2 = ProcessStoreDb(store_path_2, input_file, output_folder, mac_info.output_params, items_1, table_name, True, False, sub_folder, flip_id_endianness=flip_id_endianness)
         else:
             log.debug('File not found: {}'.format(store_path_2))
 
@@ -532,7 +553,8 @@ def Plugin_Start(mac_info):
     # For catalina's read-only volume
     spotlight_base_path = '/private/var/db/Spotlight-V100/BootVolume'
     if mac_info.IsValidFolderPath(spotlight_base_path):
-        ProcessVolumeStore(mac_info, spotlight_base_path, configs_list, 'BootVolume')
+        ProcessVolumeStore(mac_info, spotlight_base_path, configs_list, 'BootVolume', flip_id_endianness=True)
+        # For some odd reason, the BootVolume store db has id and parent_id in big-endian format
 
     # For Ventura's Preboot volume
     spotlight_base_path = '/private/var/db/Spotlight-V100/Preboot'
