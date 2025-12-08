@@ -1148,7 +1148,7 @@ class SpotlightStore:
                 raise ValueError("Block size mismatch!")
             self.Seek(self.pos + self.block_size)
         
-def RecursiveGetFullPath(item, items_list):
+def RecursiveGetFullPath(item, items_list, suppress_error_messages=False):
     '''Return full path to given item, here items_list is dictionary'''
     # item = [id, parent_id, name, full_path, date]
     if item[3]:
@@ -1175,7 +1175,8 @@ def RecursiveGetFullPath(item, items_list):
     elif search_id == 2: # root
         ret_path = ('/' + name) if name else '/'
     else:
-        log.debug ('Err, could not find path for id {} '.format(search_id))
+        if not suppress_error_messages:
+            log.debug ('Err, could not find path for id {} '.format(search_id))
         ret_path = '..NOT-FOUND../' + name
     return ret_path
 

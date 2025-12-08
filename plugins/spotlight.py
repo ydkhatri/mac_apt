@@ -199,7 +199,7 @@ def GetMapDataOffsetHeader(input_folder, id, export_subfolder):
 
     return (map_data, offsets_data, header_data)
 
-def ProcessStoreDb(input_file_path, input_file, output_path, output_params, items_to_compare, file_name_prefix, limit_output_types=True, no_path_file=False, export_subfolder="", flip_id_endianness=False):
+def ProcessStoreDb(input_file_path, input_file, output_path, output_params, items_to_compare, file_name_prefix, limit_output_types=True, no_path_file=False, export_subfolder="", is_boot_volume=False):
     '''Main spotlight store.db processing function
        file_name_prefix is used to name the excel sheet or sqlite table, as well as prefix for name of paths_file.
        limit_output_types=True will only write to SQLITE, else all output options are honored. This is for faster 
@@ -261,7 +261,7 @@ def ProcessStoreDb(input_file_path, input_file, output_path, output_params, item
                 return None
 
             # set flip_id_endianness in store object for use later
-            store.flip_id_endianness = flip_id_endianness
+            store.flip_id_endianness = is_boot_volume
             total_items_parsed = store.ParseMetadataBlocks(output_file, items, items_to_compare, 
                                                            process_items_func=ProcessStoreItems)
             writer.FinishWrites()
@@ -284,7 +284,7 @@ def ProcessStoreDb(input_file_path, input_file, output_path, output_params, item
                         WriteFullPaths(items, items_to_compare, output_paths_file, fullpath_writer)
                     else:
                         WriteFullPaths(items, items, output_paths_file, fullpath_writer)
-                    if out_params.write_sql: 
+                    if out_params.write_sql and (total_items_parsed > 0): 
                         CreateViewAndIndexes(data_type_info, fullpath_writer.sql_writer, file_name_prefix)
                 fullpath_writer.FinishWrites()                
             return items
@@ -348,7 +348,7 @@ def CreateViewAndIndexes(data_type_info, sql_writer, file_name_prefix):
     #     log.error("Failed to create Indexes 'Spotlight-{}'".format(file_name_prefix))
     #     log.error("Error was : {}".format(error_message))
 
-def WriteFullPaths(items, all_items, output_paths_file, fullpath_writer):
+def WriteFullPaths(items, all_items, output_paths_file, fullpath_writer, is_boot_volume=False):
     '''
         Writes inode and full paths table to csv
         items = dictionary of items to write
@@ -358,11 +358,14 @@ def WriteFullPaths(items, all_items, output_paths_file, fullpath_writer):
     for k,v in list(items.items()):
         name = v[2]
         if name:
-            fullpath = spotlight_parser.RecursiveGetFullPath(v, all_items)
+            fullpath = spotlight_parser.RecursiveGetFullPath(v, all_items, suppress_error_messages=(True if is_boot_volume else False))
             to_write = str(k) + '\t' + fullpath + '\r\n'
             output_paths_file.write(to_write.encode('utf-8', 'backslashreplace'))
             path_list.append([k, fullpath])
-    path_list = [[str(x[0]), x[1]] for x in path_list] # convert inode numbers to strings
+    if is_boot_volume:
+        path_list = [[str(bswap64(x[0])), x[1]] for x in path_list if x[0] != 1] # convert inode numbers to strings and swap endianness if bootvolume, skip plist
+    else:
+        path_list = [[str(x[0]), x[1]] for x in path_list if x[0] != 1] # convert inode numbers to strings, skip plist
     fullpath_writer.WriteRows(path_list)
 
 def DropReadme(output_folder, message, filename='Readme.txt'):
@@ -476,7 +479,7 @@ def Process_User_DBs(mac_info):
             prefix = path_split[-4] + '_' + user_name
             ProcessStoreAndDotStore(mac_info, store_path_1, store_path_2, prefix, export_subfolder)
 
-def ProcessVolumeStore(mac_info, spotlight_base_path, configs_list, export_prefix='', flip_id_endianness=False):
+def ProcessVolumeStore(mac_info, spotlight_base_path, configs_list, export_prefix='', is_boot_volume=False):
     '''
     Process the main Spotlight-V100 database usually found on the volume's root.
     '''
@@ -511,7 +514,7 @@ def ProcessVolumeStore(mac_info, spotlight_base_path, configs_list, export_prefi
             if input_file != None:
                 table_name = ((export_prefix + '_') if export_prefix else '') + str(index) + '-store'
                 log.info("Spotlight data for uuid='{}' db='{}' will be saved with table/sheet name as {}".format(uuid, 'store.db', table_name))
-                items_1 = ProcessStoreDb(store_path_1, input_file, output_folder, mac_info.output_params, None, table_name, True, False, sub_folder, flip_id_endianness=flip_id_endianness)
+                items_1 = ProcessStoreDb(store_path_1, input_file, output_folder, mac_info.output_params, None, table_name, True, False, sub_folder, is_boot_volume=is_boot_volume)
         else:
             log.debug('File not found: {}'.format(store_path_1))
 
@@ -530,7 +533,7 @@ def ProcessVolumeStore(mac_info, spotlight_base_path, configs_list, export_prefi
                                             'file with mac_apt_single_plugin.py and this plugin')
                 table_name = ((export_prefix + '_') if export_prefix else '') + str(index) + '-.store-DIFF'
                 log.info("Spotlight store for uuid='{}' db='{}' will be saved with table/sheet name as {}".format(uuid, '.store.db', table_name))
-                items_2 = ProcessStoreDb(store_path_2, input_file, output_folder, mac_info.output_params, items_1, table_name, True, False, sub_folder, flip_id_endianness=flip_id_endianness)
+                items_2 = ProcessStoreDb(store_path_2, input_file, output_folder, mac_info.output_params, items_1, table_name, True, False, sub_folder, is_boot_volume=is_boot_volume)
         else:
             log.debug('File not found: {}'.format(store_path_2))
 
@@ -553,7 +556,7 @@ def Plugin_Start(mac_info):
     # For catalina's read-only volume
     spotlight_base_path = '/private/var/db/Spotlight-V100/BootVolume'
     if mac_info.IsValidFolderPath(spotlight_base_path):
-        ProcessVolumeStore(mac_info, spotlight_base_path, configs_list, 'BootVolume', flip_id_endianness=True)
+        ProcessVolumeStore(mac_info, spotlight_base_path, configs_list, 'BootVolume', is_boot_volume=True)
         # For some odd reason, the BootVolume store db has id and parent_id in big-endian format
 
     # For Ventura's Preboot volume
