@@ -64,7 +64,7 @@ try:
 except ImportError:
     print("liblzfse not found. Won't decompress lzfse/lzvn streams")
 
-__VERSION__ = '1.0.5'
+__VERSION__ = '1.0.6'
 
 log = logging.getLogger('SPOTLIGHT_PARSER')
 
@@ -493,8 +493,9 @@ class FileMetaDataListing:
                             value = self.ReadStrings(dont_decode=True if prop_name != 'kMDStoreProperties' else False)[0]
                         else:
                             value = self.ReadStr(dont_decode=True if prop_name != 'kMDStoreProperties' else False)[0]
-
-                        if  prop_type & 0x80 != 0x80 and \
+                        if prop_name == 'kMDStoreUUID':
+                            value = ''.join('{:02X}'.format(x) for x in value)
+                        elif  prop_type & 0x80 != 0x80 and \
                             prop_name != 'kMDStoreProperties':
                             if type(value) == list:
                                 if len(value) == 1:
