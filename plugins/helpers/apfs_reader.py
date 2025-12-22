@@ -449,7 +449,10 @@ class ApfsFileSystemParser:
 
     def read_inode_volume_blocks(self, inode_tree, noheader):
         processed_blocks = set()
-        for node in anytree.PreOrderIter(inode_tree, filter_=lambda n: n.is_leaf==True):  
+        for node in anytree.PreOrderIter(inode_tree, filter_=lambda n: n.is_leaf==True):
+            if not hasattr(node, 'block_number'):  # Something went wrong during tree creation
+                log.error(f'Node is missing block_number attribute, skipping it!')
+                continue
             block_number = node.block_number
             if block_number != 0:
                 if block_number in processed_blocks:
@@ -479,7 +482,7 @@ class ApfsFileSystemParser:
         else: # == 1
             highest_xid = nodes[0].xid
         for node in nodes:
-            if node.xid != highest_xid:
+            if node.xid != highest_xid or node is None or (not hasattr(node, 'payload')) or node.payload is None:
                 continue
             n = node.payload
             level = n.name

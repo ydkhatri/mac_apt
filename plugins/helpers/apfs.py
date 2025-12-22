@@ -492,7 +492,11 @@ class Apfs(KaitaiStruct):
             self.checksum = self._io.read_u8le()
             self.oid = self._io.read_u8le()
             self.xid = self._io.read_u8le()
-            self.type_block = self._root.ObjType(self._io.read_u2le())
+            try:
+                self.type_block = self._root.ObjType(self._io.read_u2le())
+            except ValueError as e:
+                log.debug("Unknown ObjType found in BlockHeader.type_block: {}".format(e))
+                self.type_block = self._root.ObjType(0)
             self.flags = self._io.read_u2le()
             self.subtype = self._io.read_u4le()
             #self.type_content = self._root.ObjType(0xff & subtype)

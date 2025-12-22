@@ -135,7 +135,7 @@ class FileMetaDataListing:
         '''Convert Epoch microseconds timestamp to datetime'''
         try:
             return datetime.datetime(1970, 1, 1) + datetime.timedelta(seconds=value/1000000.)
-        except OverflowError:
+        except (TypeError,OverflowError):
             pass
         return ""
     
@@ -990,8 +990,11 @@ class SpotlightStore:
                                 uncompressed_size = struct.unpack('<I', block_data[chunk_start + 4:chunk_start + 8])[0]
                                 uncompressed += block_data[chunk_start + 8:chunk_start + 8 + uncompressed_size]
                                 chunk_start += 8 + uncompressed_size
+                            elif header == b'\0\0\0\0':
+                                break
                             else:
                                 log.warning('Unknown compression value @ 0x{:X} - {}'.format(chunk_start, header))
+                                break
                             header = block_data[chunk_start:chunk_start + 4]
                     else:
                         uncompressed = lz4.block.decompress(block_data[20:compressed_block.logical_size], compressed_block.unknown - 20)
@@ -1013,8 +1016,11 @@ class SpotlightStore:
                         elif header == b'bvx-':
                             uncompressed_size = struct.unpack('<I', block_data[chunk_start + 4:chunk_start + 8])[0]
                             uncompressed = block_data[chunk_start + 8:chunk_start + 8 + uncompressed_size]
+                        elif header == b'\0\0\0\0':
+                            break
                         else:
                             log.warning('Unknown compression value @ 0x{:X} - {}'.format(chunk_start, header))
+                            break
                     else:
                         uncompressed = lz4.block.decompress(block_data[20:compressed_block.logical_size], compressed_block.unknown - 20)
                 else: # zlib compression
