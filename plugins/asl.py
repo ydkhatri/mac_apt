@@ -279,7 +279,11 @@ class AslVer2:
 
         if val & 0x8000000000000000 == 0:
             self.fd.seek(val)
-            _type_of_rec, = struct.unpack(">H",self.fd.read(2))
+            try:
+                _type_of_rec, = struct.unpack(">H",self.fd.read(2))
+            except struct.error:
+                log.error(f'Struct Error, not enough data to unpack?, offset was: {val}')
+                return _str
             if _type_of_rec != _ASL_FILE_TYPE_STR:
                 log.error('Type Not Match')
             else:
