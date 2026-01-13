@@ -1795,6 +1795,8 @@ class ApfsExtent:
         offset_within_block = offset_within_extent % volume.block_size
         blocks_to_skip_at_front = offset_within_extent // volume.block_size
         blocks_to_skip_at_end = (self.size - (offset_within_extent + size)) // volume.block_size
+        if blocks_to_skip_at_end < 0:
+            blocks_to_skip_at_end = 0
         #
         encryption_key = volume.encryption_key
         if size == -1:
