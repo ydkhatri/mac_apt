@@ -18,7 +18,6 @@ import binascii
 import logging
 import os
 import sqlite3
-import struct
 import zlib
 
 from io import BytesIO
@@ -28,7 +27,7 @@ from plugins.helpers.writer import *
 
 __Plugin_Name = "NOTES"
 __Plugin_Friendly_Name = "Notes"
-__Plugin_Version = "1.2"
+__Plugin_Version = "1.3"
 __Plugin_Description = "Reads Notes databases"
 __Plugin_Author = "Yogesh Khatri"
 __Plugin_Author_Email = "yogesh@swiftforensics.com"
@@ -101,7 +100,7 @@ def ReadAttPathFromPlist(plist_blob):
     if success:
         try:
             path = plist['$objects'][2]
-            return path
+            return CommonFunctions.url_decode(path)
         except (KeyError, IndexError):
             log.exception('Could not fetch attachment path from plist')
     else:
@@ -209,7 +208,7 @@ def ReadNotesHighSierraAndAbove(db, notes, source, user, is_ios):
         query_1 = \
         """
         SELECT n.Z_PK, n.ZNOTE as note_id, n.ZDATA as data, c1.ZISPASSWORDPROTECTED as encrypted, c1.ZPASSWORDHINT, 
-        c3.ZFILESIZE,  c4.ZFILENAME, c4.ZIDENTIFIER as att_uuid, 
+        c3.ZFILESIZE, c4.ZFILENAME, c4.ZIDENTIFIER as att_uuid, c4.ZGENERATION1,
         c1.ZTITLE1 as title, c1.ZSNIPPET as snippet, c1.ZIDENTIFIER as noteID, 
         c1.ZCREATIONDATE1 as created, c1.ZLASTVIEWEDMODIFICATIONDATE, c1.ZMODIFICATIONDATE1 as modified,
         c2.ZACCOUNT3, c2.ZTITLE2 as folderName, c2.ZIDENTIFIER as folderID, 
@@ -225,7 +224,7 @@ def ReadNotesHighSierraAndAbove(db, notes, source, user, is_ios):
         query_2 = \
         """
         SELECT n.Z_PK, n.ZNOTE as note_id, n.ZDATA as data, c1.ZISPASSWORDPROTECTED as encrypted, c1.ZPASSWORDHINT, 
-        c3.ZFILESIZE,  c4.ZFILENAME, c4.ZIDENTIFIER as att_uuid,  
+        c3.ZFILESIZE, c4.ZFILENAME, c4.ZIDENTIFIER as att_uuid, c4.ZGENERATION1,
         c1.ZTITLE1 as title, c1.ZSNIPPET as snippet, c1.ZIDENTIFIER as noteID, 
         c1.ZCREATIONDATE1 as created, c1.ZLASTVIEWEDMODIFICATIONDATE, c1.ZMODIFICATIONDATE1 as modified,
         c2.ZACCOUNT4, c2.ZTITLE2 as folderName, c2.ZIDENTIFIER as folderID, 
@@ -258,13 +257,14 @@ def ReadNotesHighSierraAndAbove(db, notes, source, user, is_ios):
                     text_content = ProcessNoteBodyBlob(data)
                 if row['att_uuid'] != None:
                     try:
+                        filename = row['ZFILENAME'] if row['ZFILENAME'] is not None else row['att_uuid']
                         if is_ios:
                             base_path, _ = os.path.split(source)
-                            att_path = base_path + '/Accounts/' + row['acc_identifier'] + '/Media/' + row['att_uuid'] + '/' + (row['ZFILENAME'] if row['ZFILENAME'] is not None else row['att_uuid'])
+                            att_path = f'{base_path}/Accounts/{row['acc_identifier']}/Media/{row['att_uuid']}/{row['ZGENERATION1']}/{filename}'
                         elif user:
-                            att_path = '/Users/' + user + '/Library/Group Containers/group.com.apple.notes/Media/' + row['att_uuid'] + '/' + (row['ZFILENAME'] if row['ZFILENAME'] is not None else row['att_uuid'])
+                            att_path = f'/Users/{user}/Library/Group Containers/group.com.apple.notes/Accounts/LocalAccount/Media/{row['att_uuid']}/{row['ZGENERATION1']}/{filename}'
                         else:
-                            att_path = 'Media/' + row['att_uuid'] + '/' + (row['ZFILENAME'] if row['ZFILENAME'] is not None else row['att_uuid'])
+                            att_path = f'Accounts/LocalAccount/Media/{row['att_uuid']}/{row['ZGENERATION1']}/{filename}'
                     except TypeError as ex:
                         log.error('Error computing att path for row ' + str(row['note_id']) + ' Error was ' + str(ex))
 
