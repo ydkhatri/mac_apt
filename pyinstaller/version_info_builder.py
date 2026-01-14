@@ -72,7 +72,7 @@ def fix_mac_spec_files():
             spec_file = os.path.join(base_path, item)
             with open(spec_file, 'r', encoding='utf-8') as f:
                 content = f.read()
-            new_content = re.sub(r"version='[0-9\.]+'", f"version='{version_info}'", content)
+            new_content = re.sub(r"version='[0-9\.() ]+'", f"version='{version_info}'", content)
             if new_content != content:
                 with open(spec_file, 'w', encoding='utf-8') as f:
                     f.write(new_content)
