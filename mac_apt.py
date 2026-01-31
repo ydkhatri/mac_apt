@@ -658,10 +658,14 @@ if found_macos:
         if IsItemPresentInList(plugins_to_run, plugin.__Plugin_Name):
             log.info("-"*50)
             log.info("Running plugin " + plugin.__Plugin_Name)
+            time_plugin_started = time.time()
             try:
                 plugin.Plugin_Start(mac_info)
             except Exception as ex:
                 log.exception("An exception occurred while running plugin - {}".format(plugin.__Plugin_Name))
+            time_plugin_ended = time.time()
+            run_time = time_plugin_ended - time_plugin_started
+            log.info(f"{plugin.__Plugin_Name} plugin ran for {time.strftime('%H:%M:%S', time.gmtime(run_time))}")
 else:
     log.warning(":( Could not find a partition having a macOS installation on it")
 
