@@ -452,6 +452,19 @@ def ReadJson(data):
         log.error('Failed to parse json. Input Data was ' + str(data))
     return {}
 
+def ReadVersion(f, file_size, user, file_path):
+    """
+    Reads the 'Last Version' file which contains the current browser version.
+    
+    :param f: file pointer opened as 'rb'
+    :param file_size: file size
+    :param user: user profile name
+    :param file_path: path to 'Last Version' file
+    """
+    data = f.read().decode('utf8', 'ignore')
+    version = data.strip()
+    log.info(f"Browser Version: {version} from file {file_path} for user {user}")
+
 def ReadSecurePreferencesFile(ext_info, f, file_size, user, file_path):
     """Reads the 'Secure Preferences' json file
 
@@ -483,6 +496,9 @@ def ReadSecurePreferencesFile(ext_info, f, file_size, user, file_path):
             enabled = True if state == 1 else False
 
         disable_reasons = ext.get('disable_reasons', [])
+        # On older chrome versions, disable_reasons is a single integer, on newer versions it is a list of integers.
+        if isinstance(disable_reasons, int):
+            disable_reasons = [disable_reasons]
         if len(disable_reasons) == 0 or disable_reasons[0] == 0:
             enabled = True
             disable_reasons = 0
@@ -782,6 +798,8 @@ def Plugin_Start(mac_info):
                                 ExtractAndReadFile(mac_info, chromium_artifacts, user_profile_name, source_path + '/Preferences', file_entry['size'], ReadProfileInfo, browser)
                             elif file_entry['name'] == 'Secure Preferences':
                                 ExtractAndReadFile(mac_info, chromium_extension_artifacts, user_profile_name, source_path + '/Secure Preferences', file_entry['size'], ReadSecurePreferencesFile, browser)
+                            elif file_entry['name'] == 'Last Version':
+                                ExtractAndReadFile(mac_info, chromium_artifacts, user_profile_name, source_path + '/Last Version', file_entry['size'], ReadVersion, browser)
                         else: # Folder
                             if file_entry['name'] == 'Extensions':
                                 ProcessExtensions(mac_info, chromium_artifacts, user_profile_name, source_path + '/Extensions', browser)
