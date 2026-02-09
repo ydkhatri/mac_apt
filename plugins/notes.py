@@ -242,6 +242,10 @@ def ReadNotesHighSierraAndAbove(db, notes, source, user, is_ios):
         else:
             query = query_1
 
+        z_generation1_exists = CommonFunctions.ColumnExists(db, 'ZICCLOUDSYNCINGOBJECT', 'ZGENERATION1')
+        if not z_generation1_exists:
+            # remove from query
+            query = query.replace('c4.ZGENERATION1,', 'NULL as ZGENERATION1,')
         # ZACCOUNTTYPE - 1=iCloud, 3=local
         db.row_factory = sqlite3.Row
         cursor = db.execute(query)
@@ -260,11 +264,20 @@ def ReadNotesHighSierraAndAbove(db, notes, source, user, is_ios):
                         filename = row['ZFILENAME'] if row['ZFILENAME'] is not None else row['att_uuid']
                         if is_ios:
                             base_path, _ = os.path.split(source)
-                            att_path = f'{base_path}/Accounts/{row['acc_identifier']}/Media/{row['att_uuid']}/{row['ZGENERATION1']}/{filename}'
+                            if z_generation1_exists:
+                                att_path = f"{base_path}/Accounts/{row['acc_identifier']}/Media/{row['att_uuid']}/{row['ZGENERATION1']}/{filename}"
+                            else:
+                                att_path = f"{base_path}/Accounts/{row['acc_identifier']}/Media/{row['att_uuid']}/{filename}"
                         elif user:
-                            att_path = f'/Users/{user}/Library/Group Containers/group.com.apple.notes/Accounts/LocalAccount/Media/{row['att_uuid']}/{row['ZGENERATION1']}/{filename}'
+                            if z_generation1_exists:
+                                att_path = f"/Users/{user}/Library/Group Containers/group.com.apple.notes/Accounts/LocalAccount/Media/{row['att_uuid']}/{row['ZGENERATION1']}/{filename}"
+                            else:
+                                att_path = f"/Users/{user}/Library/Group Containers/group.com.apple.notes/Media/{row['att_uuid']}/{filename}"
                         else:
-                            att_path = f'Accounts/LocalAccount/Media/{row['att_uuid']}/{row['ZGENERATION1']}/{filename}'
+                            if z_generation1_exists:
+                                att_path = f"Accounts/LocalAccount/Media/{row['att_uuid']}/{row['ZGENERATION1']}/{filename}"
+                            else:
+                                att_path = f"Media/{row['att_uuid']}/{filename}"
                     except TypeError as ex:
                         log.error('Error computing att path for row ' + str(row['note_id']) + ' Error was ' + str(ex))
 

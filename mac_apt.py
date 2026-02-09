@@ -507,6 +507,12 @@ LogPlatformInfo(log)
 # Check inputs
 if not CheckInputType(args.input_type):
     Exit("Exiting -> 'input_type' " + args.input_type + " not recognized")
+if args.input_type.upper() not in ('MOUNTED'):
+    if not os.path.exists(args.input_path):
+        Exit("Exiting -> 'input_path' " + args.input_path + " does not exist!")
+else:
+    if not os.path.isdir(args.input_path):
+        Exit("Exiting -> 'input_path' " + args.input_path + " is not a folder! For mounted images, input_path should be the folder where the image is mounted.")
 
 plugins_to_run = list()
 plugins_not_to_run = list()
