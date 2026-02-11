@@ -280,7 +280,7 @@ def process_dir(mac_info, path, persistent_programs, method, user_name, uid):
         for file in files_list:
             file_name = file['name']
             full_path = path + '/' + file_name
-            if file_name.lower().endswith('.plist'):
+            if file_name.lower().endswith('.plist') and not file_name.startswith('._'):
                 common_name = file_name.split('.')
                 if len(common_name) >= 4:
                     del common_name[0]
@@ -305,7 +305,13 @@ def process_dir(mac_info, path, persistent_programs, method, user_name, uid):
             if full_path.startswith('/System/Cryptexes/App/'):
                 # This is a sym link to /../../System/Volumes/Preboot/Cryptexes/App   
                 # Read from mac_info.apfs_preboot_volume.
-                pass #TODO
+                
+                # If this is from a uac collection or other collection where it MAY have 
+                # been collected, we'll try to still read it first.
+                if not mac_info.IsValidFilePath(full_path):
+                    log.warning(f'Path {full_path} is a symlink to Preboot volume. Currently unsupported, skipping')
+                    continue
+
                 # TODO - change ExportFile and some other functions to accept a volume, or perhaps better to 
                 #        add Preboot volume to the Combined_Volume after reading the 
 

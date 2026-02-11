@@ -38,6 +38,7 @@ from plugins.helpers.apple_sparse_image import AppleSparseImage
 from plugins.helpers.disk_report import *
 from plugins.helpers.writer import *
 from plugins.helpers.extract_vr_zip import extract_zip
+from plugins.helpers.extract_uac import extract_uac_zip, extract_uac_tar
 from version import __VERSION
 
 __PROGRAMNAME = "macOS Artifact Parsing Tool"
@@ -54,7 +55,7 @@ def IsItemPresentInList(collection, item):
 
 def CheckInputType(input_type):
     input_type = input_type.upper()
-    return input_type in ['AFF4', 'AXIOMZIP', 'DD', 'DMG', 'E01', 'MOUNTED', 'SPARSE', 'VMDK', 'VR']
+    return input_type in ['AFF4', 'AXIOMZIP', 'DD', 'DMG', 'E01', 'MOUNTED', 'SPARSE', 'UAC', 'VMDK', 'VR']
 
 ######### FOR HANDLING E01 file ###############
 class ewf_Img_Info(pytsk3.Img_Info):
@@ -457,7 +458,7 @@ arg_parser = argparse.ArgumentParser(description='mac_apt is a framework to proc
                                                  f'You are running {__PROGRAMNAME} version {__VERSION}\n\n'
                                                  'Note: The default output is now sqlite, no need to specify it now',
                                     epilog=plugins_info, formatter_class=argparse.RawTextHelpFormatter)
-arg_parser.add_argument('input_type', help='Specify Input type as either AFF4, AXIOMZIP, DD, DMG, E01, MOUNTED, SPARSE, VMDK or VR')
+arg_parser.add_argument('input_type', help='Specify Input type as either AFF4, AXIOMZIP, DD, DMG, E01, MOUNTED, SPARSE, UAC, VMDK or VR')
 arg_parser.add_argument('input_path', help='Path to macOS image/volume')
 arg_parser.add_argument('-o', '--output_path', help='Path where output files will be created')
 arg_parser.add_argument('-x', '--xlsx', action="store_true", help='Save output in Excel spreadsheet')
@@ -582,6 +583,27 @@ try:
     elif args.input_type.upper() == 'VMDK':
         img = GetImgInfoObjectForVMDK(args.input_path)
         mac_info = macinfo.MacInfo(output_params)
+    elif args.input_type.upper() == 'UAC':
+        if os.path.isfile(args.input_path):
+            uac_extraction_folder = os.path.join(output_params.export_path, 'Extraction')
+            if args.input_path.lower().endswith('.zip'):
+                success, metadata_collection = extract_uac_zip(args.input_path, uac_extraction_folder)
+                if success:
+                    mac_info = macinfo.MountedUacZip(uac_extraction_folder, metadata_collection, output_params)
+                    found_macos = FindMacOsFiles(mac_info)
+                else:
+                    Exit("Exiting -> Could not extract/read UAC zip file!")
+            elif args.input_path.lower().endswith('.tar') or args.input_path.lower().endswith('.tar.gz') or args.input_path.lower().endswith('.tgz'):
+                success, metadata_collection, xattributes_dict, symlinks_dict = extract_uac_tar(args.input_path, uac_extraction_folder)
+                if success:
+                    mac_info = macinfo.MountedUacTar(uac_extraction_folder, metadata_collection, output_params, xattributes_dict, symlinks_dict)
+                    found_macos = FindMacOsFiles(mac_info)
+                else:
+                    Exit("Exiting -> Could not extract/read UAC tar file!")
+            else:
+                log.error("Unsupported UAC archive format! Only .zip, .tar, .tar.gz and .tgz are supported!")
+        else:
+            Exit("Exiting -> Cannot browse mounted image at " + args.input_path)
     elif args.input_type.upper() == 'VR':
         if os.path.isfile(args.input_path):
             zip_extraction_folder = os.path.join(output_params.export_path, 'Extraction')
@@ -628,7 +650,7 @@ if args.password_file:
 elif args.password:
     mac_info.password = args.password
 
-if args.input_type.upper() not in ('MOUNTED', 'AXIOMZIP', 'VR'):
+if args.input_type.upper() not in ('MOUNTED', 'AXIOMZIP', 'VR', 'UAC'):
     mac_info.pytsk_image = img
     mac_info.use_native_hfs_parser = True #False if args.use_tsk else True
     mac_info.dont_decrypt = True if args.dont_decrypt else False
