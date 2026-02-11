@@ -508,6 +508,12 @@ LogPlatformInfo(log)
 # Check inputs
 if not CheckInputType(args.input_type):
     Exit("Exiting -> 'input_type' " + args.input_type + " not recognized")
+if args.input_type.upper() not in ('MOUNTED'):
+    if not os.path.exists(args.input_path):
+        Exit("Exiting -> 'input_path' " + args.input_path + " does not exist!")
+else:
+    if not os.path.isdir(args.input_path):
+        Exit("Exiting -> 'input_path' " + args.input_path + " is not a folder! For mounted images, input_path should be the folder where the image is mounted.")
 
 plugins_to_run = list()
 plugins_not_to_run = list()
@@ -680,10 +686,14 @@ if found_macos:
         if IsItemPresentInList(plugins_to_run, plugin.__Plugin_Name):
             log.info("-"*50)
             log.info("Running plugin " + plugin.__Plugin_Name)
+            time_plugin_started = time.time()
             try:
                 plugin.Plugin_Start(mac_info)
             except Exception as ex:
                 log.exception("An exception occurred while running plugin - {}".format(plugin.__Plugin_Name))
+            time_plugin_ended = time.time()
+            run_time = time_plugin_ended - time_plugin_started
+            log.info(f"{plugin.__Plugin_Name} plugin ran for {time.strftime('%H:%M:%S', time.gmtime(run_time))}")
 else:
     log.warning(":( Could not find a partition having a macOS installation on it")
 

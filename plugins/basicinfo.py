@@ -141,15 +141,21 @@ def ReadArchFromPlist(f, source_plist):
 def GetArchitecture(mac_info):
     '''Figure out if the host is ARM64 or x86_64'''
     arch = ''
-    if isinstance(mac_info, ApfsMacInfo):
-        uuid = mac_info.apfs_data_volume.uuid
-        source_plist = f'/{uuid}/restore/BuildManifest.plist'
-        f = mac_info.apfs_preboot_volume.open(source_plist)
-        if f != None:
-            arch = ReadArchFromPlist(f, source_plist)
-            f.close()
+    source_plist = ''
+    if mac_info.GetVersionDictionary()['major'] < 11: # If earlier than Big Sur, it's x86_64
+        arch = 'x86_64 (Intel)'
+    elif isinstance(mac_info, ApfsMacInfo):
+        if mac_info.apfs_data_volume is not None:                 
+            uuid = mac_info.apfs_data_volume.uuid
+            source_plist = f'/{uuid}/restore/BuildManifest.plist'
+            f = mac_info.apfs_preboot_volume.open(source_plist)
+            if f != None:
+                arch = ReadArchFromPlist(f, source_plist)
+                f.close()
+            else:
+                log.error(f"Could not open plist file to get architecture info: {source_plist}")
         else:
-            log.error(f"Could not open plist file to get architecture info: {source_plist}")
+            log.warning('APFS volume does not have separate DATA volume, cannot get architecture information!')
     elif isinstance(mac_info, MountedMacInfo) and mac_info.macos_root_folder == '/':
         uuid_folders = []
         preboot_dir = mac_info.ListItemsInFolder('/System/Volumes/Preboot')

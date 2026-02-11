@@ -168,8 +168,12 @@ class CommonFunctions:
         try:
             integer = int(string, base)
         except ValueError: # Will go here if string is '' or contains non-digit characters
-            if string == '' or string == None: pass
-            else: log.exception('Could not convert string "{}" to int'.format(string))
+            if string == '' or string == None: 
+                pass
+            elif suppress_exception:
+                pass
+            else:
+                log.exception('Could not convert string "{}" to int'.format(string))
         except TypeError:
             log.exception('Invalid type passed to IntFromStr()')
         return integer
@@ -197,7 +201,19 @@ class CommonFunctions:
         '''
         Removes illegal characters (for windows) from the string passed.
         '''
-        return re.sub(r'[\\/*?:"<>|\'\r\n]', replacement_char, filename)
+        import unicodedata
+
+        def is_printable(ch: str) -> bool:
+            # Keep letters, numbers, punctuation, symbols, and spaces
+            cat = unicodedata.category(ch)
+            if ch.isspace():
+                return True
+            return cat[0] in {"L", "N", "P", "S"}
+
+        def drop_non_printable(s: str) -> str:
+            return "".join(ch for ch in s if is_printable(ch))
+
+        return drop_non_printable(re.sub(r'[\\/*?:"<>|\'\r\n]', replacement_char, filename))
 
     @staticmethod
     def GetFileSize(file):
