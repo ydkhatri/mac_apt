@@ -33,7 +33,7 @@ import sqlite3
 
 __Plugin_Name = "DOCUMENTREVISIONS"
 __Plugin_Friendly_Name = "DocumentRevisions"
-__Plugin_Version = "2.0"
+__Plugin_Version = "2.1"
 __Plugin_Description = "Read DocumentRevisions data and extract stored versions"
 __Plugin_Author = "Yogesh Khatri, Nicole Ibrahim"
 __Plugin_Author_Email = "yogesh@swiftforensics.com, nicoleibrahim.us@gmail.com"
@@ -427,8 +427,6 @@ def Plugin_Start(mac_info):
     doc_rev_paths = ('/.DocumentRevisions-V100', 
                      '/System/Volumes/Data/.DocumentRevisions-V100')
     chunk_table_info = {}
-    export_path = os.path.join(mac_info.output_params.output_path, "DocRevisionsExtracted")
-    os.makedirs(export_path, exist_ok=True)
 
     for doc_rev_path in doc_rev_paths:
         if mac_info.IsValidFolderPath(doc_rev_path):
@@ -437,6 +435,8 @@ def Plugin_Start(mac_info):
             chunk_path = f'{doc_rev_path}/.cs/ChunkStorage'
             chunk_table_info = ProcessDbsFromPath(mac_info, revisions, chunk_info, rev_path, csdb_path)
             chunk_files = GetChunkFileInfo(mac_info, chunk_path)
+            export_path = os.path.join(mac_info.output_params.output_path, "DocRevisionsExtracted")
+            os.makedirs(export_path, exist_ok=True)
             ProcessRevisionsAndExtract(mac_info, revisions, chunk_info, chunk_files, export_path)
             break
     

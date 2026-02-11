@@ -11,14 +11,16 @@ import logging
 import os
 import sqlite3
 
-from plugins.helpers.common import *
+from datetime import datetime
+from plugins.helpers.common import CommonFunctions
 from plugins.helpers.disk_report import Disk_Info
-from plugins.helpers.macinfo import *
-from plugins.helpers.writer import *
+from plugins.helpers.macinfo import ApfsMacInfo, MountedMacInfo, SqliteWrapper
+from plugins.helpers.writer import WriteList, DataType
+from zoneinfo import ZoneInfo
 
 __Plugin_Name = "BASICINFO"
 __Plugin_Friendly_Name = "Basic system and OS configuration"
-__Plugin_Version = "0.1"
+__Plugin_Version = "0.2"
 __Plugin_Description = "Gets basic system and OS configuration like SN, timezone, device name, last logged in user, FS info, etc.."
 __Plugin_Author = "Yogesh Khatri"
 __Plugin_Author_Email = "yogesh@swiftforensics.com"
@@ -224,14 +226,34 @@ def GetTimezone(mac_info):
     else:
         log.error(f'{global_pref_plist_path} not found')
     # Read /private/etc/localtime --> /usr/share/zoneinfo/xxxxxxx
-    if mac_info.IsValidFilePath('/private/etc/localtime'):
+    localtime_path = '/private/etc/localtime'
+    if mac_info.IsValidFilePath(localtime_path):
+        tz_symlink_path = ''
         try:
-            tz_symlink_path = mac_info.ReadSymLinkTargetPath('/private/etc/localtime')
-            if tz_symlink_path.startswith('/usr/share/zoneinfo'):
-                tz_symlink_path = tz_symlink_path[20:]
-            elif tz_symlink_path.startswith('/var/db/timezone/zoneinfo/'): # on HighSierra
-                tz_symlink_path = tz_symlink_path[26:]
-            mac_info.timezone = tz_symlink_path
+            if mac_info.IsSymbolicLink(localtime_path):                    
+                tz_symlink_path = mac_info.ReadSymLinkTargetPath(localtime_path)
+                if tz_symlink_path.startswith('/usr/share/zoneinfo'):
+                    tz_symlink_path = tz_symlink_path[20:]
+                elif tz_symlink_path.startswith('/var/db/timezone/zoneinfo/'): # on HighSierra
+                    tz_symlink_path = tz_symlink_path[26:]
+                mac_info.timezone = tz_symlink_path
+            else: # must be a regular file!
+                log.info('File /private/etc/localtime is not a symbolic link, trying to read timezone info from it')
+                f = mac_info.Open(localtime_path)
+                if f:                    
+                    try:
+                        if f.read(4) == b'TZif': # tzfile magic number
+                            log.debug('File /private/etc/localtime is a valid tzfile') 
+                            f.seek(0)
+                            local_tz = ZoneInfo.from_file(f)
+                            now = datetime.now(local_tz)
+                            tz_symlink_path = f"{now.strftime('%Z')}, UTC Offset: {now.strftime('%z')}"
+                        else:
+                            f.seek(0)
+                            tz_symlink_path = f.read(128).decode('utf8', 'ignore') # just to check if it is a text file with timezone info in it
+                    except (OSError, ValueError) as ex:
+                        log.error('Error trying to read timezone information from /private/etc/localtime - ' + str(ex))
+                    
             basic_data.append(['TIMEZONE', 'TimeZone Set', tz_symlink_path, 'Timezone on machine', '/private/etc/localtime'])
         except (IndexError, ValueError, TypeError) as ex:
             log.error('Error trying to read timezone information - ' + str(ex))

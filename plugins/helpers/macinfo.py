@@ -8,7 +8,6 @@
 '''
 
 import logging
-import nska_deserialize as nd
 import os
 import posixpath
 import pytsk3
@@ -28,7 +27,7 @@ from uuid import UUID
 
 from plugins.helpers import decryptor
 from plugins.helpers.apfs_reader import *
-from plugins.helpers.common import *
+from plugins.helpers.common import CommonFunctions, EntryType
 from plugins.helpers.darwin_path_generator import GetDarwinPath, GetDarwinPath2
 from plugins.helpers.hfs_alt import HFSVolume
 from plugins.helpers.structs import *
@@ -1847,6 +1846,89 @@ class MountedVRZip(MountedMacInfo):
         if metadata:
             return metadata.get('XAttr', {})
         return None
+
+class MountedUac(MountedMacInfo):
+    '''
+        To process extracted zip, tar, tgz or tar.gz UAC output.
+        Same as MountedMacInfo, but will return correct file MACB times
+    '''
+
+    def __init__(self, root_folder_path, metadata_collection, output_params):
+        super().__init__(os.path.join(root_folder_path, '[root]'), output_params)
+        self.metadata_collection = metadata_collection
+        
+    def GetFileMACTimes(self, file_path):
+        '''Gets MAC timestamps for a file or folder.
+           Assumes file_path starts with /
+        '''
+        metadata = self.metadata_collection.get(file_path, None)
+        if metadata:
+            times = {
+                'c_time': metadata['c_time'],
+                'm_time': metadata['m_time'],
+                'cr_time':metadata['cr_time'],
+                'a_time': metadata['a_time']
+            }
+        else:
+            times = { 'c_time':None, 'm_time':None, 'cr_time':None, 'a_time':None }
+            # Only log error if this is a file. Folders will not be collected in zips,
+            # hence timestamps won't exist there.
+            if os.path.isfile(file_path):
+                log.error(f'Failed to retrieve original timestamps for {file_path}')
+        return times
+
+    def GetExtendedAttribute(self, path, att_name):
+        return None
+    
+    def GetExtendedAttributes(self, path):
+        return None
+
+class MountedUacZip(MountedUac):
+
+    def __init__(self, root_folder_path, metadata_collection, output_params):
+        super().__init__(root_folder_path, metadata_collection, output_params)
+        self.metadata_collection = metadata_collection
+    
+    def IsSymbolicLink(self, path):
+        metadata = self.metadata_collection.get(path, None)
+        if metadata:
+            return metadata.get('sym_link', None) is not None
+        return False
+
+    def ReadSymLinkTargetPath(self, path):
+        '''Returns the target file/folder's path from the sym link path provided'''
+        sym_link_target = self.metadata_collection.get(path, {}).get('sym_link', None)
+        if sym_link_target is None:
+            log.error(f'Error resolving symlink : {path}, no entry found in metadata!')
+            return ''
+        return sym_link_target
+    
+class MountedUacTar(MountedUac):
+
+    def __init__(self, root_folder_path, metadata_collection, output_params, xattributes_dict, symlinks_dict):
+        super().__init__(root_folder_path, metadata_collection, output_params)
+        self.xattributes_dict = xattributes_dict
+        self.symlinks_dict = symlinks_dict
+
+    def GetExtendedAttribute(self, path, att_name):
+        xattr = self.xattributes_dict.get(path, None)
+        if xattr:
+            return xattr.get(att_name, None)
+        return None
+    
+    def GetExtendedAttributes(self, path):
+        return self.xattributes_dict.get(path, None)
+    
+    def IsSymbolicLink(self, path):
+        return self.symlinks_dict.get(path, False)
+
+    def ReadSymLinkTargetPath(self, path):
+        '''Returns the target file/folder's path from the sym link path provided'''
+        sym_link_target = self.symlinks_dict.get(path, None)
+        if sym_link_target is None:
+            log.error(f'Error resolving symlink : {path}, no entry found in symlinks dictionary!')
+            return ''
+        return sym_link_target
 
 class MountedMacInfoSeperateSysData(MountedMacInfo):
     '''Same as MountedMacInfo, but takes into account two volumes (SYS, DATA) mounted separately'''
