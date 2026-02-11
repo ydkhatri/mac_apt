@@ -1,5 +1,5 @@
 # mac_apt - macOS (and iOS) Artifact Parsing Tool
-[![Latest version](https://img.shields.io/badge/version-v1.13.6-blue)](https://github.com/ydkhatri/mac_apt/releases/tag/v1.13.6)
+[![Latest version](https://img.shields.io/badge/version-v1.29.0-blue)](https://github.com/ydkhatri/mac_apt/releases/tag/v1.29.0)
 [![status](https://img.shields.io/badge/status-stable-green)]()
 
 mac_apt is a DFIR (Digital Forensics and Incident Response) tool to process Mac computer full disk images (**or _live_ machines**) and extract data/metadata useful for forensic investigation. It is a python based framework, which has plugins to process individual artifacts (such as Safari internet history, Network interfaces, Recently accessed files & volumes, ..)
@@ -10,7 +10,7 @@ mac_apt now also includes **[ios_apt](https://swiftforensics.com/2020/12/introdu
 _Note: Tested upto Python 3.14 on Windows and macOS (ARM and x64)._
 #### Features
 * Cross platform (no dependency on pyobjc)
-* Works on E01, VMDK, AFF4, DD, split-DD, DMG (no compression), SPARSEIMAGE, Velociraptor collected files (VR) & mounted images
+* Works on E01, VMDK, AFF4, DD, split-DD, DMG (no compression), SPARSEIMAGE, UAC collections, Velociraptor collected files (VR) & mounted images
 * XLSX, CSV, TSV, JSONL, Sqlite outputs
 * Analyzed files/artifacts are exported for later review
 * zlib, lzvn, lzfse compressed files are supported!
@@ -22,6 +22,7 @@ _Note: Tested upto Python 3.14 on Windows and macOS (ARM and x64)._
 :heavy_check_mark: Can read Axiom created targeted collection zip files  
 :heavy_check_mark: ios_apt can read GrayKey extracted file system  
 :heavy_check_mark: Can read [RECON](https://sumuri.com/software/recon-itr/), [FUJI](https://github.com/Lazza/Fuji) and [ASLA](https://github.com/giuseppetotaro/asla) created .sparseimage files  
+:heavy_check_mark: Can read [UAC](https://github.com/tclahr/uac) collections (ZIP, TAR, TAR.GZ)files  
 :heavy_check_mark: Support for macOS Big Sur Sealed volumes (11.0)  
 :heavy_check_mark: Introducing **ios_apt** for processing iOS/ipadOS images  
 :heavy_check_mark: FAST mode :hourglass_flowing_sand:  
