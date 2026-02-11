@@ -22,7 +22,7 @@ _Note: Tested upto Python 3.14 on Windows and macOS (ARM and x64)._
 :heavy_check_mark: Can read Axiom created targeted collection zip files  
 :heavy_check_mark: ios_apt can read GrayKey extracted file system  
 :heavy_check_mark: Can read [RECON](https://sumuri.com/software/recon-itr/), [FUJI](https://github.com/Lazza/Fuji) and [ASLA](https://github.com/giuseppetotaro/asla) created .sparseimage files  
-:heavy_check_mark: Can read [UAC](https://github.com/tclahr/uac) collections (ZIP, TAR, TAR.GZ)files  
+:heavy_check_mark: Can read [UAC](https://github.com/tclahr/uac) collections (ZIP, TAR, TAR.GZ) files  
 :heavy_check_mark: Support for macOS Big Sur Sealed volumes (11.0)  
 :heavy_check_mark: Introducing **ios_apt** for processing iOS/ipadOS images  
 :heavy_check_mark: FAST mode :hourglass_flowing_sand:  
