@@ -174,7 +174,7 @@ except Exception as ex:
 
 if args.xlsx: 
     try:
-        xlsx_path = os.path.join(output_params.output_path, "mac_apt.xlsx")
+        xlsx_path = os.path.join(output_params.output_path, "ios_apt.xlsx")
         output_params.xlsx_writer = ExcelWriter()
         log.debug("Trying to create xlsx file @ " + xlsx_path)
         output_params.xlsx_writer.CreateXlsxFile(xlsx_path)
