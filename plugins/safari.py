@@ -388,7 +388,7 @@ def ReadSafariTabSnapshotsDb(conn: sqlite3.Connection, safari_items: list[Safari
         conn.row_factory = sqlite3.Row
         cursor = conn.execute('SELECT date_created, filename, url FROM snapshot_metadata')
         for row in cursor:
-            date = CommonFunctions.ReadMacAbsoluteTime(row['date_created']).strftime("%Y-%m-%d %H:%M:%S.%f")
+            date = CommonFunctions.ReadMacAbsoluteTime(row['date_created'])
             si = SafariItem(SafariItemType.TAB_SNAPSHOT, row['url'], row['filename'], date, '', user, source_path)
             safari_items.append(si)
     except sqlite3.Error:
