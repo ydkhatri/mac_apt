@@ -170,12 +170,12 @@ def process_server(icloud_devices, icloud_server_items, db, user, source_path):
                 item_filename,
                 item_filename AS item_path,
                 1 AS depth,
-                datetime(item_birthtime,"unixepoch") AS item_birthtime,
-                datetime(item_lastusedtime,"unixepoch") AS item_lastusedtime,
+                item_birthtime,
+                item_lastusedtime,
                 version_device,
                 version_name,
                 version_size,
-                datetime(version_mtime,"unixepoch") AS version_mtime,
+                version_mtime,
                 item_type,
                 item_sharing_options
               FROM server_items WHERE length(item_parent_id) < 16
@@ -185,12 +185,12 @@ def process_server(icloud_devices, icloud_server_items, db, user, source_path):
                 c.item_filename,
                 p.item_path || '/' || c.item_filename,
                 p.depth + 1,
-                datetime(c.item_birthtime,"unixepoch"),
-                datetime(c.item_lastusedtime,"unixepoch"),
+                c.item_birthtime,
+                c.item_lastusedtime, 
                 c.version_device,
                 c.version_name,
                 c.version_size,
-                datetime(c.version_mtime,"unixepoch"),
+                c.version_mtime,
                 c.item_type,
                 c.item_sharing_options
               FROM server_items c INNER JOIN server_items_with_path p ON (p.item_id = c.item_parent_id)
@@ -207,14 +207,14 @@ def process_server(icloud_devices, icloud_server_items, db, user, source_path):
         for row in cursor:
             item_filename = row['item_filename']
             item_path = row['item_path']
-            item_birthtime = row['item_birthtime']
-            item_lastusedtime = row['item_lastusedtime']
+            item_birthtime = CommonFunctions.ReadUnixTime(row['item_birthtime'])
+            item_lastusedtime = CommonFunctions.ReadUnixTime(row['item_lastusedtime'])
             version_device = row['version_device']
             item_type_str = convert_item_type(row['item_type'])
             version_device_name = ''
             version_name = row['version_name']
             version_size = row['version_size']
-            version_mtime = row['version_mtime']
+            version_mtime = CommonFunctions.ReadUnixTime(row['version_mtime'])
             item_sharing_options = row['item_sharing_options']
             item_is_shared = "Yes"
             if item_sharing_options == 0:
@@ -245,13 +245,13 @@ def process_client(icloud_client_items, icloud_devices, db, user, source_path):
                 item_filename,
                 item_filename AS item_path,
                 1 AS depth,
-                datetime(item_birthtime,"unixepoch") AS item_birthtime,
-                datetime(item_lastusedtime,"unixepoch") AS item_lastusedtime,
+                item_birthtime,
+                item_lastusedtime,
                 version_device,
                 app_library_rowid,
                 version_name,
                 version_size,
-                datetime(version_mtime,"unixepoch") AS version_mtime,
+                version_mtime,
                 item_type,
                 item_sharing_options
               FROM client_items WHERE length(item_parent_id) < 16
@@ -262,13 +262,13 @@ def process_client(icloud_client_items, icloud_devices, db, user, source_path):
                 c.item_filename,
                 p.item_path || '/' || c.item_filename,
                 p.depth + 1,
-                datetime(c.item_birthtime,"unixepoch"),
-                datetime(c.item_lastusedtime,"unixepoch"),
+                c.item_birthtime,
+                c.item_lastusedtime,
                 c.version_device,
                 c.app_library_rowid,
                 c.version_name,
                 c.version_size,
-                datetime(c.version_mtime,"unixepoch"),
+                c.version_mtime,
                 c.item_type,
                 c.item_sharing_options
               FROM client_items c INNER JOIN client_items_with_path p ON (p.item_id = c.item_parent_id)
@@ -288,13 +288,13 @@ def process_client(icloud_client_items, icloud_devices, db, user, source_path):
             rowid = row['rowid']
             item_filename = row['item_filename']
             item_path = row['item_path']
-            item_birthtime = row['item_birthtime']
-            item_lastusedtime = row['item_lastusedtime']
+            item_birthtime = CommonFunctions.ReadUnixTime(row['item_birthtime'])
+            item_lastusedtime = CommonFunctions.ReadUnixTime(row['item_lastusedtime'])
             version_device = row['version_device']
             version_device_name = ''
             version_name = row['version_name']
             version_size = row['version_size']
-            version_mtime = row['version_mtime']
+            version_mtime = CommonFunctions.ReadUnixTime(row['version_mtime'])
             app_library_name = row['app_library_name']
             item_type_str = convert_item_type(row['item_type'])
             item_sharing_options = row['item_sharing_options']
