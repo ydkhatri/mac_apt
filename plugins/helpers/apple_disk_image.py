@@ -40,12 +40,15 @@ SOFTWARE.
 """
 
 from __future__ import annotations
+
+import bisect
 import bz2
 import io
 import logging
 import plistlib
 import struct
-from typing import BinaryIO, Dict, List, Optional, Tuple
+from collections import OrderedDict
+from typing import BinaryIO, List, Optional, Tuple
 import zlib
 
 import liblzfse
@@ -260,9 +263,12 @@ class AppleDiskImage:
         self._partitions: List[Tuple[dict, List[dict], str]] = []
         # _partition_byte_offsets[i] = start of partition i in concatenated stream; len = n+1
         self._partition_byte_offsets: List[int] = []
-        self._chunk_cache: Dict[Tuple[int, int], bytes] = {}
-        self._chunk_cache_order: List[Tuple[int, int]] = []
-        self._chunk_cache_max = 48
+        # Per-partition non-overlapping spans: (byte_start, byte_end_exclusive, chunk_index_or_-1).
+        # chunk_index -1 = zero padding (dmgwiz extract_partition padding before next sector_number).
+        self._part_spans: List[List[Tuple[int, int, int]]] = []
+        self._part_span_starts: List[List[int]] = []
+        self._chunk_cache: OrderedDict[Tuple[int, int], bytes] = OrderedDict()
+        self._chunk_cache_max = 64
 
     def __del__(self):
         self.close()
@@ -349,44 +355,58 @@ class AppleDiskImage:
         if not self._partitions:
             raise AppleDiskImageError("no blkx resources in plist")
 
-        off = 0
         self._partition_byte_offsets = [0]
+        self._part_spans = []
+        self._part_span_starts = []
         for pi in range(len(self._partitions)):
-            plen = self._partition_output_len_bytes(pi)
-            off += plen
-            self._partition_byte_offsets.append(off)
-        self.size = off
+            total, spans = self._build_partition_spans(pi)
+            self._part_spans.append(spans)
+            self._part_span_starts.append([s[0] for s in spans])
+            self._partition_byte_offsets.append(
+                self._partition_byte_offsets[-1] + total
+            )
+        self.size = self._partition_byte_offsets[-1]
         log.debug(
             "AppleDiskImage extract_all-equivalent size=%s bytes, blkx_resources=%d",
             self.size,
             len(self._partitions),
         )
 
-    def _partition_output_len_bytes(self, pi: int) -> int:
-        """Length of dmgwiz ``extract_partition`` output for this resource (padding + data)."""
-        hdr, chunks, _ = self._partitions[pi]
+    def _build_partition_spans(self, pi: int) -> Tuple[int, List[Tuple[int, int, int]]]:
+        """
+        Single pass: dmgwiz extract_partition byte layout as contiguous spans.
+        Returns (total_bytes, spans). Spans are (start, end, ci) with ci=-1 for padding.
+        """
+        _hdr, chunks, _ = self._partitions[pi]
         stream_pos = 0
         sectors_written = 0
-        for ch in chunks:
-            ctype = ch["type"]
-            if ctype == CHUNK_TERM:
+        spans: List[Tuple[int, int, int]] = []
+        for ci, ch in enumerate(chunks):
+            if ch["type"] == CHUNK_TERM:
                 break
             sn = ch["sector_number"]
             sc = ch["sector_count"]
             if sn < sectors_written:
                 raise AppleDiskImageError(
-                    "invalid sector number %s (partition=%s)" % (sn, pi)
+                    "invalid sector number %s (partition=%s chunk=%s)" % (sn, pi, ci)
                 )
             if sn > sectors_written:
-                stream_pos += (sn - sectors_written) * SECTOR_SIZE
+                pad_len = (sn - sectors_written) * SECTOR_SIZE
+                if pad_len:
+                    pad_end = stream_pos + pad_len
+                    spans.append((stream_pos, pad_end, -1))
+                    stream_pos = pad_end
             out_len = int(sc) * SECTOR_SIZE
-            stream_pos += out_len
+            data_end = stream_pos + out_len
+            spans.append((stream_pos, data_end, ci))
+            stream_pos = data_end
             sectors_written += sc
-        return stream_pos
+        return stream_pos, spans
 
     def _load_chunk(self, pi: int, ci: int) -> bytes:
         key = (pi, ci)
         if key in self._chunk_cache:
+            self._chunk_cache.move_to_end(key)
             return self._chunk_cache[key]
         hdr, chunks, _ = self._partitions[pi]
         ch = chunks[ci]
@@ -406,11 +426,10 @@ class AppleDiskImage:
             raise AppleDiskImageError("short read on compressed chunk data")
         out = _decompress_chunk(ctype, compressed, out_len, pi, ci)
         if len(out) <= 16 * 1024 * 1024:
-            while len(self._chunk_cache) >= self._chunk_cache_max:
-                old = self._chunk_cache_order.pop(0)
-                self._chunk_cache.pop(old, None)
             self._chunk_cache[key] = out
-            self._chunk_cache_order.append(key)
+            self._chunk_cache.move_to_end(key)
+            while len(self._chunk_cache) > self._chunk_cache_max:
+                self._chunk_cache.popitem(last=False)
         return out
 
     def _read_partition_slice(self, pi: int, start: int, length: int) -> bytes:
@@ -422,44 +441,32 @@ class AppleDiskImage:
             return b"\x00" * length
         target_end = min(start + length, total)
         length = target_end - start
-        _hdr, chunks, _ = self._partitions[pi]
-        out = bytearray(length)
-        stream_pos = 0
-        sectors_written = 0
-        for ci, ch in enumerate(chunks):
-            if ch["type"] == CHUNK_TERM:
-                break
-            sn = ch["sector_number"]
-            sc = ch["sector_count"]
-            if sn < sectors_written:
-                raise AppleDiskImageError(
-                    "invalid sector number %s (partition=%s chunk=%s)" % (sn, pi, ci)
-                )
-            if sn > sectors_written:
-                pad_len = (sn - sectors_written) * SECTOR_SIZE
-                pad_end = stream_pos + pad_len
-                z0 = max(stream_pos, start)
-                z1 = min(pad_end, target_end)
-                if z1 > z0:
-                    dst = z0 - start
-                    out[dst : dst + (z1 - z0)] = b"\x00" * (z1 - z0)
-                stream_pos = pad_end
-            out_len = int(sc) * SECTOR_SIZE
-            data_end = stream_pos + out_len
-            overlap_lo = max(stream_pos, start)
-            overlap_hi = min(data_end, target_end)
-            if overlap_hi > overlap_lo:
+        spans = self._part_spans[pi]
+        span_starts = self._part_span_starts[pi]
+        out = bytearray(length)  # zero-filled; padding spans need no explicit writes
+        if not spans:
+            return bytes(out)
+        # First span overlapping [start, target_end): bisect on span starts, then skip
+        # spans that end at or before start (e.g. start on next span's first byte).
+        i = bisect.bisect_right(span_starts, start) - 1
+        if i < 0:
+            i = 0
+        while i < len(spans) and spans[i][1] <= start:
+            i += 1
+        while i < len(spans) and spans[i][0] < target_end:
+            a, b, ci = spans[i]
+            overlap_lo = max(a, start)
+            overlap_hi = min(b, target_end)
+            if overlap_hi > overlap_lo and ci >= 0:
                 chunk_data = self._load_chunk(pi, ci)
+                out_len = b - a
                 if len(chunk_data) != out_len:
                     raise AppleDiskImageError("chunk length mismatch")
-                src_a = overlap_lo - stream_pos
-                src_b = overlap_hi - stream_pos
+                src_a = overlap_lo - a
+                src_b = overlap_hi - a
                 dst_a = overlap_lo - start
                 out[dst_a : dst_a + (src_b - src_a)] = chunk_data[src_a:src_b]
-            stream_pos = data_end
-            sectors_written += sc
-            if stream_pos >= target_end:
-                break
+            i += 1
         return bytes(out)
 
     def read(self, offset: int, size: int) -> bytes:
@@ -473,15 +480,10 @@ class AppleDiskImage:
         size = end - offset
         result = bytearray(size)
         pos = 0
+        offs = self._partition_byte_offsets
         while pos < size:
             g = offset + pos
-            # partition index
-            pi = 0
-            while (
-                pi + 1 < len(self._partition_byte_offsets)
-                and self._partition_byte_offsets[pi + 1] <= g
-            ):
-                pi += 1
+            pi = bisect.bisect_right(offs, g) - 1
             base = self._partition_byte_offsets[pi]
             local = g - base
             part_end = self._partition_byte_offsets[pi + 1]
