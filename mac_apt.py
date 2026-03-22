@@ -35,6 +35,7 @@ from plugin import *
 from plugins.helpers.aff4_helper import EvidenceImageStream
 from plugins.helpers.apfs_reader import ApfsContainer, ApfsDbInfo
 from plugins.helpers.apple_sparse_image import AppleSparseImage
+from plugins.helpers.apple_disk_image import AppleDiskImage
 from plugins.helpers.disk_report import *
 from plugins.helpers.writer import *
 from plugins.helpers.extract_vr_zip import extract_zip
@@ -205,6 +206,30 @@ def GetImgInfoObjectForSparse(path):
     return img_info
 
 #### End special handling for .sparseimage ####
+
+##### FOR HANDLING Apple UDIF compressed .dmg ####
+class DMG_Info(pytsk3.Img_Info):
+    def __init__(self, disk_image):
+        self._disk_image = disk_image
+        super(DMG_Info, self).__init__(
+            url="", type=pytsk3.TSK_IMG_TYPE_EXTERNAL)
+
+    def close(self):
+        self._disk_image.close()
+
+    def read(self, offset, size):
+        return self._disk_image.read(offset, size)
+
+    def get_size(self):
+        return self._disk_image.size
+
+
+def GetImgInfoObjectForDMG(path):
+    disk_image = AppleDiskImage()
+    disk_image.open(path)
+    return DMG_Info(disk_image)
+
+#### End special handling for UDIF .dmg ####
 
 def FindMacOsFiles(mac_info):
     if mac_info.IsValidFilePath('/System/Library/CoreServices/SystemVersion.plist'):
@@ -627,8 +652,15 @@ try:
     elif args.input_type.upper() == 'SPARSE':
         img = GetImgInfoObjectForSparse(args.input_path)
         mac_info = macinfo.MacInfo(output_params)
-    elif args.input_type.upper() in ('DD', 'DMG'):
-        img = pytsk3.Img_Info(args.input_path) # Works for split dd images too! Works for DMG too, if no compression/encryption is used!
+    elif args.input_type.upper() == 'DMG':
+        if os.path.isfile(args.input_path) and AppleDiskImage.is_compressed(args.input_path):
+            img = GetImgInfoObjectForDMG(args.input_path)
+        else:
+            # Uncompressed / raw DMG
+            img = pytsk3.Img_Info(args.input_path)
+        mac_info = macinfo.MacInfo(output_params)
+    elif args.input_type.upper() == 'DD':
+        img = pytsk3.Img_Info(args.input_path)  # Works for split dd images too!
         mac_info = macinfo.MacInfo(output_params)
     elif args.input_type.upper() == 'MOUNTED':
         if os.path.isdir(args.input_path):
