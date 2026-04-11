@@ -2,6 +2,9 @@
 .vscode/
 .idea/
 other_dependencies/pyaff4-0.31
+.codex
+.claude
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[co]

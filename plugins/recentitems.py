@@ -19,6 +19,7 @@ import nska_deserialize as nd
 
 import plugins.helpers.ccl_bplist as ccl_bplist
 from plugins.helpers.macinfo import *
+from plugins.helpers.shared_file_list import parse_shared_file_list
 from plugins.helpers.writer import *
 
 __Plugin_Name = "RECENTITEMS"
@@ -606,71 +607,48 @@ def ReadRecentPlist(plist, recent_items, source='', user=''):
 def ReadSFL2Plist(file_handle, recent_items, source, user=''):
     basename = os.path.basename(source).lower()
     try:
-        plist = nd.deserialize_plist(file_handle)
-        for item in plist['items']:
-            name = item.get('Name', '')
-            uuid = item.get('uuid', '')
+        entries = parse_shared_file_list(file_handle, source)
+        for entry in entries:
             recent_type = RecentType.UNKNOWN
-            if basename.find('recentservers') >=0 : recent_type = RecentType.SERVER
-            elif basename.find('recenthosts') >=0 : recent_type = RecentType.HOST
-            elif basename.find('recentdocuments') >=0 : recent_type = RecentType.DOCUMENT
-            elif basename.find('recentapplications') >=0 : recent_type = RecentType.APPLICATION
-            elif basename.find('favoritevolumes') >=0 : recent_type = RecentType.FAVORITE_VOLUME
-            elif basename.find('projectitems') >=0 : recent_type = RecentType.TAG
-            elif basename.find('favoriteservers') >=0 : recent_type = RecentType.FAVORITE_SERVER
-            elif basename.find('favoriteitems') >=0 : recent_type = RecentType.FAVORITE_ITEM
-            elif basename.find('applicationrecentdocuments') >=0 : recent_type = RecentType.APP_RECENT_DOC
-            ri = RecentItem(name, '', 'uuid={}'.format(uuid), source, recent_type, user)
-            recent_items.append(ri)
-
-            data = item.get('Bookmark', None)
-            if data:
-                if isinstance(data, dict):
-                    data = data.get('NS.data', None)
-                    if data:
-                        ri.ReadBookmark(data)
-                else:
-                    ri.ReadBookmark(data)
-    except(KeyError, nd.DeserializeError, nd.biplist.NotBinaryPlistException, nd.biplist.InvalidPlistException,
-            plistlib.InvalidFileException,nd.ccl_bplist.BplistError, ValueError, TypeError, OSError, OverflowError):
+            if basename.find('recentservers') >= 0:
+                recent_type = RecentType.SERVER
+            elif basename.find('recenthosts') >= 0:
+                recent_type = RecentType.HOST
+            elif basename.find('recentdocuments') >= 0:
+                recent_type = RecentType.DOCUMENT
+            elif basename.find('recentapplications') >= 0:
+                recent_type = RecentType.APPLICATION
+            elif basename.find('favoritevolumes') >= 0:
+                recent_type = RecentType.FAVORITE_VOLUME
+            elif basename.find('projectitems') >= 0:
+                recent_type = RecentType.TAG
+            elif basename.find('favoriteservers') >= 0:
+                recent_type = RecentType.FAVORITE_SERVER
+            elif basename.find('favoriteitems') >= 0:
+                recent_type = RecentType.FAVORITE_ITEM
+            elif basename.find('applicationrecentdocuments') >= 0:
+                recent_type = RecentType.APP_RECENT_DOC
+            recent_items.append(RecentItem(entry.name, entry.url, entry.info, source, recent_type, user))
+    except Exception:
         log.exception('Error reading SFL2 or SFL3 plist')
 
 def ReadSFLPlist(file_handle, recent_items, source, user=''):
     try:
         basename = os.path.basename(source).lower()
-        ccl_bplist.set_object_converter(ccl_bplist.NSKeyedArchiver_common_objects_convertor)
-        plist = ccl_bplist.load(file_handle)
+        entries = parse_shared_file_list(file_handle, source)
+        for entry in entries:
+            recent_type = RecentType.UNKNOWN
+            if basename.find('recentservers') >= 0:
+                recent_type = RecentType.SERVER
+            elif basename.find('recenthosts') >= 0:
+                recent_type = RecentType.HOST
+            elif basename.find('recentdocuments') >= 0:
+                recent_type = RecentType.DOCUMENT
+            elif basename.find('recentapplications') >= 0:
+                recent_type = RecentType.APPLICATION
 
-        ns_keyed_archiver_obj = ccl_bplist.deserialise_NsKeyedArchiver(plist, parse_whole_structure=True)
-
-        root = ns_keyed_archiver_obj['root']
-        log.debug('Version of SFL is {}'.format(root['version'])) # Currently we parse version 1
-        items = root['items']
-
-        for item in items:
-            url = ''
-            name = ''
-            try: url = item['URL']['NS.relative']
-            except KeyError: pass
-            if url.find('x-apple-findertag') == 0: continue # skipping these items
-            name = item.get('name', '')
-            if name or url:
-                recent_type = RecentType.UNKNOWN
-                if basename.find('recentservers') >=0 : recent_type = RecentType.SERVER
-                elif basename.find('recenthosts') >=0 : recent_type = RecentType.HOST
-                elif basename.find('recentdocuments') >=0 : recent_type = RecentType.DOCUMENT
-                elif basename.find('recentapplications') >=0 : recent_type = RecentType.APPLICATION
-
-                ri = RecentItem(name, url, '', source, recent_type, user)
-                recent_items.append(ri)
-                # try: # Not reading bookmark right now, but this code should work!
-                #     bm = item['bookmark']
-                #     if type(bm) == ccl_bplist.NsKeyedArchiverDictionary: # Sometimes its 'str', otherwise this
-                #         bm = bm['NS.data']
-                #     #print "bookmark bytes=", len(bm)
-                # except:
-                #     pass # Not everything has bookmarks
-    except (ccl_bplist.BplistError, ValueError, TypeError) as ex:
+            recent_items.append(RecentItem(entry.name, entry.url, entry.info, source, recent_type, user))
+    except Exception:
         log.exception('Error reading SFL plist')
 
 def ProcessSFLFolder(mac_info, user_path, recent_items):

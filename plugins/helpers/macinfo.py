@@ -40,6 +40,14 @@ if sys.platform != "win32": # xattr only works on non-windows platforms (macOS, 
 
 log = logging.getLogger('MAIN.HELPERS.MACINFO')
 
+PARTIAL_MACOS_MARKERS = (
+    '/Users',
+    '/Applications',
+    '/Library',
+    '/private/etc',
+    '/private/var/db/dslocal/nodes/Default/users',
+)
+
 '''
     Common data structures for plugins 
 '''
@@ -57,6 +65,19 @@ class OutputParams:
         self.export_path_rel = '' # Relative export path
         self.export_log_sqlite = None
         self.timezone = TimeZoneType.UTC
+
+def _PathExists(mac_info, path):
+    '''Check whether path exists as either a file or a folder.'''
+    return mac_info.IsValidFilePath(path) or mac_info.IsValidFolderPath(path)
+
+def CheckForPartialMacOsAcquisition(mac_info, min_marker_hits=3):
+    '''
+        Identify likely partial macOS acquisitions where key data-volume paths are
+        present but /System/Library/CoreServices/SystemVersion.plist is absent.
+        Returns (is_partial, matched_markers).
+    '''
+    matched_markers = [path for path in PARTIAL_MACOS_MARKERS if _PathExists(mac_info, path)]
+    return len(matched_markers) >= min_marker_hits, matched_markers
 
 class UserInfo:
     def __init__ (self):

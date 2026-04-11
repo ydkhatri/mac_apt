@@ -56,6 +56,13 @@ def FindMacOsFiles(mac_info):
         mac_info._GetUserInfo()
         return True
     else:
+        is_partial, matched_markers = macinfo.CheckForPartialMacOsAcquisition(mac_info)
+        if is_partial:
+            log.warning("Could not find /System/Library/CoreServices/SystemVersion.plist. "
+                        "Treating image as a partial macOS acquisition based on data-volume markers: %s",
+                        ', '.join(matched_markers))
+            mac_info._GetUserInfo()
+            return True
         log.info("Could not find OSX/macOS installation!")
     return False
 
