@@ -38,6 +38,7 @@
      PKGSCRIPTS_DETAIL - raw script content (first 50 lines), package metadata
 '''
 
+import bz2
 import gzip
 import logging
 import os
@@ -105,6 +106,7 @@ SCRIPT_PATHS = {  # path variants as they appear in xar TOC
 }
 
 XAR_MAGIC = 0x78617221  # 'xar!'
+MAX_PKG_RECURSION_DEPTH = 4  # max nesting depth for component packages inside a product archive
 
 
 # ---------------------------------------------------------------------------
@@ -174,12 +176,17 @@ def _extract_xar_file(data, heap_start, offset, length, encoding):
     if not raw:
         return b''
     enc = encoding.lower()
-    if 'gzip' in enc or enc == 'application/x-gzip':
+    if 'gzip' in enc:
         try:
             return gzip.decompress(raw)
         except Exception:
             pass
-    if 'zlib' in enc or enc == 'application/x-bzip2':
+    if 'bzip2' in enc:
+        try:
+            return bz2.decompress(raw)
+        except Exception:
+            pass
+    if 'zlib' in enc:
         try:
             return zlib.decompress(raw)
         except Exception:
@@ -188,10 +195,14 @@ def _extract_xar_file(data, heap_start, offset, length, encoding):
     return raw
 
 
-def extract_scripts_from_xar(data):
+def extract_scripts_from_xar(data, depth=0):
     '''Parse a xar archive (bytes) and extract preinstall/postinstall script content.
     Returns dict: {script_basename: bytes_content}.
     Returns empty dict if not a valid xar or no scripts found.'''
+    if depth > MAX_PKG_RECURSION_DEPTH:
+        log.debug('xar: max nesting depth {} reached, skipping nested package'.format(depth))
+        return {}
+
     try:
         hdr_size, toc_len_c, heap_start = _read_xar_header(data)
         root = _parse_xar_toc(data, hdr_size, toc_len_c)
@@ -211,7 +222,6 @@ def extract_scripts_from_xar(data):
             scripts[basename] = content
 
     # Also look for nested packages (product archive contains component pkgs)
-    # These appear as .pkg directories in the TOC; recurse one level
     for file_elem in root.iter('file'):
         name = file_elem.findtext('name', '')
         if not (name.endswith('.pkg') or name.endswith('.mpkg')):
@@ -228,7 +238,7 @@ def extract_scripts_from_xar(data):
             continue
         sub_data = _extract_xar_file(data, heap_start, offset, length, encoding)
         if sub_data and sub_data[:4] == b'xar!':
-            sub_scripts = extract_scripts_from_xar(sub_data)
+            sub_scripts = extract_scripts_from_xar(sub_data, depth=depth + 1)
             for k, v in sub_scripts.items():
                 if k not in scripts:
                     scripts[k] = v

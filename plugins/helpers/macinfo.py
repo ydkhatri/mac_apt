@@ -48,8 +48,13 @@ PARTIAL_MACOS_MARKERS = (
     '/private/var/db/dslocal/nodes/Default/users',
 )
 
+# SpringBoard.app is iOS-only; its presence means this is definitely not macOS
+_IOS_DISCRIMINATOR_PATHS = (
+    '/System/Library/CoreServices/SpringBoard.app',
+)
+
 '''
-    Common data structures for plugins 
+    Common data structures for plugins
 '''
 class OutputParams:
     def __init__(self):
@@ -75,9 +80,25 @@ def CheckForPartialMacOsAcquisition(mac_info, min_marker_hits=3):
         Identify likely partial macOS acquisitions where key data-volume paths are
         present but /System/Library/CoreServices/SystemVersion.plist is absent.
         Returns (is_partial, matched_markers).
+
+        Hard excludes iOS images (SpringBoard.app present) and generic Linux/Docker
+        images that happen to have /Users, /Applications, /Library but lack any
+        macOS-private-namespace path (/private/...).
     '''
+    # Reject iOS: SpringBoard.app exists only on iOS, never on macOS
+    if any(_PathExists(mac_info, p) for p in _IOS_DISCRIMINATOR_PATHS):
+        return False, []
+
     matched_markers = [path for path in PARTIAL_MACOS_MARKERS if _PathExists(mac_info, path)]
-    return len(matched_markers) >= min_marker_hits, matched_markers
+    if len(matched_markers) < min_marker_hits:
+        return False, []
+
+    # Require at least one /private/... path to exclude Linux/Docker images that
+    # may carry /Users, /Applications, /Library but have no macOS private namespace
+    if not any('/private/' in p for p in matched_markers):
+        return False, []
+
+    return True, matched_markers
 
 class UserInfo:
     def __init__ (self):

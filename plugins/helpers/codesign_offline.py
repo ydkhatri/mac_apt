@@ -52,12 +52,15 @@ CD_MAGIC_BYTES         = b'\xfa\xde\x0c\x02'
 # (field added in 0x20200; present in all modern macOS binaries)
 CD_VERSION_TEAM_OFFSET = 0x20200
 
-# Byte offset of the teamOffset field within a CodeDirectory struct
-# struct layout up to that field (all big-endian uint32):
+# Byte offset of fields within a CodeDirectory struct (all big-endian uint32):
 #   magic(4) length(4) version(4) flags(4) hashOffset(4) identOffset(4)
 #   nSpecialSlots(4) nCodeSlots(4) codeLimit(4) hashSize(1) hashType(1)
 #   platform(1) pageSize(1) spare2(4) scatterOffset(4) → teamOffset at byte 48
-CD_TEAM_OFFSET_FIELD_POS = 48
+CD_FLAGS_FIELD_POS       = 12   # offset of flags within CodeDirectory struct
+CD_TEAM_OFFSET_FIELD_POS = 48   # offset of teamOffset field
+
+# CS_ADHOC flag: set when the binary is signed without a certificate (self-signed)
+CS_ADHOC = 0x2
 
 # Maximum bytes read from the end of a binary when scanning for Team ID.
 # Code signatures are always at the end of a Mach-O; 4 MB is generous.
@@ -119,16 +122,21 @@ def compute_sha256(mac_info, file_path):
 # ---------------------------------------------------------------------------
 
 def _scan_bytes_for_team_id(data):
-    '''Scan a bytes buffer for a CodeDirectory blob and return the Team ID.
-    Returns a 10-character alphanumeric string, or empty string if not found.'''
+    '''Scan a bytes buffer for a CodeDirectory blob.
+    Returns (team_id, is_adhoc) where:
+      team_id  - 10-char alphanumeric string or empty string
+      is_adhoc - True when CS_ADHOC flag is set in any valid CodeDirectory found
+    '''
     offset = 0
+    found_is_adhoc = False
+
     while True:
         idx = data.find(CD_MAGIC_BYTES, offset)
         if idx < 0:
             break
 
-        # Need at least 52 bytes to read teamOffset
-        if len(data) - idx < CD_TEAM_OFFSET_FIELD_POS + 4:
+        # Need at least 16 bytes to verify magic and read flags
+        if len(data) - idx < CD_FLAGS_FIELD_POS + 4:
             break
 
         try:
@@ -136,7 +144,18 @@ def _scan_bytes_for_team_id(data):
             if magic != CSMAGIC_CODEDIRECTORY:
                 offset = idx + 4
                 continue
+
+            # Read CS flags — present in all CodeDirectory versions
+            flags = struct.unpack_from('>I', data, idx + CD_FLAGS_FIELD_POS)[0]
+            if flags & CS_ADHOC:
+                found_is_adhoc = True
+
             if version < CD_VERSION_TEAM_OFFSET:
+                offset = idx + 4
+                continue
+
+            # Need 52 bytes to read the teamOffset field
+            if len(data) - idx < CD_TEAM_OFFSET_FIELD_POS + 4:
                 offset = idx + 4
                 continue
 
@@ -169,30 +188,30 @@ def _scan_bytes_for_team_id(data):
                 continue
 
             if candidate.isalnum() and candidate.isupper():
-                return candidate
+                return candidate, found_is_adhoc
             # Some Team IDs mix upper and digit only - accept alphanumeric
             if candidate.isalnum():
-                return candidate
+                return candidate, found_is_adhoc
 
         except struct.error:
             pass
 
         offset = idx + 4
 
-    return ''
+    return '', found_is_adhoc
 
 
 def get_team_id_from_binary(mac_info, binary_path):
-    '''Extract Team ID from a Mach-O binary by scanning for a CodeDirectory.
-    Reads only the last MAX_SCAN_BYTES of the file for performance.
-    Returns Team ID string or empty string.'''
+    '''Extract Team ID and adhoc flag from a Mach-O binary by scanning for a
+    CodeDirectory. Reads only the last MAX_SCAN_BYTES of the file for performance.
+    Returns (team_id, is_adhoc) tuple.'''
     try:
         file_size = mac_info.GetFileSize(binary_path)
         if not file_size:
-            return ''
+            return '', False
         f = mac_info.Open(binary_path)
         if f is None:
-            return ''
+            return '', False
 
         if file_size > MAX_SCAN_BYTES:
             f.seek(file_size - MAX_SCAN_BYTES)
@@ -207,7 +226,7 @@ def get_team_id_from_binary(mac_info, binary_path):
 
     except Exception:
         log.debug('Team ID binary scan failed for {}'.format(binary_path))
-        return ''
+        return '', False
 
 
 # ---------------------------------------------------------------------------
@@ -274,16 +293,17 @@ def get_bundle_info(mac_info, bundle_path):
     info.main_binary_path = _find_main_binary(mac_info, bundle_path, plist)
 
     # --- Team ID + SHA-256 ---
+    is_adhoc = False
     if info.main_binary_path:
-        info.team_id = get_team_id_from_binary(mac_info, info.main_binary_path)
+        info.team_id, is_adhoc = get_team_id_from_binary(mac_info, info.main_binary_path)
         info.sha256  = compute_sha256(mac_info, info.main_binary_path)
 
     # --- CodeSign status ---
     has_sig_dir = _has_code_signature_dir(mac_info, bundle_path)
-    if info.team_id and info.team_id != '-':
-        info.codesign_status = 'signed'
-    elif info.team_id == '-':
+    if is_adhoc:
         info.codesign_status = 'adhoc'
+    elif info.team_id:
+        info.codesign_status = 'signed'
     elif has_sig_dir:
         # Signature directory present but Team ID not readable
         info.codesign_status = 'signed'
@@ -299,13 +319,13 @@ def get_binary_codesign_info(mac_info, binary_path):
     Returns a BundleInfo instance (bundle_id will be empty).'''
     info = BundleInfo()
     info.main_binary_path = binary_path
-    info.team_id = get_team_id_from_binary(mac_info, binary_path)
+    info.team_id, is_adhoc = get_team_id_from_binary(mac_info, binary_path)
     info.sha256  = compute_sha256(mac_info, binary_path)
 
-    if info.team_id and info.team_id != '-':
-        info.codesign_status = 'signed'
-    elif info.team_id == '-':
+    if is_adhoc:
         info.codesign_status = 'adhoc'
+    elif info.team_id:
+        info.codesign_status = 'signed'
     else:
         info.codesign_status = 'unknown'
 

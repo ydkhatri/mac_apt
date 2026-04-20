@@ -54,8 +54,8 @@ EMOND_RULES_DIRS = [
 ]
 EMOND_CLIENTS_PATH = '/private/var/db/emondClients'
 
-# Action types that have an execution target
-EXEC_ACTION_TYPES = {'RunCommand', 'Log', 'SendEmail'}
+# Action types that have an execution target (only these produce main-table rows)
+EXEC_ACTION_TYPES = {'RunCommand'}
 
 
 # ---------------------------------------------------------------------------
@@ -138,23 +138,24 @@ def process_emond_rule_file(mac_info, file_path, main_rows, detail_rows):
                 value=str(action),
             ))
 
-            # Emit a main row for every action (RunCommand is highest priority)
-            main_rows.append(make_main_row(
-                mechanism='Emond Persistence',
-                sub_mechanism='emond_rule',
-                scope='system',
-                user='root',
-                uid=0,
-                artifact_path=file_path,
-                artifact_type='emond_rule',
-                target_path=target,
-                target_args=args,
-                trigger=trigger,
-                enabled=enabled,
-                label_or_name=rule_name,
-                artifact_mtime=artifact_mtime,
-                source=file_path,
-            ))
+            # Emit a main row only for actions that execute something
+            if action_type in EXEC_ACTION_TYPES:
+                main_rows.append(make_main_row(
+                    mechanism='Emond Persistence',
+                    sub_mechanism='emond_rule',
+                    scope='system',
+                    user='root',
+                    uid=0,
+                    artifact_path=file_path,
+                    artifact_type='emond_rule',
+                    target_path=target,
+                    target_args=args,
+                    trigger=trigger,
+                    enabled=enabled,
+                    label_or_name=rule_name,
+                    artifact_mtime=artifact_mtime,
+                    source=file_path,
+                ))
 
 
 # ---------------------------------------------------------------------------

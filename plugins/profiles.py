@@ -471,9 +471,14 @@ def Plugin_Start(mac_info):
         log.info('No configuration profile artifacts found')
 
 
+_SCAN_PLISTS_MAX_DEPTH = 8
+
+
 def _scan_dir_for_plists(mac_info, directory, user_name, uid, sub_mech,
-                          main_rows, detail_rows, processed):
+                          main_rows, detail_rows, processed, depth=0):
     '''Recursively scan directory for .plist / .mobileconfig files and parse them.'''
+    if depth > _SCAN_PLISTS_MAX_DEPTH:
+        return
     try:
         items = mac_info.ListItemsInFolder(directory, EntryType.FILES_AND_FOLDERS, False)
     except Exception:
@@ -483,8 +488,9 @@ def _scan_dir_for_plists(mac_info, directory, user_name, uid, sub_mech,
         if item_path in processed:
             continue
         if item.get('type') == EntryType.FOLDERS or mac_info.IsValidFolderPath(item_path):
+            processed.add(item_path)  # mark folder before recursing to break symlink cycles
             _scan_dir_for_plists(mac_info, item_path, user_name, uid, sub_mech,
-                                  main_rows, detail_rows, processed)
+                                  main_rows, detail_rows, processed, depth + 1)
         elif item['name'].endswith(('.plist', '.mobileconfig')):
             processed.add(item_path)
             process_mobileconfig(mac_info, item_path, user_name, uid,

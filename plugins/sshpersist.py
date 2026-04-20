@@ -339,10 +339,30 @@ def parse_authkeys_line(line):
 # authorized_keys processor
 # ---------------------------------------------------------------------------
 
+def _compute_file_sha256(mac_info, file_path):
+    '''Return lowercase hex SHA-256 of file contents, or empty string on error.'''
+    try:
+        fh = mac_info.Open(file_path)
+        if fh is None:
+            return ''
+        h = hashlib.sha256()
+        while True:
+            chunk = fh.read(65536)
+            if not chunk:
+                break
+            if isinstance(chunk, str):
+                chunk = chunk.encode('latin-1')
+            h.update(chunk)
+        return h.hexdigest()
+    except Exception:
+        return ''
+
+
 def process_authorized_keys(mac_info, file_path, user_name, uid, main_rows, detail_rows):
     mac_info.ExportFile(file_path, __Plugin_Name, user_name + '_', False)
     artifact_mtime = get_file_mtime(mac_info, file_path)
     scope = get_scope(user_name)
+    file_sha256 = _compute_file_sha256(mac_info, file_path)
 
     f = mac_info.Open(file_path)
     if f is None:
@@ -374,7 +394,7 @@ def process_authorized_keys(mac_info, file_path, user_name, uid, main_rows, deta
                 target_path=target,
                 trigger='ssh connection',
                 label_or_name=label[:120],
-                sha256=parsed['fingerprint'],
+                sha256=file_sha256,
                 artifact_mtime=artifact_mtime,
                 source=file_path,
             ))

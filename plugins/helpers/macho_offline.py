@@ -217,7 +217,7 @@ def _parse_single_arch(data, base_offset=0):
 
     # Parse load commands
     lc_offset = base_offset + hdr_size
-    lc_end    = lc_offset + sizeofcmds-
+    lc_end    = lc_offset + sizeofcmds
 
     if lc_end > len(data):
         # We may have a truncated read — process as much as available
@@ -293,7 +293,7 @@ def _parse_fat(data, is_fat64=False):
         if arch_info:
             arches.append(arch_info)
 
-    return arches-
+    return arches
 
 
 # ---------------------------------------------------------------------------
@@ -360,7 +360,7 @@ def parse_macho_from_mac_info(mac_info, binary_path,
     except Exception as e:
         info.parse_error = str(e)
         log.debug('macho_offline: read error for {}: {}'.format(binary_path, e))
-        return info-
+        return info
 
     return parse_macho(data, path=binary_path)
 

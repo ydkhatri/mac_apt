@@ -439,7 +439,7 @@ def Plugin_Start_Standalone(input_files_list, output_params):
                                 main_rows=main_rows, detail_rows=detail_rows)
         elif basename in ('at.allow', 'at.deny'):
             _standalone_policy(input_path, main_rows, detail_rows)
-        elif _looks_like_at_job(input_path):-
+        elif _looks_like_at_job(input_path):
             process_at_job(fake, input_path, main_rows, detail_rows)
         else:
             # Treat anything else as a user crontab.
