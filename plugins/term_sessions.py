@@ -17,7 +17,7 @@ from plugins.helpers.writer import *
 
 __Plugin_Name = "TERMSESSIONS" # Cannot have spaces, and must be all caps!
 __Plugin_Friendly_Name = "Terminal Sessions & History"
-__Plugin_Version = "1.0"
+__Plugin_Version = "1.1"
 __Plugin_Description = "Reads Terminal (bash & zsh) sessions & history for every user"
 __Plugin_Author = "Yogesh Khatri"
 __Plugin_Author_Email = "yogesh@swiftforensics.com"
@@ -175,17 +175,20 @@ def ReadHistoryFile(mac_info, history_path, history_type_str, term_sessions, use
     session.all_content = ''.join(content)
     # If EXTENDED_HISTORY was enabled at some point, then timestamps are stored in the .zsh_history file
     # Look for those and parse
-    regex = re.compile(r'^: ([0-9]+):([0-9]+);(.*)')
+    pattern = re.compile(r'^:\s*(?P<timestamp>\d+):(?P<duration>\d+);\s*(?P<command>[\s\S]*?)(?=\n:\s*\d+:\d+;|\Z)', re.MULTILINE)
 
-    for item in content:
-        if item:
-            matches = regex.match(item)
-            if matches:
-                session = BashSession(user_name, history_path, history_type_str + '_EXTENDED')
-                session.start_date = CommonFunctions.ReadUnixTime(matches.group(1))
-                session.new_content = matches.group(3)
-                term_sessions.append(session)
+    for match in pattern.finditer(session.all_content):
+        # Extract data using the group names
+        timestamp = match.group('timestamp')
+        duration = match.group('duration')
+        command = match.group('command').strip()
 
+        session = BashSession(user_name, history_path, history_type_str + '_EXTENDED')
+        session.start_date = CommonFunctions.ReadUnixTime(timestamp)
+        if duration != "0":
+            session.end_date = CommonFunctions.ReadUnixTime(int(timestamp) + int(duration))
+        session.new_content = command
+        term_sessions.append(session)
 
 def Plugin_Start(mac_info):
     '''Main Entry point function for plugin'''
