@@ -19,7 +19,7 @@ from plugins.helpers.writer import *
 
 __Plugin_Name = "AUTOSTART" # Cannot have spaces, and must be all caps!
 __Plugin_Friendly_Name = "Auto start"
-__Plugin_Version = "2.0"
+__Plugin_Version = "2.1"
 __Plugin_Description = "Retrieves persistent and auto-start programs, daemons, services"
 __Plugin_Author = "Brandon Mignini, Yogesh Khatri, Minoru Kobayashi"
 __Plugin_Author_Email = "brandon.mignini@mymail.champlain.edu, khatri@champlain.edu, unknownbit@gmail.com"
@@ -347,6 +347,8 @@ def process_dir(mac_info, path, persistent_programs, method, user_name, uid):
                         if program_args:
                             program_path = program_args[0]
                     program.app_path = program_path
+                    if isinstance(program.app_path, list):
+                        program.app_path = program.app_path[0]
                     program.app_args = ' '.join(program_args)
                     persistent_programs.append(program)
                     program.start_when = get_run_when(plist, method)
