@@ -951,8 +951,11 @@ class MacInfo:
                                         pass #log.debug('Could not find accountPolicyData for user {}'.format(target_user.user_name))
                                     else:
                                         self._ReadAccountPolicyData(account_policy_data, target_user)
+                            elif plist_meta['name'].startswith('_'):
+                                # Ignore hidden user plists, these are likely system users that do not have home directories
+                                pass
                             else:
-                                log.error('Did not find \'home\' in ' + plist_meta['name'])
+                                log.warning('Did not find \'home\' in ' + plist_meta['name'])
                         else:
                             log.error("failed to read plist " + user_plist_path + " Error was : " + error)
                             self._CheckFileContents(f)
