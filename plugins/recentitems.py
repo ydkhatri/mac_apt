@@ -10,10 +10,12 @@
 import logging
 import os
 import plistlib
+import re
 import struct
-import sys
+
 from binascii import unhexlify
 from enum import IntEnum
+from pathlib import Path
 
 import nska_deserialize as nd
 
@@ -23,7 +25,7 @@ from plugins.helpers.writer import *
 
 __Plugin_Name = "RECENTITEMS"
 __Plugin_Friendly_Name = "Recently accessed Servers, Documents, Hosts, Volumes & Applications"
-__Plugin_Version = "1.4"
+__Plugin_Version = "1.5"
 __Plugin_Description = "Gets recently accessed Servers, Documents, Hosts, Volumes & Applications from .plist and .sfl files. Also gets recent searches and places for each user"
 __Plugin_Author = "Yogesh Khatri"
 __Plugin_Author_Email = "yogesh@swiftforensics.com"
@@ -371,7 +373,7 @@ def ParseRecentFile(input_file):
             with open(input_file, "rb") as f:
                 if basename.endswith('.sfl'):
                     ReadSFLPlist(f, recent_items, input_file, '')
-                else: #SFL2 or SFL3
+                else: #SFL2 or SFL3 or SFL4
                     ReadSFL2Plist(f, recent_items, input_file, '')
         except (OSError) as ex:
             log.exception('Failed to open file: {}'.format(input_file))
@@ -606,6 +608,7 @@ def ReadRecentPlist(plist, recent_items, source='', user=''):
 def ReadSFL2Plist(file_handle, recent_items, source, user=''):
     basename = os.path.basename(source).lower()
     try:
+        count = 0
         plist = nd.deserialize_plist(file_handle)
         for item in plist['items']:
             name = item.get('Name', '')
@@ -622,6 +625,7 @@ def ReadSFL2Plist(file_handle, recent_items, source, user=''):
             elif basename.find('applicationrecentdocuments') >=0 : recent_type = RecentType.APP_RECENT_DOC
             ri = RecentItem(name, '', 'uuid={}'.format(uuid), source, recent_type, user)
             recent_items.append(ri)
+            count += 1
 
             data = item.get('Bookmark', None)
             if data:
@@ -633,7 +637,8 @@ def ReadSFL2Plist(file_handle, recent_items, source, user=''):
                     ri.ReadBookmark(data)
     except(KeyError, nd.DeserializeError, nd.biplist.NotBinaryPlistException, nd.biplist.InvalidPlistException,
             plistlib.InvalidFileException,nd.ccl_bplist.BplistError, ValueError, TypeError, OSError, OverflowError):
-        log.exception('Error reading SFL2 or SFL3 plist')
+        log.exception('Error reading SFL2/SFL3/SFL4 plist')
+    log.debug(f'Added {count} items')
 
 def ReadSFLPlist(file_handle, recent_items, source, user=''):
     try:
@@ -696,7 +701,7 @@ def ProcessSFLFolder(mac_info, user_path, recent_items):
                     if f != None:
                         if f_name.endswith('.sfl'):
                             ReadSFLPlist(f, recent_items, source_path, user_name)
-                        else: #SFL2 or SFL3
+                        else: #SFL2 or SFL3 or SFL4
                             ReadSFL2Plist(f, recent_items, source_path, user_name)
 
 def ProcessSFL(mac_info, recent_items):
@@ -817,8 +822,24 @@ def Plugin_Start_Standalone(input_files_list, output_params):
         if os.path.basename(input_path).startswith('com.apple.LSSharedFileList.ProjectsItems.'): # Only has Tag/color info
             log.info('Skipping ' + input_path)
             continue
+        recent_items = []
+        if os.path.isdir(input_path):
+            if os.path.basename(input_path).startswith('com.apple.LSSharedFileList.ApplicationRecentDocuments') or \
+                os.path.basename(input_path).startswith('com.apple.sharedfilelist'):
 
-        recent_items = ParseRecentFile(input_path)
+                path_obj = Path(input_path)
+                pattern = re.compile(r'\.sfl[1-9]?$')
+                for item in path_obj.iterdir():
+                    if item.is_file() and pattern.search(item.suffix):
+                        sfl_full_path = str(item.resolve())
+                        log.debug(f"Reading {sfl_full_path}")
+                        with open(sfl_full_path, 'rb') as f:
+                            if item.name.endswith('.sfl'):
+                                ReadSFLPlist(f, recent_items, sfl_full_path, '')
+                            else: #SFL2 or SFL3 or SFL4
+                                ReadSFL2Plist(f, recent_items, sfl_full_path, '')
+        else:
+            recent_items = ParseRecentFile(input_path)
         if len(recent_items) > 0:
             PrintAll(recent_items, output_params, input_path)
         else:
