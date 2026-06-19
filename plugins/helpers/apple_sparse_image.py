@@ -7,7 +7,7 @@
    
 '''
 
-from construct import *
+from construct import Struct, Const, Int32ub, Int64ub
 
 class AppleSparseImage:
 

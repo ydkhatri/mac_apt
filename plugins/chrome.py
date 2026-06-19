@@ -16,7 +16,7 @@ import os
 import re
 import sqlite3
 
-from construct import *
+from construct import Bytes, If, Int32ul, Int64ul, this
 
 from plugins.helpers.common import CommonFunctions
 from plugins.helpers.macinfo import *

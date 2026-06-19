@@ -17,7 +17,7 @@
 import logging
 import os
 
-from construct import *
+from construct import Int32ul, Padding, PaddedString
 
 from plugins.helpers.macinfo import *
 from plugins.helpers.writer import *

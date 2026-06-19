@@ -33,7 +33,7 @@ http://mirror.informatimago.com/next/developer.apple.com/documentation/Carbon/Re
    kIsAlias = 0x8000
 """
 
-from construct import *
+from construct import Array, Bytes, Int8sb, Int8sl, Int8ub, Int16sb, Int16ub, Int16ul, Int32sb, Int32ub, Int32ul, Int64ub, Int64ul, PaddedString, Struct, Switch
 
 def getString(obj):
     return obj.HFSUniStr255.unicode.replace('/', ':')
