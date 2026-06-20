@@ -10,7 +10,7 @@
 import logging
 import sqlite3
 
-from plugins.helpers.bookmark import *
+from mac_alias import Bookmark, kBookmarkPath, kBookmarkFileCreationDate, kBookmarkVolumeBookmark, kBookmarkVolumePath, kBookmarkVolumeCreationDate
 from plugins.helpers.common import CommonFunctions
 from plugins.helpers.macinfo import *
 from plugins.helpers.writer import *
@@ -127,7 +127,6 @@ def ReadLastGKRejectPlist(plist):
     mal_type = plist.get('XProtectMalwareType', None)
 
     if bookmark_data:
-        bm = Bookmark.from_bytes(bookmark_data)
         file_path = ''
         file_creation_date = None
         vol_path = ''
@@ -135,30 +134,31 @@ def ReadLastGKRejectPlist(plist):
         orig_vol_path = ''
         orig_vol_creation_date = None
         try:
+            bm = Bookmark.from_bytes(bookmark_data)
             # Get full file path
-            vol_path = bm.tocs[0][1].get(BookmarkKey.VolumePath, '')
-            vol_creation_date = bm.tocs[0][1].get(BookmarkKey.VolumeCreationDate, '')
-            file_path = bm.tocs[0][1].get(BookmarkKey.Path, [])
+            vol_path = bm.tocs[0][1].get(kBookmarkVolumePath, '')
+            vol_creation_date = bm.tocs[0][1].get(kBookmarkVolumeCreationDate, '')
+            file_path = bm.tocs[0][1].get(kBookmarkPath, [])
 
             file_path = '/' + '/'.join(file_path)
-            file_creation_date = bm.tocs[0][1].get(BookmarkKey.FileCreationDate, '')
+            file_creation_date = bm.tocs[0][1].get(kBookmarkFileCreationDate, '')
             if vol_path and (not file_path.startswith(vol_path)):
                 file_path += vol_path
             
             # If file is on a mounted volume (dmg), get the dmg file details too
-            orig_vol_bm = bm.tocs[0][1].get(BookmarkKey.VolumeBookmark, None)
+            orig_vol_bm = bm.tocs[0][1].get(kBookmarkVolumeBookmark, None)
             if orig_vol_bm:
                 filtered = list(filter(lambda x: x[0]==orig_vol_bm, bm.tocs))
                 if filtered:
                     orig_vol_toc = filtered[0][1]
-                    orig_vol_path = orig_vol_toc.get(BookmarkKey.Path, '')
-                    orig_vol_creation_date = orig_vol_toc.get(BookmarkKey.VolumeCreationDate, '')
+                    orig_vol_path = orig_vol_toc.get(kBookmarkPath, '')
+                    orig_vol_creation_date = orig_vol_toc.get(kBookmarkVolumeCreationDate, '')
                     if orig_vol_path:
                         orig_vol_path = '/' + '/'.join(orig_vol_path)
                         log.info
                 else:
                     print ("Error, tid {} not found ".format(orig_vol_bm))
-        except (IndexError, ValueError):
+        except (IndexError, ValueError, struct.error):
             log.exception('Error processing BookmarkData from .LastGKReject')
             log.debug(bm)
 

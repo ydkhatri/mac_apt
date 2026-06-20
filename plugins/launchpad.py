@@ -12,8 +12,9 @@
 '''
 
 import logging
+
+from mac_alias import Bookmark, kBookmarkPath, kBookmarkVolumePath
 from plugins.helpers.common import CommonFunctions
-from plugins.helpers.bookmark import *
 from plugins.helpers.macinfo import *
 from plugins.helpers.writer import *
 
@@ -135,11 +136,11 @@ def ParseLaunchpadItemsDb(db, launchpad_items, user_name, source_path):
                 path = ''
                 try:
                     bm = Bookmark.from_bytes(app_bookmark)
-                    path = '/'.join(bm.tocs[0][1].get(BookmarkKey.Path, []))
-                    vol_path = bm.tocs[0][1].get(BookmarkKey.VolumePath, '/') # in case it is different from /
+                    path = '/'.join(bm.tocs[0][1].get(kBookmarkPath, []))
+                    vol_path = bm.tocs[0][1].get(kBookmarkVolumePath, '/') # in case it is different from /
                     if path:
                         path = vol_path + path
-                except (KeyError, ValueError, TypeError):
+                except (KeyError, ValueError, TypeError, struct.error):
                     log.exception("Failed to read path from bookmark")
                     
                 di = LaunchpadItem(app_title, app_moddate, path, app_bundle_id, app_category, user_name, source_path)

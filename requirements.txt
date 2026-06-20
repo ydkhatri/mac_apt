@@ -8,6 +8,7 @@ kaitaistruct
 libewf-python
 libvmdk-python
 lz4
+mac_alias==2.2.3
 nska_deserialize==1.5.1
 packaging
 pillow

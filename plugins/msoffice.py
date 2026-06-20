@@ -13,12 +13,13 @@ import posixpath
 import sqlite3
 import struct
 
+from mac_alias import Bookmark, kBookmarkPath, kBookmarkFileCreationDate, kBookmarkUserName, kBookmarkVolumePath, kBookmarkVolumeCreationDate
 from os import path
 from plistutils.alias import AliasParser
 from plugins.helpers.common import CommonFunctions
 from plugins.helpers.macinfo import *
 from plugins.helpers.writer import *
-from plugins.helpers.bookmark import *
+
 
 __Plugin_Name = "MSOFFICE"
 __Plugin_Friendly_Name = "MSOffice"
@@ -242,26 +243,26 @@ def ProcessOfficeAppPlist(plist, office_items, app_name, user, source):
         try:
             bm = Bookmark.from_bytes(bookmark_data)
             # Get full file path
-            vol_path = bm.tocs[0][1].get(BookmarkKey.VolumePath, '')
-            vol_creation_date = bm.tocs[0][1].get(BookmarkKey.VolumeCreationDate, '')
-            file_path = bm.tocs[0][1].get(BookmarkKey.Path, [])
+            vol_path = bm.tocs[0][1].get(kBookmarkVolumePath, '')
+            vol_creation_date = bm.tocs[0][1].get(kBookmarkVolumeCreationDate, '')
+            file_path = bm.tocs[0][1].get(kBookmarkPath, [])
 
             file_path = '/' + '/'.join(file_path)
-            file_creation_date = bm.tocs[0][1].get(BookmarkKey.FileCreationDate, '')
+            file_creation_date = bm.tocs[0][1].get(kBookmarkFileCreationDate, '')
             if vol_path and (not file_path.startswith(vol_path)):
                 file_path += vol_path
             
             if user == '': # in artifact_only mode
                 try:
-                    user = bm.tocs[0][1].get(BookmarkKey.UserName, '')
+                    user = bm.tocs[0][1].get(kBookmarkUserName, '')
                     if user == 'unknown':
                         user = ''
-                except (IndexError, ValueError):
+                except (IndexError, ValueError, struct.error):
                     pass
 
             o_item = MSOfficeItem(app_name, file_creation_date, None, 'LastSaveFilePathBookmark', file_path, 'TimeStamp is FileCreated', user, source)
             office_items.append(o_item)
-        except (IndexError, ValueError):
+        except (IndexError, ValueError, struct.error):
             log.exception('Error processing BookmarkData from {}'.format(source))
             log.debug(bm)
         
@@ -274,15 +275,15 @@ def ProcessOfficeAppSecureBookmarksPlist(plist, office_items, app_name, user, so
         last_used_date = v.get('kLastUsedDateKey', None)
         try:
             bm = Bookmark.from_bytes(data)
-            file_creation_date = bm.tocs[0][1].get(BookmarkKey.FileCreationDate, '')
+            file_creation_date = bm.tocs[0][1].get(kBookmarkFileCreationDate, '')
             if user == '': # in artifact_only mode
                 try:
-                    user = bm.tocs[0][1].get(BookmarkKey.UserName, '')
+                    user = bm.tocs[0][1].get(kBookmarkUserName, '')
                     if user == 'unknown':
                         user = ''
-                except (IndexError, ValueError):
+                except (IndexError, ValueError, struct.error):
                     pass
-        except (IndexError, ValueError):
+        except (IndexError, ValueError, struct.error):
             log.exception('Error processing BookmarkData from {}'.format(source))
             log.debug(bm)
 

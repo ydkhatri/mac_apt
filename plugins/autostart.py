@@ -11,9 +11,8 @@ import logging
 import os
 import posixpath
 
+from mac_alias import Bookmark, kBookmarkDisplayName, kBookmarkPath, kBookmarkFileCreationDate, kBookmarkUserName, kBookmarkURL, kBookmarkVolumeBookmark, kBookmarkVolumePath, kBookmarkVolumeURL, kBookmarkVolumeSize, kBookmarkVolumeCreationDate, kBookmarkVolumeName, kBookmarkVolumeUUID 
 from plistutils.alias import AliasParser
-
-from plugins.helpers.bookmark import *
 from plugins.helpers.macinfo import *
 from plugins.helpers.writer import *
 
@@ -139,7 +138,11 @@ def process_backgrounditems_btm(mac_info, btm_path, user, uid, persistent_progra
                     log.error('Error fetching bookmark data ' + str(ex))
                     continue
                 if isinstance(bm, bytes):
-                    bm = Bookmark.from_bytes(bm)
+                    try:
+                        bm = Bookmark.from_bytes(bm)
+                    except (KeyError, ValueError, struct.error):
+                        log.exception("Failed to read bookmark")
+                        continue
                 elif isinstance(bm, dict):
                     try:
                         bm = Bookmark.from_bytes(bm['NS.data'])
@@ -147,30 +150,29 @@ def process_backgrounditems_btm(mac_info, btm_path, user, uid, persistent_progra
                         log.exception("Failed to read NS.data as bookmark")
                         continue
                 try:
-                    # record type 0xf017 means an item name
-                    name = bm.tocs[0][1].get(0xf017, '')
+                    name = bm.tocs[0][1].get(kBookmarkDisplayName, '')
 
                     # Get full file path
-                    vol_path = bm.tocs[0][1].get(BookmarkKey.VolumePath, '')
-                    file_path = bm.tocs[0][1].get(BookmarkKey.Path, [])
+                    vol_path = bm.tocs[0][1].get(kBookmarkVolumePath, '')
+                    file_path = bm.tocs[0][1].get(kBookmarkPath, [])
                     file_path = '/' + '/'.join(file_path)
                     if vol_path and (not file_path.startswith(vol_path)):
                         file_path = vol_path + file_path
 
                     # If file is on a mounted volume (dmg), get the dmg file details too
-                    orig_vol_bm = bm.tocs[0][1].get(BookmarkKey.VolumeBookmark, None)
+                    orig_vol_bm = bm.tocs[0][1].get(kBookmarkVolumeBookmark, None)
                     if orig_vol_bm:
                         filtered = list(filter(lambda x: x[0]==orig_vol_bm, bm.tocs))
                         if filtered:
                             orig_vol_toc = filtered[0][1]
-                            orig_vol_path = orig_vol_toc.get(BookmarkKey.Path, '')
-                            orig_vol_creation_date = orig_vol_toc.get(BookmarkKey.VolumeCreationDate, '')
+                            orig_vol_path = orig_vol_toc.get(kBookmarkPath, '')
+                            orig_vol_creation_date = orig_vol_toc.get(kBookmarkVolumeCreationDate, '')
                             if orig_vol_path:
                                 orig_vol_path = '/' + '/'.join(orig_vol_path)
                                 log.info
                         else:
                             print ("Error, tid {} not found ".format(orig_vol_bm))
-                except (TypeError, KeyError, ValueError) as ex:
+                except (TypeError, KeyError, ValueError, struct.error) as ex:
                     log.exception('Problem reading btm bookmark')
                     continue
 
