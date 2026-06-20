@@ -10,7 +10,6 @@
 import logging
 import sqlite3
 
-from plugins.helpers.bookmark import *
 from plugins.helpers.common import CommonFunctions
 from plugins.helpers.macinfo import *
 from plugins.helpers.writer import *
