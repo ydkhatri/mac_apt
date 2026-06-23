@@ -7,6 +7,7 @@
    
 '''
 
+from ast import pattern
 import logging
 import os
 import plistlib
@@ -328,7 +329,10 @@ def PrintAll(recent_items, output_params, source_path):
 def ParseRecentFile(input_file):
     recent_items = []
     basename = os.path.basename(input_file).lower()
-    if basename.endswith('.sfl') or basename.endswith('.sfl2') or basename.endswith('.sfl3'):
+    pattern = re.compile(r'\.sfl[1-9]?$', re.IGNORECASE)
+    ext = Path(input_file).suffix
+    
+    if pattern.search(ext):
         try:
             with open(input_file, "rb") as f:
                 if basename.endswith('.sfl'):
@@ -643,6 +647,7 @@ def ReadSFLPlist(file_handle, recent_items, source, user=''):
         log.exception('Error reading SFL plist')
 
 def ProcessSFLFolder(mac_info, user_path, recent_items):
+    pattern = re.compile(r'\.sfl[1-9]?$', re.IGNORECASE)
     processed_paths = []
     for user in mac_info.users:
         user_name = user.user_name
@@ -654,9 +659,10 @@ def ProcessSFLFolder(mac_info, user_path, recent_items):
         if mac_info.IsValidFolderPath(source_folder):
             files_list = mac_info.ListItemsInFolder(source_folder,EntryType.FILES)
             for file_entry in files_list:
+                source_path = source_folder + '/' + file_entry['name']
                 f_name = file_entry['name'].lower()
-                if (f_name.endswith('.sfl') and (file_entry['size'] > 446)) or f_name.endswith('.sfl2') or f_name.endswith('.sfl3'): # 446 is an empty plist, only keyed class data for SFL
-                    source_path = source_folder + '/' + file_entry['name']
+                ext = Path(source_path).suffix
+                if pattern.search(ext):
                     if f_name.startswith('com.apple.lssharedfilelist.projectsitems.'): # Only has Tag/color info
                         log.info('Skipping ' + source_path)
                         continue
@@ -792,13 +798,13 @@ def Plugin_Start_Standalone(input_files_list, output_params):
                 os.path.basename(input_path).startswith('com.apple.sharedfilelist'):
 
                 path_obj = Path(input_path)
-                pattern = re.compile(r'\.sfl[1-9]?$')
+                pattern = re.compile(r'\.sfl[1-9]?$', re.IGNORECASE)
                 for item in path_obj.iterdir():
                     if item.is_file() and pattern.search(item.suffix):
                         sfl_full_path = str(item.resolve())
                         log.debug(f"Reading {sfl_full_path}")
                         with open(sfl_full_path, 'rb') as f:
-                            if item.name.endswith('.sfl'):
+                            if item.suffix.lower().endswith('.sfl'):
                                 ReadSFLPlist(f, recent_items, sfl_full_path, '')
                             else: #SFL2 or SFL3 or SFL4
                                 ReadSFL2Plist(f, recent_items, sfl_full_path, '')
