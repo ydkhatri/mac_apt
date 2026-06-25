@@ -804,7 +804,7 @@ def Plugin_Start(mac_info):
                             if file_entry['name'] == 'Extensions':
                                 ProcessExtensions(mac_info, chromium_artifacts, user_profile_name, source_path + '/Extensions', browser)
                             elif file_entry['name'] == 'Sessions':
-                                sessions_path = os.path.join(source_path, "Sessions")
+                                sessions_path = f"{source_path.rstrip('/')}/Sessions"
                                 sessions_files_list = mac_info.ListItemsInFolder(sessions_path, EntryType.FILES, include_dates=False)
                                 for file_entry in sessions_files_list:
                                     if file_entry['size'] == 0: 
