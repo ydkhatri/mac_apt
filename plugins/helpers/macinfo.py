@@ -2077,12 +2077,16 @@ class ZipMacInfo(MacInfo):
             log.warning(f'In ZipMacInfo::IsValidFolderPath(), found \\ in path: {path}')
         ###
         try:
-            if path[-1] != '/': # For Axiom created zip files, folders have their own objects, which end in /
+            if path[-1] != '/': # For Axiom created zip files, most folders have their own objects, which end in /
                 path += '/'
             info = self.zip_file.getinfo(path[1:])
             return info.is_dir() # check if its folder
         except KeyError as ex:
-            pass
+            # some folders don't have their own objects
+            for member in self.name_list:
+                if member.startswith(path[1:]):
+                    # this does not exists as an independent member, but its a folder!
+                    return True
         return False
 
     def GetFileSize(self, full_path, error=None):
@@ -2100,18 +2104,32 @@ class ZipMacInfo(MacInfo):
     def GetUserAndGroupIDForFolder(self, path):
         return self._GetUserAndGroupID(path)
 
-    def _ListFilesInZipFolder(self, folder_path):
+    def _ListFilesInZipFolder(self, folder_path, return_first_item_only=False):
         '''folder_path must begin with / '''
         if folder_path[-1] != '/':
             folder_path += '/'
 
-        path_list = []
-        reg = re.compile(f'^{folder_path}[^/]+/?$')
-        for member in self.name_list:
-            # Typically zip members won't have / as first character, so add it
-            if reg.match('/' + member):
-                path_list.append('/' + member)
-        return path_list
+        path_list = set()
+        reg = re.compile(f'^{re.escape(folder_path)}([^/]+)(/?)(.*)$')
+        # In above regex, group(1) = folder_path ending in /
+        #                 group(2) = /   if it exists, or will be blank
+        #                 group(3) = rest of path if it exists
+
+        if return_first_item_only:
+             for member in self.name_list:
+                # Typically zip members won't have / as first character, so add it
+                match = reg.match('/' + member)
+                if match:
+                    path_list.add(f'{folder_path}{match.group(1)}{match.group(2)}')
+                    break
+        else:
+            for member in self.name_list:
+                # Typically zip members won't have / as first character, so add it
+                match = reg.match('/' + member)
+                if match:
+                    path_list.add(f'{folder_path}{match.group(1)}{match.group(2)}')
+
+        return list(path_list)
 
     def ListItemsInFolder(self, path='/', types_to_fetch=EntryType.FILES_AND_FOLDERS, include_dates=False):
         '''
@@ -2123,15 +2141,26 @@ class ZipMacInfo(MacInfo):
         items = [] # List of dictionaries
         if path[-1] != '/':
             path += '/'
+        possible_error = ''
         try:
             info = self.zip_file.getinfo(path[1:])
         except KeyError:
-            log.error(f'Folder {path} not present in archive')
-            return items
+            possible_error = f'Folder {path} not present in archive'
 
         dir = self._ListFilesInZipFolder(path)
+        if len(dir) == 0 and possible_error:
+            # confirms that dir does not exist in archive
+            log.error(possible_error)
+            return []
+
         for entry in dir:
-            info = self.zip_file.getinfo(entry[1:]) # removing initial / as it's not in zip, we added it
+            is_synthetic_entry = False
+            try:
+                info = self.zip_file.getinfo(entry[1:]) # removing initial / as it's not in zip, we added it
+            except KeyError:
+                # folder exists but not a zip member, create a synthetic entry for it
+                is_synthetic_entry = True
+
             entry_type = EntryType.FOLDERS if (entry[-1] == '/') else EntryType.FILES
             if entry[-1] == '/':
                 name = os.path.basename(entry[0:-1])
@@ -2139,7 +2168,10 @@ class ZipMacInfo(MacInfo):
                 name = os.path.basename(entry)
             item = { 'name':name, 'type':entry_type, 'size':info.file_size}
             if include_dates:
-                item['dates'] = self.GetFileMACTimes(entry, info)
+                if is_synthetic_entry:
+                    item['dates'] = { 'c_time':None, 'm_time':None, 'cr_time':None, 'a_time':None }
+                else:
+                    item['dates'] = self.GetFileMACTimes(entry, info)
             if types_to_fetch == EntryType.FILES_AND_FOLDERS:
                 items.append( item )
             elif types_to_fetch == EntryType.FILES and entry_type == EntryType.FILES:
