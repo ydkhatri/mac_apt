@@ -13,7 +13,7 @@
 '''
 
 import plugins.helpers.pkipplib as pkipplib
-import datetime
+
 from plugins.helpers.macinfo import *
 from plugins.helpers.writer import *
 from plugins.helpers.common import *

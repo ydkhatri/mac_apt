@@ -14,7 +14,6 @@ import jsonlines
 import logging
 import os
 import sqlite3
-import sys
 import xlsxwriter
 
 from enum import IntEnum

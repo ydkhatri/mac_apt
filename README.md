@@ -78,6 +78,7 @@ SUDOLASTRUN | Gets last time sudo was used and a few other times earlier (if ava
 TCC | Reads Transparency, Consent and Control (TCC) database
 TERMINALSTATE | Reads Terminal saved state files which includes full text content of terminal windows
 TERMSESSIONS | Reads Terminal (bash & zsh) history & sesions for every user
+TRASH | Get deleted file/folder metadata from .DS_Store files in .Trash folder (Bin)
 ~~UNIFIEDLOGS~~ | ~~Reads macOS unified logging logs from .tracev3 files~~ _REMOVED as better options are [available](https://github.com/ydkhatri/UnifiedLogReader/blob/master/README.md#this-tool-is-now-archived-i-havent-had-time-to-update-this-tool-so-its-a-bit-outdated-there-isnt-incentive-to-update-this-any-more-as-python-processing-of-unifiedlogs-is-slow-and-takes-a-very-long-time-a-much-faster-rust-based-alternative-exists-please-use-that-instead-httpsgithubcommandiantmacos-unifiedlogs)_
 UNIFIEDLOGEXPORT | Exports Unifiedlogs and associated files for external processing  
 USERS | Local & Domain user information - name, UID, UUID, GID, account creation & password set dates, pass hints, homedir & Darwin paths
