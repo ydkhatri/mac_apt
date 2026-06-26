@@ -9,7 +9,6 @@
 import json
 import os
 import logging
-from plugins.helpers import macinfo
 
 from enum import IntEnum
 from plugins.helpers.common import CommonFunctions

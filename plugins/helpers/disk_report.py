@@ -12,7 +12,6 @@ from plugins.helpers.apfs_reader import ApfsSysDataLinkedVolume
 import plugins.helpers.macinfo as macinfo
 from plugins.helpers.writer import *
 import logging
-import textwrap
 
 log = logging.getLogger('MAIN.DISK_REPORT')
 

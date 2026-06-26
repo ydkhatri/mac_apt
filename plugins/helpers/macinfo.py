@@ -2166,7 +2166,11 @@ class ZipMacInfo(MacInfo):
                 name = os.path.basename(entry[0:-1])
             else:
                 name = os.path.basename(entry)
-            item = { 'name':name, 'type':entry_type, 'size':info.file_size}
+            item = { 
+                'name': name, 
+                'type': entry_type, 
+                'size': 0 if is_synthetic_entry else info.file_size 
+            }
             if include_dates:
                 if is_synthetic_entry:
                     item['dates'] = { 'c_time':None, 'm_time':None, 'cr_time':None, 'a_time':None }

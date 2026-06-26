@@ -8,7 +8,6 @@
 '''
 
 import os
-import sys
 import logging
 
 from enum import IntEnum

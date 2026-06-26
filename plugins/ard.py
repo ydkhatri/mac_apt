@@ -12,8 +12,6 @@
 '''
 
 import logging
-import plugins.helpers.common
-import struct
 
 from datetime import timedelta
 from plugins.helpers.common import CommonFunctions

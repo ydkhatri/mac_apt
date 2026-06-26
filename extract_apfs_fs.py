@@ -14,7 +14,7 @@
    For usage information, run: 
      python extract_apfs_fs.py -h
 
-   NOTE: This currently works only on Python3.7 or higher.
+   NOTE: This currently works only on Python3.9 or higher.
    
 '''
 
@@ -26,7 +26,6 @@ import pyewf
 import pytsk3
 import pyvmdk
 import sys
-import textwrap
 import time
 import traceback
 from plugins.helpers.aff4_helper import EvidenceImageStream

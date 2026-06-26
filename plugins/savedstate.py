@@ -14,11 +14,9 @@
 import io
 import nska_deserialize as nd
 import os
-import plistlib
 import struct
 
 from Crypto.Cipher import AES
-from plugins.helpers.common import CommonFunctions
 from plugins.helpers.macinfo import *
 from plugins.helpers.writer import *
 

@@ -14,9 +14,7 @@
 import logging
 import os
 import plugins.helpers.chainbreaker as chainbreaker
-import sys
 
-from collections import namedtuple
 from plugins.helpers.macinfo import *
 from plugins.helpers.writer import *
 

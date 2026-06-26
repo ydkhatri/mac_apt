@@ -19,14 +19,12 @@ THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND 
 # and is now a part of the mac_apt framework
 #
 
-import os
+import logging
 import mmap
-import sys
 import struct
 import tempfile
 import zlib
-import pytsk3
-import logging
+
 from plugins.helpers.common import CommonFunctions
 from plugins.helpers.btree import AttributesTree, CatalogTree, ExtentsOverflowTree
 from plugins.helpers.structs import *

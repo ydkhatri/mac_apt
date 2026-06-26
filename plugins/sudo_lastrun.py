@@ -10,12 +10,11 @@
    This gets the last time(s) sudo was used by each user.
 '''
 
-import os
-
 from plugins.helpers.macinfo import *
 from plugins.helpers.writer import *
 
 import logging
+import os
 import struct
 
 __Plugin_Name = "SUDOLASTRUN" # Cannot have spaces, and must be all caps!

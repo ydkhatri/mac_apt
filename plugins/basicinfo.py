@@ -14,7 +14,7 @@ import sqlite3
 from datetime import datetime
 from plugins.helpers.common import CommonFunctions
 from plugins.helpers.disk_report import Disk_Info
-from plugins.helpers.macinfo import ApfsMacInfo, MountedMacInfo, SqliteWrapper
+from plugins.helpers.macinfo import ApfsMacInfo, MountedMacInfo, SqliteWrapper, ZipMacInfo
 from plugins.helpers.writer import WriteList, DataType
 from zoneinfo import ZoneInfo
 
@@ -156,7 +156,8 @@ def GetArchitecture(mac_info):
                 log.error(f"Could not open plist file to get architecture info: {source_plist}")
         else:
             log.warning('APFS volume does not have separate DATA volume, cannot get architecture information!')
-    elif isinstance(mac_info, MountedMacInfo) and mac_info.macos_root_folder == '/':
+    elif (isinstance(mac_info, MountedMacInfo) and mac_info.macos_root_folder == '/') or \
+        isinstance(mac_info, ZipMacInfo):
         uuid_folders = []
         preboot_dir = mac_info.ListItemsInFolder('/System/Volumes/Preboot')
         for items in preboot_dir:

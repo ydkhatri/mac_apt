@@ -6,12 +6,9 @@
    terms of the MIT License.
    
 '''
-import json
 import os
 import logging
-from plugins.helpers import macinfo
 
-from enum import IntEnum
 from plugins.helpers.common import CommonFunctions
 from plugins.helpers.macinfo import *
 from plugins.helpers.writer import *

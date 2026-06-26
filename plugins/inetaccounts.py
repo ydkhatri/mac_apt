@@ -9,7 +9,6 @@
 
 import os
 import logging
-import struct
 
 from plugins.helpers.common import CommonFunctions
 from plugins.helpers.macinfo import *

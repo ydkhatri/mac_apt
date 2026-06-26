@@ -12,8 +12,8 @@
 '''
 
 import logging
-import plugins.helpers.common
 import struct
+
 from plugins.helpers.common import CommonFunctions
 from plugins.helpers.macinfo import *
 from plugins.helpers.writer import *

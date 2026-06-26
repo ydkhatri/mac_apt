@@ -10,14 +10,11 @@ from __future__ import annotations
 
 import io
 import logging
+import nska_deserialize as nd
 import os
 import sqlite3
+
 from enum import IntEnum
-
-import nska_deserialize as nd
-
-# import plugins.helpers.ccl_bplist as ccl_bplist
-# from plugins.helpers import macinfo
 from plugins.helpers.common import CommonFunctions
 from plugins.helpers.macinfo import *
 from plugins.helpers.writer import *

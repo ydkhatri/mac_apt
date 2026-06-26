@@ -2,6 +2,7 @@ anytree
 biplist
 construct==2.10.70
 cryptography
+ds-store
 inflate64
 jsonlines
 kaitaistruct

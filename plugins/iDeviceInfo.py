@@ -13,7 +13,6 @@
 import logging
 import os
 
-from enum import Enum
 from plugins.helpers.common import CommonFunctions
 from plugins.helpers.macinfo import *
 from plugins.helpers.writer import *
