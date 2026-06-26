@@ -1362,6 +1362,9 @@ class MountedFile():
         if self._file:
             self._file.close()
 
+    def flush(self):
+        pass
+
     def tell(self):
         return self.pos
 

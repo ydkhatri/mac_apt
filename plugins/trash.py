@@ -117,7 +117,7 @@ def ProcessDSStore(ds, deleted_artifacts, user_name, source_path):
         deleted_artifacts.append(deleted_item)
 
 def ProcessTrashFolder(mac_info, trash_artifacts, user_name, trash_folder_path):
-    '''Processes a .Trash folder and enumerated existing items'''
+    '''Processes a .Trash folder and enumerate existing items at root level only'''
     for item in mac_info.ListItemsInFolder(trash_folder_path, EntryType.FILES_AND_FOLDERS, include_dates=True):
         if item['name'] == '.DS_Store':
             continue
@@ -129,7 +129,7 @@ def ProcessTrashFolder(mac_info, trash_artifacts, user_name, trash_folder_path):
             existing_entry.changed = item['dates']['c_time']
             existing_entry.birth = item['dates']['cr_time']
         else:
-            log.warning(f"Item {item['name']} in trash folder {trash_folder_path} not found in .DS_Store entries. Adding it as a new entry.")
+            log.warning(f"Item '{item['name']}' not found in {trash_folder_path}/.DS_Store, adding it as a new entry.")
         
             ds_current_name = item['name']
             ds_current_location = trash_folder_path
@@ -195,12 +195,13 @@ def Plugin_Start_Standalone(input_files_list, output_params):
         log.debug("Input path passed was: " + input_path)
         trash_artifacts = []
         if input_path.lower().endswith('.ds_store'):
-            try:
-                with DSStore.open(input_path, 'r') as ds:
-                    ProcessDSStore(ds, trash_artifacts, '', input_path)
-            except buddy.BuddyError as e:
-                log.error("Error occurred while processing .DS_Store file at path: " + input_path)
-                log.error("Error was: " + str(e))
+            with open(input_path, 'rb') as dss_file:
+                try:
+                    with DSStore.open(dss_file, 'r') as ds:
+                        ProcessDSStore(ds, trash_artifacts, '', input_path)
+                except buddy.BuddyError as e:
+                    log.error("Error occurred while processing .DS_Store file at path: " + input_path)
+                    log.error("Error was: " + str(e))
         else:
             log.error("Input file name is not a .DS_Store : " + input_path)
 
