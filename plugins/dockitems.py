@@ -18,7 +18,7 @@ from plugins.helpers.writer import *
 
 __Plugin_Name = "DOCKITEMS"
 __Plugin_Friendly_Name = "Dock Items"
-__Plugin_Version = "1.0"
+__Plugin_Version = "1.1"
 __Plugin_Description = "Reads the Dock plist for every user"
 __Plugin_Author = "Adam Ferrante"
 __Plugin_Author_Email = "adam@ferrante.io"
@@ -31,7 +31,7 @@ log = logging.getLogger('MAIN.' + __Plugin_Name) # Do not rename or remove this 
 #---- Do not change the variable names in above section ----#
 
 class DockItem:
-    def __init__(self, file_label, parent_mod_date, file_mod_date, recent_used, file_type, file_data, guid, user, source_path):
+    def __init__(self, file_label, parent_mod_date, file_mod_date, recent_used, file_type, file_data, guid, bid, user, source_path):
         self.file_label = file_label
         if parent_mod_date and (parent_mod_date > 0xFFFFFFFF): # On High Sierra and above..
             parent_mod_date = parent_mod_date & 0xFFFFFFFF # Killing upper 32 bits!
@@ -46,6 +46,7 @@ class DockItem:
         self.file_type = file_type
         self.file_path = file_data
         self.guid = guid
+        self.bundle_identifier = bid
         self.user = user
         self.path = source_path
 
@@ -54,7 +55,7 @@ def PrintAll(docks, output_params, input_path=''):
                     ('Parent Modified',DataType.TEXT),('File Modified',DataType.DATE),
                     ('Recently Used',DataType.TEXT),
                     ('File Type',DataType.TEXT),('File Path',DataType.TEXT),
-                    ('GUID',DataType.TEXT),
+                    ('GUID',DataType.TEXT),('Bundle Identifier',DataType.TEXT),
                     ('User',DataType.TEXT),('Source',DataType.TEXT)
                 ]
 
@@ -64,7 +65,7 @@ def PrintAll(docks, output_params, input_path=''):
     for item in docks:
         single_dock_item = [item.file_label, item.parent_mod_date, item.file_mod_date, 
                             item.recent_used, item.file_type, item.file_path, 
-                            item.guid,
+                            item.guid, item.bundle_identifier,
                             item.user, item.path
                             ]
         dock_list_final.append(single_dock_item)
@@ -101,6 +102,7 @@ def ParseDockItemsPlist(plist, docks, user_name, plist_path):
                                             tile_data.get('file-type', ''),
                                             GetPath(tile_data.get('file-data', None)),
                                             item.get('GUID', ''),
+                                            tile_data.get('bundle-identifier', ''),
                                             user_name, plist_path)
                         docks.append(instance)
                     else:
