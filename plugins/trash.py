@@ -128,6 +128,9 @@ def ProcessTrashFolder(mac_info, trash_artifacts, user_name, trash_folder_path):
             existing_entry.accessed = item['dates']['a_time']
             existing_entry.changed = item['dates']['c_time']
             existing_entry.birth = item['dates']['cr_time']
+
+            if existing_entry.ds_logical_size is None:
+                existing_entry.ds_logical_size = item['size']
         else:
             log.warning(f"Item '{item['name']}' not found in {trash_folder_path}/.DS_Store, adding it as a new entry.")
         
