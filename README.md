@@ -37,6 +37,7 @@ ARD | Reads ARD (Apple Remote Desktop) cached databases about app usage
 ASL | Reads ASL (Apple System Log) from asl.log, asl.db and ".asl" files
 AUTOSTART | Retrieves programs, daemons, services set to start at boot/login
 BASICINFO | Basic machine & OS configuration like SN, timezone, computer name, last logged in user, HFS info
+BIOME | Reads biome data  
 BLUETOOTH | Gets Bluetooth Artifacts
 CALLHISTORY | Reads call history database
 CFURLCACHE | Reads CFURL cache to URLs, requests and responses
