@@ -8,9 +8,7 @@
    biome.py
    ---------------
    This plugin reads Biome data.
-
-   TODO
-   Add more intepreted data
+   
 '''
 
 from plugins.helpers.ccl_segb.ccl_segb_common import EntryState
@@ -117,9 +115,19 @@ def interpret_data(data: bytes, biome_type: str, record_offset: int) -> tuple:
                 message['status'] = 'Connect'
             else:
                 message['status'] = f'Unknown ({message["status"]})'
+        elif biome_type == 'Device.Wireless.WiFi':
+            pb_def = {'1': {'type': 'string', 'name': 'ssid'},
+                    '2': {'type': 'int', 'name': 'status'}
+                    }
+            message, _ = bbpb.decode_message(data, pb_def)
+            if message['status'] == 0:
+                message['status'] = 'Disconnect'
+            elif message['status'] == 1:
+                message['status'] = 'Connect'
+            else:
+                message['status'] = f'Unknown ({message["status"]})'
         elif biome_type == 'App.InFocus':
             pb_def = {'3': {'type': 'int', 'name': 'status'},
-                    '4': {'type': 'fixed64', 'name': 'timestamp'},
                     '6': {'type': 'string', 'name': 'product_name'},
                     '9': {'type': 'string', 'name': 'CFBundleShortVersionString'},
                     '10': {'type': 'string', 'name': 'CFBundleVersion'}
@@ -131,29 +139,22 @@ def interpret_data(data: bytes, biome_type: str, record_offset: int) -> tuple:
                 message['status'] = 'In focus'
             else:
                 message['status'] = f'Unknown ({message["status"]})'
-            message['timestamp'] = str(CommonFunctions.ReadMacAbsoluteTime(message['timestamp']/1000000))
         elif biome_type.startswith('Safari.'):
-            pb_def = {'2': {'type': 'fixed64', 'name': 'timestamp'},
-                    '1': {'type': 'string', 'name': 'domain_visited'}
-                    }
+            pb_def = {'1': {'type': 'string', 'name': 'domain_visited'}}
             message, _ = bbpb.decode_message(data, pb_def)
-            message['timestamp'] = str(CommonFunctions.ReadMacAbsoluteTime(message['timestamp']/1000000))
         elif biome_type == 'App.WebUsage':
-            pb_def = {'2': {'type': 'fixed64', 'name': 'timestamp'},
+            pb_def = {
                     '3': {'type': 'int', 'name': 'status'},
                     '4': {'type': 'string', 'name': 'url'},
                     '5': {'type': 'string', 'name': 'domain_visited'},
                     '6': {'type': 'string', 'name': 'app_bundle_id'},
                     }
             message, _ = bbpb.decode_message(data, pb_def)
-            message['timestamp'] = str(CommonFunctions.ReadMacAbsoluteTime(message['timestamp']/1000000))        
         elif biome_type == 'ScreenTime.AppUsage':
             pb_def = {'1': {'type': 'int', 'name': 'status'},
-                    '2': {'type': 'fixed64', 'name': 'timestamp'},
                     '3': {'type': 'string', 'name': 'app_bundle_id'}
                     }
             message, _ = bbpb.decode_message(data, pb_def)
-            message['timestamp'] = str(CommonFunctions.ReadMacAbsoluteTime(message['timestamp']/1000000))        
             if message['status'] == 0:
                 message['status'] = 'Out of focus'
             elif message['status'] == 1:
