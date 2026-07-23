@@ -26,7 +26,7 @@ __Plugin_Author = "Yogesh Khatri"
 __Plugin_Author_Email = "yogesh@swiftforensics.com"
 
 __Plugin_Modes = "MACOS,ARTIFACTONLY" # Valid values are 'MACOS', 'IOS, 'ARTIFACTONLY' 
-__Plugin_ArtifactOnly_Usage = 'Provide the folder /Users/<USER>/Library/Saved Application State/com.apple.calculator//Data/Library/Application Support/default.store as input'
+__Plugin_ArtifactOnly_Usage = 'Provide the folder /Users/<USER>/Library/Containers/com.apple.calculator/Data/Library/Application Support/default.store as input'
 
 log = logging.getLogger('MAIN.' + __Plugin_Name) # Do not rename or remove this ! This is the logger object
 
