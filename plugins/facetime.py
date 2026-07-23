@@ -21,7 +21,7 @@ __Plugin_Description = "Reads the database for FaceTime call information"
 __Plugin_Author = "Yogesh Khatri"
 __Plugin_Author_Email = "yogesh@swiftforensics.com"
 
-__Plugin_Modes = "MACOS,ARTIFACTONLY"
+__Plugin_Modes = "MACOS,ARTIFACTONLY,IOS"
 __Plugin_ArtifactOnly_Usage = 'Provide the facetime database located at '\
                               '/Users/$USER/Library/Application Support/FaceTime/FaceTime.sqlite3'
 
@@ -159,6 +159,17 @@ def Plugin_Start_Standalone(input_files_list, output_params):
             PrintAll(facetime_records, output_params)
         else:
             log.info('No facetime events found in {}'.format(input_path))
+
+def Plugin_Start_Ios(ios_info):
+    '''Entry point for ios_apt plugin'''
+    facetime_records = []
+    db_path = '/private/var/mobile/Library/Application Support/FaceTime/FaceTime.sqlite3'
+    ProcessDbFromPath(ios_info, facetime_records, db_path, '')
+
+    if len(facetime_records) > 0:
+        PrintAll(facetime_records, ios_info.output_params)
+    else:
+        log.info('No facetime events found')
 
 if __name__ == '__main__':
     print ("This plugin is a part of a framework and does not run independently on its own!")

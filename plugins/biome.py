@@ -18,18 +18,21 @@ from plugins.helpers.macinfo import *
 from plugins.helpers.writer import *
 from pprint import pformat
 import blackboxprotobuf as bbpb
+import io
 import logging
+import plistlib
+import nska_deserialize as nd
 import os
 import typing
 
 __Plugin_Name = "BIOME" # Cannot have spaces, and must be all caps!
 __Plugin_Friendly_Name = "Biome"
-__Plugin_Version = "1.0"
+__Plugin_Version = "1.1"
 __Plugin_Description = "Reads Biome data"
 __Plugin_Author = "Yogesh Khatri"
 __Plugin_Author_Email = "yogesh@swiftforensics.com"
 
-__Plugin_Modes = "MACOS,ARTIFACTONLY" # Valid values are 'MACOS', 'IOS, 'ARTIFACTONLY' 
+__Plugin_Modes = "MACOS,ARTIFACTONLY,IOS" # Valid values are 'MACOS', 'IOS, 'ARTIFACTONLY' 
 __Plugin_ArtifactOnly_Usage = 'Provide path of biome/streams folder'
 
 log = logging.getLogger('MAIN.' + __Plugin_Name) # Do not rename or remove this ! This is the logger object
@@ -94,13 +97,26 @@ def get_enum_name_or_value(enum_class, value):
     
 def interpret_data(data: bytes, biome_type: str, record_offset: int) -> tuple:
     try:
-        if biome_type == 'SystemSettings.SearchTerms':
-            pb_def = {'1': {'type': 'string', 'name': 'search_term'}, 
-                    '2': {'name': 'match', 'type': 'message', 'message_typedef': {
-                        '1': {'type': 'string', 'name': 'bundle_identifier'},
-                        '2': {'type': 'string', 'name': 'app_or_bundle'},
-                        '3': {'type': 'int', 'name': 'unknown'}
-                    }}}
+        if biome_type == 'App.InFocus':
+            pb_def = {'3': {'type': 'int', 'name': 'status'},
+                    '6': {'type': 'string', 'name': 'product_name'},
+                    '9': {'type': 'string', 'name': 'CFBundleShortVersionString'},
+                    '10': {'type': 'string', 'name': 'CFBundleVersion'}
+                    }
+            message, _ = bbpb.decode_message(data, pb_def)
+            if message['status'] == 0:
+                message['status'] = 'Out of focus'
+            elif message['status'] == 1:
+                message['status'] = 'In focus'
+            else:
+                message['status'] = f'Unknown ({message["status"]})'
+        elif biome_type == 'App.WebUsage':
+            pb_def = {
+                    '3': {'type': 'int', 'name': 'status'},
+                    '4': {'type': 'string', 'name': 'url'},
+                    '5': {'type': 'string', 'name': 'domain_visited'},
+                    '6': {'type': 'string', 'name': 'app_bundle_id'},
+                    }
             message, _ = bbpb.decode_message(data, pb_def)
         elif biome_type == 'Device.Wireless.Bluetooth':
             pb_def = {'1': {'type': 'string', 'name': 'address'},
@@ -126,29 +142,15 @@ def interpret_data(data: bytes, biome_type: str, record_offset: int) -> tuple:
                 message['status'] = 'Connect'
             else:
                 message['status'] = f'Unknown ({message["status"]})'
-        elif biome_type == 'App.InFocus':
-            pb_def = {'3': {'type': 'int', 'name': 'status'},
-                    '6': {'type': 'string', 'name': 'product_name'},
-                    '9': {'type': 'string', 'name': 'CFBundleShortVersionString'},
-                    '10': {'type': 'string', 'name': 'CFBundleVersion'}
+        elif biome_type == 'Notification.Usage':
+            pb_def = {
+                        '4': {'type': 'string', 'name': 'App'},
+                        '8': {'type': 'string', 'name': 'Title'},
+                        '9': {'type': 'string', 'name': 'SubTitle'}
                     }
             message, _ = bbpb.decode_message(data, pb_def)
-            if message['status'] == 0:
-                message['status'] = 'Out of focus'
-            elif message['status'] == 1:
-                message['status'] = 'In focus'
-            else:
-                message['status'] = f'Unknown ({message["status"]})'
         elif biome_type.startswith('Safari.'):
             pb_def = {'1': {'type': 'string', 'name': 'domain_visited'}}
-            message, _ = bbpb.decode_message(data, pb_def)
-        elif biome_type == 'App.WebUsage':
-            pb_def = {
-                    '3': {'type': 'int', 'name': 'status'},
-                    '4': {'type': 'string', 'name': 'url'},
-                    '5': {'type': 'string', 'name': 'domain_visited'},
-                    '6': {'type': 'string', 'name': 'app_bundle_id'},
-                    }
             message, _ = bbpb.decode_message(data, pb_def)
         elif biome_type == 'ScreenTime.AppUsage':
             pb_def = {'1': {'type': 'int', 'name': 'status'},
@@ -161,9 +163,59 @@ def interpret_data(data: bytes, biome_type: str, record_offset: int) -> tuple:
                 message['status'] = 'In focus'
             else:
                 message['status'] = f'Unknown ({message["status"]})'
+        elif biome_type == 'SystemSettings.SearchTerms':
+            pb_def = {'1': {'type': 'string', 'name': 'search_term'}, 
+                    '2': {'name': 'match', 'type': 'message', 'message_typedef': {
+                        '1': {'type': 'string', 'name': 'bundle_identifier'},
+                        '2': {'type': 'string', 'name': 'app_or_bundle'},
+                        '3': {'type': 'int', 'name': 'unknown'}
+                    }}}
+            message, _ = bbpb.decode_message(data, pb_def)
         else:
             pb_def = None
             message, _ = bbpb.decode_message(data, pb_def)
+            for k,v in message.items():
+                if isinstance(v, bytes) and len(v) > 10:
+                    if v[0:8] == b'bplist00':
+                        try:
+                            plist = plistlib.loads(v)
+                            if isinstance(plist, dict) and '$archiver' in plist and plist['$archiver'] == 'NSKeyedArchiver':
+                                try:
+                                    message[k] = nd.deserialize_plist(io.BytesIO(v))
+                                except (nd.DeserializeError,
+                                        nd.biplist.NotBinaryPlistException,
+                                        nd.biplist.InvalidPlistException,
+                                        nd.plistlib.InvalidFileException,
+                                        nd.ccl_bplist.BplistError,
+                                        ValueError,
+                                        TypeError, OSError, OverflowError) as ex:
+                                    log.error(f"Had an error interpreting NSKeyedArchiver data for record at pos {record_offset} : {ex}")
+                                    message[k] = plist
+                        except plistlib.InvalidFileException as ex:
+                            log.error(f"Had an error interpreting plist for record at pos {record_offset} : {ex}")
+                            message[k] = v
+            if biome_type == 'App.Intent': # TODO: Needs better parsing, this is just demo code to see whats available!
+                dict_8 = message.get('8', None)
+                try:
+                    intent_backing_store = dict_8.get('intent', {}).get('backingStore', {}).get('bytes', None)
+                    if intent_backing_store is not None:
+                        try:
+                            ibs_msg = bbpb.decode_message(intent_backing_store)
+                            dict_8['intent']['backingStore'] = ibs_msg
+                        except (bbpb.DecoderException, ValueError, KeyError, TypeError) as ex:
+                            pass
+                except (AttributeError, KeyError, TypeError):
+                    pass
+                try:
+                    intentResponse_backing_store = dict_8.get('intentResponse', {}).get('backingStore', {}).get('bytes', NotImplemented)
+                    if intentResponse_backing_store is not None:
+                        try:
+                            ibs_msg = bbpb.decode_message(intentResponse_backing_store)
+                            dict_8['intentResponse']['backingStore'] = ibs_msg
+                        except (bbpb.DecoderException, ValueError, KeyError, TypeError) as ex:
+                            pass
+                except (AttributeError, KeyError, TypeError):
+                    pass
             
     except (bbpb.DecoderException, ValueError, KeyError) as ex:
         log.error(f"Had an error interpreting protobuf for record at pos {record_offset} : {ex}")
@@ -279,7 +331,22 @@ def Plugin_Start_Standalone(input_files_list, output_params):
 
 def Plugin_Start_Ios(ios_info):
     '''Entry point for ios_apt plugin'''
-    pass
+    user_biome_path = '/private/var/mobile/Library/Biome/streams/'
+    system_biome_path = '/private/var/db/biome/streams/'
+    biome_items = []
+
+    if ios_info.IsValidFolderPath(system_biome_path):
+        process_biome_folder(ios_info, system_biome_path, biome_items, '-')
+
+    if ios_info.IsValidFolderPath(user_biome_path):
+        process_biome_folder(ios_info, user_biome_path, biome_items, '')
+    if ios_info.IsValidFolderPath(system_biome_path):
+        process_biome_folder(ios_info, system_biome_path, biome_items, '')
+
+    if len(biome_items) > 0:
+        PrintAll(biome_items, ios_info.output_params, '')
+    else:
+        log.info('No Biome artifacts found')
 
 if __name__ == '__main__':
     print ("This plugin is a part of a framework and does not run independently on its own!")
