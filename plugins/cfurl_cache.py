@@ -96,23 +96,25 @@ def CheckSchemaVersion(db):
 
 def ParseRequestObject(object_data):
     object_array = plistlib.loads(object_data)['Array']
-    http_req_method = object_array[18]
-    header_list = object_array[19]
+    http_req_method = object_array[18] if len(object_array) > 18 else None
+    header_list = object_array[19] if len(object_array) > 19 else {}
     req_headers = []
-    for header, value in header_list.items():
-        if header != '__hhaa__':
-            req_headers.append("{}: {}".format(header, value))
+    if isinstance(header_list, dict):
+        for header, value in header_list.items():
+            if header != '__hhaa__':
+                req_headers.append("{}: {}".format(header, value))
     return http_req_method, "\r\n".join(req_headers)
 
 
 def ParseResponseObject(object_data):
     object_array = plistlib.loads(object_data)['Array']
-    http_status = object_array[3]
-    header_list = object_array[4]
+    http_status = object_array[3] if len(object_array) > 3 else None
+    header_list = object_array[4] if len(object_array) > 4 else {}
     resp_headers = []
-    for header, value in header_list.items():
-        if header != '__hhaa__':
-            resp_headers.append("{}: {}".format(header, value))
+    if isinstance(header_list, dict):
+        for header, value in header_list.items():
+            if header != '__hhaa__':
+                resp_headers.append("{}: {}".format(header, value))
     return http_status, "\r\n".join(resp_headers)
 
 
