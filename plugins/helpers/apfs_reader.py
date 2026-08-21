@@ -1974,6 +1974,9 @@ class ApfsFile():
         self._buffer = None
         self._buffer_start = 0
 
+    def flush(self):
+        pass
+    
     def tell(self):
         self._check_closed()
         return self._pointer
