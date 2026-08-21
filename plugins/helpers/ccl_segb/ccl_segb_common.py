@@ -6,10 +6,15 @@ COCOA_EPOCH = datetime.datetime(2001, 1, 1, 0, 0, 0)
 
 
 class EntryState(enum.IntEnum):
+    Undefined = 0
     Written = 1
     Deleted = 3
     Unknown = 4
 
+    @classmethod
+    def _missing_(cls, value):
+        # Maps any undefined integer value to EntryState.Unknown
+        return cls.Unknown
 
 def decode_cocoa_time(seconds) -> datetime.datetime:
     """
