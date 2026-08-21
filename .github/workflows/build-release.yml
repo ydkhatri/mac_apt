@@ -18,11 +18,23 @@ jobs:
             spec_file: mac_apt_windows.spec
             artifact_name: mac_apt.exe
             asset_name: mac_apt-windows-x64.exe
+            spec_file_2: mac_apt_artifact_only_windows.spec
+            artifact_name_2: mac_apt_artifact_only.exe
+            asset_name_2: mac_apt_artifact_only-windows-x64.exe
+            spec_file_3: ios_apt_windows.spec
+            artifact_name_3: ios_apt.exe
+            asset_name_3: ios_apt-windows-x64.exe
 
           - os: windows-11-arm
             spec_file: mac_apt_windows.spec
             artifact_name: mac_apt.exe
             asset_name: mac_apt-windows-arm64.exe
+            spec_file_2: mac_apt_artifact_only_windows.spec
+            artifact_name_2: mac_apt_artifact_only.exe
+            asset_name_2: mac_apt_artifact_only-windows-arm64.exe
+            spec_file_3: ios_apt_windows.spec
+            artifact_name_3: ios_apt.exe
+            asset_name_3: ios_apt-windows-arm64.exe
 
           - os: macos-15-intel
             spec_file: all_macos_x86_64.spec
@@ -88,7 +100,19 @@ jobs:
           mkdir -p release
           cp dist/${{ matrix.artifact_name }} release/${{ matrix.asset_name }}
         shell: bash
+        
+      - name: Build and package executable 2 from spec for Windows
+        if: runner.os == 'Windows'
+        run: |
+          pyinstaller pyinstaller/${{ matrix.spec_file_2 }}
+          cp dist/${{ matrix.artifact_name_2 }} release/${{ matrix.asset_name_2 }}
 
+      - name: Build and package executable 3 from spec for Windows
+        if: runner.os == 'Windows'
+        run: |
+          pyinstaller pyinstaller/${{ matrix.spec_file_3 }}
+          cp dist/${{ matrix.artifact_name_3 }} release/${{ matrix.asset_name_3 }}
+          
       - name: Package artifact (macOS)
         if: runner.os == 'macOS'
         run: |
