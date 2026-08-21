@@ -14,12 +14,12 @@ from plugins.helpers.writer import *
 
 __Plugin_Name = "CALLHISTORY"
 __Plugin_Friendly_Name = "Call history"
-__Plugin_Version = "1.0"
+__Plugin_Version = "1.1"
 __Plugin_Description = "Reads call history database at /Users/<user>/Library/Application Support/CallHistoryDB/CallHistory.storedata"
 __Plugin_Author = "Yogesh Khatri"
 __Plugin_Author_Email = "yogesh@swiftforensics.com"
 
-__Plugin_Modes = "MACOS,ARTIFACTONLY"
+__Plugin_Modes = "MACOS,ARTIFACTONLY,IOS"
 __Plugin_ArtifactOnly_Usage = 'Provide the path to ".../Library/Application Support/CallHistoryDB/CallHistory.storedata" as argument'
 
 log = logging.getLogger('MAIN.' + __Plugin_Name) # Do not rename or remove this ! This is the logger object
@@ -203,7 +203,14 @@ def Plugin_Start_Standalone(input_files_list, output_params):
 
 def Plugin_Start_Ios(ios_info):
     '''Entry point for ios_apt plugin'''
-    pass
+    callhistory_artifacts = []
+    db_path = '/private/var/mobile/Library/CallHistoryDB/CallHistory.storedata'
+    ExtractAndReadDb(ios_info, callhistory_artifacts, '', db_path, process_callhistory)
+    
+    if len(callhistory_artifacts) > 0:
+        PrintAll(callhistory_artifacts, ios_info.output_params, '')
+    else:
+        log.info('No callhistory artifacts were found!')
 
 if __name__ == '__main__':
     print ("This plugin is a part of a framework and does not run independently on its own!")

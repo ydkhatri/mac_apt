@@ -705,15 +705,27 @@ def ProcessSshKnownHostsFile(mac_info, source_path, user_name, recent_items, las
         ReadKnownHosts(data, source_path, user_name, recent_items, last_mod_date)
 
 def ReadKnownHosts(data, source_path, user_name, recent_items, last_mod_date):
-    lines = data.split(b'\r')
+    lines = data.split(b'\n')
     for line in lines:
         try:
-            host = line.split(b' ')[0]
+            host, ktype, _ = line.split(b' ')
+            ktype = ktype.decode("utf8", "ignore")
             if host:
                 host = host.decode('utf8', 'backslashreplace')
-                ri = RecentItem(host, '', 'File Last Modified on {}'.format(str(last_mod_date)), source_path, None, RecentType.SSH_KNOWNHOST, user_name)
+                info =  f'File Last Modified on {str(last_mod_date)}, Key Type {ktype}'
+                # check if existing, else add
+                skip = False
+                for item in recent_items:
+                    if  item.Type == RecentType.SSH_KNOWNHOST and \
+                        item.Name == host and \
+                        item.Info == info:
+                        skip = True
+                        break
+                if skip:
+                    continue
+                ri = RecentItem(host, '', info, source_path, None, RecentType.SSH_KNOWNHOST, user_name)
                 recent_items.append(ri)
-        except (OSError, ValueError):
+        except (KeyError, OSError, ValueError):
             pass
 
 def ProcessPreferencesFolder(mac_info, recent_items):
@@ -744,6 +756,7 @@ def Plugin_Start(mac_info):
     user_finder_plist_path = '{}/Library/Preferences/com.apple.finder.plist'
     user_sidebarlists_plist_path = '{}/Library/Preferences/com.apple.sidebarlists.plist'
     user_ssh_known_hosts_path = '{}/.ssh/known_hosts'
+    user_ssh_known_hosts_path_2 = '{}/.ssh/known_hosts.old'
     processed_paths = []
     for user in mac_info.users:
         user_name = user.user_name
@@ -771,6 +784,10 @@ def Plugin_Start(mac_info):
             ProcessSinglePlist(mac_info, source_path, user_name, recent_items)
         # Process ssh known_hosts
         source_path = user_ssh_known_hosts_path.format(user.home_dir)
+        if mac_info.IsValidFilePath(source_path):
+            last_mod_date = mac_info.GetFileMACTimes(source_path)['m_time']
+            ProcessSshKnownHostsFile(mac_info, source_path, user_name, recent_items, last_mod_date)
+        source_path = user_ssh_known_hosts_path_2.format(user.home_dir)
         if mac_info.IsValidFilePath(source_path):
             last_mod_date = mac_info.GetFileMACTimes(source_path)['m_time']
             ProcessSshKnownHostsFile(mac_info, source_path, user_name, recent_items, last_mod_date)

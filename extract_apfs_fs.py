@@ -14,7 +14,7 @@
    For usage information, run: 
      python extract_apfs_fs.py -h
 
-   NOTE: This currently works only on Python3.9 or higher.
+   NOTE: This currently works only on Python3.10 or higher.
    
 '''
 
