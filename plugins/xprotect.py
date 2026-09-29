@@ -31,7 +31,7 @@ if sys.version_info >= (3, 9):  # zoneinfo module is available from Python 3.9
 
 __Plugin_Name = "XPROTECT"  # Cannot have spaces, and must be all caps!
 __Plugin_Friendly_Name = "XProtect"
-__Plugin_Version = "2.0"
+__Plugin_Version = "2.1"
 __Plugin_Description = "Parses XProtect diagnostic files and XProtect Behavior Service database and extract timestamp, signature/rule names, and so on."
 __Plugin_Author = "Minoru Kobayashi"
 __Plugin_Author_Email = "unknownbit@gmail.com"
@@ -282,7 +282,7 @@ def Plugin_Start(mac_info: MacInfo) -> None:
     xp_diag_artifacts: list[XProtectDiagItem] = list()
     xp_diag_base_path = '{}/Library/Logs/DiagnosticReports/'
     xbs_artifacts: list[XPdbItem] = list()
-    xpdb_path = '/private/var/protected/xprotect/XPdb'
+    xpdb_paths = ('/private/var/protected/xprotect/XPdb', '/private/var/protected/xprotect/db/XPdb')
     processed_paths: set[str] = set()
 
     # Processing XProtect Diagnostic files
@@ -294,7 +294,7 @@ def Plugin_Start(mac_info: MacInfo) -> None:
             base_path = xp_diag_base_path.format(user.home_dir)
             if not mac_info.IsValidFolderPath(base_path):
                 continue
-
+            
             if mac_info.IsValidFilePath(base_path):
                 folder_items = mac_info.ListItemsInFolder(base_path, EntryType.FILES, include_dates=False)
                 xp_diag_files = [folder_item['name'] for folder_item in folder_items if re.match(xp_diag_filename_regex, folder_item['name'])]
@@ -312,8 +312,9 @@ def Plugin_Start(mac_info: MacInfo) -> None:
         log.info('No XProtect diag artifacts were found!')
 
     # Processing XProtect Behavior Service database files
-    if mac_info.IsValidFilePath(xpdb_path) and mac_info.GetFileSize(xpdb_path) > 0:
-        ExtractAndReadXPdb(mac_info, xbs_artifacts, xpdb_path)
+    for xpdb_path in xpdb_paths:
+        if mac_info.IsValidFilePath(xpdb_path) and mac_info.GetFileSize(xpdb_path) > 0:
+            ExtractAndReadXPdb(mac_info, xbs_artifacts, xpdb_path)
 
     if len(xbs_artifacts) > 0:
         PrintAllXPdb(xbs_artifacts, mac_info.output_params, '')

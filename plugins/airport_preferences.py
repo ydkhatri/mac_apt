@@ -20,11 +20,11 @@ from plugins.helpers.writer import *
 __Plugin_Name = "WIFI"
 __Plugin_Friendly_Name = "Wifi-Airport Preferences"
 __Plugin_Version = "1.1"
-__Plugin_Description = "Gets wifi network information from the com.apple.airport.preferences.plist file"
+__Plugin_Description = "Gets wifi network information from the com.apple.airport.preferences.plist file and ~/Library/Preferences/com.apple.wifi.WiFiAgent.plist"
 __Plugin_Author = "Michael Geyer, Yogesh Khatri"
 __Plugin_Author_Email = "michael.geyer@mymail.champlain.edu, yogesh@swiftforensics.com"
 __Plugin_Modes = "MACOS,ARTIFACTONLY"
-__Plugin_ArtifactOnly_Usage = 'Provide the airport wifi plist file found at /Library/Preferences/SystemConfiguration/com.apple.airport.preferences.plist'
+__Plugin_ArtifactOnly_Usage = 'Provide the airport wifi plist file found at /Library/Preferences/SystemConfiguration/com.apple.airport.preferences.plist or the wifi agent plist file found at ~/Library/Preferences/com.apple.wifi.WiFiAgent.plist'
 
 log = logging.getLogger('MAIN.' + __Plugin_Name) # Do not rename or remove this ! This is the logger object
 
@@ -162,6 +162,8 @@ def ParseWifi(input_path):
     if success:
         if os.path.basename(input_path) == 'com.apple.wifi.known-networks.plist':
             ReadKnownNetworksPlist(plist, networks, input_path)
+        elif os.path.basename(input_path) == 'com.apple.wifi.WiFiAgent.plist':
+            ReadWiFiAgentPlist(plist, networks, input_path)
         else:
             ReadAirportPrefPlist(plist, networks, input_path)
     else:
@@ -219,6 +221,26 @@ def ParseKnownNetworksAndPreferredOrder(known_networks, networks, preferred_orde
     except Exception as e:
         log.exception('Error parsing and adding a known network to the final known network list')
 
+def ReadWiFiAgentPlist(plist, networks, path):
+    # Read the UserDismissedLimitedNetworkFirstJoins section of the WiFiAgent plist
+    # Only add networks that are not already in the 'networks' list
+    aded_values = 0
+    try:
+        user_networks = plist.get('UserDismissedLimitedNetworkFirstJoins', {})
+        for key, value in user_networks.items():
+            if any(net.SSIDString == value or net.Name == key for net in networks):
+                continue
+            net = Network('')
+            net.Source = path
+            net.SSIDString = value
+            net.Name = key
+            networks.append(net)
+            aded_values += 1
+    except (TypeError, KeyError) as e:
+        log.exception('Error parsing com.apple.wifi.WiFiAgent.plist: ' + str(e))
+    if aded_values > 0:
+        log.info(f"Total user dismissed limited network first joins added: {aded_values}")
+
 def ReadAirportPrefPlist(plist, networks, source):
     # Read version info (12=10.8, 14=10.9, 2200=10.10 & higher) Also seen 1900 and 2100
     # Version 1900 has BSSIDHistory (MAC address of AP & timestamp)
@@ -269,6 +291,8 @@ def ParseWifiFromImage(mac_info, path, networks):
             basename = os.path.basename(path)
             if basename == 'com.apple.wifi.known-networks.plist':
                 ReadKnownNetworksPlist(plist, networks, path)
+            elif basename == 'com.apple.wifi.WiFiAgent.plist':
+                ReadWiFiAgentPlist(plist, networks, path)
             else:
                 ReadAirportPrefPlist(plist, networks, path)
         else:
@@ -354,10 +378,21 @@ def Plugin_Start(mac_info):
     airport_pref_plist_path = '/Library/Preferences/SystemConfiguration/com.apple.airport.preferences.plist'
     airport_pref_backup_plist_path = '/Library/Preferences/SystemConfiguration/com.apple.airport.preferences.plist.backup'
     known_networks_plist_path = '/Library/Preferences/com.apple.wifi.known-networks.plist'
+    wifi_agent_plist_path = '{}/Library/Preferences/com.apple.wifi.WiFiAgent.plist'
     networks = []
     ParseWifiFromImage(mac_info, airport_pref_plist_path, networks)
     ParseWifiFromImage(mac_info, airport_pref_backup_plist_path, networks)
     ParseWifiFromImage(mac_info, known_networks_plist_path, networks)
+
+    processed_paths = []
+    for user in mac_info.users:
+        user_name = user.user_name
+        if user.home_dir == '/private/var/empty': continue # Optimization, nothing should be here!
+        elif user.home_dir == '/private/var/root': user_name = 'root' # Some other users use the same root folder, we will list such all users as 'root', as there is no way to tell
+        if user.home_dir in processed_paths: continue # Avoid processing same folder twice (some users have same folder! (Eg: root & daemon))
+        processed_paths.append(user.home_dir)
+        source_path = wifi_agent_plist_path.format(user.home_dir)
+        ParseWifiFromImage(mac_info, source_path, networks)
 
     if len(networks) > 0:
         PrintAll(networks, mac_info.output_params, '')
