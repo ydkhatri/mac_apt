@@ -116,7 +116,7 @@ def PrintAllAuths(auths_dict, output_params):
                  ('User', DataType.TEXT),('Source',DataType.TEXT) ]
 
     log.info (f"{len(auths_dict)} authorization artifact(s) found")
-    WriteList("akd_auths", "akd_auths", auths_dict, auth_info, output_params, '')
+    WriteList("AKD_Auths", "AKD_Auths", auths_dict, auth_info, output_params, '')
 
 def process_private_emails(artifacts, db, user, file_path):
     '''Process the privateEmails.db database'''
@@ -145,7 +145,7 @@ def PrintAllEmails(emails_dict, output_params):
 
     email_info = [ ('Email',DataType.TEXT),('User', DataType.TEXT),('Source',DataType.TEXT) ]
     log.info (f"{len(emails_dict)} email artifact(s) found")
-    WriteList("akd_emails", "akd_emails", emails_dict, email_info, output_params, '')
+    WriteList("AKD_Emails", "AKD_Emails", emails_dict, email_info, output_params, '')
 
 def process_devices(artifacts, db, user, file_path):
     '''Process the devicelist.db database'''
@@ -197,7 +197,7 @@ def PrintAllDevices(devices_dict, output_params):
     #    data_list.append( [ item['name'], item['serial_number'], item['model'], item['os'], item['os_version'],
     #                       item['build_number'], item['trusted'], item['last_updated_date'], item['additional_info'],
     #                       item['services'], item['user'], item['source'] ] )
-    WriteList("akd_devices", "akd_devices", devices_dict, device_info, output_params, '')
+    WriteList("AKD_Devices", "AKD_Devices", devices_dict, device_info, output_params, '')
 
 def Plugin_Start(mac_info):
     '''Main Entry point function for plugin'''
