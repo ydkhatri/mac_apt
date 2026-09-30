@@ -482,7 +482,21 @@ class MacInfo:
         if artifact_path.find('\\') >= 0:
             log.warning(f'In MacInfo::ExportFile(), found \\ in path: {artifact_path}')
         ###
-        export_path = os.path.join(self.output_params.export_path, subfolder_name)
+        # Since os.path.join will ignore base path if following path is absolute,
+        # we need to detect that and not process any further
+
+        if subfolder_name:
+            export_path = os.path.join(self.output_params.export_path, subfolder_name)
+            export_path_abs = os.path.abspath(export_path)
+            orig_exp_path_with_ending_slash = os.path.join(self.output_params.export_path, '')
+            if not export_path_abs.startswith(orig_exp_path_with_ending_slash):
+                log.error('Attempt to exploit by passing a bad subfolder_name! Will not export this file.')
+                log.error(f'export_path     = "{self.output_params.export_path}"')
+                log.error(f'export_path_abs = "{export_path_abs}"')
+                return False
+            export_path = export_path_abs
+        else:
+            export_path = self.output_params.export_path
         # create folder
         try:
             if not os.path.exists(export_path):
@@ -1666,6 +1680,11 @@ class MountedMacInfo(MacInfo):
         try:
             mounted_path = self.BuildFullPath(path)
             log.debug("Trying to open file : " + mounted_path)
+            if os.path.islink(mounted_path):
+                #log.error(f"Aborted: '{mounted_path}' is a symbolic link, cannot open in Mounted mode.")
+                target_path = self.ReadSymLinkTargetPath(path)
+                log.info(f'Symlink detected for path: {path}, resolved to {target_path}')
+                mounted_path = self.BuildFullPath(target_path)
             file = MountedFile().open(mounted_path, 'rb')
             return file
         except (OSError) as ex:
