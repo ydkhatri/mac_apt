@@ -63,6 +63,7 @@ class SafariItemType(IntEnum):
     TAB = 13 # From BrowserState
     TABHISTORY = 14 # Tab session history from BrowserState
     TAB_SNAPSHOT = 15
+    TAGGED = 16
 
     def __str__(self):
         return self.name
@@ -177,12 +178,41 @@ def ProcessSafariPlist(mac_info, source_path, user, safari_items, read_plist_fun
 def ReadHistoryDb(conn, safari_items, source_path, user, safari_profile=SafariProfile('', '', '')):
     try:
         conn.row_factory = sqlite3.Row
-        cursor = conn.execute("select title, url, load_successful, visit_time as time_utc from "
-                              "history_visits left join history_items on history_visits.history_item = history_items.id")
+        using_tags_tables = False
+        # check for existence of history_tags and history_items_to_tags tables
+        if CommonFunctions.TableExists(conn, 'history_tags') and \
+            CommonFunctions.TableExists(conn, 'history_items_to_tags'):
+            using_tags_tables = True
+            query = '''
+                SELECT history_visits.title, url, load_successful, visit_time as time_utc, 
+                history_tags.title as tag_title, history_tags.modification_timestamp as tag_mod_date, history_tags.identifier as tag_identifier
+                FROM history_visits 
+                LEFT JOIN history_items on history_visits.history_item = history_items.id
+                LEFT JOIN history_items_to_tags ON history_items_to_tags.history_item=history_items.id
+                LEFT JOIN history_tags on history_items_to_tags.tag_id=history_tags.id
+                ORDER BY visit_time ASC
+            '''
+        else:
+            query = '''
+                SELECT title, url, load_successful, visit_time as time_utc 
+                from history_visits LEFT JOIN history_items on history_visits.history_item = history_items.id
+                ORDER BY visit_time ASC
+            '''
+        cursor = conn.execute(query)
         try:
             for row in cursor:
                 try:
                     info = f"Profile: {safari_profile.profile_name}" if safari_profile.profile_uuid else ''
+
+                    if using_tags_tables and row['tag_title'] is not None:
+                        tag_title = row['tag_title']
+                        tag_mod_date = CommonFunctions.ReadMacAbsoluteTime(row['tag_mod_date'])
+                        tag_identifier = row['tag_identifier']
+                        if info:
+                            info += f", Tag: {tag_title} ({tag_identifier}) Tag_Modified: {tag_mod_date}"
+                        else:
+                            info = f"Tag: {tag_title} ({tag_identifier}) Tag_Modified: {tag_mod_date}"
+                                        
                     si = SafariItem(SafariItemType.HISTORY, row['url'], row['title'],
                                     CommonFunctions.ReadMacAbsoluteTime(row['time_utc']), info, user, source_path)
                     safari_items.append(si)
@@ -190,6 +220,32 @@ def ReadHistoryDb(conn, safari_items, source_path, user, safari_profile=SafariPr
                     log.exception ("Error while fetching row data")
         except sqlite3.Error as ex:
             log.exception ("Db cursor error while reading file " + source_path)
+
+        # Query to fetch tags with zero item count from the history_tags table
+        query = '''
+            SELECT title, identifier, history_tags.modification_timestamp as tag_mod_date_UTC, 
+                item_count
+            FROM history_tags
+            WHERE item_count = 0
+            ORDER BY tag_mod_date_UTC
+        '''
+        cursor = conn.execute(query)
+        try:
+            for row in cursor:
+                try:
+                    title = row['title']
+                    identifier = row['identifier']
+                    tag_mod_date_UTC = CommonFunctions.ReadMacAbsoluteTime(row['tag_mod_date_UTC'])
+                    item_count = row['item_count']
+                    info = f"Tag Identifier: {identifier}, no history items survived"
+                    si = SafariItem(SafariItemType.TAGGED, '', title,
+                                    tag_mod_date_UTC, info, user, source_path)
+                    safari_items.append(si)
+                except sqlite3.Error as ex:
+                    log.exception("Error while fetching tag row data")
+        except sqlite3.Error as ex:
+            log.exception("Db cursor error while reading tags from file " + source_path)
+
         conn.close()
     except sqlite3.Error as ex:
         log.exception ("Sqlite error")
