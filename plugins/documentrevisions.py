@@ -411,6 +411,10 @@ def ProcessRevisionsAndExtract(mac_info, revisions, chunk_info, chunk_files, exp
                     else:
                         out_file_name += ".jpg"
                 out_file_path = CommonFunctions.GetNextAvailableFileName(os.path.join(export_path, f'{rev.gen_id}_{out_file_name}'))
+                # security check for possible exploitation of os.path.join(), if an absolute path is present in rev.gen_id
+                if not os.path.abspath(out_file_path).startswith(export_path):
+                    log.error(f'Security check failed for path: {out_file_path}, rev.gen_id="{rev.gen_id}", out_file_name="{out_file_name}"')
+                    continue
                 rev.extracted_path = out_file_path
                 size_written = ExtractChunksReconstructFile(mac_info, out_file_path, chunk_files, chunks_meta_info, used_cids)
                 if size_written != rev.generation_size:
