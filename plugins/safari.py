@@ -580,7 +580,7 @@ def ReadTopSitesPlist(plist, safari_items, source_path, user):
         ts_last_mod_date = plist['DisplayedSitesLastModified']
         log.info('Topsites last modified on {}'.format(ts_last_mod_date))
     except KeyError:
-        log.error('DisplayedSitesLastModified not found')
+        log.warning('DisplayedSitesLastModified not found')
     try:
         banned = plist['BannedURLStrings']
         for item in banned:
