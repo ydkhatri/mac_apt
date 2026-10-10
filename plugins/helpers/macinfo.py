@@ -1539,6 +1539,8 @@ class MountedMacInfo(MacInfo):
     def _GetFileSizeNoPathMod(self, full_path, error=None):
         '''Simply calls os.path.getsize(), BEWARE-does not build full path!'''
         try:
+            if os.path.islink(full_path):
+                return os.lstat(full_path).st_size # will return size of the symbolic link itself, not the target file
             return os.path.getsize(full_path)
         except OSError as ex:
             log.error("Exception in _GetFileSizeNoPathMod() : " + str(ex))
