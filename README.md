@@ -1,5 +1,5 @@
 # mac_apt - macOS (and iOS) Artifact Parsing Tool
-[![Latest version](https://img.shields.io/badge/version-v1.33.2-blue)](https://github.com/ydkhatri/mac_apt/releases/tag/v1.33.2)
+[![Latest version](https://img.shields.io/badge/version-v1.36.2-blue)](https://github.com/ydkhatri/mac_apt/releases/tag/v1.36.2)
 [![status](https://img.shields.io/badge/status-stable-green)]()
 
 mac_apt is a DFIR (Digital Forensics and Incident Response) tool to process Mac computer full disk images (**or _live_ machines**) and extract data/metadata useful for forensic investigation. It is a python based framework, which has plugins to process individual artifacts (such as Safari internet history, Network interfaces, Recently accessed files & volumes, ..)
@@ -32,6 +32,7 @@ _Note: Tested upto Python 3.14 on Windows and macOS (ARM and x64)._
 
 Available Plugins (artifacts parsed) | Description
 ------------------ | ---------------
+AKD | Reads device and email alias info from Authkit daemon (com.apple.akd) databases
 APPLIST | Reads apps & printers installed and/or available for each user from appList.dat
 ARD | Reads ARD (Apple Remote Desktop) cached databases about app usage
 ASL | Reads ASL (Apple System Log) from asl.log, asl.db and ".asl" files
@@ -46,7 +47,7 @@ CHROMIUM | Read Chromium Browsers (Edge, Chrome, Opera,..) History, Top Sites, D
 COOKIES | Reads .binarycookies, .cookies files and HSTS.plist for each user
 CRASHREPORTER | Reads crash reporter plists
 DOCKITEMS | Reads the Dock plist for every user
-DOCUMENTREVISIONS | Reads DocumentRevisions database
+DOCUMENTREVISIONS | Reads DocumentRevisions database and extract stored versions
 DOMAINS | Active Directory Domain(s) that the mac is connected to
 FACETIME | Read available facetime call metadata  
 FILESHARING | Read shared folder info

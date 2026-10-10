@@ -20,7 +20,7 @@ __Plugin_Author = "Yogesh Khatri"
 __Plugin_Author_Email = "yogesh@swiftforensics.com"
 
 __Plugin_Modes = "MACOS,ARTIFACTONLY"
-__Plugin_ArtifactOnly_Usage = 'This module parses user searched data using the spotlight bar. Data is retreived from the plist file(s) found at: /Users/<User>/Library/Preferences/com.apple.spotlight.plist and /Users/<User>/Library/Application Support/com.apple.spotlight.Shortcuts'
+__Plugin_ArtifactOnly_Usage = 'This module parses user searched data using the spotlight bar. Data is retreived from the plist file(s) found at: /Users/<User>/Library/Preferences/com.apple.Spotlight.plist and /Users/<User>/Library/Application Support/com.apple.spotlight.Shortcuts'
 
 log = logging.getLogger('MAIN.' + __Plugin_Name) # Do not rename or remove this ! This is the logger object
 
@@ -74,7 +74,7 @@ def Plugin_Start(mac_info):
     '''Main Entry point function for plugin'''
     shortcuts = []
     user_plist_rel_paths = (
-        '{}/Library/Preferences/com.apple.spotlight.plist', # Mavericks (10.9) or older
+        '{}/Library/Preferences/com.apple.Spotlight.plist', # Mavericks (10.9) or older
         '{}/Library/Application Support/com.apple.spotlight.Shortcuts', # 10.10 - 10.14
         '{}/Library/Application Support/com.apple.spotlight/com.apple.spotlight.Shortcuts',  # 10.15
         '{}/Library/Application Support/com.apple.spotlight/com.apple.spotlight.Shortcuts.v3', # 11 - 13?
