@@ -222,7 +222,7 @@ class AslLegacy:
         self.next_rec = _next_rec
         self.ruid = _ruid
         self.rgid = _rgid
-        self.time = datetime.datetime.fromtimestamp(0) + datetime.timedelta(seconds=_time)
+        self.time = datetime.datetime.fromtimestamp(0, tz=datetime.timezone.utc) + datetime.timedelta(seconds=_time)
         self.host = _host
         self.sender = _sender
         self.facility = _facility
@@ -321,7 +321,7 @@ class AslVer2:
         _session = self._get_asl_str(_session)
 
         self.id = _id
-        self.timestamp = datetime.datetime.fromtimestamp(0) + datetime.timedelta(seconds=_time)
+        self.timestamp = datetime.datetime.fromtimestamp(0, tz=datetime.timezone.utc) + datetime.timedelta(seconds=_time)
         self.nano = _nano
         self.level = _ASL_LEVEL[_level] if int(_level) < len(_ASL_LEVEL) else ""
         self.flags = _flags
@@ -387,7 +387,7 @@ class Asl:
                 self.first_rec, td = struct.unpack(">Qq", self.fd.read(16))
                 try:
                     timedelta = datetime.timedelta(seconds=td)
-                    self.time = datetime.datetime.fromtimestamp(0) + timedelta
+                    self.time = datetime.datetime.fromtimestamp(0, tz=datetime.timezone.utc) + timedelta
                 except:
                     log.exception('Time exception')
                 self.string_cache_size, = struct.unpack(">I", self.fd.read(4))

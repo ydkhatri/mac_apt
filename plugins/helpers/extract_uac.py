@@ -13,7 +13,7 @@ import plugins.helpers.zip_inf64 as zipfile
 import re
 import tarfile
 
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 
 log = logging.getLogger('MAIN.HELPERS.UAC_EXTRACTOR')
@@ -29,7 +29,7 @@ def to_datetime(ts_str):
     :return: datetime object or None
     '''
     if ts_str and ts_str != '-1':
-        return datetime.fromtimestamp(int(ts_str))
+        return datetime.fromtimestamp(int(ts_str), tz=timezone.utc)
     return None
 
 def parse_bodyfile(filename):

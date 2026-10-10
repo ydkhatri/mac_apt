@@ -124,7 +124,7 @@ def Plugin_Start_Standalone(input_files_list, output_params):
                             app_name = file_name[:-43]
                             success, plist, error = CommonFunctions.ReadPlist(file_path)
                             if success:
-                                cr_time = datetime.datetime.fromtimestamp(os.path.getctime(file_path))
+                                cr_time = datetime.datetime.fromtimestamp(os.path.getctime(file_path), tz=datetime.timezone.utc)
                                 ProcessPlist(plist, crashreporter_artifacts, app_name, cr_time, '', file_path)
                             else:
                                 log.error(f'Failed to read plist {file_path}')
