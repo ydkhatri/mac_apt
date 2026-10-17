@@ -58,7 +58,7 @@ def PrintAll(biome_items, output_params, input_path=''):
     biome_info = [  ('Biome Type',DataType.TEXT), 
                     ('Filename timestamp',DataType.TEXT),
                     ('Offset',DataType.INTEGER),('State',DataType.TEXT),
-                    ('Data',DataType.DATE),
+                    ('Data',DataType.TEXT),
                     ('Timestamp1',DataType.DATE),('Timestamp2',DataType.DATE),
                     ('User',DataType.TEXT),('Source',DataType.TEXT)
                 ]
