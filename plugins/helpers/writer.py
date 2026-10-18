@@ -627,7 +627,7 @@ class ExcelWriter:
         '''
         self.filepath = CommonFunctions.GetNextAvailableFileName(filepath)
         try:
-            self.workbook = xlsxwriter.Workbook(self.filepath, {'strings_to_urls': False, 'constant_memory': True}) #Turning off auto-URL generation as excel freaks on \r \n in url or paths, will result in corrupt excel file
+            self.workbook = xlsxwriter.Workbook(self.filepath, {'strings_to_urls': False, 'constant_memory': True, 'remove_timezone': True}) #Turning off auto-URL generation as excel freaks on \r \n in url or paths, will result in corrupt excel file. Excel has no timezones, so UTC-aware datetimes are written as their UTC values
             self.bold = self.workbook.add_format({'bold': 1}) #Define formatting for later use
             self.date_format = self.workbook.add_format({'num_format':'YYYY-MM-DD HH:MM:SS'})
             self.num_format = self.workbook.add_format()
