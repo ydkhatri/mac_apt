@@ -173,6 +173,11 @@ def ReadHistoryFile(mac_info, history_path, history_type_str, term_sessions, use
     session = BashSession(user_name, history_path, history_type_str)
     term_sessions.append(session)
     session.all_content = ''.join(content)
+    session.end_date = mac_info.GetFileMACTimes(history_path)['m_time']
+    # For Python history, set the start date based on the creation time of the file, not reliable for other history types
+    if history_type_str == 'PYTHON_HISTORY':
+        session.start_date = mac_info.GetFileMACTimes(history_path)['cr_time']
+        
     # If EXTENDED_HISTORY was enabled at some point, then timestamps are stored in the .zsh_history file
     # Look for those and parse
     pattern = re.compile(r'^:\s*(?P<timestamp>\d+):(?P<duration>\d+);\s*(?P<command>[\s\S]*?)(?=\n:\s*\d+:\d+;|\Z)', re.MULTILINE)
@@ -212,12 +217,15 @@ def Plugin_Start(mac_info):
         sh_history_path = user.home_dir + '/.sh_history'
         bash_history_path = user.home_dir + '/.bash_history'
         zsh_history_path = user.home_dir + '/.zsh_history'
+        python_history_path = user.home_dir + '/.python_history'
         if mac_info.IsValidFilePath(bash_history_path):
             ReadHistoryFile(mac_info, bash_history_path, 'BASH_HISTORY', term_sessions, user_name)
         if mac_info.IsValidFilePath(zsh_history_path):
             ReadHistoryFile(mac_info, zsh_history_path, 'ZSH_HISTORY', term_sessions, user_name)
         if mac_info.IsValidFilePath(sh_history_path):
             ReadHistoryFile(mac_info, sh_history_path, 'SH_HISTORY', term_sessions, user_name)
+        if mac_info.IsValidFilePath(python_history_path):
+            ReadHistoryFile(mac_info, python_history_path, 'PYTHON_HISTORY', term_sessions, user_name)
 
     if len(term_sessions) > 0:
         PrintAll(term_sessions, mac_info.output_params, '')
