@@ -61,6 +61,7 @@ INETACCOUNTS | Retrieve configured internet accounts (iCloud, Google, Linkedin, 
 INSTALLHISTORY | Software Installation History
 KEYCHAINS | Reads the System keychain and decrypts stored passwords
 LAUNCHPAD | Reads the launchpad database for every user  
+LESSHST | Reads less pager history (search patterns, shell commands & marks) for every user
 MSOFFICE | Reads Word, Excel, Powerpoint and other office MRU/accessed file paths
 MSRDC | Reads connection history from Microsoft Remote Desktop database and extracts thumbnails
 NETUSAGE | Read network usage data statistics per application
