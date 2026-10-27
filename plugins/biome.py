@@ -149,7 +149,7 @@ def interpret_data(data: bytes, biome_type: str, record_offset: int) -> tuple:
                         '9': {'type': 'string', 'name': 'SubTitle'}
                     }
             message, _ = bbpb.decode_message(data, pb_def)
-        elif biome_type.startswith('Safari.'):
+        elif biome_type.startswith('Safari.') and biome_type != 'Safari.PageLoad':
             pb_def = {'1': {'type': 'string', 'name': 'domain_visited'}}
             message, _ = bbpb.decode_message(data, pb_def)
         elif biome_type == 'ScreenTime.AppUsage':
@@ -223,13 +223,25 @@ def interpret_data(data: bytes, biome_type: str, record_offset: int) -> tuple:
     return message
 
 def process_biome(stream: typing.BinaryIO, biome_items: list, user: str, source_path: str, file_name: str, biome_type: str):
-    log.debug(f'Reading biome file {source_path}')
+    log.info(f'Reading biome file {source_path}')
     try:
         for record in read_segb_stream(stream):
             # record will be a SEGB1 or SEGB2 class depending on which type of file was passed
             if record.state == 3: 
-                continue # DELETED
-            
+                if any(record.data): # DELETED but data present
+                    log.warning(f'Record with state 3 and non-zero data at offset {record.data_start_offset}')
+                else:
+                    continue # DELETED and no data
+            # Ignore records where CRC fails
+            if not record.crc_passed:
+                if record.metadata_crc == 0:
+                    if not any(record.data):
+                        log.debug(f'Skipped Zeroed out record of length {len(record.data)} at offset {record.data_start_offset}')
+                    else:
+                        log.error(f'Metadata CRC is 0, skipping corrupted record of length {len(record.data)} at offset {record.data_start_offset}')
+                    continue
+                else:
+                    log.warning(f'CRC mismatch but including record of length {len(record.data)} at offset {record.data_start_offset}')
             ts_filename_int = CommonFunctions.IntFromStr(file_name, suppress_exception=True)
             ts_filename = CommonFunctions.ReadMacAbsoluteTime(ts_filename_int/1000000)
             message = interpret_data(record.data, biome_type, record.data_start_offset)
@@ -242,6 +254,8 @@ def process_biome(stream: typing.BinaryIO, biome_items: list, user: str, source_
                           record.timestamp2 if isinstance(record, Segb1Entry) else None,
                           biome_type, user, source_path)
             biome_items.append(b)
+    except struct.error:
+        log.exception('Error parsing SEGB stream')
     except InvalidStreamException as ex:
         log.warning(f'Not a valid SEGB1 or SEGB2 stream, invalid file data in file {source_path}')
     except ValueError as ex:

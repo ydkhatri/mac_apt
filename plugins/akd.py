@@ -83,6 +83,11 @@ def process_auth(artifacts, db, user, file_path):
     except sqlite3.Error:
         log.exception("Failed to read version info for authorization.db")
 
+    if CommonFunctions.TableExists(db, 'authorized_primary_applications') is False:
+        # Must be a really old version of the authorization.db, that won't have emails
+        log.warning("Table 'authorized_primary_applications' does not exist in authorization.db")
+        return
+
     query = '''
         SELECT authorized_teams.team_id, private_email, 
             authorized_primary_applications.app_name, authorized_primary_applications.app_developer_name,
@@ -125,7 +130,11 @@ def process_private_emails(artifacts, db, user, file_path):
         cursor = db.cursor()
         cursor.execute('SELECT privateEmailListVersion, db_version, protocol_version FROM version')
         for row in cursor.fetchall():
-            log.debug(f"privateEmails.db -> DB Version: {row['db_version']}, Private Email List Version: {CommonFunctions.ReadUnixMillisecondsTime(row['privateEmailListVersion'])}, Protocol Version: {row['protocol_version']}")
+            private_email_list_version = row['privateEmailListVersion']
+            date_int = CommonFunctions.IntFromStr(private_email_list_version, base=10, suppress_exception=True)
+            if date_int != 0:
+                private_email_list_version = CommonFunctions.ReadUnixMillisecondsTime(date_int)
+            log.debug(f"privateEmails.db -> DB Version: {row['db_version']}, Private Email List Version: {private_email_list_version}, Protocol Version: {row['protocol_version']}")
     except sqlite3.Error:
         log.exception("Failed to read version info for privateEmails.db")
     try:
