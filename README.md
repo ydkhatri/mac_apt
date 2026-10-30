@@ -100,6 +100,9 @@ For installation (to run from code) see https://github.com/ydkhatri/mac_apt/wiki
 
 To download windows binaries, proceed here - https://github.com/ydkhatri/mac_apt/releases
 
+### WARNING - **_mac_apt includes code from the [Chainbreaker](https://github.com/n0fate/chainbreaker) project to read macOS Keychain files, which may flag with AV/EDR vendors as malware._**
+
+
 ## Bugs
 Feel free to send comments and feedback to yogesh@swiftforensics.com, or open an [issue](https://github.com/ydkhatri/mac_apt/issues).  
 
