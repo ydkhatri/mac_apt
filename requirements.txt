@@ -18,7 +18,7 @@ plistutils
 pybindgen==0.21.0
 pycryptodome
 pyliblzfse
-pytsk3==20230125
+pytsk3==20260715
 pyyaml
 setuptools
 win32_setctime
