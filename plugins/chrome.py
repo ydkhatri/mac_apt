@@ -24,13 +24,14 @@ from plugins.helpers.writer import *
 
 __Plugin_Name = "CHROMIUM"
 __Plugin_Friendly_Name = "Chromium"
-__Plugin_Version = "3.0"
-__Plugin_Description = "Read Chromium browsers (Chrome, Edge, ..) History, Top Sites, Downloads, Tabs/Sessions and Extension info"
+__Plugin_Version = "3.1"
+__Plugin_Description = "Read Chromium browsers (Arc, Brave, Chrome, Edge, Island, Opera, Vivaldi) History, Top Sites, Downloads, Tabs/Sessions and Extension info"
 __Plugin_Author = "Yogesh Khatri"
 __Plugin_Author_Email = "yogesh@swiftforensics.com"
 
 __Plugin_Modes = "MACOS,ARTIFACTONLY"
-__Plugin_ArtifactOnly_Usage = 'Provide the path to "/Chrome/<Profile Name>" folder as argument'
+__Plugin_ArtifactOnly_Usage = 'Provide the path to "/Chrome/<Profile Name>" folder or path to any ' \
+                                'Chromium browser\'s profile folder as argument'
 
 log = logging.getLogger('MAIN.' + __Plugin_Name) # Do not rename or remove this ! This is the logger object
 
@@ -449,7 +450,8 @@ def ReadJson(data):
     try:
         return json.loads(data)
     except json.decoder.JSONDecodeError:
-        log.error('Failed to parse json. Input Data was ' + str(data))
+        log.error('Failed to parse json. Data may be encrypted')
+        log.debug('Bad Data (first 20 chars) was ' + str(data[:20]))  # Show only the first 20 characters of the bad data
     return {}
 
 def ReadVersion(f, file_size, user, file_path):
@@ -479,10 +481,9 @@ def ReadSecurePreferencesFile(ext_info, f, file_size, user, file_path):
         None: 
     """
     data = f.read().decode('utf8', 'ignore')
-    try:
-        data = json.loads(data)
-    except json.decoder.JSONDecodeError:
-        log.error('Failed to parse json. Input Data was ' + str(data))
+    data = ReadJson(data)
+    if not data:
+        log.error('Failed to read Secure Preferences file or file is empty')
         return
     
     extensions = data.get('extensions', {}).get('settings', {})
@@ -581,10 +582,9 @@ def ReadProfileInfo(artifacts, f, file_size, user, file_path):
         None: 
     """
     data = f.read().decode('utf8', 'ignore')
-    try:
-        data = json.loads(data)
-    except json.decoder.JSONDecodeError:
-        log.error('Failed to parse json. Input Data was ' + str(data))
+    data = ReadJson(data)
+    if not data:
+        log.error('Failed to read Profile info from Preferences file or file is empty')
         return
     
     profile = data.get('profile', {})
@@ -609,10 +609,9 @@ def ReadPreferencesFile(accounts, f, file_size, user, file_path):
         None: 
     """
     data = f.read().decode('utf8', 'ignore')
-    try:
-        data = json.loads(data)
-    except json.decoder.JSONDecodeError:
-        log.error('Failed to parse json. Input Data was ' + str(data))
+    data = ReadJson(data)
+    if not data:
+        log.error('Failed to read Preferences file or file is empty')
         return
     
     # profile = data.get('profile', {})
@@ -738,12 +737,15 @@ def OpenLocalFileAndRead(chromium_artifacts, user, file_path, file_size, parser_
 
 def Plugin_Start(mac_info):
     '''Main Entry point function for plugin'''
-    chromium_browsers = {'Chrome': '{}/Library/Application Support/Google/Chrome/',
-                         'Edge': '{}/Library/Application Support/Microsoft Edge/',
-                         'Opera': '{}/Library/Application Support/com.operasoftware.Opera/',  # Does not support multiple profiles
-                         'Vivaldi': '{}/Library/Application Support/Vivaldi/',
-                         'Brave': '{}/Library/Application Support/BraveSoftware/Brave-Browser/',
-                         'Arc': '{}/Library/Application Support/Arc/User Data/'}
+    chromium_browsers = {
+        'Arc': '{}/Library/Application Support/Arc/User Data/',
+        'Brave': '{}/Library/Application Support/BraveSoftware/Brave-Browser/',
+        'Chrome': '{}/Library/Application Support/Google/Chrome/',
+        'Island': '{}/Library/Application Support/Island/',
+        'Edge': '{}/Library/Application Support/Microsoft Edge/',
+        'Opera': '{}/Library/Application Support/com.operasoftware.Opera/',  # Does not support multiple profiles
+        'Vivaldi': '{}/Library/Application Support/Vivaldi/'
+    }
 
     profile_regex = r'(Default|Profile \d+|Guest Profile)'
 

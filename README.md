@@ -43,7 +43,7 @@ BLUETOOTH | Gets Bluetooth Artifacts
 CALCULATOR | Reads calculator history
 CALLHISTORY | Reads call history database
 CFURLCACHE | Reads CFURL cache to URLs, requests and responses
-CHROMIUM | Read Chromium Browsers (Edge, Chrome, Opera,..) History, Top Sites, Downloads and Extension info
+CHROMIUM | Read Chromium Browsers (Arc, Brave, Chrome, Edge, Island, Opera, Vivaldi) History, Top Sites, Downloads and Extension info
 CRASHREPORTER | Reads crash reporter plists
 DOCKITEMS | Reads the Dock plist for every user
 DOCUMENTREVISIONS | Reads DocumentRevisions database and extract stored versions
