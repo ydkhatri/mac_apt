@@ -44,7 +44,6 @@ CALCULATOR | Reads calculator history
 CALLHISTORY | Reads call history database
 CFURLCACHE | Reads CFURL cache to URLs, requests and responses
 CHROMIUM | Read Chromium Browsers (Edge, Chrome, Opera,..) History, Top Sites, Downloads and Extension info
-COOKIES | Reads .binarycookies, .cookies files and HSTS.plist for each user
 CRASHREPORTER | Reads crash reporter plists
 DOCKITEMS | Reads the Dock plist for every user
 DOCUMENTREVISIONS | Reads DocumentRevisions database and extract stored versions
@@ -73,6 +72,7 @@ QUARANTINE | Reads the quarantine database and .LastGKReject file
 QUICKLOOK | Reads the QuickLook index.sqlite and carves thumbnails from thumbnails.data
 RECENTITEMS | Recently accessed Servers, Documents, Hosts, Volumes & Applications from .plist and .sfl files. Also gets recent searches and places for each user
 SAFARI | Internet history, downloaded file information, cookies and more from Safari caches
+SAFARICOOKIES | Reads .binarycookies, .cookies files and HSTS.plist for each user
 SAVEDSTATE | Gets window titles from Saved Application State info
 SCREENSHARING | Reads the list of connected hosts with Screen Sharing
 SCREENTIME | Reads ScreenTime database for program and app usage

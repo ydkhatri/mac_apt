@@ -5,9 +5,9 @@
    Usage or distribution of this software/code is subject to the
    terms of the MIT License.
 
-   cookies.py
+   safaricookies.py
    ---------------
-   Reads Cookie information from .binarycookies, .cookies files and HSTS.plist for each user.
+   Reads Safari cookie information from .binarycookies, .cookies files and HSTS.plist for each user.
 
 '''
 
@@ -18,15 +18,15 @@ from plugins.helpers.common import CommonFunctions
 from plugins.helpers.macinfo import *
 from plugins.helpers.writer import *
 
-__Plugin_Name = "COOKIES"
-__Plugin_Friendly_Name = "Cookies"
+__Plugin_Name = "SAFARICOOKIES"
+__Plugin_Friendly_Name = "Safari Cookies"
 __Plugin_Version = "1.0"
 __Plugin_Description = "Reads .binarycookies, .cookies files and HSTS.plist for each user"
 __Plugin_Author = "Yogesh Khatri"
 __Plugin_Author_Email = "yogesh@swiftforensics.com"
 
 __Plugin_Modes = "MACOS,ARTIFACTONLY"
-__Plugin_ArtifactOnly_Usage = 'Provide the HSTS.plist file located at /Users/<USER>/Library/Cookielication Support/com.apple.spotlight/appList.dat'
+__Plugin_ArtifactOnly_Usage = 'Provide the HSTS.plist file or .binarycookies or .cookies files located at ~/Library/Cookies or ~/Library/Containers/com.apple.Safari/Data/Library/Cookies'
 
 log = logging.getLogger('MAIN.' + __Plugin_Name) # Do not rename or remove this ! This is the logger object
 
@@ -63,7 +63,7 @@ def PrintAll(cookies, output_params, input_path=''):
                             item.user, item.source_path ]
         cookies_list_final.append(single_cookie_item)
 
-    WriteList("Cookies List", "Cookies", cookies_list_final, cookies_info, output_params, input_path)
+    WriteList("Safari Cookies List", "Safari Cookies", cookies_list_final, cookies_info, output_params, input_path)
 
 def read_cstring(buffer):
     pos = buffer.find(b'\0')

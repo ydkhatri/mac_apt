@@ -20,9 +20,9 @@ from plugins.helpers.macinfo import *
 from plugins.helpers.writer import *
 
 __Plugin_Name = "SAFARI"
-__Plugin_Friendly_Name = "Internet history, downloaded file information, cookies and more from Safari caches"
+__Plugin_Friendly_Name = "Internet history, downloaded file information and more from Safari caches"
 __Plugin_Version = "2.1"
-__Plugin_Description = "Gets internet history, downloaded file information, cookies and more from Safari caches"
+__Plugin_Description = "Gets internet history, downloaded file information and more from Safari caches"
 __Plugin_Author = "Yogesh Khatri"
 __Plugin_Author_Email = "yogesh@swiftforensics.com"
 
