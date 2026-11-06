@@ -59,6 +59,7 @@ class Statx(ctypes.Structure):
 
 # https://github.com/hrw/syscalls-table
 SYSCALLS = {
+    "aarch64": 291,
     "alpha": 522,
     "arc": 291,
     "arm": 397,
