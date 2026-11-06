@@ -453,6 +453,7 @@ def Process_User_DBs(mac_info):
     macOS 12 and above    : /Users/<USER>/Library/Metadata/CoreSpotlight/NSFileProtectionComplete/index.spotlightV3/
                             /Users/<USER>/Library/Metadata/CoreSpotlight/NSFileProtectionCompleteUnlessOpen/index.spotlightV3/
                             /Users/<USER>/Library/Metadata/CoreSpotlight/NSFileProtectionCompleteUntilFirstUserAuthentication/index.spotlightV3/
+                            /Users/<USER>/Library/Metadata/CoreSpotlight/Priority/index.spotlightV3/
                             /Users/<USER>/Library/Caches/com.apple.helpd/NSFileProtectionComplete/index.spotlightV3/
                             /Users/<USER>/Library/Caches/com.apple.helpd/NSFileProtectionCompleteUnlessOpen/index.spotlightV3/
                             /Users/<USER>/Library/Caches/com.apple.helpd/NSFileProtectionCompleteUntilFirstUserAuthentication/index.spotlightV3/
@@ -460,7 +461,8 @@ def Process_User_DBs(mac_info):
     user_spotlight_metadata_paths = ['{}/Library/Metadata/CoreSpotlight/index.spotlightV3/',
                                      '{}/Library/Metadata/CoreSpotlight/NSFileProtectionComplete/index.spotlightV3/',
                                      '{}/Library/Metadata/CoreSpotlight/NSFileProtectionCompleteUnlessOpen/index.spotlightV3/',
-                                     '{}/Library/Metadata/CoreSpotlight/NSFileProtectionCompleteUntilFirstUserAuthentication/index.spotlightV3/']
+                                     '{}/Library/Metadata/CoreSpotlight/NSFileProtectionCompleteUntilFirstUserAuthentication/index.spotlightV3/',
+                                     '{}/Library/Metadata/CoreSpotlight/Priority/index.spotlightV3/']
     user_spotlight_cache_paths = ['{}/Library/Caches/com.apple.helpd/NSFileProtectionComplete/index.spotlightV3/',
                                   '{}/Library/Caches/com.apple.helpd/NSFileProtectionCompleteUnlessOpen/index.spotlightV3/',
                                   '{}/Library/Caches/com.apple.helpd/NSFileProtectionCompleteUntilFirstUserAuthentication/index.spotlightV3/']
