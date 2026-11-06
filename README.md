@@ -76,6 +76,7 @@ SAFARICOOKIES | Reads .binarycookies, .cookies files and HSTS.plist for each use
 SAVEDSTATE | Gets window titles from Saved Application State info
 SCREENSHARING | Reads the list of connected hosts with Screen Sharing
 SCREENTIME | Reads ScreenTime database for program and app usage
+SIRI | Read Siri history
 SPOTLIGHT | Reads the spotlight index databases
 SPOTLIGHTSHORTCUTS | User typed data in the spotlight bar & targeted document/app
 SUDOLASTRUN | Gets last time sudo was used and a few other times earlier (if available)
