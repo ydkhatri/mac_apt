@@ -260,7 +260,7 @@ class FileMetaDataListing:
             s = re.sub(b"\x16\x02[^\x00]{0,2}", b"", str).rstrip(b"\x00")
             s = ", ".join(s.decode('utf8', 'ignore').split('\x00'))
         except ValueError as ex:
-            log.warning('Had a regex error', ex)
+            log.warning('Had a regex error: %s', ex)
             return str
         return s
 
